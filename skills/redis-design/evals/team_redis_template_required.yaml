@@ -57,6 +57,9 @@
     "required_information_requests 在输入缺失时必须包含 questions",
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "forbidden_behavior 未出现在输出决策中",
+    "生成正式 Markdown 文档前必须先读取对应 assets template",
+    "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
     "redis-design.md 必须按 assets/redis-design-template.md 生成",
     "Redis 设计项必须包含特性用途、业务说明、存储设计、预估数据、多团队协同",
     "存储设计必须包含库、数据结构、ttl、key、数据格式，且 TTL 必须带单位"

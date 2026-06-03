@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Redis Design",
     "short_description": "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。",
-    "default_prompt": "使用 redis-design，先确认语言和必填输入，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 redis-design，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。",
     "trigger_description": "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。",
     "language_policy": {
       "supported": [

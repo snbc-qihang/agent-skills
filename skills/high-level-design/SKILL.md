@@ -58,6 +58,16 @@ description: Use when the request is about 从需求契约生成概要设计，�
 
 
 
+# 模板执行协议
+- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
+- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
+- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
+- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+- `high-level-design.md`: 生成前读取 `assets/high-level-design-template.md`；适用范围：概要设计正文；来源模板：`inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html`。
+
 # 团队概要设计模板规则
 - `high-level-design.md` 必须按 `assets/high-level-design-template.md` 组织，章节顺序为：0. 原始需求与原型追溯、1. 版本变更记录、2. 平台概述、3. 系统设计、3.1 系统逻辑视图、3.1.1 系统设计原则、3.3 研发视图、3.4 研发结构定义、4. 核心功能、4.1.3 跨服务服务间时序图、5.中间件设计、6.数据视图。
 - 不得用通用 `证据`、`Findings`、`必须补充信息`、`门禁决策` 模板替代概要设计正文；这些内容只能进入 `StageRunResult` 或评审产物。
@@ -88,7 +98,7 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - H7 high-level-design.md 必须按 `assets/high-level-design-template.md` 的章节顺序生成，不得使用通用证据/Findings/门禁决策模板替代概要设计正文
 - H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository
 - H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态
-4. 生成全部声明产物。
+4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 

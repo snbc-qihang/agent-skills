@@ -58,6 +58,16 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 
 
 
+# 模板执行协议
+- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
+- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
+- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
+- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+- `detailed-design.md`: 生成前读取 `assets/detailed-design-template.md`；适用范围：详细设计主文档正文；来源模板：`inputs/详细设计规范.md`。
+
 # 团队详细设计主文档规则
 - `detailed-design.md` 必须按 `assets/detailed-design-template.md` 组织，章节顺序为：1. 修订历史、2. 设计背景与目标摘要、2.1 原始需求与原型引用矩阵、3. 模块/功能详细设计、3.1. 业务流程图、3.2. UML类图、4. 数据库设计、5. 接口定义、5.1. API接口列表、5.2. 中间件设计、6. 单元测试、7. 性能与扩展性设计、8. 人工评审项。
 - 主文档不得包含独立章节：来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线；不得展开数据库字段表、MQ 表格、Redis Key 表格。
@@ -109,7 +119,7 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - P6 分布式锁必须有超时时间和兜底方案
 - P7 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，详细设计阶段状态必须为 waiting_for_human_review，不得直接 succeeded
 - DG1-DG5 正式详细设计必须有文档编号、状态和留存策略；任务过程和待确认清单只作为 run artifact
-4. 生成全部声明产物。
+4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 

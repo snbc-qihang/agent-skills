@@ -446,6 +446,40 @@
       "artifact": "detailed-design.md",
       "canonical_template": "skills/detailed-design/assets/detailed-design-template.md",
       "source_template": "inputs/详细设计规范.md",
+      "template_usage_policy": {
+        "required": true,
+        "source_of_truth": "template_assets[].canonical_template",
+        "must_read_template_before_generation": true,
+        "template_assets": [
+          {
+            "artifact": "detailed-design.md",
+            "template": "assets/detailed-design-template.md",
+            "canonical_template": "skills/detailed-design/assets/detailed-design-template.md",
+            "source_template": "inputs/详细设计规范.md",
+            "selection": "详细设计主文档正文"
+          }
+        ],
+        "generation_protocol": [
+          "生成正式 Markdown 文档前必须先读取对应 skill 的 assets template 文件，不得凭记忆、通用模板或聊天上下文替代。",
+          "以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。",
+          "只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。",
+          "输入材料缺少事实时，保留模板章节并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
+          "不得用 assets/artifact-template.md 的证据/Findings/门禁决策骨架替代正式设计正文。",
+          "模板文件不存在、无法读取或输出无法通过模板校验时，StageRunResult.status 必须为 blocked 或 failed。"
+        ],
+        "strict_format_rules": [
+          "保留模板原有章节、标题名称、标题层级、表格列头和固定提示块。",
+          "不适用章节不得删除，必须写明不适用原因或等待用户补充事实。",
+          "不得把团队 template 压缩成摘要、检查清单或通用证据报告。",
+          "不得把 source_template 只当参考风格；canonical_template 才是输出正文骨架。"
+        ],
+        "blocked_when": [
+          "未读取 template asset 就生成正式 Markdown 文档",
+          "输出缺少 template 章节、列头、固定提示块或顺序",
+          "用 assets/artifact-template.md 或通用报告格式替代正式设计正文",
+          "缺少关键事实却填充待确认占位符并标记 succeeded"
+        ]
+      },
       "allowed_sections": [
         "1. 修订历史",
         "2. 设计背景与目标摘要",

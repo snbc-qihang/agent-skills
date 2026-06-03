@@ -61,17 +61,25 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         policy = contract["team_document_policy"]
 
         self.assertEqual("skills/high-level-design/assets/high-level-design-template.md", policy["canonical_template"])
+        template_policy = policy["template_usage_policy"]
+        self.assertTrue(template_policy["must_read_template_before_generation"])
+        self.assertIn("skills/high-level-design/assets/high-level-design-template.md", json.dumps(template_policy, ensure_ascii=False))
+        self.assertIn("不得凭记忆", "\n".join(template_policy["generation_protocol"]))
         for section in ["1. 版本变更记录", "2. 平台概述", "3. 系统设计", "5.中间件设计", "6.数据视图"]:
             self.assertIn(section, policy["required_sections"])
 
         skill_md = (ROOT / "skills" / "high-level-design" / "SKILL.md").read_text(encoding="utf-8")
-        for text in ["团队概要设计模板规则", "high-level-design-template.md", "系统逻辑视图", "数据视图"]:
+        for text in ["模板执行协议", "团队概要设计模板规则", "high-level-design-template.md", "先读取", "不得删除", "系统逻辑视图", "数据视图"]:
             self.assertIn(text, skill_md)
 
     def test_detailed_design_contract_exposes_team_document_policy(self) -> None:
         contract = json.loads((ROOT / "skills" / "detailed-design" / "contract.yaml").read_text(encoding="utf-8"))
         policy = contract["team_document_policy"]
+        template_policy = policy["main_document"]["template_usage_policy"]
 
+        self.assertTrue(template_policy["must_read_template_before_generation"])
+        self.assertIn("skills/detailed-design/assets/detailed-design-template.md", json.dumps(template_policy, ensure_ascii=False))
+        self.assertIn("不得把团队 template 压缩成摘要", json.dumps(template_policy, ensure_ascii=False))
         self.assertIn("来源证据", policy["main_document"]["forbidden_headings"])
         self.assertIn("sequenceDiagram", policy["main_document"]["forbidden_mermaid"])
         self.assertIn("flowchart", policy["main_document"]["required_mermaid"])
@@ -82,8 +90,36 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         self.assertIn("Redis 新 Key", policy["stage_result"]["waiting_for_human_review_when"])
 
         skill_md = (ROOT / "skills" / "detailed-design" / "SKILL.md").read_text(encoding="utf-8")
-        for text in ["detailed-design-template.md", "sequenceDiagram", "流程设计说明", "classDiagram", "waiting_for_human_review"]:
+        for text in ["模板执行协议", "detailed-design-template.md", "先读取", "章节顺序", "sequenceDiagram", "流程设计说明", "classDiagram", "waiting_for_human_review"]:
             self.assertIn(text, skill_md)
+
+    def test_template_execution_policy_is_exposed_by_all_template_skills(self) -> None:
+        expected_templates = {
+            "high-level-design": ["assets/high-level-design-template.md"],
+            "detailed-design": ["assets/detailed-design-template.md"],
+            "database-design": ["assets/database-oltp-template.md", "assets/database-olap-template.md"],
+            "redis-design": ["assets/redis-design-template.md"],
+            "mq-design": ["assets/mq-design-template.md"],
+        }
+
+        for skill_id, template_paths in expected_templates.items():
+            contract = json.loads((ROOT / "skills" / skill_id / "contract.yaml").read_text(encoding="utf-8"))
+            policy = contract["team_document_policy"]
+            template_policy = policy.get("template_usage_policy") or policy["main_document"]["template_usage_policy"]
+            self.assertTrue(template_policy["required"], skill_id)
+            self.assertTrue(template_policy["must_read_template_before_generation"], skill_id)
+            protocol_text = "\n".join(template_policy["generation_protocol"])
+            self.assertIn("先读取", protocol_text, skill_id)
+            self.assertIn("不得删除", protocol_text, skill_id)
+            self.assertIn("waiting_for_input", protocol_text, skill_id)
+
+            skill_md = (ROOT / "skills" / skill_id / "SKILL.md").read_text(encoding="utf-8")
+            agent_meta = (ROOT / "skills" / skill_id / "agents" / "openai.yaml").read_text(encoding="utf-8")
+            self.assertIn("模板执行协议", skill_md, skill_id)
+            self.assertIn("先读取对应 assets template", agent_meta, skill_id)
+            for template_path in template_paths:
+                self.assertIn(template_path, json.dumps(template_policy, ensure_ascii=False), skill_id)
+                self.assertIn(template_path, skill_md, skill_id)
 
     def test_team_templates_are_generated(self) -> None:
         expected = [

@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Database Design",
     "short_description": "设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。",
-    "default_prompt": "使用 database-design，先确认语言和必填输入，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 database-design，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。",
     "trigger_description": "Use when the request is about 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。",
     "language_policy": {
       "supported": [

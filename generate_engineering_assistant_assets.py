@@ -1500,6 +1500,8 @@ def skill_routing_metadata(skill: dict) -> dict:
 def agents_openai_yaml(skill: dict) -> str:
     allow_implicit = "false" if skill["id"] in HIGH_RISK_SKILLS else "true"
     default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+    if template_usage_policy(skill).get("required"):
+        default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息；生成正式 Markdown 文档前先读取对应 assets template，并按模板骨架逐节填充输入事实。"
     return f"""display_name: "{skill['name']}"
 short_description: "{skill['purpose']}"
 default_prompt: "{default_prompt}"
@@ -1565,7 +1567,7 @@ def runtime_ir(skill: dict) -> dict:
         "prompt_pack": {
             "display_name": skill["name"],
             "short_description": skill["purpose"],
-            "default_prompt": f"使用 {skill['id']}，先确认语言和必填输入，再输出声明产物与 gate decision。",
+            "default_prompt": f"使用 {skill['id']}，先确认语言和必填输入，再输出声明产物与 gate decision。" if not template_usage_policy(skill).get("required") else f"使用 {skill['id']}，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。",
             "trigger_description": skill_trigger_description(skill),
             "language_policy": {"supported": ["zh-CN", "en"], "when_unspecified": "ask_user"},
         },
@@ -1693,12 +1695,133 @@ def control_surface_policy(skill: dict) -> dict:
     }
 
 
+TEMPLATE_GENERATION_PROTOCOL = [
+    "生成正式 Markdown 文档前必须先读取对应 skill 的 assets template 文件，不得凭记忆、通用模板或聊天上下文替代。",
+    "以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。",
+    "只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。",
+    "输入材料缺少事实时，保留模板章节并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
+    "不得用 assets/artifact-template.md 的证据/Findings/门禁决策骨架替代正式设计正文。",
+    "模板文件不存在、无法读取或输出无法通过模板校验时，StageRunResult.status 必须为 blocked 或 failed。",
+]
+
+
+def template_asset_definitions(skill_id: str) -> list[dict]:
+    assets = {
+        "high-level-design": [
+            {
+                "artifact": "high-level-design.md",
+                "template": "assets/high-level-design-template.md",
+                "canonical_template": "skills/high-level-design/assets/high-level-design-template.md",
+                "source_template": "inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html",
+                "selection": "概要设计正文",
+            }
+        ],
+        "detailed-design": [
+            {
+                "artifact": "detailed-design.md",
+                "template": "assets/detailed-design-template.md",
+                "canonical_template": "skills/detailed-design/assets/detailed-design-template.md",
+                "source_template": "inputs/详细设计规范.md",
+                "selection": "详细设计主文档正文",
+            }
+        ],
+        "database-design": [
+            {
+                "artifact": "database-design.md",
+                "template": "assets/database-oltp-template.md",
+                "canonical_template": "skills/database-design/assets/database-oltp-template.md",
+                "source_template": "inputs/关系型(OLTP)详细设计模板.md",
+                "selection": "MySQL/PostgreSQL 等关系型 OLTP 场景",
+            },
+            {
+                "artifact": "database-design.md",
+                "template": "assets/database-olap-template.md",
+                "canonical_template": "skills/database-design/assets/database-olap-template.md",
+                "source_template": "",
+                "selection": "ClickHouse、物化视图或分析宽表场景",
+            },
+        ],
+        "redis-design": [
+            {
+                "artifact": "redis-design.md",
+                "template": "assets/redis-design-template.md",
+                "canonical_template": "skills/redis-design/assets/redis-design-template.md",
+                "source_template": "inputs/Redis详细设计模板 - 人人取平台总体设计 - 站点标题.html",
+                "selection": "Redis 详细设计正文",
+            }
+        ],
+        "mq-design": [
+            {
+                "artifact": "mq-design.md",
+                "template": "assets/mq-design-template.md",
+                "canonical_template": "skills/mq-design/assets/mq-design-template.md",
+                "source_template": "inputs/xxxMQ设计.xlsx",
+                "selection": "MQ 设计正文",
+            }
+        ],
+    }
+    return assets.get(skill_id, [])
+
+
+def template_usage_policy(skill: dict) -> dict:
+    templates = template_asset_definitions(skill["id"])
+    if not templates:
+        return {"required": False}
+    return {
+        "required": True,
+        "source_of_truth": "template_assets[].canonical_template",
+        "must_read_template_before_generation": True,
+        "template_assets": templates,
+        "generation_protocol": TEMPLATE_GENERATION_PROTOCOL,
+        "strict_format_rules": [
+            "保留模板原有章节、标题名称、标题层级、表格列头和固定提示块。",
+            "不适用章节不得删除，必须写明不适用原因或等待用户补充事实。",
+            "不得把团队 template 压缩成摘要、检查清单或通用证据报告。",
+            "不得把 source_template 只当参考风格；canonical_template 才是输出正文骨架。",
+        ],
+        "blocked_when": [
+            "未读取 template asset 就生成正式 Markdown 文档",
+            "输出缺少 template 章节、列头、固定提示块或顺序",
+            "用 assets/artifact-template.md 或通用报告格式替代正式设计正文",
+            "缺少关键事实却填充待确认占位符并标记 succeeded",
+        ],
+    }
+
+
+def template_execution_note(skill: dict) -> str:
+    policy = template_usage_policy(skill)
+    if not policy.get("required"):
+        return ""
+    templates = "\n".join(
+        f"- `{item['artifact']}`: 生成前读取 `{item['template']}`；适用范围：{item['selection']}；来源模板：`{item['source_template'] or 'generator canonical template'}`。"
+        for item in policy["template_assets"]
+    )
+    return f"""
+# 模板执行协议
+- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
+- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
+- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
+- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+{templates}
+"""
+
+
+def template_generation_step(skill: dict) -> str:
+    if template_usage_policy(skill).get("required"):
+        return "按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。"
+    return "生成全部声明产物。"
+
+
 def team_document_policy(skill: dict) -> dict:
     if skill["id"] == "high-level-design":
         return {
             "artifact": "high-level-design.md",
             "canonical_template": "skills/high-level-design/assets/high-level-design-template.md",
             "source_template": "inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html",
+            "template_usage_policy": template_usage_policy(skill),
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
@@ -1717,6 +1840,7 @@ def team_document_policy(skill: dict) -> dict:
                 "artifact": "detailed-design.md",
                 "canonical_template": "skills/detailed-design/assets/detailed-design-template.md",
                 "source_template": "inputs/详细设计规范.md",
+                "template_usage_policy": template_usage_policy(skill),
                 "allowed_sections": DETAILED_DESIGN_MAIN_SECTIONS,
                 "forbidden_headings": DETAILED_DESIGN_FORBIDDEN_HEADINGS,
                 "forbidden_mermaid": ["sequenceDiagram"],
@@ -1748,6 +1872,7 @@ def team_document_policy(skill: dict) -> dict:
             "artifact": "database-design.md",
             "canonical_oltp_template": "skills/database-design/assets/database-oltp-template.md",
             "positive_oltp_example": "用户提供的 customer_type_ref database-design.md 用作表达风格参考；结构以 canonical_oltp_template 为准。",
+            "template_usage_policy": template_usage_policy(skill),
             "template_selection": {"oltp": DB_OLTP_REQUIRED_SECTIONS, "olap": DB_OLAP_REQUIRED_SECTIONS},
             "oltp_required_table_headers": DB_OLTP_REQUIRED_TABLE_HEADERS,
             "oltp_required_fact_fields": DB_OLTP_REQUIRED_FACT_FIELDS,
@@ -1778,6 +1903,7 @@ def team_document_policy(skill: dict) -> dict:
     if skill["id"] == "redis-design":
         return {
             "artifact": "redis-design.md",
+            "template_usage_policy": template_usage_policy(skill),
             "required_sections": REDIS_REQUIRED_SECTIONS,
             "design_item_required_fields": REDIS_DESIGN_ITEM_FIELDS,
             "storage_required_fields": REDIS_STORAGE_FIELDS,
@@ -1789,6 +1915,7 @@ def team_document_policy(skill: dict) -> dict:
     if skill["id"] == "mq-design":
         return {
             "artifact": "mq-design.md",
+            "template_usage_policy": template_usage_policy(skill),
             "producer_table_fields": MQ_PRODUCER_FIELDS,
             "consumer_table_fields": MQ_CONSUMER_FIELDS,
             "rules": ["MQ 只用于削峰填谷、异步执行和服务解耦", "进程内异步不默认使用 MQ", "一个服务一个队列，一个队列可绑定多个 Exchange/routingKey", "队列默认建议仲裁队列", "必须设计死信队列", "消息体默认不超过 10KB", "必须定义幂等、重试、死信、回放策略"],
@@ -1800,7 +1927,7 @@ def team_document_policy(skill: dict) -> dict:
 
 def team_document_note(skill: dict) -> str:
     if skill["id"] == "high-level-design":
-        return f"""
+        return template_execution_note(skill) + f"""
 # 团队概要设计模板规则
 - `high-level-design.md` 必须按 `assets/high-level-design-template.md` 组织，章节顺序为：{"、".join(HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS)}。
 - 不得用通用 `证据`、`Findings`、`必须补充信息`、`门禁决策` 模板替代概要设计正文；这些内容只能进入 `StageRunResult` 或评审产物。
@@ -1812,7 +1939,7 @@ def team_document_note(skill: dict) -> str:
 """
     if skill["id"] == "detailed-design":
         forbidden = "、".join(DETAILED_DESIGN_FORBIDDEN_HEADINGS)
-        return f"""
+        return template_execution_note(skill) + f"""
 # 团队详细设计主文档规则
 - `detailed-design.md` 必须按 `assets/detailed-design-template.md` 组织，章节顺序为：{"、".join(DETAILED_DESIGN_MAIN_SECTIONS)}。
 - 主文档不得包含独立章节：{forbidden}；不得展开数据库字段表、MQ 表格、Redis Key 表格。
@@ -1825,7 +1952,7 @@ def team_document_note(skill: dict) -> str:
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 """
     if skill["id"] == "database-design":
-        return """
+        return template_execution_note(skill) + """
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
 - OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
@@ -1844,7 +1971,7 @@ def team_document_note(skill: dict) -> str:
 - 未确认库名、实例、字符集、索引名时，不得标记为 `approved` 或 `final`。
 """
     if skill["id"] == "redis-design":
-        return """
+        return template_execution_note(skill) + """
 # 团队 Redis 设计规则
 - Redis 设计必须生成独立 `redis-design.md`，不得在主详细设计中展开。
 - 文档必须按 `assets/redis-design-template.md` 组织，并覆盖历史版本信息、前言、公共配置、Redis版本、集群配置、持久化策略、过期淘汰策略、设计项、资源申请和运维监控。
@@ -1855,7 +1982,7 @@ def team_document_note(skill: dict) -> str:
 - Redis 版本、拓扑、持久化、淘汰策略无法确认时，状态必须为 `waiting_for_input` 或 `waiting_for_human_review`。
 """
     if skill["id"] == "mq-design":
-        return """
+        return template_execution_note(skill) + """
 # 团队 MQ 设计规则
 - MQ 设计必须生成独立 `mq-design.md`，不得在主详细设计中展开。
 - 文档必须按 `assets/mq-design-template.md` 组织，至少包含生产者表和消费者表。
@@ -3467,6 +3594,12 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "无法映射到原始需求规格/原型和设计章节的代码变更必须 blocked",
         ],
     }.get(skill["id"], [])
+    if template_usage_policy(skill).get("required"):
+        skill_specific_pass_criteria = [
+            "生成正式 Markdown 文档前必须先读取对应 assets template",
+            "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
+            "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+        ] + skill_specific_pass_criteria
     return {
         "id": f"{skill['id']}-{scenario['case']}",
         "name": f"{skill['name']} {scenario['title']}",
@@ -3796,6 +3929,7 @@ def skill_md(skill: dict) -> str:
     approvals = "\n".join(f"- {a}" for a in skill["approvals"])
     checks = "\n".join(f"- {c}" for c in skill["checks"])
     non_goals = "\n".join(f"- {g}" for g in skill["non_goals"])
+    generation_step = template_generation_step(skill)
     return f"""---
 name: {skill['id']}
 description: {skill_trigger_description(skill)}
@@ -3857,7 +3991,7 @@ description: {skill_trigger_description(skill)}
 2. 校验必填输入并记录假设。
 3. 基于来源证据执行以下检查。
 {checks}
-4. 生成全部声明产物。
+4. {generation_step}
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 
@@ -3961,6 +4095,29 @@ def eval_case(skill: dict, case: str) -> dict:
         "block": "blocked",
     }[scenario["expected_gate_decision"]]
     provided_input = f"provided: {scenario['material']}" if case != "missing_required_input" else ""
+    pass_criteria = [
+        "StageRunResult status 合法",
+        "未指定 language 时必须询问用户选择 zh-CN 或 en",
+        "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
+        "missing_required_input 场景必须输出非空 required_information_requests.questions",
+        "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
+        "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
+        "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
+        "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",
+        "声明 HTML 产物时必须登记为 artifact，且每个 finding 可追溯到稳定 JSON id",
+        "必需产物已声明",
+        "team_rule_refs 中每条规则都有检查结论",
+        "risk_focus 中每个风险都有证据、假设或 required action",
+        "阻断风险未被降级",
+        "forbidden_behavior 未出现在输出决策中",
+        "策略要求审批时已请求人工审批",
+    ]
+    if template_usage_policy(skill).get("required"):
+        pass_criteria.extend([
+            "生成正式 Markdown 文档前必须先读取对应 assets template",
+            "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
+            "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+        ])
     return {
         "id": f"{skill['id']}-{case}",
         "name": f"{skill['name']} {case.replace('_', ' ')}",
@@ -3995,23 +4152,7 @@ def eval_case(skill: dict, case: str) -> dict:
         "expected_behavior": f"围绕 {', '.join(scenario['rule_refs'])} 检查场景，输出 {expected_status} 状态和 {scenario['expected_gate_decision']} 门禁决策；对风险给出证据、finding 和 required actions。",
         "expected_gate_decision": scenario["expected_gate_decision"],
         "expected_status": expected_status,
-        "pass_criteria": [
-            "StageRunResult status 合法",
-            "未指定 language 时必须询问用户选择 zh-CN 或 en",
-            "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
-            "missing_required_input 场景必须输出非空 required_information_requests.questions",
-            "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
-            "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
-            "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
-            "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",
-            "声明 HTML 产物时必须登记为 artifact，且每个 finding 可追溯到稳定 JSON id",
-            "必需产物已声明",
-            "team_rule_refs 中每条规则都有检查结论",
-            "risk_focus 中每个风险都有证据、假设或 required action",
-            "阻断风险未被降级",
-            "forbidden_behavior 未出现在输出决策中",
-            "策略要求审批时已请求人工审批",
-        ],
+        "pass_criteria": pass_criteria,
         "severity_when_failed": "critical" if case in ["regression_case", "policy_conflict"] else "major",
         "grader": {
             "type": "deterministic" if case in ["missing_required_input", "regression_case", "policy_conflict"] else "hybrid",

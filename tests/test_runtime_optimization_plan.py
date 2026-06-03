@@ -123,6 +123,9 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
 
     def test_context_pack_uses_only_allowed_ai_platform_sources(self) -> None:
         fixture = json.loads((ROOT / "engineering-assistant" / "evals" / "fixtures" / "ai-platform-v1.json").read_text(encoding="utf-8"))
+        canary_root = Path(fixture["root"])
+        if not canary_root.exists():
+            self.skipTest(f"external canary root is unavailable: {canary_root}")
         result = run_script(
             "recommend_context.py",
             "--root",

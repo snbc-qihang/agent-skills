@@ -58,6 +58,16 @@ description: Use when the request is about 设计 Redis 使用方案，明确 ke
 
 
 
+# 模板执行协议
+- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
+- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
+- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
+- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+- `redis-design.md`: 生成前读取 `assets/redis-design-template.md`；适用范围：Redis 详细设计正文；来源模板：`inputs/Redis详细设计模板 - 人人取平台总体设计 - 站点标题.html`。
+
 # 团队 Redis 设计规则
 - Redis 设计必须生成独立 `redis-design.md`，不得在主详细设计中展开。
 - 文档必须按 `assets/redis-design-template.md` 组织，并覆盖历史版本信息、前言、公共配置、Redis版本、集群配置、持久化策略、过期淘汰策略、设计项、资源申请和运维监控。
@@ -85,7 +95,7 @@ description: Use when the request is about 设计 Redis 使用方案，明确 ke
 - R11 Spring 接入优先 StringRedisTemplate，复杂结构才使用 RedisTemplate<String,Object>
 - R12 库存扣减、分布式锁、幂等、延迟双删、排行榜、Pipeline 不使用 Spring Cache 注解
 - R13 Redis 部署版本、拓扑、持久化和淘汰策略由项目 profile 或 repo_context 注入
-4. 生成全部声明产物。
+4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 

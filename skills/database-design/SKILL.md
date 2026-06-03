@@ -58,6 +58,17 @@ description: Use when the request is about 设计数据库表结构、索引、�
 
 
 
+# 模板执行协议
+- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
+- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
+- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
+- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+- `database-design.md`: 生成前读取 `assets/database-oltp-template.md`；适用范围：MySQL/PostgreSQL 等关系型 OLTP 场景；来源模板：`inputs/关系型(OLTP)详细设计模板.md`。
+- `database-design.md`: 生成前读取 `assets/database-olap-template.md`；适用范围：ClickHouse、物化视图或分析宽表场景；来源模板：`generator canonical template`。
+
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
 - OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
@@ -94,7 +105,7 @@ description: Use when the request is about 设计数据库表结构、索引、�
 - DB12 缺少库名、实例、版本、负责人、字段口径、索引用途、QPS/容量、审批状态、敏感级别等事实时，必须进入 waiting_for_input 并输出 required_information_requests；除非用户明确允许，不得推测
 - DB13 需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入强耦合表组模式，不得生成单表或混合字段池
 - DB14 强耦合表组模式下，标题、设计对象、文档定位、2.4 表组说明、3.1 逐表职责、4.2 逐表字段、4.3 逐表索引、CRUD 参与表、事务一致性、迁移、回滚、风险报告和 DDL 的表集合必须一致
-4. 生成全部声明产物。
+4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 

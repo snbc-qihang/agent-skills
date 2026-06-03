@@ -1,6 +1,6 @@
 display_name: "Detailed Design"
 short_description: "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。"
-default_prompt: "使用 detailed-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+default_prompt: "使用 detailed-design，先确认输出语言和必须补充的信息；生成正式 Markdown 文档前先读取对应 assets template，并按模板骨架逐节填充输入事实。"
 language_policy:
   supported:
     - "zh-CN"
