@@ -66,6 +66,16 @@
       "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；不得用通用证据/Findings/门禁决策模板替代正文。"
     },
     {
+      "id": "H8",
+      "category": "概要设计",
+      "rule": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。"
+    },
+    {
+      "id": "H9",
+      "category": "概要设计",
+      "rule": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。"
+    },
+    {
       "id": "D1",
       "category": "详细设计",
       "rule": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。"
@@ -274,6 +284,16 @@
       "id": "D8",
       "category": "详细设计",
       "rule": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。"
+    },
+    {
+      "id": "D12",
+      "category": "详细设计",
+      "rule": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。"
+    },
+    {
+      "id": "CD1",
+      "category": "代码研发",
+      "rule": "代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据。"
     },
     {
       "id": "CQ1",

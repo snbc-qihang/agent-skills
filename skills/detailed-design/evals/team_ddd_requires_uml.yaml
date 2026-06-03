@@ -56,6 +56,7 @@
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "forbidden_behavior 未出现在输出决策中",
     "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
+    "detailed-design.md 必须包含原始需求与原型引用矩阵，核心流程、接口、数据对象或规则必须映射 source_id",
     "detailed-design.md 不得包含来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线等禁止标题",
     "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
     "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",

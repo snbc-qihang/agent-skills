@@ -31,9 +31,10 @@ EVAL_CASES = [
     "low_quality_automation",
 ]
 
-TEAM_DOC_TARGET_SKILLS = {"high-level-design", "detailed-design", "database-design", "redis-design", "mq-design"}
+TEAM_DOC_TARGET_SKILLS = {"high-level-design", "detailed-design", "database-design", "redis-design", "mq-design", "code-development"}
 
 HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS = [
+    "0. 原始需求与原型追溯",
     "1. 版本变更记录",
     "2. 平台概述",
     "3. 系统设计",
@@ -42,6 +43,7 @@ HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS = [
     "3.3 研发视图",
     "3.4 研发结构定义",
     "4. 核心功能",
+    "4.1.3 跨服务服务间时序图",
     "5.中间件设计",
     "6.数据视图",
 ]
@@ -56,6 +58,7 @@ HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS = [
 DETAILED_DESIGN_MAIN_SECTIONS = [
     "1. 修订历史",
     "2. 设计背景与目标摘要",
+    "2.1 原始需求与原型引用矩阵",
     "3. 模块/功能详细设计",
     "3.1. 业务流程图",
     "3.2. UML类图",
@@ -66,6 +69,27 @@ DETAILED_DESIGN_MAIN_SECTIONS = [
     "6. 单元测试",
     "7. 性能与扩展性设计",
     "8. 人工评审项",
+]
+
+SOURCE_TRACEABILITY_TABLE_HEADER = "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |"
+
+HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS = [
+    "用户",
+    "页面",
+    "前端",
+    "客户端",
+    "Controller",
+    "API",
+    "接口",
+    "数据库",
+    "DB",
+    "Redis",
+    "MQ",
+    "Topic",
+    "Queue",
+    "表",
+    "Mapper",
+    "Repository",
 ]
 
 DETAILED_DESIGN_FORBIDDEN_HEADINGS = [
@@ -482,6 +506,8 @@ TEAM_RULE_CATALOG = [
     {"id": "H5", "category": "概要设计", "rule": "application 层负责编排，不直接沉淀复杂业务判断；核心业务规则进入 domain。"},
     {"id": "H6", "category": "概要设计", "rule": "聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰。"},
     {"id": "H7", "category": "概要设计", "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；不得用通用证据/Findings/门禁决策模板替代正文。"},
+    {"id": "H8", "category": "概要设计", "rule": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。"},
+    {"id": "H9", "category": "概要设计", "rule": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。"},
     {"id": "D1", "category": "详细设计", "rule": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。"},
     {"id": "D2", "category": "详细设计", "rule": "列出业务规则、状态机、校验规则、异常码、幂等点、事务边界、回滚策略。"},
     {"id": "D3", "category": "详细设计", "rule": "导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理。"},
@@ -524,6 +550,8 @@ TEAM_RULE_CATALOG = [
     {"id": "D6", "category": "详细设计", "rule": "涉及租户、认证、鉴权、角色、权限、多租户隔离时，必须生成 IAM/RBAC 专项规范。"},
     {"id": "D7", "category": "详细设计", "rule": "涉及 Spring AI、LLM provider、RAG、Agent、Tool Calling、Embedding、VectorStore 时，必须生成 Spring AI 专项规范。"},
     {"id": "D8", "category": "详细设计", "rule": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。"},
+    {"id": "D12", "category": "详细设计", "rule": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。"},
+    {"id": "CD1", "category": "代码研发", "rule": "代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据。"},
     {"id": "CQ1", "category": "代码质量", "rule": "好代码必须同时满足正确性、领域表达、边界清晰、可测试、可维护、安全、可观测、性能并发可控和可演进。"},
     {"id": "CQ2", "category": "代码质量", "rule": "代码必须能映射到需求、设计文档、接口契约和测试证据；无法映射的实现视为无设计依据。"},
     {"id": "JDK1", "category": "JDK21", "rule": "JDK21 稳定特性可以提升表达力，但不得启用未批准 preview feature 或让新语法掩盖复杂业务。"},
@@ -933,6 +961,8 @@ SKILLS = [
             "H6 聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰",
             "DG1-DG5 正式概要设计必须有文档编号、状态和留存策略；中间过程摘要不得作为正式文档留存",
             "H7 high-level-design.md 必须按 `assets/high-level-design-template.md` 的章节顺序生成，不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
+            "H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository",
+            "H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态",
         ],
     },
     {
@@ -960,6 +990,7 @@ SKILLS = [
             "D9 导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理",
             "D10 状态流转说明允许状态、终态、CAS/乐观锁控制、并发竞争处理",
             "D11 项目定制功能不能破坏原有通用能力，说明新增模块边界和兼容策略",
+            "D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异",
             "I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi",
             "I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD",
             "I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口",
@@ -1142,6 +1173,7 @@ SKILLS = [
             "测试覆盖",
             "变更摘要",
             "完成实现后必须运行 build_traceability_report.py 刷新 artifacts/_control/traceability-matrix.json 和 docs/human-readable/traceability-report.html",
+            "CD1 代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据",
             "FW1 框架选型必须来自设计、repo_context 或用户确认；缺失时主动询问",
             "FW2 Java/Spring 持久化默认使用 mybatis-plus；直接 JDBC 必须有评审批准",
             "FW3 实现必须遵循现有仓库 mapper/repository/service 分层和依赖",
@@ -1653,8 +1685,14 @@ def team_document_policy(skill: dict) -> dict:
             "source_template": "inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html",
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
-            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系"],
-            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失"],
+            "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
+            "service_sequence_policy": {
+                "required_mermaid": "sequenceDiagram",
+                "participants_only": "services",
+                "forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
+            },
+            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系", "概要设计必须保留原始需求规格或原型引用矩阵"],
+            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失", "缺少跨服务服务间时序图", "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象", "缺少原始需求规格或原型引用矩阵"],
         }
     if skill["id"] == "detailed-design":
         return {
@@ -1673,6 +1711,7 @@ def team_document_policy(skill: dict) -> dict:
                 "specialty_reference_only": DETAILED_DESIGN_SPECIALTY_DOCS,
                 "evidence_location": ["stage-run-result.json", "repo-context-report.md", "review evidence artifacts"],
                 "technology_selection_location": ["high-level-design.md", "technology-selection-review.md", "repo-context-report.md"],
+                "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             },
             "stage_result": {
                 "must_register_specialty_artifacts": list(DETAILED_DESIGN_SPECIALTY_DOCS),
@@ -1684,6 +1723,7 @@ def team_document_policy(skill: dict) -> dict:
                     "flowchart 后缺少流程设计说明",
                     "DDD/分层/扩展点关键词出现但缺少 classDiagram",
                     "涉及 DB/MQ/Redis 但缺少独立专项文档或 StageRunResult 未登记",
+                    "缺少原始需求规格或原型引用矩阵",
                 ],
             },
         }
@@ -1748,8 +1788,10 @@ def team_document_note(skill: dict) -> str:
 # 团队概要设计模板规则
 - `high-level-design.md` 必须按 `assets/high-level-design-template.md` 组织，章节顺序为：{"、".join(HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS)}。
 - 不得用通用 `证据`、`Findings`、`必须补充信息`、`门禁决策` 模板替代概要设计正文；这些内容只能进入 `StageRunResult` 或评审产物。
+- `0. 原始需求与原型追溯` 必须列出原始需求规格或原型引用矩阵，字段包含 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；设计事实必须能追溯到规格或原型。
 - `系统设计` 必须覆盖系统逻辑视图、系统设计原则、研发视图和研发结构定义。
 - `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、流程、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、Controller、数据库、Redis、MQ、表、Mapper、Repository 等非服务对象。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 """
     if skill["id"] == "detailed-design":
@@ -1759,6 +1801,7 @@ def team_document_note(skill: dict) -> str:
 - `detailed-design.md` 必须按 `assets/detailed-design-template.md` 组织，章节顺序为：{"、".join(DETAILED_DESIGN_MAIN_SECTIONS)}。
 - 主文档不得包含独立章节：{forbidden}；不得展开数据库字段表、MQ 表格、Redis Key 表格。
 - 来源证据只能进入 `stage-run-result.json`、repo-context 产物或评审证据；技术选型进入概要设计、技术选型评审或 repo-context，除非用户明确要求。
+- `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
 - `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
@@ -2314,6 +2357,12 @@ source_artifacts: []
 
 # <系统/项目名称>概要设计
 
+## 0. 原始需求与原型追溯
+
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | requirement_spec / prototype |  |  |  |  | matched / pending_confirmation / conflict |
+
 ## 1. 版本变更记录
 
 | 版本 | 日期 | 变更内容 | 作者 | 评审/批准 |
@@ -2349,13 +2398,24 @@ flowchart TD
     A["开始"] --> B["处理"]
 ```
 
-#### 4.1.3 状态机设计
+#### 4.1.3 跨服务服务间时序图
+
+```mermaid
+sequenceDiagram
+    participant SourceService as 来源服务
+    participant TargetService as 目标服务
+    SourceService->>TargetService: 服务间调用或事件协作
+```
+
+> 时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。
+
+#### 4.1.4 状态机设计
 
 | 状态 | 条件 | 动作 |
 | --- | --- | --- |
 |  |  |  |
 
-#### 4.1.4 异常流与最终一致性
+#### 4.1.5 异常流与最终一致性
 
 ## 5.中间件设计
 
@@ -2396,6 +2456,12 @@ source_artifacts: []
 
 - 关联概要设计：`high-level-design.md`
 - 核心目标摘要：
+
+### 2.1 原始需求与原型引用矩阵
+
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | requirement_spec / prototype |  |  |  |  | matched / pending_confirmation / conflict |
 
 ## 3. 模块/功能详细设计
 
@@ -2586,6 +2652,8 @@ def team_validator_script(skill_id: str) -> str:
         "high-level-design": {
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
+            "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
+            "service_sequence_forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
         },
         "detailed-design": {
             "required_sections": DETAILED_DESIGN_MAIN_SECTIONS,
@@ -2593,6 +2661,10 @@ def team_validator_script(skill_id: str) -> str:
             "flow_note_fields": DETAILED_DESIGN_FLOW_NOTE_FIELDS,
             "ddd_terms": DETAILED_DESIGN_DDD_TERMS,
             "specialty_docs": DETAILED_DESIGN_SPECIALTY_DOCS,
+            "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
+        },
+        "code-development": {
+            "traceability_required_fields": ["source_id", "source_type", "source_path_or_url", "design_section", "code_path", "verification_evidence"],
         },
         "database-design": {
             "oltp_sections": DB_OLTP_REQUIRED_SECTIONS,
@@ -2635,6 +2707,22 @@ def validate_output(payload_path, payload):
     for required in ["系统逻辑视图", "系统设计原则", "研发视图", "研发结构定义", "中间件设计", "数据视图"]:
         if required not in text:
             errors.append("high-level-design.md 缺少概要设计核心内容: " + required)
+    if POLICY["source_traceability_header"] not in text:
+        errors.append("high-level-design.md 缺少原始需求与原型追溯矩阵列头: " + POLICY["source_traceability_header"])
+    sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
+    if not sequence_blocks:
+        errors.append("high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图")
+    for block_index, block in enumerate(sequence_blocks, start=1):
+        participants = service_sequence_participants(block)
+        if not participants:
+            errors.append(f"第 {block_index} 个 sequenceDiagram 必须显式声明 participant，且 participant 只能是服务")
+        for alias, label in participants.items():
+            if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
+                errors.append(f"第 {block_index} 个 sequenceDiagram participant 不是服务: {label}")
+        for endpoint in service_sequence_endpoints(block):
+            label = participants.get(endpoint, endpoint)
+            if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
+                errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点不是服务: {label}")
     return errors
 ''',
         "detailed-design": r'''
@@ -2672,6 +2760,8 @@ def validate_output(payload_path, payload):
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
     if any(term in text for term in POLICY["ddd_terms"]) and "classDiagram" not in text:
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
+    if POLICY["source_traceability_header"] not in text:
+        errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
     artifacts = artifact_map(payload)
     for doc_name in POLICY["specialty_docs"]:
         if doc_name not in artifacts:
@@ -2680,6 +2770,34 @@ def validate_output(payload_path, payload):
     high_risk_terms = ["DDL", "CREATE TABLE", "ALTER TABLE", "新队列", "新 topic", "新Topic", "Redis 新 Key", "新增 Key"]
     if status == "succeeded" and any(term in text for term in high_risk_terms):
         errors.append("存在 DDL、MQ 新队列/topic 或 Redis 新 Key 时状态必须为 waiting_for_human_review")
+    return errors
+''',
+        "code-development": r'''
+def validate_output(payload_path, payload):
+    errors = []
+    artifacts = artifact_map(payload)
+    for required in ["implementation-summary.md", "design-to-code-mapping.yaml", "changed-files-report.json", "traceability-matrix.json"]:
+        if required not in artifacts:
+            errors.append("StageRunResult.artifacts 未登记代码追踪产物: " + required)
+    mapping_text = read_artifact(payload_path, payload, "design-to-code-mapping.yaml")
+    if not mapping_text:
+        errors.append("缺少 design-to-code-mapping.yaml artifact 或文件不可读")
+    else:
+        for field in POLICY["traceability_required_fields"]:
+            if field not in mapping_text:
+                errors.append("design-to-code-mapping.yaml 缺少追踪字段: " + field)
+    matrix = read_json_artifact(payload_path, payload, "traceability-matrix.json")
+    if matrix is None:
+        errors.append("缺少 traceability-matrix.json artifact、文件不可读或不是合法 JSON")
+    else:
+        rows = matrix.get("rows") if isinstance(matrix, dict) else []
+        if not rows:
+            errors.append("traceability-matrix.json 必须包含非空 rows")
+        for index, row in enumerate(rows or [], start=1):
+            for field in POLICY["traceability_required_fields"]:
+                value = row.get(field) if isinstance(row, dict) else None
+                if not value:
+                    errors.append(f"traceability-matrix.json 第 {index} 行缺少追踪字段: {field}")
     return errors
 ''',
         "database-design": r'''
@@ -3012,6 +3130,50 @@ def markdown_index_rows(text):
     return rows
 
 
+def mermaid_blocks(text, diagram_type):
+    pattern = r"```mermaid\\s*\\n\\s*" + re.escape(diagram_type) + r"\\b([\\s\\S]*?)```"
+    return [match.group(1) for match in re.finditer(pattern, text)]
+
+
+def service_sequence_participants(block):
+    participants = {{}}
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"(?i)^(participant|actor)\\s+([A-Za-z0-9_]+)(?:\\s+as\\s+(.+))?$", line)
+        if match:
+            participants[match.group(2)] = (match.group(3) or match.group(2)).strip()
+    return participants
+
+
+def service_sequence_endpoints(block):
+    endpoints = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_\\u4e00-\\u9fff]+)\\s*(?:-+|=+|x-+|-->>|->>|->|-->)\\s*([A-Za-z0-9_\\u4e00-\\u9fff]+)", line)
+        if match:
+            endpoints.extend([match.group(1), match.group(2)])
+    return endpoints
+
+
+def is_service_label(label, forbidden_terms):
+    label = str(label).strip()
+    if not label:
+        return False
+    if any(term and term in label for term in forbidden_terms):
+        return False
+    return "服务" in label or "Service" in label or label.endswith("Svc")
+
+
+def read_json_artifact(payload_path, payload, name):
+    text = read_artifact(payload_path, payload, name)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\\n".join(errors))
@@ -3035,6 +3197,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["H1", "H2", "H3", "H7"],
             "risk_focus": ["概要设计模板", "系统边界", "中间件范围", "数据视图"],
             "forbidden_behavior": ["只输出证据/Findings/门禁决策", "省略中间件设计或数据视图"],
+        },
+        {
+            "case": "team_high_level_service_sequence_traceability",
+            "title": "概要设计跨服务时序图和规格原型追溯",
+            "material": "需求规格和原型均已提供，概要设计涉及服务商系统、活动服务、权益发放服务之间的跨服务协作。概要设计必须列出原始需求规格/原型 source_id 引用矩阵，并补充 Mermaid sequenceDiagram 服务间时序图；时序图只能出现服务，不能把用户、页面、Controller、数据库、Redis、MQ、表或 Repository 作为参与者。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["H2", "H3", "H8", "H9"],
+            "risk_focus": ["跨服务时序图", "服务参与者限制", "规格原型追溯", "设计一致性"],
+            "forbidden_behavior": ["sequenceDiagram 出现用户或页面", "sequenceDiagram 出现数据库或 MQ", "缺少 source_id 引用矩阵", "设计无法追溯原始规格或原型"],
         }
     ],
     "detailed-design": [
@@ -3162,6 +3333,17 @@ EXTRA_EVAL_SCENARIOS = {
             "forbidden_behavior": ["只生成配置单表", "把配置规则领取字段混成字段池", "跨服务发放失败回滚领取事实", "DDL 表集合与主文档不一致"],
         }
     ],
+    "code-development": [
+        {
+            "case": "team_code_source_design_traceability",
+            "title": "代码实现必须追溯规格原型和设计",
+            "material": "代码阶段基于已审批设计实施接口、服务和 mapper 变更。design-to-code-mapping.yaml 和 traceability-matrix.json 必须逐项记录 source_id、source_type、source_path_or_url、design_section、code_path、verification_evidence，确保原始需求规格/原型、设计章节、代码文件和验证证据一一对应。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["CQ2", "CD1", "DG20"],
+            "risk_focus": ["规格原型追溯", "设计到代码映射", "无依据代码", "验证证据"],
+            "forbidden_behavior": ["只写变更摘要不写 source_id", "代码文件无法映射设计章节", "traceability-matrix.json 缺少 code_path", "缺少验证证据"],
+        }
+    ],
 }
 
 
@@ -3183,11 +3365,14 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
     skill_specific_pass_criteria = {
         "high-level-design": [
             "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
-            "high-level-design.md 必须包含版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图",
+            "high-level-design.md 必须包含原始需求与原型追溯、版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图",
+            "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许服务",
+            "high-level-design.md 必须用 source_id 引用原始需求规格或原型，并说明一致性状态",
             "high-level-design.md 不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
         ],
         "detailed-design": [
             "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
+            "detailed-design.md 必须包含原始需求与原型引用矩阵，核心流程、接口、数据对象或规则必须映射 source_id",
             "detailed-design.md 不得包含来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线等禁止标题",
             "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
             "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
@@ -3211,6 +3396,11 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "多事实对象、主明细、配置+规则+记录、主表+参数表+大字段表、领取主记录+领取明细必须进入强耦合表组模式",
             "强耦合表组模式下标题、设计对象、2.4 表组说明、3.1 逐表职责、4.2 逐表字段、4.3 逐表索引、CRUD 参与表和事务一致性必须完整",
             "schema-change-plan.sql、migration-plan.md、rollback-plan.md、database-risk-report.json 的成员表集合和表组口径必须与 database-design.md 一致",
+        ],
+        "code-development": [
+            "design-to-code-mapping.yaml 必须包含 source_id、source_type、source_path_or_url、design_section、code_path、verification_evidence",
+            "traceability-matrix.json 必须包含非空 rows，且每行串联原始规格/原型、设计章节、代码文件和验证证据",
+            "无法映射到原始需求规格/原型和设计章节的代码变更必须 blocked",
         ],
     }.get(skill["id"], [])
     return {
@@ -3531,6 +3721,7 @@ def controlled_execution_note(skill: dict) -> str:
 - 不得依赖聊天上下文记忆替代机读控制面；规则、技术栈、质量命令和停止条件必须来自控制产物。
 - 进入实现、自测、质量治理或代码评审前必须先运行 `validate_control_health.py`；控制面缺失、规则包缺失或 blocking open question 必须阻断。
 - 涉及代码变更后必须运行 `validate_technology_adoption.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `validate_rule_consumption.py`。
+- `code-development` 的 `design-to-code-mapping.yaml` 和 `traceability-matrix.json` 必须串联原始规格/原型 `source_id`、设计章节 `design_section`、代码文件 `code_path` 和验证证据；不能映射到原始规格/原型和设计的代码变更必须阻断。
 """
 
 
@@ -6579,11 +6770,31 @@ def existing_text(root: Path, *candidates: str) -> tuple[str, str]:
     return "", ""
 
 def mapping_from_text(text: str) -> dict:
-    result = {"requirement_refs": [], "design_refs": [], "changed_files": [], "tests": []}
+    result = {"requirement_refs": [], "design_refs": [], "changed_files": [], "tests": [], "entries": []}
+    current = {}
+    key_aliases = {
+        "requirement": "requirement_item",
+        "design": "design_section",
+        "code": "code_path",
+        "file": "code_path",
+        "test": "verification_evidence",
+        "source": "source_id",
+    }
+    traceability_keys = {"source_id", "source_type", "source_path_or_url", "prototype_page_or_section", "requirement_item", "design_section", "code_path", "verification_evidence", "consistency_status"}
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
+            if current:
+                result["entries"].append(current)
+                current = {}
             continue
+        normalized = line[2:].strip() if line.startswith("- ") else line
+        key_match = re.match(r"([A-Za-z_][A-Za-z0-9_ -]*)\\s*:\\s*(.+)$", normalized)
+        if key_match:
+            key = key_match.group(1).strip().replace("-", "_").replace(" ", "_")
+            key = key_aliases.get(key, key)
+            if key in traceability_keys:
+                current[key] = key_match.group(2).strip().strip("`")
         result["requirement_refs"].extend(REQ_RE.findall(line))
         for token in re.split(r"[,，\\s]+", line):
             token = token.strip().strip("`'\\\"[](){}，,.;；:")
@@ -6594,6 +6805,8 @@ def mapping_from_text(text: str) -> dict:
                     result["changed_files"].append(token)
         if any(word in line.lower() for word in ["design", "详细设计", "概要设计", "section", "章节"]):
             result["design_refs"].append(line[:240])
+    if current:
+        result["entries"].append(current)
     return {key: unique(value) for key, value in result.items()}
 
 def rows_from_contracts(design: dict, implementation: dict, quality: dict, changed_report: dict, validation: dict, mapping: dict) -> list[dict]:
@@ -6603,23 +6816,36 @@ def rows_from_contracts(design: dict, implementation: dict, quality: dict, chang
     validation_findings = validation.get("findings") or []
     rows = []
     explicit_req_ids = mapping.get("requirement_refs") or []
-    for index, item in enumerate(seeds[:40], start=1):
+    entries = mapping.get("entries") or []
+    row_count = max(len(seeds), len(entries), 1)
+    for index in range(1, min(row_count, 40) + 1):
+        item = seeds[index - 1] if index <= len(seeds) else entries[index - 1].get("requirement_item", "Mapped implementation item")
+        entry = entries[index - 1] if index <= len(entries) else {}
         req_id = explicit_req_ids[index - 1] if index <= len(explicit_req_ids) else f"REQ-{index:03d}"
-        row_files = changed_files
+        row_files = unique([entry.get("code_path", "")] + changed_files)
         gaps = []
         if not row_files:
             gaps.append("尚未登记 changed-files-report.json 或 design-to-code-mapping.yaml")
-        if not mapping.get("requirement_refs"):
-            gaps.append("design-to-code-mapping.yaml 未提供逐需求稳定编号映射")
+        for required_field in ["source_id", "source_type", "source_path_or_url", "design_section", "code_path", "verification_evidence"]:
+            if not entry.get(required_field):
+                gaps.append(f"design-to-code-mapping.yaml 未提供 {required_field}")
         if validation_status != "pass":
             gaps.append("design-to-code-validation.json 未通过或尚未生成")
         rows.append({
+            "source_id": entry.get("source_id") or req_id,
+            "source_type": entry.get("source_type", ""),
+            "source_path_or_url": entry.get("source_path_or_url", ""),
+            "prototype_page_or_section": entry.get("prototype_page_or_section", ""),
             "requirement_id": req_id,
-            "requirement": item,
-            "design_refs": unique([design.get("source_design", "")] + mapping.get("design_refs", [])),
+            "requirement": entry.get("requirement_item") or item,
+            "requirement_item": entry.get("requirement_item") or item,
+            "design_section": entry.get("design_section", ""),
+            "design_refs": unique([entry.get("design_section", ""), design.get("source_design", "")] + mapping.get("design_refs", [])),
             "implementation_targets": implementation.get("allowed_modules", []),
+            "code_path": entry.get("code_path", ""),
             "changed_files": row_files,
-            "tests": unique((implementation.get("required_tests") or []) + mapping.get("tests", [])),
+            "verification_evidence": entry.get("verification_evidence", ""),
+            "tests": unique([entry.get("verification_evidence", "")] + (implementation.get("required_tests") or []) + mapping.get("tests", [])),
             "validation_status": validation_status,
             "validation_findings": validation_findings,
             "evidence": {
@@ -6639,6 +6865,7 @@ def render_html(matrix: dict) -> str:
     summary = matrix.get("summary", {})
     table = []
     for row in rows:
+        source = "<br>".join(esc(item) for item in [row.get("source_id"), row.get("source_type"), row.get("source_path_or_url"), row.get("prototype_page_or_section")] if item) or '<span class="muted">未登记</span>'
         design = "<br>".join(esc(item) for item in row.get("design_refs", [])) or '<span class="muted">未登记</span>'
         targets = "<br>".join(esc(item) for item in row.get("implementation_targets", [])) or '<span class="muted">未登记</span>'
         files = "<br>".join(esc(item) for item in row.get("changed_files", [])) or '<span class="muted">待实现</span>'
@@ -6647,7 +6874,7 @@ def render_html(matrix: dict) -> str:
         table.append(
             "<tr>"
             f"<td><strong>{esc(row.get('requirement_id'))}</strong><div class='sub'>{esc(row.get('requirement'))}</div></td>"
-            f"<td>{design}</td><td>{targets}</td><td>{files}</td><td>{tests}</td>"
+            f"<td>{source}</td><td>{design}</td><td>{targets}</td><td>{files}</td><td>{tests}</td>"
             f"<td><span class='pill'>{esc(row.get('validation_status'))}</span><div class='gap'>{gaps}</div></td>"
             "</tr>"
         )
@@ -6683,8 +6910,8 @@ def render_html(matrix: dict) -> str:
         f'<div class="metric">已映射代码<strong>{esc(summary.get("rows_with_code", 0))}</strong></div>',
         f'<div class="metric">存在缺口<strong>{esc(summary.get("gap_rows", 0))}</strong></div>',
         "</section>",
-        "<section><h2>追踪矩阵</h2><table><thead><tr><th>需求</th><th>设计依据</th><th>实现目标</th><th>代码文件</th><th>测试/验证</th><th>状态与缺口</th></tr></thead><tbody>",
-        "".join(table) or '<tr><td colspan="6" class="muted">暂无追踪条目</td></tr>',
+        "<section><h2>追踪矩阵</h2><table><thead><tr><th>需求</th><th>原始规格/原型</th><th>设计依据</th><th>实现目标</th><th>代码文件</th><th>测试/验证</th><th>状态与缺口</th></tr></thead><tbody>",
+        "".join(table) or '<tr><td colspan="7" class="muted">暂无追踪条目</td></tr>',
         "</tbody></table></section>",
         f"<section><h2>证据文件</h2><ul>{evidence}</ul></section>",
         "</main></body></html>",

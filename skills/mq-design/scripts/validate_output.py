@@ -190,6 +190,50 @@ def markdown_index_rows(text):
     return rows
 
 
+def mermaid_blocks(text, diagram_type):
+    pattern = r"```mermaid\s*\n\s*" + re.escape(diagram_type) + r"\b([\s\S]*?)```"
+    return [match.group(1) for match in re.finditer(pattern, text)]
+
+
+def service_sequence_participants(block):
+    participants = {}
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"(?i)^(participant|actor)\s+([A-Za-z0-9_]+)(?:\s+as\s+(.+))?$", line)
+        if match:
+            participants[match.group(2)] = (match.group(3) or match.group(2)).strip()
+    return participants
+
+
+def service_sequence_endpoints(block):
+    endpoints = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_\u4e00-\u9fff]+)\s*(?:-+|=+|x-+|-->>|->>|->|-->)\s*([A-Za-z0-9_\u4e00-\u9fff]+)", line)
+        if match:
+            endpoints.extend([match.group(1), match.group(2)])
+    return endpoints
+
+
+def is_service_label(label, forbidden_terms):
+    label = str(label).strip()
+    if not label:
+        return False
+    if any(term and term in label for term in forbidden_terms):
+        return False
+    return "服务" in label or "Service" in label or label.endswith("Svc")
+
+
+def read_json_artifact(payload_path, payload, name):
+    text = read_artifact(payload_path, payload, name)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))

@@ -449,6 +449,7 @@
       "allowed_sections": [
         "1. 修订历史",
         "2. 设计背景与目标摘要",
+        "2.1 原始需求与原型引用矩阵",
         "3. 模块/功能详细设计",
         "3.1. 业务流程图",
         "3.2. UML类图",
@@ -513,7 +514,8 @@
         "high-level-design.md",
         "technology-selection-review.md",
         "repo-context-report.md"
-      ]
+      ],
+      "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |"
     },
     "stage_result": {
       "must_register_specialty_artifacts": [
@@ -535,7 +537,8 @@
         "detailed-design.md 缺少 flowchart",
         "flowchart 后缺少流程设计说明",
         "DDD/分层/扩展点关键词出现但缺少 classDiagram",
-        "涉及 DB/MQ/Redis 但缺少独立专项文档或 StageRunResult 未登记"
+        "涉及 DB/MQ/Redis 但缺少独立专项文档或 StageRunResult 未登记",
+        "缺少原始需求规格或原型引用矩阵"
       ]
     }
   }

@@ -20,6 +20,12 @@ source_artifacts: []
 - 关联概要设计：`high-level-design.md`
 - 核心目标摘要：
 
+### 2.1 原始需求与原型引用矩阵
+
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | requirement_spec / prototype |  |  |  |  | matched / pending_confirmation / conflict |
+
 ## 3. 模块/功能详细设计
 
 ### 3.1. 业务流程图

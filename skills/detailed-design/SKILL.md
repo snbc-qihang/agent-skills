@@ -59,9 +59,10 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 
 
 # 团队详细设计主文档规则
-- `detailed-design.md` 必须按 `assets/detailed-design-template.md` 组织，章节顺序为：1. 修订历史、2. 设计背景与目标摘要、3. 模块/功能详细设计、3.1. 业务流程图、3.2. UML类图、4. 数据库设计、5. 接口定义、5.1. API接口列表、5.2. 中间件设计、6. 单元测试、7. 性能与扩展性设计、8. 人工评审项。
+- `detailed-design.md` 必须按 `assets/detailed-design-template.md` 组织，章节顺序为：1. 修订历史、2. 设计背景与目标摘要、2.1 原始需求与原型引用矩阵、3. 模块/功能详细设计、3.1. 业务流程图、3.2. UML类图、4. 数据库设计、5. 接口定义、5.1. API接口列表、5.2. 中间件设计、6. 单元测试、7. 性能与扩展性设计、8. 人工评审项。
 - 主文档不得包含独立章节：来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线；不得展开数据库字段表、MQ 表格、Redis Key 表格。
 - 来源证据只能进入 `stage-run-result.json`、repo-context 产物或评审证据；技术选型进入概要设计、技术选型评审或 repo-context，除非用户明确要求。
+- `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
 - `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
@@ -84,6 +85,7 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - D9 导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理
 - D10 状态流转说明允许状态、终态、CAS/乐观锁控制、并发竞争处理
 - D11 项目定制功能不能破坏原有通用能力，说明新增模块边界和兼容策略
+- D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异
 - I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi
 - I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD
 - I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口

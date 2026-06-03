@@ -9,6 +9,7 @@ POLICY = {
   "required_sections": [
     "1. 修订历史",
     "2. 设计背景与目标摘要",
+    "2.1 原始需求与原型引用矩阵",
     "3. 模块/功能详细设计",
     "3.1. 业务流程图",
     "3.2. UML类图",
@@ -56,7 +57,8 @@ POLICY = {
     "redis-design.md": "Redis 设计",
     "interface-contracts.yaml": "接口契约",
     "test-strategy.md": "测试策略"
-  }
+  },
+  "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |"
 }
 
 
@@ -202,6 +204,50 @@ def markdown_index_rows(text):
     return rows
 
 
+def mermaid_blocks(text, diagram_type):
+    pattern = r"```mermaid\s*\n\s*" + re.escape(diagram_type) + r"\b([\s\S]*?)```"
+    return [match.group(1) for match in re.finditer(pattern, text)]
+
+
+def service_sequence_participants(block):
+    participants = {}
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"(?i)^(participant|actor)\s+([A-Za-z0-9_]+)(?:\s+as\s+(.+))?$", line)
+        if match:
+            participants[match.group(2)] = (match.group(3) or match.group(2)).strip()
+    return participants
+
+
+def service_sequence_endpoints(block):
+    endpoints = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_\u4e00-\u9fff]+)\s*(?:-+|=+|x-+|-->>|->>|->|-->)\s*([A-Za-z0-9_\u4e00-\u9fff]+)", line)
+        if match:
+            endpoints.extend([match.group(1), match.group(2)])
+    return endpoints
+
+
+def is_service_label(label, forbidden_terms):
+    label = str(label).strip()
+    if not label:
+        return False
+    if any(term and term in label for term in forbidden_terms):
+        return False
+    return "服务" in label or "Service" in label or label.endswith("Svc")
+
+
+def read_json_artifact(payload_path, payload, name):
+    text = read_artifact(payload_path, payload, name)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))
@@ -242,6 +288,8 @@ def validate_output(payload_path, payload):
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
     if any(term in text for term in POLICY["ddd_terms"]) and "classDiagram" not in text:
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
+    if POLICY["source_traceability_header"] not in text:
+        errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
     artifacts = artifact_map(payload)
     for doc_name in POLICY["specialty_docs"]:
         if doc_name not in artifacts:

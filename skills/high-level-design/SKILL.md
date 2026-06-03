@@ -59,10 +59,12 @@ description: Use when the request is about 从需求契约生成概要设计，�
 
 
 # 团队概要设计模板规则
-- `high-level-design.md` 必须按 `assets/high-level-design-template.md` 组织，章节顺序为：1. 版本变更记录、2. 平台概述、3. 系统设计、3.1 系统逻辑视图、3.1.1 系统设计原则、3.3 研发视图、3.4 研发结构定义、4. 核心功能、5.中间件设计、6.数据视图。
+- `high-level-design.md` 必须按 `assets/high-level-design-template.md` 组织，章节顺序为：0. 原始需求与原型追溯、1. 版本变更记录、2. 平台概述、3. 系统设计、3.1 系统逻辑视图、3.1.1 系统设计原则、3.3 研发视图、3.4 研发结构定义、4. 核心功能、4.1.3 跨服务服务间时序图、5.中间件设计、6.数据视图。
 - 不得用通用 `证据`、`Findings`、`必须补充信息`、`门禁决策` 模板替代概要设计正文；这些内容只能进入 `StageRunResult` 或评审产物。
+- `0. 原始需求与原型追溯` 必须列出原始需求规格或原型引用矩阵，字段包含 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；设计事实必须能追溯到规格或原型。
 - `系统设计` 必须覆盖系统逻辑视图、系统设计原则、研发视图和研发结构定义。
 - `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、流程、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、Controller、数据库、Redis、MQ、表、Mapper、Repository 等非服务对象。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 
 
@@ -84,6 +86,8 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - H6 聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰
 - DG1-DG5 正式概要设计必须有文档编号、状态和留存策略；中间过程摘要不得作为正式文档留存
 - H7 high-level-design.md 必须按 `assets/high-level-design-template.md` 的章节顺序生成，不得使用通用证据/Findings/门禁决策模板替代概要设计正文
+- H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository
+- H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态
 4. 生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

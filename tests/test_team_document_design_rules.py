@@ -98,13 +98,13 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             self.assertTrue(path.exists(), f"missing template: {path}")
 
         hld_template = expected[0].read_text(encoding="utf-8")
-        for text in ["1. 版本变更记录", "2. 平台概述", "3.1 系统逻辑视图", "5.中间件设计", "6.数据视图"]:
+        for text in ["0. 原始需求与原型追溯", "source_id", "1. 版本变更记录", "2. 平台概述", "3.1 系统逻辑视图", "4.1.3 跨服务服务间时序图", "sequenceDiagram", "5.中间件设计", "6.数据视图"]:
             self.assertIn(text, hld_template)
         self.assertNotIn("## 证据", hld_template)
         self.assertNotIn("## Findings", hld_template)
 
         detailed_template = expected[1].read_text(encoding="utf-8")
-        for text in ["1. 修订历史", "2. 设计背景与目标摘要", "3.1. 业务流程图", "3.2. UML类图", "4. 数据库设计", "5.2. 中间件设计", "6. 单元测试"]:
+        for text in ["1. 修订历史", "2. 设计背景与目标摘要", "2.1 原始需求与原型引用矩阵", "source_id", "3.1. 业务流程图", "3.2. UML类图", "4. 数据库设计", "5.2. 中间件设计", "6. 单元测试"]:
             self.assertIn(text, detailed_template)
         self.assertIn("flowchart TD", detailed_template)
         self.assertIn("classDiagram", detailed_template)
@@ -150,6 +150,11 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         hld_data = json.loads(hld_case.read_text(encoding="utf-8"))
         self.assertEqual("team_high_level_template_required", hld_data["case_type"])
         self.assertIn("high-level-design.md", "\n".join(hld_data["pass_criteria"]))
+        hld_sequence_case = ROOT / "skills" / "high-level-design" / "evals" / "team_high_level_service_sequence_traceability.yaml"
+        self.assertTrue(hld_sequence_case.exists())
+        hld_sequence_data = json.loads(hld_sequence_case.read_text(encoding="utf-8"))
+        self.assertIn("sequenceDiagram", "\n".join(hld_sequence_data["pass_criteria"]))
+        self.assertIn("source_id", "\n".join(hld_sequence_data["pass_criteria"]))
 
         expected_cases = [
             "team_db_reference_only",
@@ -179,6 +184,12 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             criteria = "\n".join(data["pass_criteria"])
             self.assertIn("强耦合表组模式", criteria)
             self.assertIn("schema-change-plan.sql", criteria)
+
+        code_case = ROOT / "skills" / "code-development" / "evals" / "team_code_source_design_traceability.yaml"
+        self.assertTrue(code_case.exists())
+        code_data = json.loads(code_case.read_text(encoding="utf-8"))
+        self.assertIn("source_id", "\n".join(code_data["pass_criteria"]))
+        self.assertIn("traceability-matrix.json", "\n".join(code_data["pass_criteria"]))
 
     def test_specialty_validators_only_contain_current_skill_rules(self) -> None:
         scripts = {
@@ -276,6 +287,90 @@ sequenceDiagram
         output = result.stdout + result.stderr
         self.assertIn("缺少团队概要设计模板章节", output)
         self.assertIn("通用产物模板标题", output)
+
+    def test_high_level_design_validator_blocks_non_service_sequence_participants(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 开通
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant OrderService as 订单服务
+    participant DB as 数据库
+    User->>OrderService: 提交
+    OrderService->>DB: 写入
+```
+## 5.中间件设计
+## 6.数据视图
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("participant 不是服务", output)
+        self.assertIn("消息端点不是服务", output)
+
+    def test_code_development_validator_requires_source_design_code_traceability(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            summary = root / "implementation-summary.md"
+            summary.write_text("# summary\n", encoding="utf-8")
+            mapping = root / "design-to-code-mapping.yaml"
+            mapping.write_text("- requirement: REQ-001\n  design: detailed-design.md#开通\n  code: src/OrderService.java\n", encoding="utf-8")
+            changed = root / "changed-files-report.json"
+            changed.write_text(json.dumps({"changed_files": ["src/OrderService.java"]}, ensure_ascii=False), encoding="utf-8")
+            matrix = root / "traceability-matrix.json"
+            matrix.write_text(json.dumps({"rows": [{"design_section": "detailed-design.md#开通"}]}, ensure_ascii=False), encoding="utf-8")
+            result_payload = payload(
+                "code-development",
+                [
+                    {"name": "implementation-summary.md", "path": str(summary)},
+                    {"name": "design-to-code-mapping.yaml", "path": str(mapping), "artifact_type": "yaml"},
+                    {"name": "changed-files-report.json", "path": str(changed), "artifact_type": "json"},
+                    {"name": "traceability-matrix.json", "path": str(matrix), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "code-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("code-development", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("design-to-code-mapping.yaml 缺少追踪字段: source_id", output)
+        self.assertIn("traceability-matrix.json 第 1 行缺少追踪字段: code_path", output)
 
     def test_detailed_design_validator_blocks_missing_flow_notes_uml_and_human_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

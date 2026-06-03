@@ -63,6 +63,7 @@ description: Use when the request is about 基于设计文档进行最小必要�
 - 不得依赖聊天上下文记忆替代机读控制面；规则、技术栈、质量命令和停止条件必须来自控制产物。
 - 进入实现、自测、质量治理或代码评审前必须先运行 `validate_control_health.py`；控制面缺失、规则包缺失或 blocking open question 必须阻断。
 - 涉及代码变更后必须运行 `validate_technology_adoption.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `validate_rule_consumption.py`。
+- `code-development` 的 `design-to-code-mapping.yaml` 和 `traceability-matrix.json` 必须串联原始规格/原型 `source_id`、设计章节 `design_section`、代码文件 `code_path` 和验证证据；不能映射到原始规格/原型和设计的代码变更必须阻断。
 
 
 # 操作流程
@@ -76,6 +77,7 @@ description: Use when the request is about 基于设计文档进行最小必要�
 - 测试覆盖
 - 变更摘要
 - 完成实现后必须运行 build_traceability_report.py 刷新 artifacts/_control/traceability-matrix.json 和 docs/human-readable/traceability-report.html
+- CD1 代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据
 - FW1 框架选型必须来自设计、repo_context 或用户确认；缺失时主动询问
 - FW2 Java/Spring 持久化默认使用 mybatis-plus；直接 JDBC 必须有评审批准
 - FW3 实现必须遵循现有仓库 mapper/repository/service 分层和依赖

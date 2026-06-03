@@ -9,6 +9,12 @@ source_artifacts: []
 
 # <系统/项目名称>概要设计
 
+## 0. 原始需求与原型追溯
+
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | requirement_spec / prototype |  |  |  |  | matched / pending_confirmation / conflict |
+
 ## 1. 版本变更记录
 
 | 版本 | 日期 | 变更内容 | 作者 | 评审/批准 |
@@ -44,13 +50,24 @@ flowchart TD
     A["开始"] --> B["处理"]
 ```
 
-#### 4.1.3 状态机设计
+#### 4.1.3 跨服务服务间时序图
+
+```mermaid
+sequenceDiagram
+    participant SourceService as 来源服务
+    participant TargetService as 目标服务
+    SourceService->>TargetService: 服务间调用或事件协作
+```
+
+> 时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。
+
+#### 4.1.4 状态机设计
 
 | 状态 | 条件 | 动作 |
 | --- | --- | --- |
 |  |  |  |
 
-#### 4.1.4 异常流与最终一致性
+#### 4.1.5 异常流与最终一致性
 
 ## 5.中间件设计
 
