@@ -142,7 +142,31 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         ]:
             self.assertIn(table_header, oltp_template)
         self.assertIn("### 4.2 字段定义（按表展开）", oltp_template)
-        self.assertIn("#### 4.2.1 表名", oltp_template)
+        self.assertIn("#### 4.2.1 `{table}`", oltp_template)
+        for text in [
+            "应写明：",
+            "不应重复：",
+            "编写要点：",
+            "示例（请替换为真实业务）：",
+            "方言差异提示：",
+            "编写要求：",
+            "契约含义：",
+            "原则说明（可粘贴到评审）：",
+            "读写分离：",
+            "样例 SQL（MySQL 风格，可按项目替换）",
+            "文档结束",
+        ]:
+            self.assertIn(text, oltp_template)
+        source_template = (ROOT / "inputs" / "关系型(OLTP)详细设计模板.md").read_text(encoding="utf-8")
+        for text in [
+            "## 1. 文档信息",
+            "### 3.2 核心业务场景",
+            "### 5.5 性能保障措施",
+            "### 8.5 冷热分离与只读副本",
+            "### 10.3 样例 SQL（MySQL 风格，可按项目替换）",
+        ]:
+            self.assertIn(text, source_template)
+            self.assertIn(text, oltp_template)
 
     def test_extra_team_eval_cases_are_generated_and_checked_by_runner(self) -> None:
         hld_case = ROOT / "skills" / "high-level-design" / "evals" / "team_high_level_template_required.yaml"
@@ -418,7 +442,7 @@ flowchart TD
             root = Path(temp_dir)
 
             db_doc = root / "database-design.md"
-            db_doc.write_text("UPDATE t_order SET status = 1;\nCREATE TABLE t_order_ext(id bigint);\n", encoding="utf-8")
+            db_doc.write_text("```sql\nUPDATE t_order SET status = 1;\nCREATE TABLE t_order_ext(id bigint);\n```\n", encoding="utf-8")
             db_payload = root / "db-stage-run-result.json"
             db_payload.write_text(json.dumps(payload("database-design", [{"name": "database-design.md", "path": str(db_doc)}]), ensure_ascii=False), encoding="utf-8")
             db_result = run_validator("database-design", db_payload)
@@ -467,6 +491,27 @@ flowchart TD
             waiting_result = run_validator("database-design", waiting_path)
             self.assertNotEqual(0, waiting_result.returncode)
             self.assertIn("required_information_requests", waiting_result.stdout + waiting_result.stderr)
+
+    def test_database_validator_blocks_compressed_oltp_template_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            db_doc = root / "database-design.md"
+            template = (ROOT / "skills" / "database-design" / "assets" / "database-oltp-template.md").read_text(encoding="utf-8")
+            compressed = template.replace("**应写明：**", "").replace("**不应重复：**", "").replace("**编写要点：**", "")
+            db_doc.write_text(compressed, encoding="utf-8")
+            db_payload = root / "db-stage-run-result.json"
+            db_payload.write_text(
+                json.dumps(payload("database-design", [{"name": "database-design.md", "path": str(db_doc)}]), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = run_validator("database-design", db_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("缺少 OLTP 模板固定内容: 应写明：", output)
+        self.assertIn("缺少 OLTP 模板固定内容: 不应重复：", output)
+        self.assertIn("缺少 OLTP 模板固定内容: 编写要点：", output)
 
     def test_database_validator_blocks_inconsistent_strong_table_group_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

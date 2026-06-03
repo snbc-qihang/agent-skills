@@ -142,12 +142,12 @@ DB_OLTP_REQUIRED_SECTIONS = [
     "2.1 编写目的",
     "2.2 设计对象类型",
     "2.3 与其他文档的关系",
-    "2.4 强耦合表组说明",
+    "2.4 强耦合表组说明（若适用）",
     "3. 业务语义与生命周期",
-    "3.1 表的业务职责",
+    "3.1 表的业务职责（业务角色）",
     "3.2 核心业务场景",
     "3.3 数据生命周期阶段",
-    "3.4 状态机",
+    "3.4 状态机（若存在状态字段）",
     "4. 物理结构设计",
     "4.1 建表级环境与约定",
     "4.2 字段定义（按表展开）",
@@ -161,10 +161,10 @@ DB_OLTP_REQUIRED_SECTIONS = [
     "5.3 热点与数据倾斜分析",
     "5.4 容量规划",
     "5.5 性能保障措施",
-    "6. CRUD 契约设计",
+    "6. CRUD 契约设计（OLTP 核心）",
     "6.1 CRUD 总览矩阵",
-    "6.2 强制前置条件",
-    "6.3 禁止操作清单",
+    "6.2 强制前置条件（Mandatory Conditions）",
+    "6.3 禁止操作清单（Prohibited Operations）",
     "6.4 Create",
     "6.5 Read",
     "6.6 Update",
@@ -172,8 +172,8 @@ DB_OLTP_REQUIRED_SECTIONS = [
     "6.8 幂等键与重复请求",
     "6.9 批量操作与数据修复规则",
     "7. 事务、一致性与并发控制",
-    "7.1 本地事务边界",
-    "7.2 跨表一致性",
+    "7.1 本地事务边界（单库）",
+    "7.2 跨表一致性（表组内/跨库）",
     "7.3 并发控制",
     "7.4 数据质量校验",
     "7.5 隔离级别、死锁与重试约定",
@@ -244,6 +244,22 @@ DB_OLTP_REQUIRED_TABLE_HEADERS = [
     "| 检查项 | 结果 | 备注 |",
     "| 类型 | 目的 | 示例 |",
     "| 主题 | 注意点 |",
+]
+
+DB_OLTP_REQUIRED_TEMPLATE_MARKERS = [
+    "应写明：",
+    "不应重复：",
+    "编写要点：",
+    "示例（请替换为真实业务）：",
+    "方言差异提示：",
+    "编写要求：",
+    "契约含义：",
+    "原则说明（可粘贴到评审）：",
+    "读写分离：",
+    "样例 SQL（MySQL 风格，可按项目替换）",
+    "强耦合表组模式标题规则",
+    "强耦合表组模式要求",
+    "文档结束",
 ]
 
 DB_OLTP_REQUIRED_FACT_FIELDS = [
@@ -1812,7 +1828,7 @@ def team_document_note(skill: dict) -> str:
         return """
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
-- OLTP 场景必须严格使用 `assets/database-oltp-template.md` 的章节顺序、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
+- OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
 - 当需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入“强耦合表组模式”，不得生成单表或混合字段池。
 - 强耦合表组模式下，文档标题必须使用 `<业务对象>表组 关系型（OLTP）详细设计`；`设计对象` 必须写成 `强耦合表组：表1、表2、表3...`；`文档定位` 必须明确对象类型，例如 `主表 + 明细表 + 规则表 + 领取主表 + 领取明细表`。
 - 强耦合表组模式下必须生成 `### 2.4 强耦合表组说明`，列头固定为 `成员表 | 角色 | 与主表关系 | 同事务要求 | 备注`；`### 3.1 表的业务职责` 必须按表列出业务职责和唯一事实来源。
@@ -1852,7 +1868,50 @@ def team_document_note(skill: dict) -> str:
     return ""
 
 
+DB_OLTP_TEMPLATE_INPUT = ROOT / "inputs" / "关系型(OLTP)详细设计模板.md"
+
+
+def enhance_database_oltp_template(template: str) -> str:
+    """Apply team database-design extensions without compressing the canonical template."""
+    template = template.replace("\r\n", "\n")
+    template = template.replace(
+        "> **编写原则：** 本文档必须比“建表 DDL”更完整——除字段与索引外，必须明确 **CRUD 契约、幂等与并发、事务边界、禁止操作、批量与修复规则**，作为研发、测试、DBA、审计与排障的统一依据。",
+        "> **编写原则：** 本文档必须比“建表 DDL”更完整——除字段与索引外，必须明确 **CRUD 契约、幂等与并发、事务边界、禁止操作、批量与修复规则**，作为研发、测试、DBA、审计与排障的统一依据。\n> **信息原则：** 缺少事实必须主动询问用户并进入 `waiting_for_input`；除非用户明确允许，不得推测、补造或用示例值替代事实。",
+    )
+    template = template.replace(
+        "| 最后更新 | YYYY-MM-DD |\n\n\n---",
+        "| 最后更新 | YYYY-MM-DD |\n\n强耦合表组模式标题规则：\n\n- 当设计对象为强耦合表组时，文档标题必须改为 `<业务对象>表组 关系型（OLTP）详细设计`。\n- `设计对象` 必须写成 `强耦合表组：表1、表2、表3...`，成员表集合须与 DDL、迁移、回滚和风险报告一致。\n\n---",
+    )
+    template = template.replace(
+        "### 4.2 字段定义（含敏感级别）",
+        "### 4.2 字段定义（按表展开）",
+    )
+    template = template.replace(
+        "**字段说明列至少包含：** 名称、业务含义、类型、空值、默认值、生成策略、敏感级别、是否参与索引、备注（含 **谁可写、何时可改**）。\n\n| 序号 | 字段名 | 中文名 | 类型 | 必填 | 默认值 | 敏感级别 | 说明 |\n|------|--------|--------|------|------|--------|----------|------|\n| 1 | `id` | 主键 | `BIGINT` | 是 | 自增/序列 | 低 | 内部主键 |\n| 2 | `{biz_key}` | 业务唯一键 | `VARCHAR(n)` | 是 | - | 低 | 幂等定位 |\n| 3 | `{tenant_id}` | 租户 | `BIGINT` | 是 | - | 低 | 多租户必带 |\n| 4 | `{status}` | 状态 | `SMALLINT`/`枚举` | 是 | `{默认}` | 低 | 受状态机约束 |\n| 5 | `{amount}` | 金额 | `DECIMAL(18,2)` | 是 | `0` | 中 | 应用+约束校验 |\n| 6 | `{phone}` | 手机号 | `VARCHAR(32)` | 条件必填 | - | **高** | 加密/脱敏策略见 §9 |\n| 7 | `create_time` | 创建时间 | `DATETIME(3)` / `TIMESTAMPTZ` | 是 | `CURRENT_TIMESTAMP` | 低 | 分区/排序 |\n| 8 | `update_time` | 更新时间 | 同左 | 是 | 自动更新 | 低 | 由触发器/应用维护 |\n| 9 | `version` | 乐观锁版本 | `INT` | 是 | `1` | 低 | 并发更新 |",
+        "**字段说明列至少包含：** 字段、类型、必填、默认值、索引、敏感级别、说明；说明中必须覆盖业务含义、生成策略、谁可写、何时可改。\n\n**强耦合表组模式要求：** 每张成员表必须建立独立子章节，例如 `#### 4.2.1 t_xxx_main`，字段不得跨表混放；不适用章节也必须保留并写明“不适用原因”。\n\n#### 4.2.1 `{table}`\n\n| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |\n|------|------|------|--------|------|----------|------|\n| `id` | `BIGINT` | 是 | 自增/序列 | PRIMARY | 低 | 内部主键 |\n| `{biz_key}` | `VARCHAR(n)` | 是 | - | `uk_*` | 低 | 业务唯一键，幂等定位 |\n| `{tenant_id}` | `BIGINT` | 是 | - | `uk_*`/`idx_*` | 低 | 多租户必带 |\n| `{status}` | `SMALLINT`/`枚举` | 是 | `{默认}` | `idx_*` | 低 | 受状态机约束 |\n| `{amount}` | `DECIMAL(18,2)` | 是 | `0` | 否 | 中 | 应用+约束校验 |\n| `{phone}` | `VARCHAR(32)` | 条件必填 | - | 否 | **高** | 加密/脱敏策略见 §9 |\n| `create_time` | `DATETIME(3)` / `TIMESTAMPTZ` | 是 | `CURRENT_TIMESTAMP` | `idx_*` | 低 | 分区/排序 |\n| `update_time` | 同左 | 是 | 自动更新 | 否 | 低 | 由触发器/应用维护 |\n| `version` | `INT` | 是 | `1` | 否 | 低 | 并发更新 |",
+    )
+    template = template.replace(
+        "| 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |\n|--------|------|------------------|------|----------|------|\n| `PRIMARY` | 主键 | `id` | 是 | 内部关联 | — |\n| `uk_{biz}` | 唯一 | `{tenant_id, biz_key}` 或单列 | 是 | 幂等/对外查询 | 注意租户前缀 |\n| `idx_{list}` | 二级 | `{tenant_id, status, create_time}` | 否 | 列表/后台 | 避免低选择性首列 |",
+        "| 表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |\n|----|--------|------|------------------|------|----------|------|\n| `{table}` | `PRIMARY` | 主键 | `id` | 是 | 内部关联 | — |\n| `{table}` | `uk_{biz}` | 唯一 | `{tenant_id, biz_key}` 或单列 | 是 | 幂等/对外查询 | 注意租户前缀 |\n| `{table}` | `idx_{list}` | 二级 | `{tenant_id, status, create_time}` | 否 | 列表/后台 | 避免低选择性首列 |",
+    )
+    template = template.replace(
+        "| 操作 | 典型入口 | 定位键/幂等键 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |\n|------|----------|---------------|--------------|---------------|----------|----------|------|\n| **C** | `{API}` | `{idempotency_key}` + `UNIQUE` | 租户、参数校验 | 创建字段集合 | 手写系统字段 | 唯一冲突即幂等返回 | 创建来源 |\n| **R** | `{API}` | 业务键 + 租户 | 租户过滤 | 列白名单 | `SELECT *` 大查询 | 读写分离规则 | 敏感字段访问 |\n| **U** | `{API}` | 业务键 + `version`/状态 | 状态合法 | 可变态 | 改锚点字段 | 乐观锁/条件更新 | 前后镜像 |\n| **D** | `{API/任务}` | 业务键 | 生命周期允许 | 逻辑删除列 | 在线物理删 | 条件更新 | 原因码 |",
+        "| 操作 | 典型入口 | 参与表 | 定位键/幂等键 | 一致性边界 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |\n|------|----------|--------|---------------|------------|--------------|---------------|----------|----------|------|\n| **C** | `{API}` | `{table}` / `{table_group}` | `{idempotency_key}` + `UNIQUE` | 同事务 / 最终一致 | 租户、参数校验 | 创建字段集合 | 手写系统字段 | 唯一冲突即幂等返回 | 创建来源 |\n| **R** | `{API}` | `{table}` / `{read_model}` | 业务键 + 租户 | 主库强一致 / 只读延迟可接受 | 租户过滤 | 列白名单 | `SELECT *` 大查询 | 读写分离规则 | 敏感字段访问 |\n| **U** | `{API}` | `{table}` / `{table_group}` | 业务键 + `version`/状态 | 同事务 / 最终一致 | 状态合法 | 可变态 | 改锚点字段 | 乐观锁/条件更新 | 前后镜像 |\n| **D** | `{API/任务}` | `{table}` / `{archive}` | 业务键 | 同事务 / 归档后清理 | 生命周期允许 | 逻辑删除列 | 在线物理删 | 条件更新 | 原因码 |",
+    )
+    template = template.replace(
+        "| 场景 ID | 参与表/对象 | 一致性要求 | 提交/回滚 |\n|---------|-------------|------------|-----------|\n| T01 | `{主表}+{明细}` | 强一致 | 单事务 |\n| T02 | `{主表}+{流水}` | 强一致 | 单事务 |\n| T03 | 仅主表 | 强一致 | 单事务 |",
+        "| 场景 ID | 参与表 | 一致性要求 | 提交/回滚策略 | 补偿/核对策略 |\n|---------|--------|------------|----------------|----------------|\n| T01 | `{主表}+{明细}` | 强一致 | 单事务提交；任一成员表失败整体回滚 | 表组关系校验 |\n| T02 | `{主表}+{流水}` | 强一致 | 单事务提交；失败整体回滚 | 日终一致性校验 |\n| T03 | 仅主表 | 强一致 | 单事务提交 | 业务键/状态核对 |",
+    )
+    template = template.replace(
+        "| 关系 | 策略 | 补偿/核对 |\n|------|------|-----------|\n| 同库主明细 | 同事务 | 日终一致性校验任务 |\n| 跨库 | **Saga/本地消息表/TCC**（选其一并说明） | 对账任务、幂等重试 |\n| 读侧延迟 | 明确 **允许延迟** 的场景 | 禁止用于资金最终状态展示 |",
+        "| 关系 | 参与表 | 策略 | 补偿/核对 |\n|------|--------|------|-----------|\n| 同库主明细 | `{主表}+{明细}` | 同事务 | 日终一致性校验任务 |\n| 跨库 | `{本地事实表}+{外部系统}` | **Saga/本地消息表/TCC**（选其一并说明） | 对账任务、幂等重试 |\n| 读侧延迟 | `{事实表}+{读模型}` | 明确 **允许延迟** 的场景 | 禁止用于资金最终状态展示 |",
+    )
+    return template.rstrip() + "\n"
+
+
 def database_oltp_template_md() -> str:
+    if DB_OLTP_TEMPLATE_INPUT.exists():
+        return enhance_database_oltp_template(DB_OLTP_TEMPLATE_INPUT.read_text(encoding="utf-8"))
     return """# 关系型（OLTP）表级详细设计文档模板
 
 > 适用范围：MySQL / PostgreSQL 等关系型 OLTP 场景；面向单表或强耦合表组的物理与行为设计。
@@ -2670,6 +2729,7 @@ def team_validator_script(skill_id: str) -> str:
             "oltp_sections": DB_OLTP_REQUIRED_SECTIONS,
             "olap_sections": DB_OLAP_REQUIRED_SECTIONS,
             "oltp_table_headers": DB_OLTP_REQUIRED_TABLE_HEADERS,
+            "oltp_template_markers": DB_OLTP_REQUIRED_TEMPLATE_MARKERS,
             "oltp_fact_fields": DB_OLTP_REQUIRED_FACT_FIELDS,
             "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
         },
@@ -2821,6 +2881,9 @@ def validate_output(payload_path, payload):
         for header in POLICY["oltp_table_headers"]:
             if header not in text:
                 errors.append("database-design.md 缺少 OLTP 模板表格列头: " + header)
+        for marker in POLICY["oltp_template_markers"]:
+            if marker not in text:
+                errors.append("database-design.md 缺少 OLTP 模板固定内容: " + marker)
         for field in POLICY["oltp_fact_fields"]:
             if field not in text:
                 errors.append("database-design.md 文档信息缺少必填事实字段: " + field)
@@ -2910,9 +2973,10 @@ def validate_output(payload_path, payload):
             for required in ["生产 DDL 审批", "表组同批创建审批", "容量", "QPS", "枚举口径", "幂等键口径"]:
                 if required not in risk_report:
                     errors.append("database-risk-report.json 缺少表组风险: " + required)
-    for match in re.finditer(r"(?is)\b(update|delete)\b([^;]{0,300});", text):
-        if "where" not in match.group(2).lower():
-            errors.append("禁止没有 WHERE 的 UPDATE/DELETE")
+    for block in re.findall(r"```sql\s*\n([\s\S]*?)```", text):
+        for match in re.finditer(r"(?ims)^\s*(update|delete)\b([\s\S]*?);", block):
+            if "where" not in match.group(2).lower():
+                errors.append("禁止没有 WHERE 的 UPDATE/DELETE")
     unresolved = [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
     if unresolved and payload.get("status") not in {"waiting_for_input", "waiting_for_human_review", "blocked"}:
         errors.append("存在未确认信息时必须 waiting_for_input，禁止推测或以占位符输出 succeeded: " + ", ".join(sorted(set(unresolved))))

@@ -15,12 +15,12 @@ POLICY = {
     "2.1 编写目的",
     "2.2 设计对象类型",
     "2.3 与其他文档的关系",
-    "2.4 强耦合表组说明",
+    "2.4 强耦合表组说明（若适用）",
     "3. 业务语义与生命周期",
-    "3.1 表的业务职责",
+    "3.1 表的业务职责（业务角色）",
     "3.2 核心业务场景",
     "3.3 数据生命周期阶段",
-    "3.4 状态机",
+    "3.4 状态机（若存在状态字段）",
     "4. 物理结构设计",
     "4.1 建表级环境与约定",
     "4.2 字段定义（按表展开）",
@@ -34,10 +34,10 @@ POLICY = {
     "5.3 热点与数据倾斜分析",
     "5.4 容量规划",
     "5.5 性能保障措施",
-    "6. CRUD 契约设计",
+    "6. CRUD 契约设计（OLTP 核心）",
     "6.1 CRUD 总览矩阵",
-    "6.2 强制前置条件",
-    "6.3 禁止操作清单",
+    "6.2 强制前置条件（Mandatory Conditions）",
+    "6.3 禁止操作清单（Prohibited Operations）",
     "6.4 Create",
     "6.5 Read",
     "6.6 Update",
@@ -45,8 +45,8 @@ POLICY = {
     "6.8 幂等键与重复请求",
     "6.9 批量操作与数据修复规则",
     "7. 事务、一致性与并发控制",
-    "7.1 本地事务边界",
-    "7.2 跨表一致性",
+    "7.1 本地事务边界（单库）",
+    "7.2 跨表一致性（表组内/跨库）",
     "7.3 并发控制",
     "7.4 数据质量校验",
     "7.5 隔离级别、死锁与重试约定",
@@ -127,6 +127,21 @@ POLICY = {
     "| 检查项 | 结果 | 备注 |",
     "| 类型 | 目的 | 示例 |",
     "| 主题 | 注意点 |"
+  ],
+  "oltp_template_markers": [
+    "应写明：",
+    "不应重复：",
+    "编写要点：",
+    "示例（请替换为真实业务）：",
+    "方言差异提示：",
+    "编写要求：",
+    "契约含义：",
+    "原则说明（可粘贴到评审）：",
+    "读写分离：",
+    "样例 SQL（MySQL 风格，可按项目替换）",
+    "强耦合表组模式标题规则",
+    "强耦合表组模式要求",
+    "文档结束"
   ],
   "oltp_fact_fields": [
     "文档名称",
@@ -369,6 +384,9 @@ def validate_output(payload_path, payload):
         for header in POLICY["oltp_table_headers"]:
             if header not in text:
                 errors.append("database-design.md 缺少 OLTP 模板表格列头: " + header)
+        for marker in POLICY["oltp_template_markers"]:
+            if marker not in text:
+                errors.append("database-design.md 缺少 OLTP 模板固定内容: " + marker)
         for field in POLICY["oltp_fact_fields"]:
             if field not in text:
                 errors.append("database-design.md 文档信息缺少必填事实字段: " + field)
@@ -458,9 +476,10 @@ def validate_output(payload_path, payload):
             for required in ["生产 DDL 审批", "表组同批创建审批", "容量", "QPS", "枚举口径", "幂等键口径"]:
                 if required not in risk_report:
                     errors.append("database-risk-report.json 缺少表组风险: " + required)
-    for match in re.finditer(r"(?is)\b(update|delete)\b([^;]{0,300});", text):
-        if "where" not in match.group(2).lower():
-            errors.append("禁止没有 WHERE 的 UPDATE/DELETE")
+    for block in re.findall(r"```sql\s*\n([\s\S]*?)```", text):
+        for match in re.finditer(r"(?ims)^\s*(update|delete)\b([\s\S]*?);", block):
+            if "where" not in match.group(2).lower():
+                errors.append("禁止没有 WHERE 的 UPDATE/DELETE")
     unresolved = [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
     if unresolved and payload.get("status") not in {"waiting_for_input", "waiting_for_human_review", "blocked"}:
         errors.append("存在未确认信息时必须 waiting_for_input，禁止推测或以占位符输出 succeeded: " + ", ".join(sorted(set(unresolved))))
