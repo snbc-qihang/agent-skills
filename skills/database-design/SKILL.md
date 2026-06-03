@@ -61,6 +61,13 @@ description: Use when the request is about 设计数据库表结构、索引、�
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
 - OLTP 场景必须严格使用 `assets/database-oltp-template.md` 的章节顺序、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
+- 当需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入“强耦合表组模式”，不得生成单表或混合字段池。
+- 强耦合表组模式下，文档标题必须使用 `<业务对象>表组 关系型（OLTP）详细设计`；`设计对象` 必须写成 `强耦合表组：表1、表2、表3...`；`文档定位` 必须明确对象类型，例如 `主表 + 明细表 + 规则表 + 领取主表 + 领取明细表`。
+- 强耦合表组模式下必须生成 `### 2.4 强耦合表组说明`，列头固定为 `成员表 | 角色 | 与主表关系 | 同事务要求 | 备注`；`### 3.1 表的业务职责` 必须按表列出业务职责和唯一事实来源。
+- 强耦合表组模式下 `### 4.2 字段定义（按表展开）` 必须为每张表生成独立子章节，例如 `#### 4.2.1 表名`；字段表列头必须包含 `字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明`。
+- 强耦合表组模式下 `### 4.3 索引设计` 必须逐表列出索引，列头固定为 `表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注`；索引必须能归属到具体表。
+- 强耦合表组模式下 `schema-change-plan.sql` 必须为设计对象中每张成员表生成 `CREATE TABLE`，唯一键和普通索引必须与 `database-design.md` 的索引设计一致，禁止只生成单表或承载全部字段的混合表。
+- 强耦合表组模式下 `migration-plan.md` 必须说明表组同批创建、同批校验、逐表索引 explain 和表组关系校验；`rollback-plan.md` 必须说明应用发布后不得只删除或回滚表组中的单张事实表；`database-risk-report.json` 必须覆盖生产 DDL 审批、表组同批创建审批、容量/QPS、枚举口径和幂等键口径。
 - ClickHouse、物化视图或分析宽表使用 `assets/database-olap-template.md`。
 - 过程中缺少库名、实例、版本、负责人、字段口径、索引用途、QPS/容量、审批状态、敏感级别等事实时，必须主动输出 `required_information_requests` 询问用户，状态置为 `waiting_for_input`；除非用户明确允许，不得推测。
 - `succeeded`、`approved` 或 `final` 输出不得包含 `{占位符}`、`待补充`、`待确认`、`未知`、`TODO/TBD` 等未决标记。
@@ -85,6 +92,8 @@ description: Use when the request is about 设计数据库表结构、索引、�
 - DB10 未确认库名、实例、字符集、索引名时，不得标记为 approved/final
 - DB11 关系型 OLTP 输出必须保持 `assets/database-oltp-template.md` 的章节顺序、标题名称和表格列头；不适用章节必须保留并写明不适用原因
 - DB12 缺少库名、实例、版本、负责人、字段口径、索引用途、QPS/容量、审批状态、敏感级别等事实时，必须进入 waiting_for_input 并输出 required_information_requests；除非用户明确允许，不得推测
+- DB13 需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入强耦合表组模式，不得生成单表或混合字段池
+- DB14 强耦合表组模式下，标题、设计对象、文档定位、2.4 表组说明、3.1 逐表职责、4.2 逐表字段、4.3 逐表索引、CRUD 参与表、事务一致性、迁移、回滚、风险报告和 DDL 的表集合必须一致
 4. 生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

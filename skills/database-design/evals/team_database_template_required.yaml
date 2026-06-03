@@ -59,7 +59,10 @@
     "forbidden_behavior 未出现在输出决策中",
     "database-design.md 必须按 assets/database-oltp-template.md 或 assets/database-olap-template.md 生成",
     "OLTP 章节顺序、标题名称和表格列头必须与关系型(OLTP)详细设计模板一致",
-    "缺少库名、实例、版本、负责人、索引用途、QPS/容量、审批状态、敏感级别等事实时必须 waiting_for_input"
+    "缺少库名、实例、版本、负责人、索引用途、QPS/容量、审批状态、敏感级别等事实时必须 waiting_for_input",
+    "多事实对象、主明细、配置+规则+记录、主表+参数表+大字段表、领取主记录+领取明细必须进入强耦合表组模式",
+    "强耦合表组模式下标题、设计对象、2.4 表组说明、3.1 逐表职责、4.2 逐表字段、4.3 逐表索引、CRUD 参与表和事务一致性必须完整",
+    "schema-change-plan.sql、migration-plan.md、rollback-plan.md、database-risk-report.json 的成员表集合和表组口径必须与 database-design.md 一致"
   ],
   "severity_when_failed": "critical",
   "grader": {

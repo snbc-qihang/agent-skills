@@ -23,7 +23,7 @@ POLICY = {
     "3.4 状态机",
     "4. 物理结构设计",
     "4.1 建表级环境与约定",
-    "4.2 字段定义",
+    "4.2 字段定义（按表展开）",
     "4.3 索引设计",
     "4.4 约束与数据库对象",
     "4.5 字段可变性矩阵",
@@ -90,8 +90,8 @@ POLICY = {
     "| 场景 ID | 场景名称 | 触发入口 | 主要 SQL 形态 | 优先级 | 频率/峰值 |",
     "| 阶段 | 进入条件 | 允许的操作类型 | 对外可见性 | 数据留存策略 |",
     "| 当前状态",
-    "| 字段名 | 中文名 | 类型 | 必填 | 默认值 | 敏感级别 | 说明 |",
-    "| 索引名 | 类型 | 字段",
+    "| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |",
+    "| 表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |",
     "| 类别 | 规则 | 实现方式 | 备注 |",
     "| 字段 | 创建时赋值 | 运行中可改 | 结束态可改 | 修改主体 | 约束/备注 |",
     "| 依赖项 | 版本/规格 | 本文档是否依赖 | 说明 |",
@@ -100,7 +100,7 @@ POLICY = {
     "| 热点类型 | 表现 | 发生条件 | 缓解措施 |",
     "| 资源 | 估算方法 | 目标值 | 说明 |",
     "| 措施 | 适用场景 | 实施状态 | 说明 |",
-    "| 操作 | 典型入口 | 定位键/幂等键 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |",
+    "| 操作 | 典型入口 | 参与表 | 定位键/幂等键 | 一致性边界 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |",
     "| 操作 | 编号 | 强制条件",
     "| 编号 | 禁止行为 | 适用范围 | 例外",
     "| 规则项 | 要求 |",
@@ -109,8 +109,8 @@ POLICY = {
     "| 操作 | 策略 | 前置条件 | 审批 |",
     "| 层级 | 机制 | 说明 |",
     "| 类型 | 允许条件 | 事务与批次 | 记录要求 |",
-    "| 场景 ID | 参与表/对象 | 一致性要求 | 提交/回滚 |",
-    "| 关系 | 策略 | 补偿/核对 |",
+    "| 场景 ID | 参与表 | 一致性要求 | 提交/回滚策略 | 补偿/核对策略 |",
+    "| 关系 | 参与表 | 策略 | 补偿/核对 |",
     "| 场景 | 策略 | 说明 |",
     "| 校验项 | 规则 | 频率 | 失败处理 |",
     "| 主题 | 约定 |",
@@ -199,6 +199,106 @@ def markdown_headings(text):
     return [match.group(1).strip() for match in re.finditer(r"(?m)^#{1,6}\s*(?:\d+(?:\.\d+)*\s*)?(.+?)\s*$", text)]
 
 
+def table_cells(line):
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return []
+    return [cell.strip() for cell in stripped.strip("|").split("|")]
+
+
+def is_separator_row(line):
+    cells = table_cells(line)
+    return bool(cells) and all(re.fullmatch(r":?-{2,}:?", cell.replace(" ", "")) for cell in cells)
+
+
+def section_text(text, heading, next_heading_pattern=r"^#{1,3}\s*\d+(?:\.\d+)*\s+"):
+    start = text.find(heading)
+    if start < 0:
+        return ""
+    tail = text[start:]
+    match = re.search(r"(?m)" + next_heading_pattern, tail[len(heading):])
+    return tail if not match else tail[: len(heading) + match.start()]
+
+
+def normalize_table_name(value):
+    value = value.strip().strip("`").strip()
+    if "." in value:
+        value = value.split(".")[-1].strip("`")
+    return value
+
+
+def extract_table_names(value):
+    return [normalize_table_name(item) for item in re.findall(r"`?([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*|t_[a-zA-Z0-9_]+)`?", value)]
+
+
+def design_object_value(text):
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 2 and cells[0] == "设计对象":
+            return cells[1]
+    return ""
+
+
+def object_type_value(text):
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 2 and cells[0] == "对象类型":
+            return cells[1]
+    return ""
+
+
+def table_group_members(text):
+    names = []
+    names.extend(extract_table_names(design_object_value(text)))
+    group = section_text(text, "2.4 强耦合表组说明")
+    for line in group.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 5 and cells[0] != "成员表" and not is_separator_row(line):
+            names.extend(extract_table_names(cells[0]))
+    deduped = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
+def create_table_names(sql):
+    names = []
+    pattern = r"(?is)\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:`?[a-zA-Z][a-zA-Z0-9_]*`?\.)?`?([a-zA-Z][a-zA-Z0-9_]*)`?"
+    for match in re.finditer(pattern, sql):
+        names.append(normalize_table_name(match.group(1)))
+    return names
+
+
+def ddl_index_names(sql, table):
+    names = set()
+    table_pattern = re.escape(table)
+    match = re.search(r"(?is)\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:`?[a-zA-Z][a-zA-Z0-9_]*`?\.)?`?" + table_pattern + r"`?\s*\((.*?)\)\s*;", sql)
+    if not match:
+        return names
+    body = match.group(1)
+    if re.search(r"(?is)\bprimary\s+key\b", body):
+        names.add("PRIMARY")
+    for index_match in re.finditer(r"(?is)\b(?:unique\s+)?(?:key|index)\s+`?([a-zA-Z][a-zA-Z0-9_]*)`?", body):
+        names.add(index_match.group(1))
+    return names
+
+
+def markdown_index_rows(text):
+    rows = []
+    in_index_table = False
+    for line in section_text(text, "4.3 索引设计").splitlines():
+        cells = table_cells(line)
+        if cells == ["表", "索引名", "类型", "字段（顺序敏感）", "唯一", "服务场景", "备注"]:
+            in_index_table = True
+            continue
+        if not in_index_table or is_separator_row(line):
+            continue
+        if len(cells) >= 7:
+            rows.append({"table": normalize_table_name(cells[0]), "name": cells[1], "unique": cells[4]})
+    return rows
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))
@@ -231,6 +331,89 @@ def validate_output(payload_path, payload):
         for required_text in ["MC-", "PO-", "QPS", "P99", "DDL SQL", "兼容性说明", "敏感级别", "幂等"]:
             if required_text not in text:
                 errors.append("database-design.md 缺少 OLTP 强制内容: " + required_text)
+        design_value = design_object_value(text)
+        member_tables = table_group_members(text)
+        object_type = object_type_value(text)
+        strong_group = "强耦合表组：" in design_value or "强耦合表组:" in design_value or len(member_tables) >= 2 or "表组 关系型（OLTP）详细设计" in "\n".join(text.splitlines()[:3])
+        if "强耦合表组" in text and "2.4 强耦合表组说明" not in text:
+            errors.append("database-design.md 包含强耦合表组但缺少 2.4 强耦合表组说明")
+        if strong_group:
+            if "表组 关系型（OLTP）详细设计" not in "\n".join(text.splitlines()[:5]):
+                errors.append("强耦合表组模式下文档标题必须使用 <业务对象>表组 关系型（OLTP）详细设计")
+            if not re.search(r"设计对象\s*\|\s*强耦合表组[：:]", text):
+                errors.append("强耦合表组模式下 1. 文档信息的设计对象必须写成 强耦合表组：表1、表2、表3...")
+            if len(member_tables) < 2:
+                errors.append("强耦合表组模式下设计对象或 2.4 表组说明至少要列出两张成员表")
+            if not any(term in object_type for term in ["主表", "明细", "规则", "参数", "大字段", "领取", "配置", "+"]):
+                errors.append("强耦合表组模式下 2. 文档定位必须明确对象类型，例如 主表 + 明细表 + 规则表")
+            required_group_header = "| 成员表 | 角色 | 与主表关系 | 同事务要求 | 备注 |"
+            if required_group_header not in text:
+                errors.append("2.4 强耦合表组说明列头必须固定为: " + required_group_header)
+            responsibility = section_text(text, "3.1 表的业务职责")
+            if "唯一事实来源" not in responsibility:
+                errors.append("3.1 表的业务职责必须按表列出唯一事实来源")
+            for table in member_tables:
+                if table not in responsibility:
+                    errors.append("3.1 表的业务职责缺少成员表: " + table)
+            if "4.2 字段定义（按表展开）" not in text:
+                errors.append("强耦合表组模式下 4.2 必须命名为 字段定义（按表展开）")
+            field_section = section_text(text, "4.2 字段定义（按表展开）")
+            if not re.search(r"(?m)^####\s+4\.2\.\d+\s+", field_section):
+                errors.append("多表场景下 4.2 字段定义必须逐表建立 #### 4.2.x 表名 子章节")
+            required_field_header = "| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |"
+            if required_field_header not in field_section:
+                errors.append("每张表字段表列头必须包含: " + required_field_header)
+            for table in member_tables:
+                if not re.search(r"(?m)^####\s+4\.2\.\d+\s+" + re.escape(table) + r"\b", field_section):
+                    errors.append("4.2 字段定义缺少成员表子章节: " + table)
+            required_index_header = "| 表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |"
+            if required_index_header not in text:
+                errors.append("4.3 索引设计列头必须固定为: " + required_index_header)
+            index_rows = markdown_index_rows(text)
+            indexed_tables = {row["table"] for row in index_rows if row.get("table")}
+            for table in member_tables:
+                if table not in indexed_tables:
+                    errors.append("4.3 索引设计缺少成员表索引归属: " + table)
+            crud_section = section_text(text, "6.1 CRUD 总览矩阵")
+            if "参与表" not in crud_section:
+                errors.append("CRUD 总览矩阵必须包含 参与表")
+            if not any(term in crud_section for term in ["同事务", "最终一致", "一致性边界"]):
+                errors.append("CRUD 总览矩阵必须描述跨表同事务或最终一致性边界")
+            transaction_section = section_text(text, "7. 事务、一致性与并发控制", r"^##\s+\d+\.\s+")
+            for required in ["参与表", "提交/回滚", "补偿/核对"]:
+                if required not in transaction_section:
+                    errors.append("事务、一致性与并发控制缺少表组口径: " + required)
+            for table in member_tables:
+                if table not in transaction_section:
+                    errors.append("事务、一致性与并发控制缺少成员表: " + table)
+            schema_sql = read_artifact(payload_path, payload, "schema-change-plan.sql")
+            if not schema_sql:
+                errors.append("强耦合表组模式下缺少 schema-change-plan.sql artifact 或文件不可读")
+            else:
+                ddl_tables = create_table_names(schema_sql)
+                if len(ddl_tables) < len(member_tables):
+                    errors.append("设计对象列出多张表，但 schema-change-plan.sql 的 CREATE TABLE 数量少于设计对象表数量")
+                for table in member_tables:
+                    if table not in ddl_tables:
+                        errors.append("schema-change-plan.sql 缺少成员表 CREATE TABLE: " + table)
+                for row in index_rows:
+                    table = row.get("table", "")
+                    index_name = row.get("name", "")
+                    if table in member_tables and index_name and index_name not in {"不适用", "无"}:
+                        ddl_indexes = ddl_index_names(schema_sql, table)
+                        if index_name not in ddl_indexes:
+                            errors.append(f"schema-change-plan.sql 中 {table} 缺少与索引设计一致的索引: {index_name}")
+            migration = read_artifact(payload_path, payload, "migration-plan.md")
+            for required in ["表组同批创建", "同批校验", "逐表索引 explain", "表组关系校验"]:
+                if required not in migration:
+                    errors.append("migration-plan.md 缺少表组口径: " + required)
+            rollback = read_artifact(payload_path, payload, "rollback-plan.md")
+            if not (("不得只删除" in rollback or "不得只回滚" in rollback) and "孤立" in rollback):
+                errors.append("rollback-plan.md 必须说明应用发布后不得只删除或回滚表组中的单张事实表，避免孤立配置、孤立明细或主明细不一致")
+            risk_report = read_artifact(payload_path, payload, "database-risk-report.json")
+            for required in ["生产 DDL 审批", "表组同批创建审批", "容量", "QPS", "枚举口径", "幂等键口径"]:
+                if required not in risk_report:
+                    errors.append("database-risk-report.json 缺少表组风险: " + required)
     for match in re.finditer(r"(?is)\b(update|delete)\b([^;]{0,300});", text):
         if "where" not in match.group(2).lower():
             errors.append("禁止没有 WHERE 的 UPDATE/DELETE")

@@ -132,11 +132,17 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         self.assertEqual(sorted(positions), positions)
         for table_header in [
             "| 项目 | 内容 |",
-            "| 操作 | 典型入口 | 定位键/幂等键 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |",
+            "| 成员表 | 角色 | 与主表关系 | 同事务要求 | 备注 |",
+            "| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |",
+            "| 表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |",
+            "| 操作 | 典型入口 | 参与表 | 定位键/幂等键 | 一致性边界 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |",
+            "| 场景 ID | 参与表 | 一致性要求 | 提交/回滚策略 | 补偿/核对策略 |",
             "| 编号 | 禁止行为 | 适用范围 | 例外（须工单+审批） |",
             "| 检查项 | 结果 | 备注 |",
         ]:
             self.assertIn(table_header, oltp_template)
+        self.assertIn("### 4.2 字段定义（按表展开）", oltp_template)
+        self.assertIn("#### 4.2.1 表名", oltp_template)
 
     def test_extra_team_eval_cases_are_generated_and_checked_by_runner(self) -> None:
         hld_case = ROOT / "skills" / "high-level-design" / "evals" / "team_high_level_template_required.yaml"
@@ -164,6 +170,15 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         runner = (ROOT / "engineering-assistant" / "scripts" / "run_skill_evals.py").read_text(encoding="utf-8")
         self.assertIn('glob("*.yaml")', runner)
         self.assertIn("StageRunResult.artifacts", runner)
+
+        for case in ["team_database_open_door_event_table_group", "team_database_member_private_domain_table_group"]:
+            path = ROOT / "skills" / "database-design" / "evals" / f"{case}.yaml"
+            self.assertTrue(path.exists(), f"missing eval case: {case}")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(case, data["case_type"])
+            criteria = "\n".join(data["pass_criteria"])
+            self.assertIn("强耦合表组模式", criteria)
+            self.assertIn("schema-change-plan.sql", criteria)
 
     def test_specialty_validators_only_contain_current_skill_rules(self) -> None:
         scripts = {
@@ -357,6 +372,180 @@ flowchart TD
             waiting_result = run_validator("database-design", waiting_path)
             self.assertNotEqual(0, waiting_result.returncode)
             self.assertIn("required_information_requests", waiting_result.stdout + waiting_result.stderr)
+
+    def test_database_validator_blocks_inconsistent_strong_table_group_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            db_doc = root / "database-design.md"
+            db_doc.write_text(
+                """# 配置领取表组 关系型（OLTP）详细设计
+
+## 1. 文档信息
+| 项目 | 内容 |
+|------|------|
+| 文档名称 | 配置领取表组 关系型（OLTP）详细设计 |
+| 逻辑库/Schema | biz_schema |
+| 物理库标识 | biz_schema |
+| 所属集群/实例 | biz-mysql |
+| 设计对象 | 强耦合表组：t_biz_config_main、t_biz_config_param |
+| 数据库产品 | MySQL |
+| 数据库版本 | 8.0 |
+| 编写日期 | 2026-06-03 |
+| 编写人 | DBA |
+| 业务负责人 | 会员域 |
+| DBA 负责人 | DBA |
+| 安全/合规接口人 | security |
+
+### 1.1 变更记录
+| 版本 | 日期 | 变更原因/依据 | 变更摘要 | 变更人 | 评审/批准 |
+|------|------|---------------|----------|--------|-----------|
+
+### 1.2 术语定义
+| 术语 | 说明 |
+|------|------|
+
+### 1.3 参考文档
+| 文档名 | 关联类型 | 参考说明 |
+|------|------|------|
+
+## 2. 文档定位
+### 2.1 编写目的
+### 2.2 设计对象类型
+| 项目 | 内容 |
+|------|------|
+| 对象类型 | 配置表 + 入口配置表 |
+| 是否强耦合表组 | 是 |
+### 2.3 与其他文档的关系
+### 2.4 强耦合表组说明
+| 成员表 | 角色 | 与主表关系 | 同事务要求 | 备注 |
+|--------|------|------------|------------|------|
+| t_biz_config_main | 主表 | 主表 | 是 | 配置主记录 |
+| t_biz_config_param | 参数表 | main_id | 是 | 配置参数 |
+
+## 3. 业务语义与生命周期
+### 3.1 表的业务职责
+| 表 | 业务职责 | 唯一事实来源 | 写入方 | 读取方 | 备注 |
+|----|----------|--------------|--------|--------|------|
+| t_biz_config_main | 配置主记录 | MySQL 本表 | MQ 消费 | 客户端 |  |
+| t_biz_config_param | 配置参数 | MySQL 本表 | MQ 消费 | 客户端 |  |
+### 3.2 核心业务场景
+| 场景 ID | 场景名称 | 触发入口 | 主要 SQL 形态 | 优先级 | 频率/峰值 | 说明 |
+|---------|----------|----------|---------------|--------|-----------|------|
+### 3.3 数据生命周期阶段
+| 阶段 | 进入条件 | 允许的操作类型 | 对外可见性 | 数据留存策略 |
+|------|----------|----------------|------------|--------------|
+### 3.4 状态机
+| 当前状态（值/枚举名） | 允许迁移至 | 触发动作/事件 | 是否可回退 | 备注 |
+|----------------------|------------|---------------|------------|------|
+
+## 4. 物理结构设计
+### 4.1 建表级环境与约定
+### 4.2 字段定义（按表展开）
+#### 4.2.1 t_biz_config_main
+| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |
+|------|------|------|--------|------|----------|------|
+| id | BIGINT | 是 | 无 | PRIMARY | 低 | 主键 |
+#### 4.2.2 t_biz_config_param
+| 字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明 |
+|------|------|------|--------|------|----------|------|
+| id | BIGINT | 是 | 无 | PRIMARY | 低 | 主键 |
+### 4.3 索引设计
+| 表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |
+|----|--------|------|------------------|------|----------|------|
+| t_biz_config_main | PRIMARY | 主键 | id | 是 | 内部关联 |  |
+| t_biz_config_param | idx_main_id | 普通索引 | main_id | 否 | 按主记录查参数 |  |
+### 4.4 约束与数据库对象
+### 4.5 字段可变性矩阵
+### 4.6 技术实现依赖
+## 5. 数据量与性能设计
+### 5.1 数据量估算
+### 5.2 读写 QPS 与延迟 SLA
+### 5.3 热点与数据倾斜分析
+### 5.4 容量规划
+### 5.5 性能保障措施
+## 6. CRUD 契约设计
+### 6.1 CRUD 总览矩阵
+| 操作 | 典型入口 | 参与表 | 定位键/幂等键 | 一致性边界 | 必备前置条件 | 允许字段/投影 | 明确禁止 | 并发控制 | 审计 |
+|------|----------|--------|---------------|------------|--------------|---------------|----------|----------|------|
+| C | MQ 消费 | t_biz_config_main、t_biz_config_param | biz_code | 同事务 | MC-C1 | 配置字段 | 物理删除 | 幂等 | 记录 |
+### 6.2 强制前置条件
+| 操作 | 编号 | 强制条件（不满足则拒绝） | 错误码/HTTP 建议 |
+|------|------|---------------------------|------------------|
+| Create | MC-C1 | 幂等键存在 |  |
+### 6.3 禁止操作清单
+| 编号 | 禁止行为 | 适用范围 | 例外（须工单+审批） |
+|------|----------|----------|---------------------|
+| PO-01 | 无 WHERE 的 UPDATE/DELETE | 全部环境 | 不存在 |
+### 6.4 Create
+### 6.5 Read
+### 6.6 Update
+### 6.7 Delete
+### 6.8 幂等键与重复请求
+### 6.9 批量操作与数据修复规则
+## 7. 事务、一致性与并发控制
+### 7.1 本地事务边界
+| 场景 ID | 参与表 | 一致性要求 | 提交/回滚策略 | 补偿/核对策略 |
+|---------|--------|------------|----------------|----------------|
+| T01 | t_biz_config_main、t_biz_config_param | 强一致 | 提交/回滚同事务 | 补偿/核对 |
+### 7.2 跨表一致性
+### 7.3 并发控制
+### 7.4 数据质量校验
+### 7.5 隔离级别、死锁与重试约定
+### 7.6 跨表最终一致
+## 8. 分区、分片与归档设计
+### 8.1 路由与分片规则
+### 8.2 分区策略
+### 8.3 查询策略
+### 8.4 归档与保留
+### 8.5 冷热分离与只读副本
+## 9. 安全与审计设计
+### 9.1 敏感字段清单
+### 9.2 脱敏与掩码规则
+### 9.3 访问控制
+### 9.4 审计要求
+## 10. 测试与验收
+### 10.1 验收检查表
+| 检查项 | 结果 | 备注 |
+|--------|------|------|
+### 10.2 测试用例类型
+### 10.3 样例 SQL
+## 11. 附录
+### 11.1 DDL SQL
+### 11.2 兼容性说明
+""",
+                encoding="utf-8",
+            )
+            schema = root / "schema-change-plan.sql"
+            schema.write_text("CREATE TABLE t_biz_config_main (id BIGINT PRIMARY KEY);", encoding="utf-8")
+            migration = root / "migration-plan.md"
+            migration.write_text("只建主表。", encoding="utf-8")
+            rollback = root / "rollback-plan.md"
+            rollback.write_text("允许单表回滚。", encoding="utf-8")
+            risk = root / "database-risk-report.json"
+            risk.write_text(json.dumps({"risks": ["生产 DDL 审批"]}, ensure_ascii=False), encoding="utf-8")
+            result_payload = payload(
+                "database-design",
+                [
+                    {"name": "database-design.md", "path": str(db_doc)},
+                    {"name": "schema-change-plan.sql", "path": str(schema), "artifact_type": "sql"},
+                    {"name": "migration-plan.md", "path": str(migration)},
+                    {"name": "rollback-plan.md", "path": str(rollback)},
+                    {"name": "database-risk-report.json", "path": str(risk), "artifact_type": "json"},
+                ],
+                status="waiting_for_human_review",
+            )
+            payload_path = root / "db-table-group-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("database-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("CREATE TABLE 数量少于设计对象表数量", output)
+        self.assertIn("缺少成员表 CREATE TABLE: t_biz_config_param", output)
+        self.assertIn("migration-plan.md 缺少表组口径", output)
+        self.assertIn("rollback-plan.md 必须说明", output)
+        self.assertIn("database-risk-report.json 缺少表组风险", output)
 
 
 if __name__ == "__main__":

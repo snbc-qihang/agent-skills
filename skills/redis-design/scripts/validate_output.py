@@ -87,6 +87,106 @@ def markdown_headings(text):
     return [match.group(1).strip() for match in re.finditer(r"(?m)^#{1,6}\s*(?:\d+(?:\.\d+)*\s*)?(.+?)\s*$", text)]
 
 
+def table_cells(line):
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return []
+    return [cell.strip() for cell in stripped.strip("|").split("|")]
+
+
+def is_separator_row(line):
+    cells = table_cells(line)
+    return bool(cells) and all(re.fullmatch(r":?-{2,}:?", cell.replace(" ", "")) for cell in cells)
+
+
+def section_text(text, heading, next_heading_pattern=r"^#{1,3}\s*\d+(?:\.\d+)*\s+"):
+    start = text.find(heading)
+    if start < 0:
+        return ""
+    tail = text[start:]
+    match = re.search(r"(?m)" + next_heading_pattern, tail[len(heading):])
+    return tail if not match else tail[: len(heading) + match.start()]
+
+
+def normalize_table_name(value):
+    value = value.strip().strip("`").strip()
+    if "." in value:
+        value = value.split(".")[-1].strip("`")
+    return value
+
+
+def extract_table_names(value):
+    return [normalize_table_name(item) for item in re.findall(r"`?([a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z][a-zA-Z0-9_]*|t_[a-zA-Z0-9_]+)`?", value)]
+
+
+def design_object_value(text):
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 2 and cells[0] == "设计对象":
+            return cells[1]
+    return ""
+
+
+def object_type_value(text):
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 2 and cells[0] == "对象类型":
+            return cells[1]
+    return ""
+
+
+def table_group_members(text):
+    names = []
+    names.extend(extract_table_names(design_object_value(text)))
+    group = section_text(text, "2.4 强耦合表组说明")
+    for line in group.splitlines():
+        cells = table_cells(line)
+        if len(cells) >= 5 and cells[0] != "成员表" and not is_separator_row(line):
+            names.extend(extract_table_names(cells[0]))
+    deduped = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
+def create_table_names(sql):
+    names = []
+    pattern = r"(?is)\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:`?[a-zA-Z][a-zA-Z0-9_]*`?\.)?`?([a-zA-Z][a-zA-Z0-9_]*)`?"
+    for match in re.finditer(pattern, sql):
+        names.append(normalize_table_name(match.group(1)))
+    return names
+
+
+def ddl_index_names(sql, table):
+    names = set()
+    table_pattern = re.escape(table)
+    match = re.search(r"(?is)\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:`?[a-zA-Z][a-zA-Z0-9_]*`?\.)?`?" + table_pattern + r"`?\s*\((.*?)\)\s*;", sql)
+    if not match:
+        return names
+    body = match.group(1)
+    if re.search(r"(?is)\bprimary\s+key\b", body):
+        names.add("PRIMARY")
+    for index_match in re.finditer(r"(?is)\b(?:unique\s+)?(?:key|index)\s+`?([a-zA-Z][a-zA-Z0-9_]*)`?", body):
+        names.add(index_match.group(1))
+    return names
+
+
+def markdown_index_rows(text):
+    rows = []
+    in_index_table = False
+    for line in section_text(text, "4.3 索引设计").splitlines():
+        cells = table_cells(line)
+        if cells == ["表", "索引名", "类型", "字段（顺序敏感）", "唯一", "服务场景", "备注"]:
+            in_index_table = True
+            continue
+        if not in_index_table or is_separator_row(line):
+            continue
+        if len(cells) >= 7:
+            rows.append({"table": normalize_table_name(cells[0]), "name": cells[1], "unique": cells[4]})
+    return rows
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))
