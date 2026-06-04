@@ -42,6 +42,8 @@ def run_scored_evals() -> dict:
     checks.append({"id": "route-negative", "status": "pass" if route_negative.get("status") == "rejected" else "block", "detail": route_negative})
     route_canary, _ = run_json_command([sys.executable, "engineering-assistant/scripts/route_skill.py", "--prompt", "继续推进任务 complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime"])
     checks.append({"id": "route-ai-platform-next-action", "status": "pass" if route_canary.get("status") == "waiting_for_input" and route_canary.get("candidates") else "block", "detail": route_canary})
+    manifest_result, _ = run_json_command([sys.executable, "engineering-assistant/scripts/validate_plugin_manifest.py"])
+    checks.append({"id": "plugin-manifest-metadata", "status": "pass" if manifest_result.get("status") in {"pass", "waiting_for_human_review"} else "block", "detail": manifest_result})
     fixture_path = Path("engineering-assistant/evals/fixtures/ai-platform-v1.json")
     if not fixture_path.exists():
         checks.append({"id": "canary-fixture-exists", "status": "block", "detail": "missing ai-platform-v1 fixture"})
@@ -92,6 +94,9 @@ def run_scored_evals() -> dict:
                 result = subprocess.run(["diff", "-qr", left, str(right)], text=True, capture_output=True, check=False)
                 plugin_sync.append({"left": left, "right": str(right), "status": "pass" if result.returncode == 0 else "block", "detail": result.stdout + result.stderr})
             manifest_ok = (plugin_root / ".codex-plugin" / "plugin.json").exists() and marketplace_path.exists()
+            if manifest_ok:
+                published_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+                manifest_ok = published_manifest.get("metadata_status") == "waiting_for_human_review" and published_manifest.get("distribution_notes", {}).get("runtime_policy_pack") == "target-project-template"
             plugin_sync.append({"left": "plugin-manifest", "right": str(plugin_root), "status": "pass" if manifest_ok else "block", "detail": publish_result.stdout + publish_result.stderr})
         personal_root = Path(temp_dir) / "personal"
         personal_result = subprocess.run(
@@ -130,6 +135,7 @@ def run_scored_evals() -> dict:
             "checks_passed": passed,
             "route_accuracy": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("route-")) else 0.0,
             "schema_pass": 1.0,
+            "distribution_surface_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-manifest")) else 0.0,
             "control_plane_pass": 1.0 if any(check["id"] == "canary-context-pack" and check["status"] == "pass" for check in checks) else 0.0,
             "context_source_validity": 1.0 if all(check["status"] == "pass" for check in checks if "context" in check["id"]) else 0.0,
             "plugin_sync_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-sync")) else 0.0,

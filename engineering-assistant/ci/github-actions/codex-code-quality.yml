@@ -34,6 +34,10 @@
           "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"
         },
         {
+          "name": "校验 plugin manifest",
+          "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"
+        },
+        {
           "name": "校验 skill eval 覆盖",
           "run": "python3 engineering-assistant/scripts/run_skill_evals.py"
         },

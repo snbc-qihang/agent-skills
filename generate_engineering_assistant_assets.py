@@ -1842,7 +1842,7 @@ def agents_doc() -> str:
 
 ## 验证要求
 - 变更后运行 `python3 -m unittest discover -s tests -v`。
-- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py` 和 `validate_skill_metadata.py`。
+- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py`、`validate_skill_metadata.py` 和 `validate_plugin_manifest.py`。
 - 发布脚本必须能把源树发布为 Codex 可识别插件，并通过 scored eval 的发布包同步检查。
 
 ## 风险边界
@@ -1856,8 +1856,12 @@ def generate_runtime_policy_pack(base: Path) -> None:
 
 这些文件是给目标业务项目复制启用的运行时策略模板。插件目录只提供模板，不直接替目标项目写入 `.codex/` 或 `AGENTS.md`。
 
+安装插件不等于自动启用本目录下的 hook、rules 或 tool policy；它们不作为插件内置 hooks 自动生效。若目标项目决定复制并启用这些模板，仍需按 Codex hooks 机制完成 trust review，并在目标项目中保留人工审批记录。
+
 ## 文件
 - `config.toml`：推荐的 Codex 沙箱、审批和 profile 配置。
+- `profiles/readonly_review.toml`：独立只读评审 profile 示例，供新式 profile 布局或兼容性检查使用。
+- `profiles/controlled_fix.toml`：独立受控修复 profile 示例，供新式 profile 布局或兼容性检查使用。
 - `rules/default.rules`：高风险命令规则模板。
 - `policies/tool-policy.yaml`：工具调用 policy-as-code，采用 JSON/YAML 子集格式，便于脚本稳定解析。
 - `hooks/pre_tool_use_policy.py`：PreToolUse 命令守卫模板。
@@ -1882,6 +1886,12 @@ sandbox_mode = "read-only"
 
 [profiles.controlled_fix]
 approval_policy = "untrusted"
+sandbox_mode = "workspace-write"
+""")
+    write_text(base / "runtime" / "codex" / "profiles" / "readonly_review.toml", """approval_policy = "on-request"
+sandbox_mode = "read-only"
+""")
+    write_text(base / "runtime" / "codex" / "profiles" / "controlled_fix.toml", """approval_policy = "untrusted"
 sandbox_mode = "workspace-write"
 """)
     write_text(base / "runtime" / "codex" / "rules" / "default.rules", """prefix_rule(
@@ -2476,6 +2486,80 @@ for skill_md in sorted(Path("skills").glob("*/SKILL.md")):
 if errors:
     raise SystemExit("\\n".join(errors))
 print("ok")
+""",
+        "validate_plugin_manifest.py": """#!/usr/bin/env python3
+import json
+from pathlib import Path
+
+MANIFEST = Path("engineering-assistant/plugin/plugin.json")
+manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+errors = []
+warnings = []
+
+required_top_level = ["name", "version", "description", "author", "homepage", "repository", "license", "skills", "interface", "metadata_status", "distribution_notes"]
+for field in required_top_level:
+    if field not in manifest:
+        errors.append(f"{MANIFEST}: 缺少 {field}")
+
+interface = manifest.get("interface", {})
+for field in ["displayName", "shortDescription", "longDescription", "developerName", "category", "capabilities", "defaultPrompt", "brandColor", "websiteURL", "privacyPolicyURL", "termsOfServiceURL"]:
+    if field not in interface:
+        errors.append(f"{MANIFEST}: interface 缺少 {field}")
+
+notes = manifest.get("distribution_notes", {})
+if manifest.get("metadata_status") not in {"ready", "waiting_for_human_review"}:
+    errors.append(f"{MANIFEST}: metadata_status 必须为 ready 或 waiting_for_human_review")
+if notes.get("runtime_policy_pack") != "target-project-template":
+    errors.append(f"{MANIFEST}: distribution_notes.runtime_policy_pack 必须声明为 target-project-template")
+if notes.get("hooks_packaging") != "not-bundled":
+    errors.append(f"{MANIFEST}: distribution_notes.hooks_packaging 必须声明为 not-bundled")
+
+placeholder_values = []
+author = manifest.get("author", {})
+for path, value in [
+    ("author.email", author.get("email", "")),
+    ("author.url", author.get("url", "")),
+    ("homepage", manifest.get("homepage", "")),
+    ("repository", manifest.get("repository", "")),
+    ("interface.websiteURL", interface.get("websiteURL", "")),
+    ("interface.privacyPolicyURL", interface.get("privacyPolicyURL", "")),
+    ("interface.termsOfServiceURL", interface.get("termsOfServiceURL", "")),
+]:
+    if "example." in str(value) or str(value).endswith("@example.com"):
+        placeholder_values.append(path)
+
+if placeholder_values:
+    if manifest.get("metadata_status") != "waiting_for_human_review":
+        errors.append(f"{MANIFEST}: 占位符 metadata {placeholder_values} 只能在 waiting_for_human_review 状态下保留")
+    if notes.get("external_distribution_gate") != "waiting_for_human_review":
+        errors.append(f"{MANIFEST}: 占位符 metadata 必须声明 external_distribution_gate=waiting_for_human_review")
+    if notes.get("placeholder_metadata_allowed_for_local_template") is not True:
+        errors.append(f"{MANIFEST}: 占位符 metadata 必须显式声明仅允许 local template")
+    warnings.append("example.* placeholder metadata requires human review: " + ", ".join(placeholder_values))
+
+if "hooks" in manifest:
+    errors.append(f"{MANIFEST}: runtime policy pack 当前是目标项目模板，不得在 manifest 中声明 hooks")
+
+runtime_readme = Path("engineering-assistant/runtime/codex/README.md")
+if runtime_readme.exists():
+    readme_text = runtime_readme.read_text(encoding="utf-8")
+    for required_text in ["安装插件不等于自动启用", "不作为插件内置 hooks 自动生效", "trust review"]:
+        if required_text not in readme_text:
+            errors.append(f"{runtime_readme}: 缺少 runtime 模板定位说明 {required_text}")
+else:
+    errors.append(f"{runtime_readme}: 缺少 runtime policy pack README")
+
+for profile in ["readonly_review.toml", "controlled_fix.toml"]:
+    path = Path("engineering-assistant/runtime/codex/profiles") / profile
+    if not path.exists():
+        errors.append(f"{path}: 缺少独立 profile 示例")
+
+status = "block" if errors else ("waiting_for_human_review" if warnings else "pass")
+payload = {"status": status, "errors": errors, "warnings": warnings}
+if errors:
+    raise SystemExit(json.dumps(payload, ensure_ascii=False, indent=2))
+print(json.dumps(payload, ensure_ascii=False, indent=2))
 """,
         "compile_skill_runtime.py": """#!/usr/bin/env python3
 import argparse
@@ -3533,6 +3617,8 @@ def run_scored_evals() -> dict:
     checks.append({"id": "route-negative", "status": "pass" if route_negative.get("status") == "rejected" else "block", "detail": route_negative})
     route_canary, _ = run_json_command([sys.executable, "engineering-assistant/scripts/route_skill.py", "--prompt", "继续推进任务 complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime"])
     checks.append({"id": "route-ai-platform-next-action", "status": "pass" if route_canary.get("status") == "waiting_for_input" and route_canary.get("candidates") else "block", "detail": route_canary})
+    manifest_result, _ = run_json_command([sys.executable, "engineering-assistant/scripts/validate_plugin_manifest.py"])
+    checks.append({"id": "plugin-manifest-metadata", "status": "pass" if manifest_result.get("status") in {"pass", "waiting_for_human_review"} else "block", "detail": manifest_result})
     fixture_path = Path("engineering-assistant/evals/fixtures/ai-platform-v1.json")
     if not fixture_path.exists():
         checks.append({"id": "canary-fixture-exists", "status": "block", "detail": "missing ai-platform-v1 fixture"})
@@ -3583,6 +3669,9 @@ def run_scored_evals() -> dict:
                 result = subprocess.run(["diff", "-qr", left, str(right)], text=True, capture_output=True, check=False)
                 plugin_sync.append({"left": left, "right": str(right), "status": "pass" if result.returncode == 0 else "block", "detail": result.stdout + result.stderr})
             manifest_ok = (plugin_root / ".codex-plugin" / "plugin.json").exists() and marketplace_path.exists()
+            if manifest_ok:
+                published_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+                manifest_ok = published_manifest.get("metadata_status") == "waiting_for_human_review" and published_manifest.get("distribution_notes", {}).get("runtime_policy_pack") == "target-project-template"
             plugin_sync.append({"left": "plugin-manifest", "right": str(plugin_root), "status": "pass" if manifest_ok else "block", "detail": publish_result.stdout + publish_result.stderr})
         personal_root = Path(temp_dir) / "personal"
         personal_result = subprocess.run(
@@ -3621,6 +3710,7 @@ def run_scored_evals() -> dict:
             "checks_passed": passed,
             "route_accuracy": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("route-")) else 0.0,
             "schema_pass": 1.0,
+            "distribution_surface_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-manifest")) else 0.0,
             "control_plane_pass": 1.0 if any(check["id"] == "canary-context-pack" and check["status"] == "pass" for check in checks) else 0.0,
             "context_source_validity": 1.0 if all(check["status"] == "pass" for check in checks if "context" in check["id"]) else 0.0,
             "plugin_sync_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-sync")) else 0.0,
@@ -5183,6 +5273,7 @@ print("CI 产物目录已准备")
                 {"name": "收集 CI 产物", "run": "python3 engineering-assistant/scripts/collect_ci_artifacts.py"},
                 {"name": "校验 skill contract", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "校验 skill metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "校验 plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "校验 skill eval 覆盖", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "校验文档生命周期 schema", "run": "python3 -m json.tool engineering-assistant/schemas/document-lifecycle.schema.json"},
                 {"name": "校验主动询问信息 schema", "run": "python3 -m json.tool engineering-assistant/schemas/required-information-request.schema.json"},
@@ -5196,6 +5287,7 @@ print("CI 产物目录已准备")
                 {"uses": "actions/checkout@v4"},
                 {"name": "校验 contracts", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "校验 metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "校验 plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "校验 workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "校验团队场景 eval", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "校验文档生命周期 schema", "run": "python3 -m json.tool engineering-assistant/schemas/document-lifecycle.schema.json"},
@@ -5260,6 +5352,7 @@ def plugin_manifest() -> dict:
     return {
         "name": PLUGIN_NAME,
         "version": "1.0.0",
+        "metadata_status": "waiting_for_human_review",
         "description": "团队研发助手插件，提供需求准入、主动信息补全、技术/框架选型评审、前端设计研发、代码上下文分析、概要/详细设计、DB/Redis/MQ 设计、设计评审、实现控制、文档治理、代码质量治理和经验沉淀能力。",
         "author": {
             "name": "Engineering Team",
@@ -5269,6 +5362,18 @@ def plugin_manifest() -> dict:
         "homepage": "https://example.internal/engineering-assistant",
         "repository": "https://example.internal/engineering-assistant/repo",
         "license": "UNLICENSED",
+        "distribution_notes": {
+            "placeholder_metadata_allowed_for_local_template": True,
+            "external_distribution_gate": "waiting_for_human_review",
+            "runtime_policy_pack": "target-project-template",
+            "hooks_packaging": "not-bundled",
+            "todo": [
+                "Replace author.email with an approved team contact before external distribution.",
+                "Replace homepage and repository with real internal or public URLs before external distribution.",
+                "Set interface.websiteURL, privacyPolicyURL and termsOfServiceURL to approved URLs before external distribution.",
+                "Add approved logo, composerIcon and screenshots before listing in a shared marketplace.",
+            ],
+        },
         "keywords": ["engineering", "design", "framework-selection", "frontend", "required-information", "implementation-control", "document-governance", "code-quality", "workflow", "skills"],
         "skills": "./skills/",
         "interface": {
@@ -5278,6 +5383,9 @@ def plugin_manifest() -> dict:
             "developerName": "Engineering Team",
             "category": "Productivity",
             "capabilities": ["Interactive", "Write"],
+            "websiteURL": "https://example.internal/engineering-assistant",
+            "privacyPolicyURL": "https://example.internal/engineering-assistant/privacy",
+            "termsOfServiceURL": "https://example.internal/engineering-assistant/terms",
             "defaultPrompt": [
                 "使用研发助手走 design-only 流程",
                 "基于当前仓库生成详细设计",
@@ -5569,6 +5677,7 @@ python3 engineering-assistant/scripts/run_skill_evals.py
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored --no-write-report
 python3 engineering-assistant/scripts/validate_skill_metadata.py
+python3 engineering-assistant/scripts/validate_plugin_manifest.py
 python3 engineering-assistant/scripts/publish_plugin.py --layout personal --publish-root /tmp/engineering-assistant-personal
 python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json
 diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills
@@ -5599,6 +5708,7 @@ def generate_root_ci() -> None:
                 {"name": "Validate skill evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Validate scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Publish plugin package", "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json"},
                 {"name": "Check published skill sync", "run": "diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills"},
                 {"name": "Check published governance sync", "run": "diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/engineering-assistant/engineering-assistant"},
@@ -5612,6 +5722,7 @@ def generate_root_ci() -> None:
                 {"uses": "actions/checkout@v4"},
                 {"name": "Validate contracts", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Validate workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "Run static evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Run scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},

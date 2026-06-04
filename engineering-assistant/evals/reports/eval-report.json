@@ -1,10 +1,11 @@
 {
   "status": "pass",
   "metrics": {
-    "checks_total": 9,
-    "checks_passed": 9,
+    "checks_total": 10,
+    "checks_passed": 10,
     "route_accuracy": 1.0,
     "schema_pass": 1.0,
+    "distribution_surface_status": 1.0,
     "control_plane_pass": 1.0,
     "context_source_validity": 1.0,
     "plugin_sync_status": 1.0
@@ -76,6 +77,17 @@
       }
     },
     {
+      "id": "plugin-manifest-metadata",
+      "status": "pass",
+      "detail": {
+        "status": "waiting_for_human_review",
+        "errors": [],
+        "warnings": [
+          "example.* placeholder metadata requires human review: author.email, author.url, homepage, repository, interface.websiteURL, interface.privacyPolicyURL, interface.termsOfServiceURL"
+        ]
+      }
+    },
+    {
       "id": "canary-required-files",
       "status": "pass",
       "detail": {
@@ -94,22 +106,22 @@
           {
             "path": "artifacts/workflow-orchestrator/artifact-index.json",
             "kind": "workflow_artifact_index",
-            "bytes": 3023
+            "bytes": 3419
           },
           {
             "path": "artifacts/workflow-orchestrator/workflow-summary.md",
             "kind": "workflow_summary",
-            "bytes": 13072
+            "bytes": 14596
           },
           {
             "path": "artifacts/_control/architecture-baseline.json",
             "kind": "architecture_baseline",
-            "bytes": 5792
+            "bytes": 5874
           },
           {
             "path": "Makefile",
             "kind": "validation_entrypoint",
-            "bytes": 2300
+            "bytes": 2615
           },
           {
             "path": "artifacts/requirement-intake/stage-run-result.json",
@@ -239,7 +251,7 @@
           {
             "path": "artifacts/code-review/stage-run-result.json",
             "kind": "stage_run_result",
-            "bytes": 4948
+            "bytes": 4831
           },
           {
             "path": "artifacts/product-acceptance/stage-run-result.json",
@@ -249,52 +261,53 @@
           {
             "path": "artifacts/document-control-plane/stage-run-result.json",
             "kind": "stage_run_result",
-            "bytes": 2495
+            "bytes": 6776
           },
           {
             "path": "artifacts/spring-ai-architecture/stage-run-result.json",
             "kind": "stage_run_result",
-            "bytes": 2977
+            "bytes": 2983
           },
           {
             "path": "artifacts/00-audit-index.md",
             "kind": "document_control",
-            "bytes": 2752
+            "bytes": 4627
           },
           {
             "path": "artifacts/01-document-system.md",
             "kind": "document_control",
-            "bytes": 2562
+            "bytes": 5231
           },
           {
             "path": "artifacts/02-product-completion-system.md",
             "kind": "document_control",
-            "bytes": 2497
+            "bytes": 3390
           },
           {
             "path": "artifacts/audit-manifest.yaml",
             "kind": "document_control",
-            "bytes": 2348
+            "bytes": 5224
           },
           {
-            "path": "artifacts/identity-access/rbac-permission-code-standard.md",
+            "path": "artifacts/document-control-plane/document-registry.json",
             "kind": "document_control",
-            "bytes": 1574
+            "bytes": 8868
           },
           {
-            "path": "artifacts/model-hub/model-usage-policy-port-design.md",
+            "path": "artifacts/document-control-plane/plugin-driven-document-control-refactor.md",
             "kind": "document_control",
-            "bytes": 2213
+            "bytes": 3808
           },
           {
-            "path": "artifacts/eventing/spring-cloud-stream-eventing-plan.md",
+            "path": "artifacts/document-control-plane/document-control-plane-refactor-plan.md",
             "kind": "document_control",
-            "bytes": 2013
+            "bytes": 5030
           }
         ],
         "forbidden_sources": [
           "docs/human-review/REQ-AIP-20260521-001-human-confirmation.html",
-          "docs/human-review/DBD-AIP-20260521-002-human-confirmation.html"
+          "docs/human-review/DBD-AIP-20260521-002-human-confirmation.html",
+          "docs/human-review/DOCCTRL-AIP-20260526-control-plane-review.html"
         ],
         "missing_required_sources": []
       }
@@ -302,30 +315,30 @@
     {
       "id": "plugin-sync-skills",
       "left": "skills",
-      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/plugins/engineering-assistant/skills",
+      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/plugins/engineering-assistant/skills",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-engineering-assistant",
       "left": "engineering-assistant",
-      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/plugins/engineering-assistant/engineering-assistant",
+      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/plugins/engineering-assistant/engineering-assistant",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-plugin-manifest",
       "left": "plugin-manifest",
-      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/plugins/engineering-assistant",
+      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/plugins/engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/publish/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/publish/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     },
     {
       "id": "plugin-sync-personal-marketplace",
       "left": "personal-marketplace",
-      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/personal/.agents/plugins/marketplace.json",
+      "right": "/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/personal/.agents/plugins/marketplace.json",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/personal/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpzkkg1egb/personal/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/personal/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/w9/kh37rmv936qg_mjdqj7qpsp40000gn/T/tmpfsrkrooc/personal/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     }
   ]
 }

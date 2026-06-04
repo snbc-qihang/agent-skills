@@ -47,6 +47,10 @@
           "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"
         },
         {
+          "name": "Validate plugin manifest",
+          "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"
+        },
+        {
           "name": "Publish plugin package",
           "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json"
         },
