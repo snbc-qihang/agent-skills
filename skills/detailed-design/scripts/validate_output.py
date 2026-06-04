@@ -89,7 +89,7 @@ POLICY = {
   ],
   "specialty_docs": {
     "database-design.md": "数据库设计",
-    "mq-design.md": "MQ 设计",
+    "mq-design.xlsx": "MQ 设计",
     "redis-design.md": "Redis 设计",
     "interface-contracts.yaml": "接口契约",
     "test-strategy.md": "测试策略"

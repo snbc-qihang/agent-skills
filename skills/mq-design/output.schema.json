@@ -127,7 +127,8 @@
               "code",
               "log",
               "report",
-              "html"
+              "html",
+              "xlsx"
             ]
           },
           "producer_skill": {

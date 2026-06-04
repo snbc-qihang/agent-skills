@@ -36,7 +36,7 @@
       "detailed-design.md",
       "database-design.md",
       "redis-design.md",
-      "mq-design.md"
+      "mq-design.xlsx"
     ],
     "conflicts_with": [],
     "risk_level": "medium",
@@ -144,7 +144,7 @@
       "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
     },
     {
-      "name": "mq-design.md",
+      "name": "mq-design.xlsx",
       "type": "artifact|string|object",
       "required": false,
       "source": "user|workflow|repo|ci",
@@ -353,7 +353,7 @@
       "detailed-design.md",
       "database-design.md",
       "redis-design.md",
-      "mq-design.md"
+      "mq-design.xlsx"
     ],
     "output_artifacts": [
       "design-review-report.md",

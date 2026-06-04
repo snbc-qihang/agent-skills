@@ -4,7 +4,7 @@
 - D1 详细设计主文档必须按 `assets/detailed-design-template.md` 的章节顺序生成：修订历史、设计背景与目标摘要、模块/功能详细设计、业务流程图、UML类图、数据库设计、接口定义、API接口列表、中间件设计、单元测试、性能与扩展性设计、人工评审项
 - D2 主文档不得生成来源证据、技术选型、数据库表结构展开、MQ 设计展开、Redis 设计展开、业务规则和校验独立章节、幂等和一致性独立章节、异常和日志独立章节、发布、灰度、上线章节
 - D3 来源证据放入 StageRunResult、repo-context 产物或评审证据；技术选型放入概要设计、技术选型评审或 repo-context 产物，除非用户明确要求，不进入详细设计正文
-- D4 数据库设计章节只能关联 `database-design.md` 或数据库模板；中间件设计章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，不得在主文档重复展开字段表、消息表、Redis Key 表
+- D4 数据库设计章节只能关联 `database-design.md` 或数据库模板；中间件设计章节只能关联 `mq-design.xlsx`、`redis-design.md` 和对应规范，不得在主文档重复展开字段表、消息表、Redis Key 表
 - D5 详细设计流程必须使用 Mermaid flowchart，不得用 sequenceDiagram 替代流程图；每个 flowchart 下必须紧跟流程设计说明
 - D6 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求、取消、重试、补偿、文件清理等合并到对应流程下，不得堆到文档后半部分
 - D7 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等扩展模型时，必须补充 Mermaid classDiagram

@@ -304,7 +304,7 @@
         "interface-contracts.yaml",
         "test-strategy.md",
         "database-design.md",
-        "mq-design.md",
+        "mq-design.xlsx",
         "redis-design.md"
       ],
       "preconditions": [
@@ -364,7 +364,7 @@
         "interface-contracts.yaml": "artifacts/detailed-design/interface-contracts.yaml",
         "test-strategy.md": "artifacts/detailed-design/test-strategy.md",
         "database-design.md": "artifacts/detailed-design/database-design.md",
-        "mq-design.md": "artifacts/detailed-design/mq-design.md",
+        "mq-design.xlsx": "artifacts/detailed-design/mq-design.xlsx",
         "redis-design.md": "artifacts/detailed-design/redis-design.md"
       }
     },
@@ -472,7 +472,7 @@
         "risk_policy"
       ],
       "outputs": [
-        "mq-design.md",
+        "mq-design.xlsx",
         "mq-topic-contract.yaml",
         "message-schema.json",
         "mq-risk-report.json"
@@ -486,7 +486,7 @@
         "产物已登记索引"
       ],
       "quality_gates": [
-        "mq-design.md 使用团队 MQ 模板",
+        "mq-design.xlsx 使用团队 MQ Excel 模板",
         "生产者表完整",
         "消费者表完整",
         "消息 schema 完整",
@@ -531,7 +531,7 @@
         "database-design"
       ],
       "artifact_mapping": {
-        "mq-design.md": "artifacts/mq-design/mq-design.md",
+        "mq-design.xlsx": "artifacts/mq-design/mq-design.xlsx",
         "mq-topic-contract.yaml": "artifacts/mq-design/mq-topic-contract.yaml",
         "message-schema.json": "artifacts/mq-design/message-schema.json",
         "mq-risk-report.json": "artifacts/mq-design/mq-risk-report.json"
@@ -724,7 +724,7 @@
         "detailed-design.md",
         "database-design.md",
         "redis-design.md",
-        "mq-design.md"
+        "mq-design.xlsx"
       ],
       "outputs": [
         "design-review-report.md",

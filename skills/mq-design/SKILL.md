@@ -50,7 +50,7 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 - preflight 阶段必须先完成语言确认和必须信息检查。
 - 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
 - 暂停等待人工输入或审批时，`StageRunResult.artifacts` 必须登记 HTML 审阅包，且该 HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
-- 生成正式 Markdown 文档时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
+- 生成正式 MQ Excel 文档时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
 - 输出 `StageRunResult` 后必须运行 `engineering-assistant/scripts/validate_stage_run_result.py`；校验失败视为阶段节点未遵守契约，workflow 必须 `blocked`。
 
 
@@ -59,18 +59,18 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 
 
 # 模板执行协议
-- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
-- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
-- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
-- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
-- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+- 生成正式 MQ Excel 文档前必须先读取对应 xlsx template asset；不得凭记忆、通用模板、聊天上下文、Markdown 文档或 `assets/artifact-template.md` 生成正文。
+- 以 xlsx template 作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格和格式约定。
+- 只允许补充空白单元格、追加数据行和在既有表格范围内填充输入事实；不得删除、压缩、合并、重命名或重排模板 sheet。
+- 输入材料缺少事实时，保留模板列头并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
 
 # 对应模板
-- `mq-design.md`: 生成前读取 `assets/mq-design-template.md`；适用范围：MQ 设计正文；来源模板：`inputs/xxxMQ设计.xlsx`。
+- `mq-design.xlsx`: 生成前读取 `assets/mq-design-template.xlsx`；适用范围：MQ 设计 Excel 工作簿；来源模板：`inputs/xxxMQ设计.xlsx`。
 
 # 团队 MQ 设计规则
-- MQ 设计必须生成独立 `mq-design.md`，不得在主详细设计中展开。
-- 文档必须按 `assets/mq-design-template.md` 组织，至少包含生产者表和消费者表。
+- MQ 设计必须生成独立 `mq-design.xlsx`，不得在主详细设计中展开，也不得用 `mq-design.md` 作为正式正文。
+- 文档必须按 `assets/mq-design-template.xlsx` 组织，至少包含 `生产者` sheet 和 `消费者` sheet。
 - MQ 只用于削峰填谷、异步执行和服务解耦；进程内异步不默认使用 MQ。
 - 一个服务一个队列，一个队列可绑定多个 Exchange/routingKey；队列默认建议仲裁队列，非仲裁队列需要评审。
 - 必须设计死信队列、幂等策略、重试策略、死信策略和回放策略。
@@ -93,29 +93,23 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 - M9 消息等级：9 核心交易，7 价格/会员/促销，5 配置，3 字典权限，1 数据同步/监控/死信
 - M10 等级 <=3 原则上设置 TTL；等级 >5 必须持久化
 - M11 顺序消息可单消费节点，但必须评审扩展性影响
-- M12 mq-design.md 必须至少包含生产者表和消费者表；主详细设计只引用该专项，不展开 MQ 字段
+- M12 mq-design.xlsx 必须至少包含生产者 sheet 和消费者 sheet；主详细设计只引用该专项，不展开 MQ 字段
 - M13 消息体不得承载大查询条件、文件内容或敏感明文
 - M14 回放生产消息、删除或重命名 topic/queue 必须人工审批
-4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
+4. 按模板执行协议读取对应 `assets/*-template.xlsx`，复制 Excel 工作簿骨架后填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 
 # 输出契约
 在 `artifacts/mq-design/` 下生成以下产物：
-- `mq-design.md`
+- `mq-design.xlsx`
 - `mq-topic-contract.yaml`
 - `message-schema.json`
 - `mq-risk-report.json`
 
-# 文档治理
-- `artifacts/<skill_id>/` 下的输出默认是本次 run artifact，不自动等同正式留存文档。
-- 需要正式留存的文档必须满足 `DG1-DG6`：具备唯一编号、状态、留存策略、owner、来源证据和审批状态。
-- `draft`、`reviewing`、`blocked`、`waiting_for_input`、任务过程摘要、缺失输入清单和临时评审意见不得作为正式文档沉淀。
-- 只有 `document_status=approved|final` 且 `retention_policy=persist` 的文档可进入正式文档目录；否则只保留在 workflow trace 或 run artifact 中。
-
 
 # 质量门禁
-- mq-design.md 使用团队 MQ 模板
+- mq-design.xlsx 使用团队 MQ Excel 模板
 - 生产者表完整
 - 消费者表完整
 - 消息 schema 完整

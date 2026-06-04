@@ -53,15 +53,15 @@
   "pass_criteria": [
     "StageRunResult status 合法",
     "未指定 language 时必须询问用户选择 zh-CN 或 en",
-    "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
+    "正式 MQ Excel 文档必须包含 document_metadata.document_number、document_status、retention_policy",
     "required_information_requests 在输入缺失时必须包含 questions",
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "forbidden_behavior 未出现在输出决策中",
-    "生成正式 Markdown 文档前必须先读取对应 assets template",
+    "生成正式 MQ Excel 文档前必须先读取对应 xlsx template",
     "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
     "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
-    "mq-design.md 必须按 assets/mq-design-template.md 生成",
-    "MQ 设计必须包含生产者表和消费者表，列头与 xxxMQ设计.xlsx 一致",
+    "mq-design.xlsx 必须按 assets/mq-design-template.xlsx 生成",
+    "MQ 设计必须包含生产者 sheet 和消费者 sheet，列头与 xxxMQ设计.xlsx 一致",
     "必须定义死信、幂等、重试和回放策略；超过 10KB 或回放生产消息必须 waiting_for_human_review"
   ],
   "severity_when_failed": "critical",
@@ -70,7 +70,7 @@
     "rubric": "校验团队详细设计拆分规则、专项模板、流程图、UML、人工评审和 StageRunResult artifact 登记。"
   },
   "required_artifacts": [
-    "mq-design.md",
+    "mq-design.xlsx",
     "mq-topic-contract.yaml",
     "message-schema.json",
     "mq-risk-report.json"

@@ -78,7 +78,7 @@ sequenceDiagram
 | 类型 | 是否涉及 | 专项文档 | 说明 |
 | --- | --- | --- | --- |
 | Redis | 是/否 | `redis-design.md` |  |
-| MQ | 是/否 | `mq-design.md` |  |
+| MQ | 是/否 | `mq-design.xlsx` |  |
 | 定时任务 | 是/否 |  |  |
 | 外部依赖 | 是/否 |  |  |
 

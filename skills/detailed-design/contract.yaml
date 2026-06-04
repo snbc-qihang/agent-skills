@@ -182,10 +182,10 @@
       "consumer": "workflow-orchestrator|downstream-stage|human-review"
     },
     {
-      "name": "mq-design.md",
-      "type": "markdown|json|yaml|code|log|report",
-      "path": "artifacts/detailed-design/mq-design.md",
-      "schema": "output.schema.json#mq-design.md",
+      "name": "mq-design.xlsx",
+      "type": "xlsx|artifact",
+      "path": "artifacts/detailed-design/mq-design.xlsx",
+      "schema": "output.schema.json#mq-design.xlsx",
       "consumer": "workflow-orchestrator|downstream-stage|human-review"
     },
     {
@@ -394,7 +394,7 @@
       "interface-contracts.yaml",
       "test-strategy.md",
       "database-design.md",
-      "mq-design.md",
+      "mq-design.xlsx",
       "redis-design.md"
     ],
     "document_metadata": {
@@ -570,7 +570,7 @@
       ],
       "specialty_reference_only": {
         "database-design.md": "数据库设计",
-        "mq-design.md": "MQ 设计",
+        "mq-design.xlsx": "MQ 设计",
         "redis-design.md": "Redis 设计",
         "interface-contracts.yaml": "接口契约",
         "test-strategy.md": "测试策略"
@@ -590,7 +590,7 @@
     "stage_result": {
       "must_register_specialty_artifacts": [
         "database-design.md",
-        "mq-design.md",
+        "mq-design.xlsx",
         "redis-design.md",
         "interface-contracts.yaml",
         "test-strategy.md"

@@ -4,13 +4,53 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
+XLSX_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+
+
+def write_inline_string_cell(sheet_xml: Path, cell_ref: str, value: str) -> None:
+    ET.register_namespace("", XLSX_NS)
+    root = ET.fromstring(sheet_xml.read_bytes())
+    row_number = "".join(ch for ch in cell_ref if ch.isdigit())
+    row = root.find(f".//{{{XLSX_NS}}}row[@r='{row_number}']")
+    if row is None:
+        sheet_data = root.find(f".//{{{XLSX_NS}}}sheetData")
+        row = ET.SubElement(sheet_data, f"{{{XLSX_NS}}}row", {"r": row_number})
+    cell = root.find(f".//{{{XLSX_NS}}}c[@r='{cell_ref}']")
+    if cell is None:
+        cell = ET.SubElement(row, f"{{{XLSX_NS}}}c", {"r": cell_ref})
+    cell.set("t", "inlineStr")
+    for child in list(cell):
+        cell.remove(child)
+    inline = ET.SubElement(cell, f"{{{XLSX_NS}}}is")
+    text = ET.SubElement(inline, f"{{{XLSX_NS}}}t")
+    text.text = value
+    sheet_xml.write_bytes(ET.tostring(root, encoding="utf-8", xml_declaration=True))
+
+
+def make_mq_xlsx(target: Path, producer_values: dict[str, str] | None = None, consumer_values: dict[str, str] | None = None) -> None:
+    shutil.copyfile(ROOT / "inputs" / "xxxMQ设计.xlsx", target)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp = Path(temp_dir)
+        with zipfile.ZipFile(target) as src:
+            src.extractall(temp)
+        for cell_ref, value in (producer_values or {}).items():
+            write_inline_string_cell(temp / "xl" / "worksheets" / "sheet2.xml", cell_ref, value)
+        for cell_ref, value in (consumer_values or {}).items():
+            write_inline_string_cell(temp / "xl" / "worksheets" / "sheet1.xml", cell_ref, value)
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as dst:
+            for file in temp.rglob("*"):
+                if file.is_file():
+                    dst.write(file, file.relative_to(temp).as_posix())
 
 
 def run_validator(skill_id: str, payload_path: Path) -> subprocess.CompletedProcess[str]:
@@ -99,7 +139,7 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             "detailed-design": ["assets/detailed-design-template.md"],
             "database-design": ["assets/database-oltp-template.md", "assets/database-olap-template.md"],
             "redis-design": ["assets/redis-design-template.md"],
-            "mq-design": ["assets/mq-design-template.md"],
+            "mq-design": ["assets/mq-design-template.xlsx"],
         }
 
         for skill_id, template_paths in expected_templates.items():
@@ -116,7 +156,10 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             skill_md = (ROOT / "skills" / skill_id / "SKILL.md").read_text(encoding="utf-8")
             agent_meta = (ROOT / "skills" / skill_id / "agents" / "openai.yaml").read_text(encoding="utf-8")
             self.assertIn("模板执行协议", skill_md, skill_id)
-            self.assertIn("先读取对应 assets template", agent_meta, skill_id)
+            if skill_id == "mq-design":
+                self.assertIn("先读取对应 xlsx template", agent_meta, skill_id)
+            else:
+                self.assertIn("先读取对应 assets template", agent_meta, skill_id)
             for template_path in template_paths:
                 self.assertIn(template_path, json.dumps(template_policy, ensure_ascii=False), skill_id)
                 self.assertIn(template_path, skill_md, skill_id)
@@ -128,7 +171,7 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             ROOT / "skills" / "database-design" / "assets" / "database-oltp-template.md",
             ROOT / "skills" / "database-design" / "assets" / "database-olap-template.md",
             ROOT / "skills" / "redis-design" / "assets" / "redis-design-template.md",
-            ROOT / "skills" / "mq-design" / "assets" / "mq-design-template.md",
+            ROOT / "skills" / "mq-design" / "assets" / "mq-design-template.xlsx",
         ]
         for path in expected:
             self.assertTrue(path.exists(), f"missing template: {path}")
@@ -269,8 +312,8 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         self.assertIn('SKILL_ID = "mq-design"', scripts["mq-design"])
 
         forbidden_by_skill = {
-            "database-design": ["redis-design.md", "mq-design.md", "detailed-design.md", "validate_redis", "validate_mq", "validate_detailed"],
-            "redis-design": ["database-design.md", "mq-design.md", "detailed-design.md", "validate_database", "validate_mq", "validate_detailed"],
+            "database-design": ["redis-design.md", "mq-design.xlsx", "detailed-design.md", "validate_redis", "validate_mq", "validate_detailed"],
+            "redis-design": ["database-design.md", "mq-design.xlsx", "detailed-design.md", "validate_database", "validate_mq", "validate_detailed"],
             "mq-design": ["database-design.md", "redis-design.md", "detailed-design.md", "validate_database", "validate_redis", "validate_detailed"],
         }
         for skill_id, forbidden_items in forbidden_by_skill.items():
@@ -300,7 +343,7 @@ sequenceDiagram
                 [
                     {"name": "detailed-design.md", "path": str(design)},
                     {"name": "database-design.md", "path": str(root / "database-design.md")},
-                    {"name": "mq-design.md", "path": str(root / "mq-design.md")},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
                     {"name": "redis-design.md", "path": str(root / "redis-design.md")},
                     {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
                     {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
@@ -528,7 +571,7 @@ flowchart TD
                 [
                     {"name": "detailed-design.md", "path": str(design)},
                     {"name": "database-design.md", "path": str(root / "database-design.md")},
-                    {"name": "mq-design.md", "path": str(root / "mq-design.md")},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
                     {"name": "redis-design.md", "path": str(root / "redis-design.md")},
                     {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
                     {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
@@ -596,7 +639,7 @@ flowchart TD
                 [
                     {"name": "detailed-design.md", "path": str(design)},
                     {"name": "database-design.md", "path": str(root / "database-design.md")},
-                    {"name": "mq-design.md", "path": str(root / "mq-design.md")},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
                     {"name": "redis-design.md", "path": str(root / "redis-design.md")},
                     {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
                     {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
@@ -636,14 +679,18 @@ flowchart TD
             self.assertIn("事实库", redis_output)
             self.assertIn("TTL 必须带单位", redis_output)
 
-            mq_doc = root / "mq-design.md"
-            mq_doc.write_text("消息预估大小：28KB\n生产消息回放。\n", encoding="utf-8")
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(
+                mq_doc,
+                producer_values={"K2": "28KB", "P2": "生产消息回放；未说明处理策略"},
+                consumer_values={"M2": "死信队列exchange/routeKey"},
+            )
             mq_payload = root / "mq-stage-run-result.json"
-            mq_payload.write_text(json.dumps(payload("mq-design", [{"name": "mq-design.md", "path": str(mq_doc)}]), ensure_ascii=False), encoding="utf-8")
+            mq_payload.write_text(json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}]), ensure_ascii=False), encoding="utf-8")
             mq_result = run_validator("mq-design", mq_payload)
             self.assertNotEqual(0, mq_result.returncode)
             mq_output = mq_result.stdout + mq_result.stderr
-            self.assertIn("生产者表缺少字段", mq_output)
+            self.assertIn("幂等", mq_output)
             self.assertIn("超过 10KB", mq_output)
 
     def test_database_validator_blocks_unresolved_info_and_requires_questions(self) -> None:

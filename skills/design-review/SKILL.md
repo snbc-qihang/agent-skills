@@ -19,7 +19,7 @@ description: Use when the request is about 评审设计产物，判断是否可�
 - `detailed-design.md`
 - `database-design.md`
 - `redis-design.md`
-- `mq-design.md`
+- `mq-design.xlsx`
 
 # 前置条件
 - 加载适用的团队规范、`engineering-assistant/profiles/rrq-yq-team.yaml`、`engineering-assistant/registry/team-rule-catalog.yaml` 和风险策略。

@@ -3,6 +3,8 @@ import json
 import re
 import sys
 from pathlib import Path
+import zipfile
+from xml.etree import ElementTree as ET
 
 SKILL_ID = "mq-design"
 POLICY = {
@@ -240,21 +242,103 @@ def fail(errors):
     print("ok")
 
 
+XLSX_NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main", "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+
+
+def _shared_text(si):
+    return "".join(t.text or "" for t in si.findall(".//a:t", XLSX_NS))
+
+
+def _cell_ref_to_col(ref):
+    letters = re.match(r"([A-Z]+)", ref or "")
+    if not letters:
+        return 0
+    index = 0
+    for char in letters.group(1):
+        index = index * 26 + ord(char) - ord("A") + 1
+    return index - 1
+
+
+def read_xlsx_artifact(payload_path, payload, name):
+    item = artifact_map(payload).get(name)
+    path = resolve_artifact(payload_path, item)
+    if not path or not path.exists():
+        return None, "缺少 " + name + " artifact 或文件不可读"
+    if path.suffix.lower() != ".xlsx":
+        return None, name + " 必须是 .xlsx 文件"
+    try:
+        with zipfile.ZipFile(path) as workbook:
+            shared = []
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                shared = [_shared_text(si) for si in shared_root.findall("a:si", XLSX_NS)]
+            rels_root = ET.fromstring(workbook.read("xl/_rels/workbook.xml.rels"))
+            rels = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels_root}
+            workbook_root = ET.fromstring(workbook.read("xl/workbook.xml"))
+            sheets = {}
+            all_text = []
+            for sheet in workbook_root.findall(".//a:sheet", XLSX_NS):
+                name = sheet.attrib.get("name", "")
+                rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+                target = rels.get(rel_id, "")
+                if not target:
+                    continue
+                sheet_path = "xl/" + target.lstrip("/")
+                sheet_root = ET.fromstring(workbook.read(sheet_path))
+                rows = {}
+                for row in sheet_root.findall(".//a:sheetData/a:row", XLSX_NS):
+                    row_number = int(row.attrib.get("r", "0") or 0)
+                    values = []
+                    for cell in row.findall("a:c", XLSX_NS):
+                        col_index = _cell_ref_to_col(cell.attrib.get("r", ""))
+                        while len(values) <= col_index:
+                            values.append("")
+                        value = ""
+                        if cell.attrib.get("t") == "inlineStr":
+                            value = "".join(t.text or "" for t in cell.findall(".//a:t", XLSX_NS))
+                        else:
+                            node = cell.find("a:v", XLSX_NS)
+                            if node is not None and node.text is not None:
+                                value = shared[int(node.text)] if cell.attrib.get("t") == "s" and shared else node.text
+                        values[col_index] = value
+                        if value:
+                            all_text.append(value)
+                    rows[row_number] = values
+                sheets[name] = rows
+            return {"sheets": sheets, "text": "\n".join(all_text)}, ""
+    except Exception as exc:
+        return None, "无法读取 mq-design.xlsx: " + str(exc)
+
+
 def validate_output(payload_path, payload):
     errors = []
-    text = read_artifact(payload_path, payload, "mq-design.md")
-    if not text:
-        return ["缺少 mq-design.md artifact 或文件不可读"]
+    workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
+    if error:
+        return [error]
+    sheets = workbook["sheets"]
+    text = workbook["text"]
+    if "mq-design.md" in artifact_map(payload):
+        errors.append("正式 MQ 设计正文必须是 mq-design.xlsx，不得登记 mq-design.md")
+    if "生产者" not in sheets:
+        errors.append("mq-design.xlsx 缺少生产者 sheet")
+    if "消费者" not in sheets:
+        errors.append("mq-design.xlsx 缺少消费者 sheet")
+    producer_header = sheets.get("生产者", {}).get(1, [])
+    consumer_header = sheets.get("消费者", {}).get(1, [])
     for field in POLICY["producer_fields"]:
-        if field not in text:
-            errors.append("mq-design.md 生产者表缺少字段: " + field)
+        if field not in producer_header:
+            errors.append("mq-design.xlsx 生产者表缺少字段: " + field)
     for field in POLICY["consumer_fields"]:
-        if field not in text:
-            errors.append("mq-design.md 消费者表缺少字段: " + field)
+        if field not in consumer_header:
+            errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:
         errors.append("MQ 必须定义幂等策略")
+    if "重试" not in text:
+        errors.append("MQ 必须定义重试策略")
+    if "回放" not in text:
+        errors.append("MQ 必须定义回放策略")
     for size in re.findall(r"(\d+)\s*KB", text, re.IGNORECASE):
         if int(size) > 10 and payload.get("status") == "succeeded":
             errors.append("消息体超过 10KB 必须 waiting_for_human_review")

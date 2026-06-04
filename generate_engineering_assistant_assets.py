@@ -161,7 +161,7 @@ DETAILED_DESIGN_DDD_TERMS = [
 
 DETAILED_DESIGN_SPECIALTY_DOCS = {
     "database-design.md": "数据库设计",
-    "mq-design.md": "MQ 设计",
+    "mq-design.xlsx": "MQ 设计",
     "redis-design.md": "Redis 设计",
     "interface-contracts.yaml": "接口契约",
     "test-strategy.md": "测试策略",
@@ -1029,14 +1029,14 @@ SKILLS = [
         "purpose": "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。",
         "non_goals": ["不批准设计进入研发", "不直接修改代码", "不省略专项设计"],
         "inputs": ["high-level-design.md", "architecture-decision-record.md", "module-boundary.yaml", "team_standards"],
-        "outputs": ["detailed-design.md", "implementation-plan.md", "interface-contracts.yaml", "test-strategy.md", "database-design.md", "mq-design.md", "redis-design.md"],
+        "outputs": ["detailed-design.md", "implementation-plan.md", "interface-contracts.yaml", "test-strategy.md", "database-design.md", "mq-design.xlsx", "redis-design.md"],
         "gates": ["主详细设计只保留功能实现主线", "专项设计独立成文并在主文档引用", "流程使用 flowchart 且紧跟流程设计说明", "DDD/分层/扩展点方案包含 classDiagram", "测试策略覆盖主干和异常路径"],
         "approvals": ["核心链路事务边界变化", "高并发路径设计", "权限/认证/鉴权设计", "DDL", "MQ 新队列或 topic", "Redis 新 Key"],
         "checks": [
             "D1 详细设计主文档必须按 `assets/detailed-design-template.md` 的章节顺序生成：修订历史、设计背景与目标摘要、模块/功能详细设计、业务流程图、UML类图、数据库设计、接口定义、API接口列表、中间件设计、单元测试、性能与扩展性设计、人工评审项",
             "D2 主文档不得生成来源证据、技术选型、数据库表结构展开、MQ 设计展开、Redis 设计展开、业务规则和校验独立章节、幂等和一致性独立章节、异常和日志独立章节、发布、灰度、上线章节",
             "D3 来源证据放入 StageRunResult、repo-context 产物或评审证据；技术选型放入概要设计、技术选型评审或 repo-context 产物，除非用户明确要求，不进入详细设计正文",
-            "D4 数据库设计章节只能关联 `database-design.md` 或数据库模板；中间件设计章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，不得在主文档重复展开字段表、消息表、Redis Key 表",
+            "D4 数据库设计章节只能关联 `database-design.md` 或数据库模板；中间件设计章节只能关联 `mq-design.xlsx`、`redis-design.md` 和对应规范，不得在主文档重复展开字段表、消息表、Redis Key 表",
             "D5 详细设计流程必须使用 Mermaid flowchart，不得用 sequenceDiagram 替代流程图；每个 flowchart 下必须紧跟流程设计说明",
             "D6 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求、取消、重试、补偿、文件清理等合并到对应流程下，不得堆到文档后半部分",
             "D7 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等扩展模型时，必须补充 Mermaid classDiagram",
@@ -1111,8 +1111,8 @@ SKILLS = [
         "purpose": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
         "non_goals": ["不未经审批删除或重命名 topic", "不隐藏重复消费风险", "不把不同语义消息混成单一处理流"],
         "inputs": ["detailed-design.md", "mq-standard.md", "repo_context", "risk_policy"],
-        "outputs": ["mq-design.md", "mq-topic-contract.yaml", "message-schema.json", "mq-risk-report.json"],
-        "gates": ["mq-design.md 使用团队 MQ 模板", "生产者表完整", "消费者表完整", "消息 schema 完整", "幂等策略明确", "重试/死信/回放策略明确", "监控告警明确"],
+        "outputs": ["mq-design.xlsx", "mq-topic-contract.yaml", "message-schema.json", "mq-risk-report.json"],
+        "gates": ["mq-design.xlsx 使用团队 MQ Excel 模板", "生产者表完整", "消费者表完整", "消息 schema 完整", "幂等策略明确", "重试/死信/回放策略明确", "监控告警明确"],
         "approvals": ["MQ topic 删除或重命名", "MQ 新队列或 topic", "核心消息链路变化", "生产消息回放", "消息体超过 10KB", "非仲裁队列"],
         "checks": [
             "M1 MQ 仅用于削峰填谷和服务解耦；进程内异步不用 MQ",
@@ -1126,7 +1126,7 @@ SKILLS = [
             "M9 消息等级：9 核心交易，7 价格/会员/促销，5 配置，3 字典权限，1 数据同步/监控/死信",
             "M10 等级 <=3 原则上设置 TTL；等级 >5 必须持久化",
             "M11 顺序消息可单消费节点，但必须评审扩展性影响",
-            "M12 mq-design.md 必须至少包含生产者表和消费者表；主详细设计只引用该专项，不展开 MQ 字段",
+            "M12 mq-design.xlsx 必须至少包含生产者 sheet 和消费者 sheet；主详细设计只引用该专项，不展开 MQ 字段",
             "M13 消息体不得承载大查询条件、文件内容或敏感明文",
             "M14 回放生产消息、删除或重命名 topic/queue 必须人工审批",
         ],
@@ -1170,7 +1170,7 @@ SKILLS = [
         "description": "设计评审、设计产物完整性检查、风险关闭和进入代码研发 gate 判断时使用；不要用于直接生成设计文档正文。",
         "purpose": "评审设计产物，判断是否可以进入代码研发。",
         "non_goals": ["不代替审批人签字", "不修正文档内容", "不放行 blocker"],
-        "inputs": ["high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.md"],
+        "inputs": ["high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx"],
         "outputs": ["design-review-report.md", "review-findings.json", "design-gate-decision.json"],
         "gates": ["无未关闭 blocker", "关键专项设计齐全", "测试策略存在", "高风险审批齐全"],
         "approvals": ["高风险设计放行", "blocker 关闭确认", "关键设计豁免"],
@@ -1440,6 +1440,11 @@ def write_json(path: Path, data: object) -> None:
     write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def write_binary(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+
+
 def copy_generated_tree(source: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
@@ -1542,6 +1547,8 @@ def agents_openai_yaml(skill: dict) -> str:
     default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
     if template_usage_policy(skill).get("required"):
         default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息；生成正式 Markdown 文档前先读取对应 assets template，并按模板骨架逐节填充输入事实。"
+    if skill["id"] == "mq-design":
+        default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息；生成正式 MQ Excel 文档前先读取对应 xlsx template，并按模板工作簿填充输入事实。"
     return f"""display_name: "{skill['name']}"
 short_description: "{skill['purpose']}"
 default_prompt: "{default_prompt}"
@@ -1571,6 +1578,44 @@ routing:
 
 def skill_by_id(skill_id: str) -> dict:
     return next(s for s in SKILLS if s["id"] == skill_id)
+
+
+def artifact_type_for_name(name: str) -> str:
+    suffix = Path(name).suffix.lower()
+    if suffix == ".md":
+        return "markdown"
+    if suffix == ".json":
+        return "json"
+    if suffix in {".yaml", ".yml"}:
+        return "yaml"
+    if suffix == ".html":
+        return "html"
+    if suffix == ".xlsx":
+        return "xlsx"
+    if suffix == ".log":
+        return "log"
+    return "report"
+
+
+def contract_output_type_for_name(name: str) -> str:
+    if Path(name).suffix.lower() == ".xlsx":
+        return "xlsx|artifact"
+    return "markdown|json|yaml|code|log|report"
+
+
+def schema_artifact_types(skill: dict) -> list[str]:
+    artifact_types = ["markdown", "json", "yaml", "code", "log", "report", "html"]
+    if any(Path(output).suffix.lower() == ".xlsx" for output in skill["outputs"]):
+        artifact_types.append("xlsx")
+    return artifact_types
+
+
+def runtime_default_prompt(skill: dict) -> str:
+    if not template_usage_policy(skill).get("required"):
+        return f"使用 {skill['id']}，先确认语言和必填输入，再输出声明产物与 gate decision。"
+    if skill["id"] == "mq-design":
+        return f"使用 {skill['id']}，先读取对应 xlsx template，按模板工作簿填充输入事实，再输出声明产物与 gate decision。"
+    return f"使用 {skill['id']}，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。"
 
 
 def workflow_runtime_policy() -> dict:
@@ -1607,7 +1652,7 @@ def runtime_ir(skill: dict) -> dict:
         "prompt_pack": {
             "display_name": skill["name"],
             "short_description": skill["purpose"],
-            "default_prompt": f"使用 {skill['id']}，先确认语言和必填输入，再输出声明产物与 gate decision。" if not template_usage_policy(skill).get("required") else f"使用 {skill['id']}，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。",
+            "default_prompt": runtime_default_prompt(skill),
             "trigger_description": skill_trigger_description(skill),
             "language_policy": {"supported": ["zh-CN", "en"], "when_unspecified": "ask_user"},
         },
@@ -1744,6 +1789,15 @@ TEMPLATE_GENERATION_PROTOCOL = [
     "模板文件不存在、无法读取或输出无法通过模板校验时，StageRunResult.status 必须为 blocked 或 failed。",
 ]
 
+MQ_EXCEL_GENERATION_PROTOCOL = [
+    "生成正式 MQ Excel 文档前必须先读取 `assets/mq-design-template.xlsx`，不得改用 Markdown 或通用报告替代。",
+    "以 xlsx template 作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格和格式约定。",
+    "只允许补充空白单元格、追加数据行和在既有表格范围内填充输入事实；不得删除、压缩、重命名或重排模板 sheet。",
+    "输入材料缺少事实时，保留模板列头并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
+    "不得额外生成 `mq-design.md` 作为正式 MQ 设计正文；Markdown 只能作为 StageRunResult 或过程摘要。",
+    "模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，StageRunResult.status 必须为 blocked 或 failed。",
+]
+
 
 def template_asset_definitions(skill_id: str) -> list[dict]:
     assets = {
@@ -1792,11 +1846,11 @@ def template_asset_definitions(skill_id: str) -> list[dict]:
         ],
         "mq-design": [
             {
-                "artifact": "mq-design.md",
-                "template": "assets/mq-design-template.md",
-                "canonical_template": "skills/mq-design/assets/mq-design-template.md",
+                "artifact": "mq-design.xlsx",
+                "template": "assets/mq-design-template.xlsx",
+                "canonical_template": "skills/mq-design/assets/mq-design-template.xlsx",
                 "source_template": "inputs/xxxMQ设计.xlsx",
-                "selection": "MQ 设计正文",
+                "selection": "MQ 设计 Excel 工作簿",
             }
         ],
     }
@@ -1807,12 +1861,13 @@ def template_usage_policy(skill: dict) -> dict:
     templates = template_asset_definitions(skill["id"])
     if not templates:
         return {"required": False}
+    unread_template_blocker = "未读取 template asset 就生成正式 MQ Excel 文档" if skill["id"] == "mq-design" else "未读取 template asset 就生成正式 Markdown 文档"
     return {
         "required": True,
         "source_of_truth": "template_assets[].canonical_template",
         "must_read_template_before_generation": True,
         "template_assets": templates,
-        "generation_protocol": TEMPLATE_GENERATION_PROTOCOL,
+        "generation_protocol": MQ_EXCEL_GENERATION_PROTOCOL if skill["id"] == "mq-design" else TEMPLATE_GENERATION_PROTOCOL,
         "strict_format_rules": [
             "保留模板原有章节、标题名称、标题层级、表格列头和固定提示块。",
             "不适用章节不得删除，必须写明不适用原因或等待用户补充事实。",
@@ -1820,7 +1875,7 @@ def template_usage_policy(skill: dict) -> dict:
             "不得把 source_template 只当参考风格；canonical_template 才是输出正文骨架。",
         ],
         "blocked_when": [
-            "未读取 template asset 就生成正式 Markdown 文档",
+            unread_template_blocker,
             "输出缺少 template 章节、列头、固定提示块或顺序",
             "用 assets/artifact-template.md 或通用报告格式替代正式设计正文",
             "缺少关键事实却填充待确认占位符并标记 succeeded",
@@ -1836,6 +1891,18 @@ def template_execution_note(skill: dict) -> str:
         f"- `{item['artifact']}`: 生成前读取 `{item['template']}`；适用范围：{item['selection']}；来源模板：`{item['source_template'] or 'generator canonical template'}`。"
         for item in policy["template_assets"]
     )
+    if skill["id"] == "mq-design":
+        return f"""
+# 模板执行协议
+- 生成正式 MQ Excel 文档前必须先读取对应 xlsx template asset；不得凭记忆、通用模板、聊天上下文、Markdown 文档或 `assets/artifact-template.md` 生成正文。
+- 以 xlsx template 作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格和格式约定。
+- 只允许补充空白单元格、追加数据行和在既有表格范围内填充输入事实；不得删除、压缩、合并、重命名或重排模板 sheet。
+- 输入材料缺少事实时，保留模板列头并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
+- 模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
+
+# 对应模板
+{templates}
+"""
     return f"""
 # 模板执行协议
 - 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
@@ -1851,6 +1918,8 @@ def template_execution_note(skill: dict) -> str:
 
 def template_generation_step(skill: dict) -> str:
     if template_usage_policy(skill).get("required"):
+        if skill["id"] == "mq-design":
+            return "按模板执行协议读取对应 `assets/*-template.xlsx`，复制 Excel 工作簿骨架后填充输入事实，再生成全部声明产物。"
         return "按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。"
     return "生成全部声明产物。"
 
@@ -1959,7 +2028,7 @@ def team_document_policy(skill: dict) -> dict:
         }
     if skill["id"] == "mq-design":
         return {
-            "artifact": "mq-design.md",
+            "artifact": "mq-design.xlsx",
             "template_usage_policy": template_usage_policy(skill),
             "producer_table_fields": MQ_PRODUCER_FIELDS,
             "consumer_table_fields": MQ_CONSUMER_FIELDS,
@@ -1991,7 +2060,7 @@ def team_document_note(skill: dict) -> str:
 - 主文档不得包含独立章节：{forbidden}；不得展开数据库字段表、MQ 表格、Redis Key 表格。
 - 来源证据只能进入 `stage-run-result.json`、repo-context 产物或评审证据；技术选型进入概要设计、技术选型评审或 repo-context，除非用户明确要求。
 - `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
-- `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
+- `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.xlsx`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
 - `flowchart` 必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
@@ -2032,8 +2101,8 @@ def team_document_note(skill: dict) -> str:
     if skill["id"] == "mq-design":
         return template_execution_note(skill) + """
 # 团队 MQ 设计规则
-- MQ 设计必须生成独立 `mq-design.md`，不得在主详细设计中展开。
-- 文档必须按 `assets/mq-design-template.md` 组织，至少包含生产者表和消费者表。
+- MQ 设计必须生成独立 `mq-design.xlsx`，不得在主详细设计中展开，也不得用 `mq-design.md` 作为正式正文。
+- 文档必须按 `assets/mq-design-template.xlsx` 组织，至少包含 `生产者` sheet 和 `消费者` sheet。
 - MQ 只用于削峰填谷、异步执行和服务解耦；进程内异步不默认使用 MQ。
 - 一个服务一个队列，一个队列可绑定多个 Exchange/routingKey；队列默认建议仲裁队列，非仲裁队列需要评审。
 - 必须设计死信队列、幂等策略、重试策略、死信策略和回放策略。
@@ -2660,7 +2729,7 @@ sequenceDiagram
 | 类型 | 是否涉及 | 专项文档 | 说明 |
 | --- | --- | --- | --- |
 | Redis | 是/否 | `redis-design.md` |  |
-| MQ | 是/否 | `mq-design.md` |  |
+| MQ | 是/否 | `mq-design.xlsx` |  |
 | 定时任务 | 是/否 |  |  |
 | 外部依赖 | 是/否 |  |  |
 
@@ -2771,7 +2840,7 @@ classDiagram
 
 | 中间件 | 是否涉及 | 关联文档 | 评审要求 |
 | --- | --- | --- | --- |
-| MQ | 是/否 | `mq-design.md` | 遵循 MQ 设计模板并完成对应评审 |
+| MQ | 是/否 | `mq-design.xlsx` | 遵循 MQ Excel 设计模板并完成对应评审 |
 | Redis | 是/否 | `redis-design.md` | 遵循 Redis 设计模板并完成对应评审 |
 
 ## 6. 单元测试
@@ -2850,33 +2919,6 @@ classDiagram
 ### 4.1. 资源申请
 
 ### 4.2. 运维监控
-""",
-        }
-    if skill["id"] == "mq-design":
-        producer_header = " | ".join(MQ_PRODUCER_FIELDS)
-        producer_sep = " | ".join(["---"] * len(MQ_PRODUCER_FIELDS))
-        consumer_header = " | ".join(MQ_CONSUMER_FIELDS)
-        consumer_sep = " | ".join(["---"] * len(MQ_CONSUMER_FIELDS))
-        return {
-            "mq-design-template.md": f"""# MQ 设计
-
-## 1. 文档信息
-
-## 2. 生产者表
-| {producer_header} |
-| {producer_sep} |
-|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-
-## 3. 消费者表
-| {consumer_header} |
-| {consumer_sep} |
-|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-
-## 4. 幂等、重试、死信和回放策略
-
-## 5. 运维监控
-
-## 6. 人工评审项
 """,
         }
     return {}
@@ -3246,21 +3288,103 @@ def validate_output(payload_path, payload):
     return errors
 ''',
         "mq-design": r'''
+XLSX_NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main", "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+
+
+def _shared_text(si):
+    return "".join(t.text or "" for t in si.findall(".//a:t", XLSX_NS))
+
+
+def _cell_ref_to_col(ref):
+    letters = re.match(r"([A-Z]+)", ref or "")
+    if not letters:
+        return 0
+    index = 0
+    for char in letters.group(1):
+        index = index * 26 + ord(char) - ord("A") + 1
+    return index - 1
+
+
+def read_xlsx_artifact(payload_path, payload, name):
+    item = artifact_map(payload).get(name)
+    path = resolve_artifact(payload_path, item)
+    if not path or not path.exists():
+        return None, "缺少 " + name + " artifact 或文件不可读"
+    if path.suffix.lower() != ".xlsx":
+        return None, name + " 必须是 .xlsx 文件"
+    try:
+        with zipfile.ZipFile(path) as workbook:
+            shared = []
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                shared = [_shared_text(si) for si in shared_root.findall("a:si", XLSX_NS)]
+            rels_root = ET.fromstring(workbook.read("xl/_rels/workbook.xml.rels"))
+            rels = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels_root}
+            workbook_root = ET.fromstring(workbook.read("xl/workbook.xml"))
+            sheets = {}
+            all_text = []
+            for sheet in workbook_root.findall(".//a:sheet", XLSX_NS):
+                name = sheet.attrib.get("name", "")
+                rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+                target = rels.get(rel_id, "")
+                if not target:
+                    continue
+                sheet_path = "xl/" + target.lstrip("/")
+                sheet_root = ET.fromstring(workbook.read(sheet_path))
+                rows = {}
+                for row in sheet_root.findall(".//a:sheetData/a:row", XLSX_NS):
+                    row_number = int(row.attrib.get("r", "0") or 0)
+                    values = []
+                    for cell in row.findall("a:c", XLSX_NS):
+                        col_index = _cell_ref_to_col(cell.attrib.get("r", ""))
+                        while len(values) <= col_index:
+                            values.append("")
+                        value = ""
+                        if cell.attrib.get("t") == "inlineStr":
+                            value = "".join(t.text or "" for t in cell.findall(".//a:t", XLSX_NS))
+                        else:
+                            node = cell.find("a:v", XLSX_NS)
+                            if node is not None and node.text is not None:
+                                value = shared[int(node.text)] if cell.attrib.get("t") == "s" and shared else node.text
+                        values[col_index] = value
+                        if value:
+                            all_text.append(value)
+                    rows[row_number] = values
+                sheets[name] = rows
+            return {"sheets": sheets, "text": "\n".join(all_text)}, ""
+    except Exception as exc:
+        return None, "无法读取 mq-design.xlsx: " + str(exc)
+
+
 def validate_output(payload_path, payload):
     errors = []
-    text = read_artifact(payload_path, payload, "mq-design.md")
-    if not text:
-        return ["缺少 mq-design.md artifact 或文件不可读"]
+    workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
+    if error:
+        return [error]
+    sheets = workbook["sheets"]
+    text = workbook["text"]
+    if "mq-design.md" in artifact_map(payload):
+        errors.append("正式 MQ 设计正文必须是 mq-design.xlsx，不得登记 mq-design.md")
+    if "生产者" not in sheets:
+        errors.append("mq-design.xlsx 缺少生产者 sheet")
+    if "消费者" not in sheets:
+        errors.append("mq-design.xlsx 缺少消费者 sheet")
+    producer_header = sheets.get("生产者", {}).get(1, [])
+    consumer_header = sheets.get("消费者", {}).get(1, [])
     for field in POLICY["producer_fields"]:
-        if field not in text:
-            errors.append("mq-design.md 生产者表缺少字段: " + field)
+        if field not in producer_header:
+            errors.append("mq-design.xlsx 生产者表缺少字段: " + field)
     for field in POLICY["consumer_fields"]:
-        if field not in text:
-            errors.append("mq-design.md 消费者表缺少字段: " + field)
+        if field not in consumer_header:
+            errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:
         errors.append("MQ 必须定义幂等策略")
+    if "重试" not in text:
+        errors.append("MQ 必须定义重试策略")
+    if "回放" not in text:
+        errors.append("MQ 必须定义回放策略")
     for size in re.findall(r"(\d+)\s*KB", text, re.IGNORECASE):
         if int(size) > 10 and payload.get("status") == "succeeded":
             errors.append("消息体超过 10KB 必须 waiting_for_human_review")
@@ -3270,12 +3394,13 @@ def validate_output(payload_path, payload):
 ''',
     }
     policy = policies[skill_id]
+    xlsx_imports = "import zipfile\nfrom xml.etree import ElementTree as ET\n" if skill_id == "mq-design" else ""
     return f"""#!/usr/bin/env python3
 import json
 import re
 import sys
 from pathlib import Path
-
+{xlsx_imports}
 SKILL_ID = {json.dumps(skill_id, ensure_ascii=False)}
 POLICY = {json.dumps(policy, ensure_ascii=False, indent=2)}
 
@@ -3522,7 +3647,7 @@ EXTRA_EVAL_SCENARIOS = {
         {
             "case": "team_mq_template_reference_only",
             "title": "MQ 设计使用专项模板",
-            "material": "用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.md，专项必须生成生产者表和消费者表。",
+            "material": "用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.xlsx，专项必须生成生产者 sheet 和消费者 sheet。",
             "expected_gate_decision": "require_human_review",
             "rule_refs": ["D4", "M7", "M8", "M12"],
             "risk_focus": ["MQ 表格展开位置", "生产者表", "消费者表"],
@@ -3664,10 +3789,15 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
         "require_human_review": "waiting_for_human_review",
         "block": "blocked",
     }[scenario["expected_gate_decision"]]
+    formal_document_criterion = (
+        "正式 MQ Excel 文档必须包含 document_metadata.document_number、document_status、retention_policy"
+        if skill["id"] == "mq-design"
+        else "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy"
+    )
     common_pass_criteria = [
         "StageRunResult status 合法",
         "未指定 language 时必须询问用户选择 zh-CN 或 en",
-        "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
+        formal_document_criterion,
         "required_information_requests 在输入缺失时必须包含 questions",
         "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
         "forbidden_behavior 未出现在输出决策中",
@@ -3698,8 +3828,8 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "存储设计必须包含库、数据结构、ttl、key、数据格式，且 TTL 必须带单位",
         ],
         "mq-design": [
-            "mq-design.md 必须按 assets/mq-design-template.md 生成",
-            "MQ 设计必须包含生产者表和消费者表，列头与 xxxMQ设计.xlsx 一致",
+            "mq-design.xlsx 必须按 assets/mq-design-template.xlsx 生成",
+            "MQ 设计必须包含生产者 sheet 和消费者 sheet，列头与 xxxMQ设计.xlsx 一致",
             "必须定义死信、幂等、重试和回放策略；超过 10KB 或回放生产消息必须 waiting_for_human_review",
         ],
         "database-design": [
@@ -3717,8 +3847,9 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
         ],
     }.get(skill["id"], [])
     if template_usage_policy(skill).get("required"):
+        template_read_criterion = "生成正式 MQ Excel 文档前必须先读取对应 xlsx template" if skill["id"] == "mq-design" else "生成正式 Markdown 文档前必须先读取对应 assets template"
         skill_specific_pass_criteria = [
-            "生成正式 Markdown 文档前必须先读取对应 assets template",
+            template_read_criterion,
             "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
             "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
         ] + skill_specific_pass_criteria
@@ -3806,7 +3937,7 @@ def contract(skill: dict) -> dict:
             for index, item in enumerate(skill["inputs"])
         ],
         "outputs": [
-            {"name": item, "type": "markdown|json|yaml|code|log|report", "path": f"artifacts/{skill['id']}/{item}", "schema": f"output.schema.json#{item}", "consumer": "workflow-orchestrator|downstream-stage|human-review"}
+            {"name": item, "type": contract_output_type_for_name(item), "path": f"artifacts/{skill['id']}/{item}", "schema": f"output.schema.json#{item}", "consumer": "workflow-orchestrator|downstream-stage|human-review"}
             for item in skill["outputs"]
         ],
         "preconditions": ["必填输入已提供或已记录缺失处理策略", "风险策略已加载", "目标范围已明确"],
@@ -3891,6 +4022,7 @@ def contract(skill: dict) -> dict:
 
 def output_schema(skill: dict) -> dict:
     required = [o for o in skill["outputs"] if not o == "code changes"]
+    artifact_types = schema_artifact_types(skill)
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"https://example.internal/engineering-assistant/{skill['id']}/output.schema.json",
@@ -3913,7 +4045,7 @@ def output_schema(skill: dict) -> dict:
                     "properties": {
                         "name": {"type": "string"},
                         "path": {"type": "string"},
-                        "artifact_type": {"enum": ["markdown", "json", "yaml", "code", "log", "report", "html"]},
+                        "artifact_type": {"enum": artifact_types},
                         "producer_skill": {"const": skill["id"]},
                         "consumer_skills": {"type": "array", "items": {"type": "string"}},
                     },
@@ -4052,6 +4184,7 @@ def skill_md(skill: dict) -> str:
     checks = "\n".join(f"- {c}" for c in skill["checks"])
     non_goals = "\n".join(f"- {g}" for g in skill["non_goals"])
     generation_step = template_generation_step(skill)
+    formal_document_kind = "正式 MQ Excel 文档" if skill["id"] == "mq-design" else "正式 Markdown 文档"
     return f"""---
 name: {skill['id']}
 description: {skill_trigger_description(skill)}
@@ -4099,7 +4232,7 @@ description: {skill_trigger_description(skill)}
 - preflight 阶段必须先完成语言确认和必须信息检查。
 - 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
 - 暂停等待人工输入或审批时，`StageRunResult.artifacts` 必须登记 HTML 审阅包，且该 HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
-- 生成正式 Markdown 文档时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
+- 生成{formal_document_kind}时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
 - 输出 `StageRunResult` 后必须运行 `engineering-assistant/scripts/validate_stage_run_result.py`；校验失败视为阶段节点未遵守契约，workflow 必须 `blocked`。
 {workflow_runtime_note(skill)}
 {static_analysis_runtime_note(skill)}
@@ -4217,10 +4350,15 @@ def eval_case(skill: dict, case: str) -> dict:
         "block": "blocked",
     }[scenario["expected_gate_decision"]]
     provided_input = f"provided: {scenario['material']}" if case != "missing_required_input" else ""
+    formal_document_criterion = (
+        "正式 MQ Excel 文档必须包含 document_metadata.document_number、document_status、retention_policy"
+        if skill["id"] == "mq-design"
+        else "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy"
+    )
     pass_criteria = [
         "StageRunResult status 合法",
         "未指定 language 时必须询问用户选择 zh-CN 或 en",
-        "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
+        formal_document_criterion,
         "missing_required_input 场景必须输出非空 required_information_requests.questions",
         "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
         "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
@@ -4235,8 +4373,9 @@ def eval_case(skill: dict, case: str) -> dict:
         "策略要求审批时已请求人工审批",
     ]
     if template_usage_policy(skill).get("required"):
+        template_read_criterion = "生成正式 MQ Excel 文档前必须先读取对应 xlsx template" if skill["id"] == "mq-design" else "生成正式 Markdown 文档前必须先读取对应 assets template"
         pass_criteria.extend([
-            "生成正式 Markdown 文档前必须先读取对应 assets template",
+            template_read_criterion,
             "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
             "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
         ])
@@ -4336,6 +4475,11 @@ source_artifacts: []
 """)
         for template_name, template_content in artifact_templates(skill).items():
             write_text(base / "assets" / template_name, template_content)
+        if skill["id"] == "mq-design":
+            stale_markdown_template = base / "assets" / "mq-design-template.md"
+            if stale_markdown_template.exists():
+                stale_markdown_template.unlink()
+            write_binary(base / "assets" / "mq-design-template.xlsx", (ROOT / "inputs" / "xxxMQ设计.xlsx").read_bytes())
         write_text(base / "scripts" / "validate_output.py", team_validator_script(skill["id"]))
         for case in EVAL_CASES:
             write_text(base / "evals" / f"{case}.yaml", json.dumps(eval_case(skill, case), ensure_ascii=False, indent=2))

@@ -4,7 +4,7 @@
   "case_type": "team_mq_template_reference_only",
   "scenario": {
     "title": "MQ 设计使用专项模板",
-    "material": "用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.md，专项必须生成生产者表和消费者表。",
+    "material": "用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.xlsx，专项必须生成生产者 sheet 和消费者 sheet。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D4",
@@ -30,7 +30,7 @@
       "skill_id": "detailed-design",
       "mode": "standalone",
       "inputs": {
-        "high-level-design.md": "provided: 用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.md，专项必须生成生产者表和消费者表。"
+        "high-level-design.md": "provided: 用户要求 MQ 设计使用模板；主详细设计只引用 mq-design.xlsx，专项必须生成生产者 sheet 和消费者 sheet。"
       },
       "artifacts": {},
       "context": {
@@ -81,7 +81,7 @@
     "interface-contracts.yaml",
     "test-strategy.md",
     "database-design.md",
-    "mq-design.md",
+    "mq-design.xlsx",
     "redis-design.md"
   ]
 }

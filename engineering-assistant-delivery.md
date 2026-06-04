@@ -65,7 +65,7 @@ flowchart LR
 | high-level-design | stage_skill | 概要设计、系统上下文、模块边界、核心流程和架构风险分析时使用；不要用于直接编写类方法级详细设计。 | requirement-contract.json, team_standards | high-level-design.md, architecture-decision-record.md, module-boundary.yaml | 是 | 是 | 需求契约已准入; 模块边界明确 | 高风险架构决策; 跨域边界调整 | 架构师 |
 | detailed-design | stage_skill | 详细设计、接口契约、实现任务拆解、测试策略和回滚策略设计时使用；不要用于替代数据库、Redis、MQ 专项设计。 | high-level-design.md, architecture-decision-record.md | detailed-design.md, implementation-plan.md, interface-contracts.yaml | 是 | 是 | 主详细设计只保留功能实现主线; 专项设计独立成文并在主文档引用 | 核心链路事务边界变化; 高并发路径设计 | 后端开发 |
 | redis-design | stage_skill | Redis 设计、缓存 key 注册、TTL、数据结构、缓存一致性和 Redis 风险评估时使用；不要用于数据库或 MQ 设计。 | detailed-design.md, redis-standard.md | redis-design.md, redis-key-registry.yaml, cache-consistency-plan.md | 是 | 是 | redis-design.md 使用团队 Redis 模板; key 命名合规 | Redis key 批量删除; 核心链路缓存策略变化 | 架构师 |
-| mq-design | stage_skill | MQ 设计、topic、routing key、消息体、生产消费链路、重试和死信策略设计时使用；不要用于 Redis 或数据库设计。 | detailed-design.md, mq-standard.md | mq-design.md, mq-topic-contract.yaml, message-schema.json | 是 | 是 | mq-design.md 使用团队 MQ 模板; 生产者表完整 | MQ topic 删除或重命名; MQ 新队列或 topic | 架构师 |
+| mq-design | stage_skill | MQ 设计、topic、routing key、消息体、生产消费链路、重试和死信策略设计时使用；不要用于 Redis 或数据库设计。 | detailed-design.md, mq-standard.md | mq-design.xlsx, mq-topic-contract.yaml, message-schema.json | 是 | 是 | mq-design.xlsx 使用团队 MQ Excel 模板; 生产者表完整 | MQ topic 删除或重命名; MQ 新队列或 topic | 架构师 |
 | database-design | stage_skill | 数据库设计、表结构、索引、迁移、修复和必要恢复方案设计时使用；不要用于缓存或消息队列专项设计。 | detailed-design.md, database-standard.md | database-design.md, schema-change-plan.sql, migration-plan.md | 是 | 是 | database-design.md 使用 OLTP 或 OLAP 团队模板; 字段和索引均有查询/约束用途 | DDL; 数据订正 | DBA |
 | design-review | stage_skill | 设计评审、设计产物完整性检查、风险关闭和进入代码研发 gate 判断时使用；不要用于直接生成设计文档正文。 | high-level-design.md, detailed-design.md | design-review-report.md, review-findings.json, design-gate-decision.json | 是 | 是 | 无未关闭 blocker; 关键专项设计齐全 | 高风险设计放行; blocker 关闭确认 | 架构师 |
 | frontend-design | stage_skill | 前端页面设计、组件边界、交互流程、接口联调契约和前端风险评估时使用；不要用于直接编写后端代码或替代 UI 视觉评审。 | requirement-contract.json, high-level-design.md | frontend-design.md, interaction-flow.md, component-contracts.yaml | 是 | 是 | 页面和组件边界明确; 接口联调契约明确 | 前端技术栈变更; 公共组件改造 | 前端开发 |
@@ -138,7 +138,7 @@ flowchart LR
 - 设计摘要：将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。
 - description：详细设计、接口契约、实现任务拆解、测试策略和回滚策略设计时使用；不要用于替代数据库、Redis、MQ 专项设计。
 - 输入：high-level-design.md, architecture-decision-record.md, module-boundary.yaml, team_standards
-- 输出：detailed-design.md, implementation-plan.md, interface-contracts.yaml, test-strategy.md, database-design.md, mq-design.md, redis-design.md
+- 输出：detailed-design.md, implementation-plan.md, interface-contracts.yaml, test-strategy.md, database-design.md, mq-design.xlsx, redis-design.md
 - 质量门禁：主详细设计只保留功能实现主线; 专项设计独立成文并在主文档引用; 流程使用 flowchart 且紧跟流程设计说明; DDD/分层/扩展点方案包含 classDiagram; 测试策略覆盖主干和异常路径
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
 - 人工审批规则：核心链路事务边界变化; 高并发路径设计; 权限/认证/鉴权设计; DDL; MQ 新队列或 topic; Redis 新 Key
@@ -168,8 +168,8 @@ flowchart LR
 - 设计摘要：设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。
 - description：MQ 设计、topic、routing key、消息体、生产消费链路、重试和死信策略设计时使用；不要用于 Redis 或数据库设计。
 - 输入：detailed-design.md, mq-standard.md, repo_context, risk_policy
-- 输出：mq-design.md, mq-topic-contract.yaml, message-schema.json, mq-risk-report.json
-- 质量门禁：mq-design.md 使用团队 MQ 模板; 生产者表完整; 消费者表完整; 消息 schema 完整; 幂等策略明确; 重试/死信/回放策略明确; 监控告警明确
+- 输出：mq-design.xlsx, mq-topic-contract.yaml, message-schema.json, mq-risk-report.json
+- 质量门禁：mq-design.xlsx 使用团队 MQ Excel 模板; 生产者表完整; 消费者表完整; 消息 schema 完整; 幂等策略明确; 重试/死信/回放策略明确; 监控告警明确
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
 - 人工审批规则：MQ topic 删除或重命名; MQ 新队列或 topic; 核心消息链路变化; 生产消息回放; 消息体超过 10KB; 非仲裁队列
 - 目录结构：`skills/mq-design/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
@@ -197,7 +197,7 @@ flowchart LR
 ## design-review
 - 设计摘要：评审设计产物，判断是否可以进入代码研发。
 - description：设计评审、设计产物完整性检查、风险关闭和进入代码研发 gate 判断时使用；不要用于直接生成设计文档正文。
-- 输入：high-level-design.md, detailed-design.md, database-design.md, redis-design.md, mq-design.md
+- 输入：high-level-design.md, detailed-design.md, database-design.md, redis-design.md, mq-design.xlsx
 - 输出：design-review-report.md, review-findings.json, design-gate-decision.json
 - 质量门禁：无未关闭 blocker; 关键专项设计齐全; 测试策略存在; 高风险审批齐全
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。

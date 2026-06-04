@@ -54,7 +54,7 @@
         "detailed-design.md",
         "database-design.md",
         "redis-design.md",
-        "mq-design.md"
+        "mq-design.xlsx"
       ],
       "outputs": [
         "design-review-report.md",

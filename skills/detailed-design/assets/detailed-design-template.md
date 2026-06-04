@@ -96,7 +96,7 @@ classDiagram
 
 | 中间件 | 是否涉及 | 关联文档 | 评审要求 |
 | --- | --- | --- | --- |
-| MQ | 是/否 | `mq-design.md` | 遵循 MQ 设计模板并完成对应评审 |
+| MQ | 是/否 | `mq-design.xlsx` | 遵循 MQ Excel 设计模板并完成对应评审 |
 | Redis | 是/否 | `redis-design.md` | 遵循 Redis 设计模板并完成对应评审 |
 
 ## 6. 单元测试
