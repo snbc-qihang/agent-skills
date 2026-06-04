@@ -11,7 +11,7 @@
 
 ## 验证要求
 - 变更后运行 `python3 -m unittest discover -s tests -v`。
-- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py` 和 `validate_skill_metadata.py`。
+- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py`、`validate_skill_metadata.py` 和 `validate_plugin_manifest.py`。
 - 发布脚本必须能把源树发布为 Codex 可识别插件，并通过 scored eval 的发布包同步检查。
 
 ## 风险边界
