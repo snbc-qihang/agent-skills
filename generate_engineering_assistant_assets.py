@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
+PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
 PLUGIN_MARKETPLACE_DISPLAY_NAME = "Local Teamwork Engineering Plugins"
@@ -92,6 +93,22 @@ HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS = [
     "Repository",
 ]
 
+HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS = [
+    "请求字段",
+    "返回字段",
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE",
+    "字段类型",
+    "索引名",
+    "Controller",
+    "Mapper",
+    "Repository",
+    "方法签名",
+    "伪代码",
+    "单元测试步骤",
+]
+
 DETAILED_DESIGN_FORBIDDEN_HEADINGS = [
     "来源证据",
     "技术选型",
@@ -110,6 +127,23 @@ DETAILED_DESIGN_FLOW_NOTE_FIELDS = [
     "幂等与一致性",
     "异常场景",
     "日志要求",
+]
+
+DETAILED_DESIGN_FLOW_REQUIRED_BRANCH_TERMS = {
+    "异常分支": ["异常", "失败", "校验失败", "权限失败", "状态失败", "调用失败", "超时"],
+    "失败终态": ["失败结束", "异常结束", "终止", "人工处理", "补偿完成", "回滚"],
+    "补偿/重试/人工处理": ["补偿", "重试", "人工处理", "回滚", "告警"],
+}
+
+DETAILED_DESIGN_EXCEPTION_TABLE_FIELDS = [
+    "场景",
+    "触发条件",
+    "异常编码",
+    "异常信息",
+    "系统处理动作",
+    "数据状态",
+    "日志/告警",
+    "补偿/重试/人工处理",
 ]
 
 DETAILED_DESIGN_DDD_TERMS = [
@@ -524,6 +558,7 @@ TEAM_RULE_CATALOG = [
     {"id": "H7", "category": "概要设计", "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；不得用通用证据/Findings/门禁决策模板替代正文。"},
     {"id": "H8", "category": "概要设计", "rule": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。"},
     {"id": "H9", "category": "概要设计", "rule": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。"},
+    {"id": "H10", "category": "概要设计", "rule": "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。"},
     {"id": "D1", "category": "详细设计", "rule": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。"},
     {"id": "D2", "category": "详细设计", "rule": "列出业务规则、状态机、校验规则、异常码、幂等点、事务边界、回滚策略。"},
     {"id": "D3", "category": "详细设计", "rule": "导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理。"},
@@ -567,6 +602,8 @@ TEAM_RULE_CATALOG = [
     {"id": "D7", "category": "详细设计", "rule": "涉及 Spring AI、LLM provider、RAG、Agent、Tool Calling、Embedding、VectorStore 时，必须生成 Spring AI 专项规范。"},
     {"id": "D8", "category": "详细设计", "rule": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。"},
     {"id": "D12", "category": "详细设计", "rule": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。"},
+    {"id": "D13", "category": "详细设计", "rule": "详细设计业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。"},
+    {"id": "D14", "category": "详细设计", "rule": "详细设计流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。"},
     {"id": "CD1", "category": "代码研发", "rule": "代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据。"},
     {"id": "CQ1", "category": "代码质量", "rule": "好代码必须同时满足正确性、领域表达、边界清晰、可测试、可维护、安全、可观测、性能并发可控和可演进。"},
     {"id": "CQ2", "category": "代码质量", "rule": "代码必须能映射到需求、设计文档、接口契约和测试证据；无法映射的实现视为无设计依据。"},
@@ -979,6 +1016,7 @@ SKILLS = [
             "H7 high-level-design.md 必须按 `assets/high-level-design-template.md` 的章节顺序生成，不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
             "H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository",
             "H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态",
+            "H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤",
         ],
     },
     {
@@ -1007,6 +1045,8 @@ SKILLS = [
             "D10 状态流转说明允许状态、终态、CAS/乐观锁控制、并发竞争处理",
             "D11 项目定制功能不能破坏原有通用能力，说明新增模块边界和兼容策略",
             "D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异",
+            "D13 业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态",
+            "D14 流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
             "I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi",
             "I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD",
             "I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口",
@@ -1824,14 +1864,15 @@ def team_document_policy(skill: dict) -> dict:
             "template_usage_policy": template_usage_policy(skill),
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
+            "detailed_implementation_forbidden_terms": HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "service_sequence_policy": {
                 "required_mermaid": "sequenceDiagram",
                 "participants_only": "services",
                 "forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
             },
-            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系", "概要设计必须保留原始需求规格或原型引用矩阵"],
-            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失", "缺少跨服务服务间时序图", "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象", "缺少原始需求规格或原型引用矩阵"],
+            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用", "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系", "概要设计必须保留原始需求规格或原型引用矩阵", "概要设计不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
+            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失", "缺少跨服务服务间时序图", "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象", "缺少原始需求规格或原型引用矩阵", "概要设计展开接口字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
         }
     if skill["id"] == "detailed-design":
         return {
@@ -1847,6 +1888,8 @@ def team_document_policy(skill: dict) -> dict:
                 "required_mermaid": ["flowchart"],
                 "flowchart_note_required": True,
                 "flowchart_note_fields": DETAILED_DESIGN_FLOW_NOTE_FIELDS,
+                "flowchart_required_branch_terms": DETAILED_DESIGN_FLOW_REQUIRED_BRANCH_TERMS,
+                "exception_table_required_fields": DETAILED_DESIGN_EXCEPTION_TABLE_FIELDS,
                 "class_diagram_required_when_terms_present": DETAILED_DESIGN_DDD_TERMS,
                 "specialty_reference_only": DETAILED_DESIGN_SPECIALTY_DOCS,
                 "evidence_location": ["stage-run-result.json", "repo-context-report.md", "review evidence artifacts"],
@@ -1861,6 +1904,8 @@ def team_document_policy(skill: dict) -> dict:
                     "detailed-design.md 包含 sequenceDiagram",
                     "detailed-design.md 缺少 flowchart",
                     "flowchart 后缺少流程设计说明",
+                    "flowchart 缺少异常分支、失败终态或补偿/重试/人工处理路径",
+                    "异常场景表缺少触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警或补偿/重试/人工处理",
                     "DDD/分层/扩展点关键词出现但缺少 classDiagram",
                     "涉及 DB/MQ/Redis 但缺少独立专项文档或 StageRunResult 未登记",
                     "缺少原始需求规格或原型引用矩阵",
@@ -1934,6 +1979,7 @@ def team_document_note(skill: dict) -> str:
 - `0. 原始需求与原型追溯` 必须列出原始需求规格或原型引用矩阵，字段包含 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；设计事实必须能追溯到规格或原型。
 - `系统设计` 必须覆盖系统逻辑视图、系统设计原则、研发视图和研发结构定义。
 - `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、流程、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、Controller、数据库、Redis、MQ、表、Mapper、Repository 等非服务对象。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 """
@@ -1947,7 +1993,9 @@ def team_document_note(skill: dict) -> str:
 - `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
 - `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
+- `flowchart` 必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
+- 异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 """
@@ -2581,8 +2629,12 @@ source_artifacts: []
 
 ```mermaid
 flowchart TD
-    A["开始"] --> B["处理"]
+    A["跨系统触发"] --> B["来源服务确认职责边界"]
+    B --> C["目标服务处理架构职责"]
+    C --> D["事件或开放服务完成协作"]
 ```
+
+> 概要设计只说明跨系统/跨服务职责、调用/事件方向、异常流、最终一致性和专项文档引用；详细实现、接口字段、SQL/DDL、类方法和单元测试只能引用详细设计或专项文档，不在概要设计正文展开。
 
 #### 4.1.3 跨服务服务间时序图
 
@@ -2655,18 +2707,36 @@ source_artifacts: []
 
 ```mermaid
 flowchart TD
-    A["开始"] --> B["校验输入与权限"]
+    A["开始"] --> B{"参数/权限/状态校验通过?"}
+    B -- 否 --> E1["返回校验/权限/状态异常"]
+    B -- 是 --> C["执行业务处理"]
+    C --> D{"外部依赖调用或事务提交成功?"}
+    D -- 是 --> S["成功结束"]
+    D -- 否 --> R{"可重试或可补偿?"}
+    R -- 可重试 --> RT["记录日志告警并重试"]
+    R -- 可补偿 --> CP["执行补偿/回滚"]
+    R -- 不可自动处理 --> H["进入人工处理"]
+    E1 --> F["失败结束"]
+    RT --> D
+    CP --> F
+    H --> F
 ```
 
 流程设计说明：
 
-- 业务规则：
-- 校验规则：
-- 事务边界：
-- 幂等与一致性：
-- 异常场景：
-- 日志要求：
-- 取消、重试、补偿、文件清理：
+- 业务规则：说明本流程的核心业务判断、状态流转和不变式。
+- 校验规则：说明参数校验、权限校验、状态校验失败时的返回和终态。
+- 事务边界：说明本地事务、跨资源一致性、提交失败和回滚动作。
+- 幂等与一致性：说明幂等键、重复请求处理、最终一致性和乱序处理。
+- 异常场景：见下表，必须覆盖校验失败、外部依赖失败、事务/一致性失败和不可自动恢复场景。
+- 日志要求：说明 traceId、业务主键、异常编码、告警维度和敏感信息脱敏。
+- 取消、重试、补偿、文件清理：说明可重试条件、补偿/回滚动作、人工处理入口和失败终态。
+
+| 场景 | 触发条件 | 异常编码 | 异常信息 | 系统处理动作 | 数据状态 | 日志/告警 | 补偿/重试/人工处理 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 参数/权限/状态校验失败 | 入参缺失、无权限或当前状态不允许继续 |  |  | 拒绝处理并返回失败 | 不落库或保持原状态 | 记录 traceId、用户、业务主键 | 无需补偿，必要时提示人工确认输入 |
+| 外部依赖失败 | 服务调用超时、返回失败或熔断 |  |  | 记录失败原因并按策略重试或降级 | 本地状态保持处理中/失败待补偿 | 告警依赖名称、耗时、错误码 | 可重试则重试；不可重试进入人工处理 |
+| 事务/一致性失败 | 本地事务提交失败、消息发送失败或状态不一致 |  |  | 回滚事务或写入补偿任务 | 回滚到提交前状态或标记待补偿 | 告警事务边界、补偿任务 ID | 执行补偿/回滚，失败后人工处理 |
 
 ### 3.2. UML类图
 
@@ -2838,6 +2908,7 @@ def team_validator_script(skill_id: str) -> str:
         "high-level-design": {
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
+            "detailed_implementation_forbidden_terms": HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "service_sequence_forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
         },
@@ -2845,6 +2916,8 @@ def team_validator_script(skill_id: str) -> str:
             "required_sections": DETAILED_DESIGN_MAIN_SECTIONS,
             "forbidden_headings": DETAILED_DESIGN_FORBIDDEN_HEADINGS,
             "flow_note_fields": DETAILED_DESIGN_FLOW_NOTE_FIELDS,
+            "flow_required_branch_terms": DETAILED_DESIGN_FLOW_REQUIRED_BRANCH_TERMS,
+            "exception_table_required_fields": DETAILED_DESIGN_EXCEPTION_TABLE_FIELDS,
             "ddd_terms": DETAILED_DESIGN_DDD_TERMS,
             "specialty_docs": DETAILED_DESIGN_SPECIALTY_DOCS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
@@ -2894,6 +2967,9 @@ def validate_output(payload_path, payload):
     for required in ["系统逻辑视图", "系统设计原则", "研发视图", "研发结构定义", "中间件设计", "数据视图"]:
         if required not in text:
             errors.append("high-level-design.md 缺少概要设计核心内容: " + required)
+    for term in POLICY["detailed_implementation_forbidden_terms"]:
+        if term in text:
+            errors.append("概要设计不得展开详细设计内容: " + term)
     if POLICY["source_traceability_header"] not in text:
         errors.append("high-level-design.md 缺少原始需求与原型追溯矩阵列头: " + POLICY["source_traceability_header"])
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
@@ -2939,12 +3015,37 @@ def validate_output(payload_path, payload):
     flow_blocks = list(re.finditer(r"```mermaid\s*\n\s*flowchart[\s\S]*?```", text))
     for index, block in enumerate(flow_blocks, start=1):
         tail = text[block.end(): block.end() + 700]
+        flow_context = block.group(0)
         if "流程设计说明" not in tail:
             errors.append(f"第 {index} 个 flowchart 后缺少流程设计说明")
             continue
+        for label, terms in POLICY["flow_required_branch_terms"].items():
+            if not any(term in flow_context for term in terms):
+                errors.append(f"第 {index} 个 flowchart 缺少{label}: " + "、".join(terms))
         for field in POLICY["flow_note_fields"]:
             if field not in tail:
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
+    exception_headers = []
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
+            exception_headers.append(cells)
+    field_aliases = {
+        "异常编码": ["异常编码", "返回编码"],
+        "日志/告警": ["日志/告警", "日志要求", "告警"],
+        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
+    }
+    if not exception_headers:
+        errors.append("异常场景表缺少字段: " + "、".join(POLICY["exception_table_required_fields"]))
+    else:
+        best_header = max(exception_headers, key=len)
+        missing_fields = []
+        for field in POLICY["exception_table_required_fields"]:
+            aliases = field_aliases.get(field, [field])
+            if not any(any(alias in cell for cell in best_header) for alias in aliases):
+                missing_fields.append(field)
+        if missing_fields:
+            errors.append("异常场景表缺少字段: " + "、".join(missing_fields))
     if any(term in text for term in POLICY["ddd_terms"]) and "classDiagram" not in text:
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:
@@ -3397,6 +3498,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["H2", "H3", "H8", "H9"],
             "risk_focus": ["跨服务时序图", "服务参与者限制", "规格原型追溯", "设计一致性"],
             "forbidden_behavior": ["sequenceDiagram 出现用户或页面", "sequenceDiagram 出现数据库或 MQ", "缺少 source_id 引用矩阵", "设计无法追溯原始规格或原型"],
+        },
+        {
+            "case": "team_high_level_no_detailed_implementation_content",
+            "title": "概要设计不得混入详细实现",
+            "material": "已有概要设计草稿在核心功能中展开请求字段、返回字段、CREATE TABLE、Controller、Mapper 和单元测试步骤。正确处理应阻断该草稿，并要求概要设计只保留跨系统/跨服务职责边界、服务间 sequenceDiagram、调用/事件方向、异常流、最终一致性和详细设计/专项文档引用。",
+            "expected_gate_decision": "block",
+            "rule_refs": ["H7", "H8", "H9", "H10"],
+            "risk_focus": ["概要与详细职责边界", "详细实现泄漏", "跨服务时序", "专项文档引用"],
+            "forbidden_behavior": ["在 high-level-design.md 展开请求字段或返回字段", "在概要设计正文写 SQL/DDL", "在概要设计正文写 Controller/Mapper/Repository 或单元测试步骤"],
         }
     ],
     "detailed-design": [
@@ -3435,6 +3545,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["D5", "D6", "RRQ-LOG1"],
             "risk_focus": ["流程图类型", "流程设计说明"],
             "forbidden_behavior": ["生成 sequenceDiagram", "flowchart 后没有流程设计说明"],
+        },
+        {
+            "case": "team_flowchart_exception_branches_required",
+            "title": "详细设计流程图必须覆盖异常分支",
+            "material": "已有详细设计草稿只有开始、保存、成功结束三个主干节点，异常场景只写待补充，缺少参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理和失败终态。正确处理应阻断该草稿，并要求补齐 flowchart 异常路径和异常场景表。",
+            "expected_gate_decision": "block",
+            "rule_refs": ["D5", "D6", "D13", "D14"],
+            "risk_focus": ["异常分支", "失败终态", "重试补偿", "异常场景表"],
+            "forbidden_behavior": ["只有主干 flowchart 就放行", "异常场景没有触发条件和异常编码", "缺少补偿/重试/人工处理路径"],
         },
         {
             "case": "team_rules_under_flow",
@@ -3560,12 +3679,15 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许服务",
             "high-level-design.md 必须用 source_id 引用原始需求规格或原型，并说明一致性状态",
             "high-level-design.md 不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
+            "high-level-design.md 不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤",
         ],
         "detailed-design": [
             "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
             "detailed-design.md 必须包含原始需求与原型引用矩阵，核心流程、接口、数据对象或规则必须映射 source_id",
             "detailed-design.md 不得包含来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线等禁止标题",
             "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
+            "detailed-design.md 的 flowchart 必须覆盖异常分支、失败终态以及补偿/重试/人工处理路径",
+            "detailed-design.md 的异常场景表必须包含场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
             "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
             "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts",
             "存在 DDL、MQ 新队列或 Redis 新 Key 时必须 waiting_for_human_review",
@@ -4268,7 +4390,7 @@ def agents_doc() -> str:
 
 ## 验证要求
 - 变更后运行 `python3 -m unittest discover -s tests -v`。
-- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py` 和 `validate_skill_metadata.py`。
+- 运行 `validate_skill_contract.py`、`validate_workflow.py`、`run_skill_evals.py`、`validate_skill_metadata.py` 和 `validate_plugin_manifest.py`。
 - 发布脚本必须能把源树发布为 Codex 可识别插件，并通过 scored eval 的发布包同步检查。
 
 ## 风险边界
@@ -4282,8 +4404,12 @@ def generate_runtime_policy_pack(base: Path) -> None:
 
 这些文件是给目标业务项目复制启用的运行时策略模板。插件目录只提供模板，不直接替目标项目写入 `.codex/` 或 `AGENTS.md`。
 
+安装插件不等于自动启用这些运行时策略；hooks、rules、tool policy 均不作为插件内置 hooks 自动生效。将本目录复制到目标项目并完成 trust review 后，才可按项目真实风险边界启用。
+
 ## 文件
 - `config.toml`：推荐的 Codex 沙箱、审批和 profile 配置。
+- `profiles/readonly_review.toml`：只读评审 profile 示例。
+- `profiles/controlled_fix.toml`：受控修复 profile 示例。
 - `rules/default.rules`：高风险命令规则模板。
 - `policies/tool-policy.yaml`：工具调用 policy-as-code，采用 JSON/YAML 子集格式，便于脚本稳定解析。
 - `hooks/pre_tool_use_policy.py`：PreToolUse 命令守卫模板。
@@ -4293,6 +4419,7 @@ def generate_runtime_policy_pack(base: Path) -> None:
 2. 按项目真实构建、测试、发布流程调整规则。
 3. 将任务运行产物写入目标项目 `artifacts/_control/`。
 4. 不要把插件目录作为 `--root` 传给控制面脚本。
+5. 变更 `profiles/readonly_review.toml` 或 `profiles/controlled_fix.toml` 前先完成 trust review，并记录项目审批人。
 """)
     write_text(base / "runtime" / "codex" / "config.toml", """model = "gpt-5.3-codex"
 approval_policy = "on-request"
@@ -4309,6 +4436,17 @@ sandbox_mode = "read-only"
 [profiles.controlled_fix]
 approval_policy = "untrusted"
 sandbox_mode = "workspace-write"
+""")
+    write_text(base / "runtime" / "codex" / "profiles" / "readonly_review.toml", """approval_policy = "on-request"
+sandbox_mode = "read-only"
+allow_login_shell = false
+""")
+    write_text(base / "runtime" / "codex" / "profiles" / "controlled_fix.toml", """approval_policy = "untrusted"
+sandbox_mode = "workspace-write"
+allow_login_shell = false
+
+[sandbox_workspace_write]
+network_access = false
 """)
     write_text(base / "runtime" / "codex" / "rules" / "default.rules", """prefix_rule(
     pattern = ["rm"],
@@ -4933,6 +5071,80 @@ if errors:
     raise SystemExit("\\n".join(errors))
 print("ok")
 """,
+        "validate_plugin_manifest.py": """#!/usr/bin/env python3
+import json
+from pathlib import Path
+
+MANIFEST = Path("engineering-assistant/plugin/plugin.json")
+manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+
+errors = []
+warnings = []
+
+required_top_level = ["name", "version", "description", "author", "homepage", "repository", "license", "skills", "interface", "metadata_status", "distribution_notes"]
+for field in required_top_level:
+    if field not in manifest:
+        errors.append(f"{MANIFEST}: 缺少 {field}")
+
+interface = manifest.get("interface", {})
+for field in ["displayName", "shortDescription", "longDescription", "developerName", "category", "capabilities", "defaultPrompt", "brandColor", "websiteURL", "privacyPolicyURL", "termsOfServiceURL"]:
+    if field not in interface:
+        errors.append(f"{MANIFEST}: interface 缺少 {field}")
+
+notes = manifest.get("distribution_notes", {})
+if manifest.get("metadata_status") not in {"ready", "waiting_for_human_review"}:
+    errors.append(f"{MANIFEST}: metadata_status 必须为 ready 或 waiting_for_human_review")
+if notes.get("runtime_policy_pack") != "target-project-template":
+    errors.append(f"{MANIFEST}: distribution_notes.runtime_policy_pack 必须声明为 target-project-template")
+if notes.get("hooks_packaging") != "not-bundled":
+    errors.append(f"{MANIFEST}: distribution_notes.hooks_packaging 必须声明为 not-bundled")
+
+placeholder_values = []
+author = manifest.get("author", {})
+for path, value in [
+    ("author.email", author.get("email", "")),
+    ("author.url", author.get("url", "")),
+    ("homepage", manifest.get("homepage", "")),
+    ("repository", manifest.get("repository", "")),
+    ("interface.websiteURL", interface.get("websiteURL", "")),
+    ("interface.privacyPolicyURL", interface.get("privacyPolicyURL", "")),
+    ("interface.termsOfServiceURL", interface.get("termsOfServiceURL", "")),
+]:
+    if "example." in str(value) or str(value).endswith("@example.com"):
+        placeholder_values.append(path)
+
+if placeholder_values:
+    if manifest.get("metadata_status") != "waiting_for_human_review":
+        errors.append(f"{MANIFEST}: 占位符 metadata {placeholder_values} 只能在 waiting_for_human_review 状态下保留")
+    if notes.get("external_distribution_gate") != "waiting_for_human_review":
+        errors.append(f"{MANIFEST}: 占位符 metadata 必须声明 external_distribution_gate=waiting_for_human_review")
+    if notes.get("placeholder_metadata_allowed_for_local_template") is not True:
+        errors.append(f"{MANIFEST}: 占位符 metadata 必须显式声明仅允许 local template")
+    warnings.append("example.* placeholder metadata requires human review: " + ", ".join(placeholder_values))
+
+if "hooks" in manifest:
+    errors.append(f"{MANIFEST}: runtime policy pack 当前是目标项目模板，不得在 manifest 中声明 hooks")
+
+runtime_readme = Path("engineering-assistant/runtime/codex/README.md")
+if runtime_readme.exists():
+    readme_text = runtime_readme.read_text(encoding="utf-8")
+    for required_text in ["安装插件不等于自动启用", "不作为插件内置 hooks 自动生效", "trust review"]:
+        if required_text not in readme_text:
+            errors.append(f"{runtime_readme}: 缺少 runtime 模板定位说明 {required_text}")
+else:
+    errors.append(f"{runtime_readme}: 缺少 runtime policy pack README")
+
+for profile in ["readonly_review.toml", "controlled_fix.toml"]:
+    path = Path("engineering-assistant/runtime/codex/profiles") / profile
+    if not path.exists():
+        errors.append(f"{path}: 缺少独立 profile 示例")
+
+status = "block" if errors else ("waiting_for_human_review" if warnings else "pass")
+payload = {"status": status, "errors": errors, "warnings": warnings}
+if errors:
+    raise SystemExit(json.dumps(payload, ensure_ascii=False, indent=2))
+print(json.dumps(payload, ensure_ascii=False, indent=2))
+""",
         "compile_skill_runtime.py": """#!/usr/bin/env python3
 import argparse
 import json
@@ -5225,6 +5437,7 @@ def apply_layout(config: dict, layout: str) -> dict:
 def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root") -> dict:
     config = apply_layout(config, layout)
     plugin_name = config.get("plugin_name", "teamwork-engineering-assistant")
+    compatibility_alias = config.get("compatibility_alias")
     publish_root_override = publish_root is not None
     publish_root = publish_root or expand(config["publish_root"])
     if marketplace_path is None:
@@ -5248,8 +5461,17 @@ def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=N
     copy_tree(skills, plugin_root / "skills")
     copy_tree(runtime, plugin_root / "engineering-assistant")
 
+    existing_marketplace = load_marketplace(marketplace_path)
+    existing_plugin_names = {item.get("name") for item in existing_marketplace.get("plugins", []) if isinstance(item, dict)}
+    if layout == "personal" and compatibility_alias and compatibility_alias != plugin_name and compatibility_alias not in existing_plugin_names:
+        alias_root = publish_root / "plugins" / compatibility_alias
+        if alias_root != plugin_root:
+            if alias_root.exists():
+                shutil.rmtree(alias_root)
+            shutil.copytree(plugin_root, alias_root)
+
     marketplace_path.parent.mkdir(parents=True, exist_ok=True)
-    marketplace_path.write_text(json.dumps(marketplace_payload(config, load_marketplace(marketplace_path)), ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    marketplace_path.write_text(json.dumps(marketplace_payload(config, existing_marketplace), ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
     legacy_marketplace = publish_root / "marketplace.json"
     if legacy_marketplace != marketplace_path and legacy_marketplace.exists():
         legacy_marketplace.unlink()
@@ -6020,6 +6242,8 @@ def run_scored_evals() -> dict:
     checks.append({"id": "route-negative", "status": "pass" if route_negative.get("status") == "rejected" else "block", "detail": route_negative})
     route_canary, _ = run_json_command([sys.executable, "engineering-assistant/scripts/route_skill.py", "--prompt", "继续推进任务 complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime"])
     checks.append({"id": "route-ai-platform-next-action", "status": "pass" if route_canary.get("status") == "waiting_for_input" and route_canary.get("candidates") else "block", "detail": route_canary})
+    manifest_result, _ = run_json_command([sys.executable, "engineering-assistant/scripts/validate_plugin_manifest.py"])
+    checks.append({"id": "plugin-manifest-metadata", "status": "pass" if manifest_result.get("status") in {"pass", "waiting_for_human_review"} else "block", "detail": manifest_result})
     fixture_path = Path("engineering-assistant/evals/fixtures/ai-platform-v1.json")
     if not fixture_path.exists():
         checks.append({"id": "canary-fixture-exists", "status": "block", "detail": "missing ai-platform-v1 fixture"})
@@ -6073,6 +6297,9 @@ def run_scored_evals() -> dict:
                 result = subprocess.run(["diff", "-qr", left, str(right)], text=True, capture_output=True, check=False)
                 plugin_sync.append({"left": left, "right": str(right), "status": "pass" if result.returncode == 0 else "block", "detail": result.stdout + result.stderr})
             manifest_ok = (plugin_root / ".codex-plugin" / "plugin.json").exists() and marketplace_path.exists()
+            if manifest_ok:
+                published_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+                manifest_ok = published_manifest.get("metadata_status") == "waiting_for_human_review" and published_manifest.get("distribution_notes", {}).get("runtime_policy_pack") == "target-project-template"
             plugin_sync.append({"left": "plugin-manifest", "right": str(plugin_root), "status": "pass" if manifest_ok else "block", "detail": publish_result.stdout + publish_result.stderr})
         personal_root = Path(temp_dir) / "personal"
         personal_result = subprocess.run(
@@ -6114,6 +6341,7 @@ def run_scored_evals() -> dict:
             "checks_passed": passed,
             "route_accuracy": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("route-")) else 0.0,
             "schema_pass": 1.0,
+            "distribution_surface_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-manifest")) else 0.0,
             "control_plane_pass": 1.0 if any(check["id"] == "canary-context-pack" and check["status"] == "pass" for check in checks) else 0.0,
             "context_source_validity": 1.0 if all(check["status"] == "pass" for check in checks if "context" in check["id"]) else 0.0,
             "plugin_sync_status": 1.0 if all(check["status"] == "pass" for check in checks if check["id"].startswith("plugin-sync")) else 0.0,
@@ -7745,6 +7973,7 @@ print("CI 产物目录已准备")
                 {"name": "收集 CI 产物", "run": "python3 engineering-assistant/scripts/collect_ci_artifacts.py"},
                 {"name": "校验 skill contract", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "校验 skill metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "校验 plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "校验 skill eval 覆盖", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "校验文档生命周期 schema", "run": "python3 -m json.tool engineering-assistant/schemas/document-lifecycle.schema.json"},
                 {"name": "校验主动询问信息 schema", "run": "python3 -m json.tool engineering-assistant/schemas/required-information-request.schema.json"},
@@ -7758,6 +7987,7 @@ print("CI 产物目录已准备")
                 {"uses": "actions/checkout@v4"},
                 {"name": "校验 contracts", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "校验 metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "校验 plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "校验 workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "校验团队场景 eval", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "校验文档生命周期 schema", "run": "python3 -m json.tool engineering-assistant/schemas/document-lifecycle.schema.json"},
@@ -7836,6 +8066,20 @@ def plugin_manifest() -> dict:
         "license": "UNLICENSED",
         "keywords": ["teamwork", "rrq", "yingqi", "engineering", "design", "framework-selection", "frontend", "required-information", "implementation-control", "document-governance", "code-quality", "workflow", "skills"],
         "skills": "./skills/",
+        "metadata_status": "waiting_for_human_review",
+        "distribution_notes": {
+            "placeholder_metadata_allowed_for_local_template": True,
+            "external_distribution_gate": "waiting_for_human_review",
+            "runtime_policy_pack": "target-project-template",
+            "hooks_packaging": "not-bundled",
+            "todo": [
+                "homepage 需要人工确认真实团队入口",
+                "websiteURL 需要人工确认正式分发链接",
+                "privacyPolicyURL 需要人工确认隐私政策链接",
+                "termsOfServiceURL 需要人工确认服务条款链接",
+                "视觉资产和外部分发说明需要人工确认",
+            ],
+        },
         "interface": {
             "displayName": PLUGIN_DISPLAY_NAME,
             "shortDescription": "按人人取/萤启团队规范完成设计、研发、评审和质量治理。",
@@ -7843,6 +8087,9 @@ def plugin_manifest() -> dict:
             "developerName": "Teamwork Engineering Team",
             "category": "Productivity",
             "capabilities": ["Interactive", "Write"],
+            "websiteURL": "https://example.internal/teamwork-engineering-assistant",
+            "privacyPolicyURL": "https://example.internal/teamwork-engineering-assistant/privacy",
+            "termsOfServiceURL": "https://example.internal/teamwork-engineering-assistant/terms",
             "defaultPrompt": [
                 "使用团队研发助手走 design-only 流程",
                 "加载人人取/萤启团队规范后生成概要设计",
@@ -7868,6 +8115,7 @@ def generate_plugin_publish_config() -> None:
             "displayName": PLUGIN_MARKETPLACE_DISPLAY_NAME,
         },
         "plugin_name": PLUGIN_NAME,
+        "compatibility_alias": PLUGIN_COMPATIBILITY_ALIAS,
         "publish_root": f"~/.codex/local-plugins/{PLUGIN_MARKETPLACE_NAME}",
         "marketplace_path": f"~/.codex/local-plugins/{PLUGIN_MARKETPLACE_NAME}/.agents/plugins/marketplace.json",
         "plugin_relative_path": f"plugins/{PLUGIN_NAME}",
@@ -8136,6 +8384,7 @@ python3 engineering-assistant/scripts/run_skill_evals.py
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored --no-write-report
 python3 engineering-assistant/scripts/validate_skill_metadata.py
+python3 engineering-assistant/scripts/validate_plugin_manifest.py
 python3 engineering-assistant/scripts/publish_plugin.py --layout personal --publish-root /tmp/teamwork-engineering-assistant-personal
 python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/teamwork-engineering-assistant-plugin --marketplace-path /tmp/teamwork-engineering-assistant-plugin/.agents/plugins/marketplace.json
 diff -qr skills /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/skills
@@ -8166,6 +8415,7 @@ def generate_root_ci() -> None:
                 {"name": "Validate skill evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Validate scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Publish plugin package", "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/teamwork-engineering-assistant-plugin --marketplace-path /tmp/teamwork-engineering-assistant-plugin/.agents/plugins/marketplace.json"},
                 {"name": "Check published skill sync", "run": "diff -qr skills /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/skills"},
                 {"name": "Check published governance sync", "run": "diff -qr engineering-assistant /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/engineering-assistant"},
@@ -8179,6 +8429,7 @@ def generate_root_ci() -> None:
                 {"uses": "actions/checkout@v4"},
                 {"name": "Validate contracts", "run": "python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml"},
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
+                {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Validate workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "Run static evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Run scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},

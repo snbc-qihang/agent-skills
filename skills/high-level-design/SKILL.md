@@ -74,6 +74,7 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - `0. 原始需求与原型追溯` 必须列出原始需求规格或原型引用矩阵，字段包含 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；设计事实必须能追溯到规格或原型。
 - `系统设计` 必须覆盖系统逻辑视图、系统设计原则、研发视图和研发结构定义。
 - `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、流程、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、Controller、数据库、Redis、MQ、表、Mapper、Repository 等非服务对象。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 
@@ -98,6 +99,7 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - H7 high-level-design.md 必须按 `assets/high-level-design-template.md` 的章节顺序生成，不得使用通用证据/Findings/门禁决策模板替代概要设计正文
 - H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository
 - H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态
+- H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤
 4. 按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

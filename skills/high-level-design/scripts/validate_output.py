@@ -26,6 +26,21 @@ POLICY = {
     "必须补充信息",
     "门禁决策"
   ],
+  "detailed_implementation_forbidden_terms": [
+    "请求字段",
+    "返回字段",
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE",
+    "字段类型",
+    "索引名",
+    "Controller",
+    "Mapper",
+    "Repository",
+    "方法签名",
+    "伪代码",
+    "单元测试步骤"
+  ],
   "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |",
   "service_sequence_forbidden_participants": [
     "用户",
@@ -262,6 +277,9 @@ def validate_output(payload_path, payload):
     for required in ["系统逻辑视图", "系统设计原则", "研发视图", "研发结构定义", "中间件设计", "数据视图"]:
         if required not in text:
             errors.append("high-level-design.md 缺少概要设计核心内容: " + required)
+    for term in POLICY["detailed_implementation_forbidden_terms"]:
+        if term in text:
+            errors.append("概要设计不得展开详细设计内容: " + term)
     if POLICY["source_traceability_header"] not in text:
         errors.append("high-level-design.md 缺少原始需求与原型追溯矩阵列头: " + POLICY["source_traceability_header"])
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")

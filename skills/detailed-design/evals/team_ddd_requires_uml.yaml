@@ -62,6 +62,8 @@
     "detailed-design.md 必须包含原始需求与原型引用矩阵，核心流程、接口、数据对象或规则必须映射 source_id",
     "detailed-design.md 不得包含来源证据、技术选型、业务规则与校验、幂等与一致性、异常与日志、发布、灰度、上线等禁止标题",
     "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
+    "detailed-design.md 的 flowchart 必须覆盖异常分支、失败终态以及补偿/重试/人工处理路径",
+    "detailed-design.md 的异常场景表必须包含场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
     "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
     "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts",
     "存在 DDL、MQ 新队列或 Redis 新 Key 时必须 waiting_for_human_review"

@@ -100,6 +100,7 @@ def apply_layout(config: dict, layout: str) -> dict:
 def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root") -> dict:
     config = apply_layout(config, layout)
     plugin_name = config.get("plugin_name", "teamwork-engineering-assistant")
+    compatibility_alias = config.get("compatibility_alias")
     publish_root_override = publish_root is not None
     publish_root = publish_root or expand(config["publish_root"])
     if marketplace_path is None:
@@ -123,8 +124,17 @@ def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=N
     copy_tree(skills, plugin_root / "skills")
     copy_tree(runtime, plugin_root / "engineering-assistant")
 
+    existing_marketplace = load_marketplace(marketplace_path)
+    existing_plugin_names = {item.get("name") for item in existing_marketplace.get("plugins", []) if isinstance(item, dict)}
+    if layout == "personal" and compatibility_alias and compatibility_alias != plugin_name and compatibility_alias not in existing_plugin_names:
+        alias_root = publish_root / "plugins" / compatibility_alias
+        if alias_root != plugin_root:
+            if alias_root.exists():
+                shutil.rmtree(alias_root)
+            shutil.copytree(plugin_root, alias_root)
+
     marketplace_path.parent.mkdir(parents=True, exist_ok=True)
-    marketplace_path.write_text(json.dumps(marketplace_payload(config, load_marketplace(marketplace_path)), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    marketplace_path.write_text(json.dumps(marketplace_payload(config, existing_marketplace), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     legacy_marketplace = publish_root / "marketplace.json"
     if legacy_marketplace != marketplace_path and legacy_marketplace.exists():
         legacy_marketplace.unlink()

@@ -215,12 +215,18 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         hld_sequence_data = json.loads(hld_sequence_case.read_text(encoding="utf-8"))
         self.assertIn("sequenceDiagram", "\n".join(hld_sequence_data["pass_criteria"]))
         self.assertIn("source_id", "\n".join(hld_sequence_data["pass_criteria"]))
+        hld_boundary_case = ROOT / "skills" / "high-level-design" / "evals" / "team_high_level_no_detailed_implementation_content.yaml"
+        self.assertTrue(hld_boundary_case.exists())
+        hld_boundary_data = json.loads(hld_boundary_case.read_text(encoding="utf-8"))
+        self.assertEqual("team_high_level_no_detailed_implementation_content", hld_boundary_data["case_type"])
+        self.assertIn("SQL/DDL", "\n".join(hld_boundary_data["pass_criteria"]))
 
         expected_cases = [
             "team_db_reference_only",
             "team_mq_template_reference_only",
             "team_redis_template_reference_only",
             "team_flowchart_not_sequence",
+            "team_flowchart_exception_branches_required",
             "team_rules_under_flow",
             "team_ddd_requires_uml",
             "team_no_release_gray_sections",
@@ -402,6 +408,72 @@ sequenceDiagram
         self.assertIn("participant 不是服务", output)
         self.assertIn("消息端点不是服务", output)
 
+    def test_high_level_design_validator_blocks_detailed_implementation_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 开通
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant OrderService as 订单服务
+    participant MemberService as 会员服务
+    OrderService->>MemberService: 服务间协作
+```
+
+### 接口字段明细
+| 请求字段 | 返回字段 | 类型 |
+| --- | --- | --- |
+| userId | status | String |
+
+```sql
+CREATE TABLE t_order_ext(id bigint);
+```
+
+Controller 调用 Mapper，并补充单元测试步骤。
+
+## 5.中间件设计
+## 6.数据视图
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("概要设计不得展开详细设计内容", output)
+        self.assertIn("请求字段", output)
+        self.assertIn("CREATE TABLE", output)
+        self.assertIn("Controller", output)
+
     def test_code_development_validator_requires_source_design_code_traceability(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -472,6 +544,75 @@ flowchart TD
         self.assertIn("流程设计说明", output)
         self.assertIn("classDiagram", output)
         self.assertIn("waiting_for_human_review", output)
+
+    def test_detailed_design_validator_blocks_flowchart_without_exception_branches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "detailed-design.md"
+            design.write_text(
+                """# 详细设计
+
+## 1. 修订历史
+## 2. 设计背景与目标摘要
+### 2.1 原始需求与原型引用矩阵
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 3.1 | matched |
+## 3. 模块/功能详细设计
+### 3.1. 业务流程图
+
+```mermaid
+flowchart TD
+    A["开始"] --> B["保存"]
+    B --> C["成功结束"]
+```
+
+流程设计说明：
+
+- 业务规则：保存开通记录
+- 校验规则：校验入参
+- 事务边界：单事务提交
+- 幂等与一致性：按业务单号幂等
+- 异常场景：
+- 日志要求：记录开始和结束
+
+| 场景 | 触发条件 | 返回编码 | 描述 |
+| --- | --- | --- | --- |
+| 参数错误 | 参数为空 | 1001 | 参数错误 |
+
+### 3.2. UML类图
+## 4. 数据库设计
+## 5. 接口定义
+### 5.1. API接口列表
+### 5.2. 中间件设计
+## 6. 单元测试
+## 7. 性能与扩展性设计
+## 8. 人工评审项
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "detailed-design",
+                [
+                    {"name": "detailed-design.md", "path": str(design)},
+                    {"name": "database-design.md", "path": str(root / "database-design.md")},
+                    {"name": "mq-design.md", "path": str(root / "mq-design.md")},
+                    {"name": "redis-design.md", "path": str(root / "redis-design.md")},
+                    {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
+                    {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
+                ],
+            )
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("缺少异常分支", output)
+        self.assertIn("缺少失败终态", output)
+        self.assertIn("异常场景表缺少字段", output)
+        self.assertIn("补偿/重试/人工处理", output)
 
     def test_specialty_validators_block_template_and_policy_violations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

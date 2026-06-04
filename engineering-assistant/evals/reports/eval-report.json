@@ -91,17 +91,13 @@
       "id": "canary-required-files",
       "status": "pass",
       "detail": {
-        "skipped": true,
-        "reason": "external canary root is unavailable on this machine",
-        "root": "/Users/sunliming/work/project/personal/ai-platform-v1"
+        "missing": []
       }
     },
     {
       "id": "canary-context-pack",
       "status": "pass",
       "detail": {
-        "skipped": true,
-        "reason": "external canary root is unavailable on this machine",
         "root": "/Users/sunliming/work/project/personal/ai-platform-v1",
         "skill_id": "workflow-orchestrator",
         "task_id": "complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime",

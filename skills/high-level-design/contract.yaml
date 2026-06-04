@@ -462,6 +462,21 @@
       "必须补充信息",
       "门禁决策"
     ],
+    "detailed_implementation_forbidden_terms": [
+      "请求字段",
+      "返回字段",
+      "CREATE TABLE",
+      "ALTER TABLE",
+      "DROP TABLE",
+      "字段类型",
+      "索引名",
+      "Controller",
+      "Mapper",
+      "Repository",
+      "方法签名",
+      "伪代码",
+      "单元测试步骤"
+    ],
     "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |",
     "service_sequence_policy": {
       "required_mermaid": "sequenceDiagram",
@@ -488,10 +503,12 @@
     "rules": [
       "概要设计必须保留团队模板章节顺序",
       "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构",
+      "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用",
       "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务",
       "中间件设计只说明是否涉及并引用专项设计",
       "数据视图声明事实表、读模型和专项 DB 设计关系",
-      "概要设计必须保留原始需求规格或原型引用矩阵"
+      "概要设计必须保留原始需求规格或原型引用矩阵",
+      "概要设计不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"
     ],
     "blocked_when": [
       "high-level-design.md 缺少团队模板章节",
@@ -499,7 +516,8 @@
       "跨系统边界、事件协作、最终一致性或异常流缺失",
       "缺少跨服务服务间时序图",
       "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象",
-      "缺少原始需求规格或原型引用矩阵"
+      "缺少原始需求规格或原型引用矩阵",
+      "概要设计展开接口字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"
     ]
   }
 }

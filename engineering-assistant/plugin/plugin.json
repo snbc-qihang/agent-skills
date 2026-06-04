@@ -2,7 +2,6 @@
   "name": "teamwork-engineering-assistant",
   "version": "1.0.0",
   "description": "人人取/萤启团队研发助手插件，内置部门和团队规范，提供需求准入、主动信息补全、技术/框架选型评审、前端设计研发、代码上下文分析、概要/详细设计、DB/Redis/MQ 设计、设计评审、实现控制、文档治理、代码质量治理和经验沉淀能力。",
-  "metadata_status": "waiting_for_human_review",
   "author": {
     "name": "Teamwork Engineering Team",
     "email": "teamwork-engineering@example.com",
@@ -11,18 +10,6 @@
   "homepage": "https://example.internal/teamwork-engineering-assistant",
   "repository": "https://example.internal/teamwork-engineering-assistant/repo",
   "license": "UNLICENSED",
-  "distribution_notes": {
-    "placeholder_metadata_allowed_for_local_template": true,
-    "external_distribution_gate": "waiting_for_human_review",
-    "runtime_policy_pack": "target-project-template",
-    "hooks_packaging": "not-bundled",
-    "todo": [
-      "Replace author.email with an approved team contact before external distribution.",
-      "Replace homepage and repository with real internal or public URLs before external distribution.",
-      "Set interface.websiteURL, privacyPolicyURL and termsOfServiceURL to approved URLs before external distribution.",
-      "Add approved logo, composerIcon and screenshots before listing in a shared marketplace."
-    ]
-  },
   "keywords": [
     "teamwork",
     "rrq",
@@ -39,6 +26,20 @@
     "skills"
   ],
   "skills": "./skills/",
+  "metadata_status": "waiting_for_human_review",
+  "distribution_notes": {
+    "placeholder_metadata_allowed_for_local_template": true,
+    "external_distribution_gate": "waiting_for_human_review",
+    "runtime_policy_pack": "target-project-template",
+    "hooks_packaging": "not-bundled",
+    "todo": [
+      "homepage 需要人工确认真实团队入口",
+      "websiteURL 需要人工确认正式分发链接",
+      "privacyPolicyURL 需要人工确认隐私政策链接",
+      "termsOfServiceURL 需要人工确认服务条款链接",
+      "视觉资产和外部分发说明需要人工确认"
+    ]
+  },
   "interface": {
     "displayName": "团队研发助手",
     "shortDescription": "按人人取/萤启团队规范完成设计、研发、评审和质量治理。",
@@ -49,9 +50,9 @@
       "Interactive",
       "Write"
     ],
-    "websiteURL": "https://example.internal/engineering-assistant",
-    "privacyPolicyURL": "https://example.internal/engineering-assistant/privacy",
-    "termsOfServiceURL": "https://example.internal/engineering-assistant/terms",
+    "websiteURL": "https://example.internal/teamwork-engineering-assistant",
+    "privacyPolicyURL": "https://example.internal/teamwork-engineering-assistant/privacy",
+    "termsOfServiceURL": "https://example.internal/teamwork-engineering-assistant/terms",
     "defaultPrompt": [
       "使用团队研发助手走 design-only 流程",
       "加载人人取/萤启团队规范后生成概要设计",

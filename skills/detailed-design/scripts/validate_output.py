@@ -39,6 +39,42 @@ POLICY = {
     "异常场景",
     "日志要求"
   ],
+  "flow_required_branch_terms": {
+    "异常分支": [
+      "异常",
+      "失败",
+      "校验失败",
+      "权限失败",
+      "状态失败",
+      "调用失败",
+      "超时"
+    ],
+    "失败终态": [
+      "失败结束",
+      "异常结束",
+      "终止",
+      "人工处理",
+      "补偿完成",
+      "回滚"
+    ],
+    "补偿/重试/人工处理": [
+      "补偿",
+      "重试",
+      "人工处理",
+      "回滚",
+      "告警"
+    ]
+  },
+  "exception_table_required_fields": [
+    "场景",
+    "触发条件",
+    "异常编码",
+    "异常信息",
+    "系统处理动作",
+    "数据状态",
+    "日志/告警",
+    "补偿/重试/人工处理"
+  ],
   "ddd_terms": [
     "DDD",
     "聚合根",
@@ -280,12 +316,37 @@ def validate_output(payload_path, payload):
     flow_blocks = list(re.finditer(r"```mermaid\s*\n\s*flowchart[\s\S]*?```", text))
     for index, block in enumerate(flow_blocks, start=1):
         tail = text[block.end(): block.end() + 700]
+        flow_context = block.group(0)
         if "流程设计说明" not in tail:
             errors.append(f"第 {index} 个 flowchart 后缺少流程设计说明")
             continue
+        for label, terms in POLICY["flow_required_branch_terms"].items():
+            if not any(term in flow_context for term in terms):
+                errors.append(f"第 {index} 个 flowchart 缺少{label}: " + "、".join(terms))
         for field in POLICY["flow_note_fields"]:
             if field not in tail:
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
+    exception_headers = []
+    for line in text.splitlines():
+        cells = table_cells(line)
+        if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
+            exception_headers.append(cells)
+    field_aliases = {
+        "异常编码": ["异常编码", "返回编码"],
+        "日志/告警": ["日志/告警", "日志要求", "告警"],
+        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
+    }
+    if not exception_headers:
+        errors.append("异常场景表缺少字段: " + "、".join(POLICY["exception_table_required_fields"]))
+    else:
+        best_header = max(exception_headers, key=len)
+        missing_fields = []
+        for field in POLICY["exception_table_required_fields"]:
+            aliases = field_aliases.get(field, [field])
+            if not any(any(alias in cell for cell in best_header) for alias in aliases):
+                missing_fields.append(field)
+        if missing_fields:
+            errors.append("异常场景表缺少字段: " + "、".join(missing_fields))
     if any(term in text for term in POLICY["ddd_terms"]) and "classDiagram" not in text:
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:

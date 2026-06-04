@@ -75,7 +75,9 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
 - `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.md`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
+- `flowchart` 必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
+- 异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 
@@ -96,6 +98,8 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - D10 状态流转说明允许状态、终态、CAS/乐观锁控制、并发竞争处理
 - D11 项目定制功能不能破坏原有通用能力，说明新增模块边界和兼容策略
 - D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异
+- D13 业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态
+- D14 流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理
 - I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi
 - I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD
 - I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口
