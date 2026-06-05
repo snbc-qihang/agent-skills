@@ -7,6 +7,7 @@
     "run_id",
     "skill_id",
     "status",
+    "preflight_input_state",
     "language",
     "trace_id",
     "document_metadata",
@@ -33,6 +34,14 @@
         "waiting_for_input",
         "waiting_for_human_review",
         "skipped"
+      ]
+    },
+    "preflight_input_state": {
+      "enum": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
       ]
     },
     "language": {
@@ -103,7 +112,7 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 0,
       "items": {
         "type": "object",
         "required": [

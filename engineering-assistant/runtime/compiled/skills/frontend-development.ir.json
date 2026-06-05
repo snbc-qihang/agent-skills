@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Frontend Development",
     "short_description": "基于前端设计和接口契约实施页面、组件、状态和接口联调变更。",
-    "default_prompt": "使用 frontend-development，先确认语言和必填输入，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 frontend-development，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
     "trigger_description": "Use when the request is about 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。；Do not use when 不修改无关页面；不绕过前端设计。",
     "language_policy": {
       "supported": [
@@ -14,6 +14,15 @@
         "en"
       ],
       "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
     }
   },
   "inputs": [

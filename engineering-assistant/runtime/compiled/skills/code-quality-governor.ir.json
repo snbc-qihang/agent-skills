@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Code Quality Governor",
     "short_description": "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。",
-    "default_prompt": "使用 code-quality-governor，先确认语言和必填输入，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 code-quality-governor，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
     "trigger_description": "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。",
     "language_policy": {
       "supported": [
@@ -14,6 +14,15 @@
         "en"
       ],
       "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
     }
   },
   "inputs": [

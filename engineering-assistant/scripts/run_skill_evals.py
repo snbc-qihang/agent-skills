@@ -194,11 +194,19 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
     if "JDBC" not in technology_selection_policy.get("requires_review", []):
         errors.append(f"{contract_path}: technology_selection_policy.requires_review 必须包含 JDBC")
     execution_gates = contract.get("execution_gates", {})
-    for gate in ["preflight_required_information", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
+    for gate in ["preflight_required_information", "preflight_before_formal_artifacts", "preflight_input_state_required", "formal_generation_requires_ready", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
         if execution_gates.get(gate) is not True:
             errors.append(f"{contract_path}: execution_gates.{gate} 必须为 true")
+    runtime_gate = contract.get("preflight_runtime_gate", {})
+    if runtime_gate.get("state_field") != "preflight_input_state":
+        errors.append(f"{contract_path}: preflight_runtime_gate.state_field 必须为 preflight_input_state")
+    if runtime_gate.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        errors.append(f"{contract_path}: preflight_runtime_gate.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+    required_policy = contract.get("required_information_policy", {})
+    if required_policy.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        errors.append(f"{contract_path}: required_information_policy.formal_generation_entry_condition 必须为 preflight_input_state == ready")
     required_schema_fields = set(output_schema.get("required", []))
-    for field in ["language", "document_metadata", "required_information_requests"]:
+    for field in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
         if field not in required_schema_fields:
             errors.append(f"{skill / 'output.schema.json'}: required 缺少 {field}")
     fingerprints = set()
@@ -236,7 +244,7 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         if len(data.get("pass_criteria", [])) < 5:
             errors.append(f"{path}: pass_criteria 过少，无法形成团队门禁")
         criteria_text = "\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "document_metadata", "required_information_requests"]:
+        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
             if required_text not in criteria_text:
                 errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
         if skill.name in {"code-development", "detailed-design", "design-review", "code-review", "code-quality-governor"} and "framework" not in criteria_text and "mybatis-plus" not in criteria_text:
@@ -247,8 +255,10 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
                     errors.append(f"{path}: pass_criteria 缺少静态分析/HTML 防回归断言 {required_text}")
         if skill.name in {"frontend-design", "frontend-development"} and "frontend" not in criteria_text:
             errors.append(f"{path}: pass_criteria 缺少 frontend 防回归断言")
-        if case == "missing_required_input" and "questions" not in criteria_text:
-            errors.append(f"{path}: missing_required_input 必须断言 questions 非空")
+        if case == "missing_required_input":
+            for required_text in ["questions", "waiting_for_input", "docs/human-review", "不得生成或登记正式阶段", "preflight_input_state"]:
+                if required_text not in criteria_text:
+                    errors.append(f"{path}: missing_required_input 必须断言 {required_text}")
         stage_request = data.get("input", {}).get("stage_run_request", {})
         if stage_request.get("skill_id") != skill.name:
             errors.append(f"{path}: stage_run_request.skill_id 与目录不一致")
@@ -284,7 +294,7 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         if len(scenario.get("team_rule_refs", [])) < 3:
             errors.append(f"{path}: 团队专项 eval 至少引用 3 条团队规范")
         criteria_text = "\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "document_metadata", "required_information_requests"]:
+        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
             if required_text not in criteria_text:
                 errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
         for required_text in ["detailed-design.md", "sequenceDiagram", "flowchart", "StageRunResult.artifacts"]:

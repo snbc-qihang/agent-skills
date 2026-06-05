@@ -8,6 +8,22 @@ from xml.etree import ElementTree as ET
 
 SKILL_ID = "mq-design"
 POLICY = {
+  "unresolved_markers": [
+    "{",
+    "}",
+    "待补充",
+    "待确认",
+    "未知",
+    "未确认",
+    "人工评审确认",
+    "待人工补充",
+    "待用户补充",
+    "pending_confirmation",
+    "TBD",
+    "TODO",
+    "<填写",
+    "请替换"
+  ],
   "producer_fields": [
     "业务用途",
     "场景应用",
@@ -46,6 +62,32 @@ POLICY = {
     "设计日期",
     "设计者",
     "备注"
+  ],
+  "producer_required_value_fields": [
+    "业务用途",
+    "场景应用",
+    "业务消息key",
+    "消息类型",
+    "消息体内容",
+    "目的交换机",
+    "路由key",
+    "生产服务/模块名称"
+  ],
+  "consumer_required_value_fields": [
+    "队列名称",
+    "业务用途",
+    "场景应用",
+    "绑定的Exchange/routingKey(多个）",
+    "死信队列exchange/routeKey",
+    "消费服务",
+    "消息key",
+    "运维监控"
+  ],
+  "formal_outputs": [
+    "mq-design.xlsx",
+    "mq-topic-contract.yaml",
+    "message-schema.json",
+    "mq-risk-report.json"
   ]
 }
 
@@ -86,6 +128,129 @@ def read_artifact(payload_path, payload, name):
     if path and path.exists():
         return path.read_text(encoding="utf-8")
     return ""
+
+
+def artifact_path(item):
+    return (item or {}).get("path") or (item or {}).get("file") or (item or {}).get("uri") or ""
+
+
+def artifact_kind(item):
+    return " ".join(str(value).lower() for value in [
+        (item or {}).get("name", ""),
+        (item or {}).get("artifact_type", ""),
+        artifact_path(item),
+    ])
+
+
+def is_waiting_support_artifact(item):
+    text = artifact_kind(item)
+    allowed = [
+        "required-information",
+        "missing-information",
+        "human-review",
+        "approval",
+        "workflow-trace",
+        "resume",
+        "open-questions",
+        "artifact-index",
+    ]
+    return any(token in text for token in allowed)
+
+
+def is_formal_artifact(item):
+    if is_waiting_support_artifact(item):
+        return False
+    path = artifact_path(item).lower()
+    kind = artifact_kind(item)
+    return path.endswith((".md", ".xlsx", ".xls", ".json", ".yaml", ".yml")) or any(token in kind for token in ["markdown", "xlsx", "json", "yaml"])
+
+
+def blocking_information_requests(payload):
+    for request in payload.get("required_information_requests", []) or []:
+        if request.get("blocking") is True:
+            return True
+        for question in request.get("questions", []) or []:
+            if isinstance(question, dict) and question.get("required") is True:
+                return True
+    return False
+
+
+def artifact_texts(payload_path, payload):
+    for item in payload.get("artifacts", []) or []:
+        name = item.get("name", "")
+        path = artifact_path(item).lower()
+        if not (name.endswith(".md") or path.endswith(".md")):
+            continue
+        resolved = resolve_artifact(payload_path, item)
+        if resolved and resolved.exists():
+            yield name or path, resolved.read_text(encoding="utf-8")
+
+
+def unresolved_markers(text):
+    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+
+
+def candidate_project_roots(payload_path):
+    path = Path(payload_path).resolve()
+    roots = []
+    for candidate in [path.parent, *path.parents]:
+        if candidate not in roots:
+            roots.append(candidate)
+        if (candidate / "artifacts").exists():
+            break
+    cwd = Path.cwd().resolve()
+    if cwd not in roots:
+        roots.append(cwd)
+    return roots
+
+
+def leaked_formal_output_files(payload_path):
+    leaks = []
+    for output in POLICY.get("formal_outputs", []):
+        for root in candidate_project_roots(payload_path):
+            for candidate in [root / "artifacts" / SKILL_ID / output, root / output]:
+                if candidate.exists():
+                    leaks.append(str(candidate))
+    return sorted(set(leaks))
+
+
+def should_validate_formal_outputs(payload):
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if status == "waiting_for_input":
+        return False
+    return state in ('ready', 'waiting_for_human_review', 'blocked') or status in ('succeeded', 'failed', 'blocked', 'waiting_for_human_review')
+
+
+def validate_preflight_order(payload_path, payload):
+    errors = []
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if state not in ('ready', 'waiting_for_input', 'waiting_for_human_review', 'blocked'):
+        errors.append("preflight_input_state 必须是 ready/waiting_for_input/waiting_for_human_review/blocked")
+    if status == "waiting_for_input":
+        if state != "waiting_for_input":
+            errors.append("status=waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+        if not payload.get("required_information_requests"):
+            errors.append("waiting_for_input 必须输出 required_information_requests 主动询问用户")
+        for item in payload.get("artifacts", []) or []:
+            if is_formal_artifact(item):
+                errors.append("waiting_for_input 不得登记正式阶段产物，必须先等待补充信息写回: " + (artifact_path(item) or item.get("name", "")))
+        leaks = leaked_formal_output_files(payload_path)
+        if leaks:
+            errors.append("waiting_for_input 不得先落盘正式阶段产物，必须先等待补充信息写回: " + ", ".join(leaks))
+    if status == "waiting_for_human_review" and state not in ('waiting_for_human_review', 'blocked'):
+        errors.append("status=waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review 或 blocked")
+    if status == "succeeded":
+        if state != "ready":
+            errors.append("succeeded 必须满足 preflight_input_state == ready")
+        if blocking_information_requests(payload):
+            errors.append("succeeded 不允许存在未解决的 blocking required_information_requests")
+        for name, text in artifact_texts(payload_path, payload):
+            unresolved = unresolved_markers(text)
+            if unresolved:
+                errors.append(name + " 包含未决信息标记，必须先 waiting_for_input 并生成 human-review HTML: " + ", ".join(sorted(set(unresolved))))
+    return errors
 
 
 def markdown_headings(text):
@@ -259,6 +424,13 @@ def _cell_ref_to_col(ref):
     return index - 1
 
 
+def _normalize_xlsx_target(target):
+    normalized = (target or "").replace("\\", "/").lstrip("/")
+    if normalized.startswith("xl/"):
+        return normalized
+    return "xl/" + normalized
+
+
 def read_xlsx_artifact(payload_path, payload, name):
     item = artifact_map(payload).get(name)
     path = resolve_artifact(payload_path, item)
@@ -283,7 +455,7 @@ def read_xlsx_artifact(payload_path, payload, name):
                 target = rels.get(rel_id, "")
                 if not target:
                     continue
-                sheet_path = "xl/" + target.lstrip("/")
+                sheet_path = _normalize_xlsx_target(target)
                 sheet_root = ET.fromstring(workbook.read(sheet_path))
                 rows = {}
                 for row in sheet_root.findall(".//a:sheetData/a:row", XLSX_NS):
@@ -310,11 +482,142 @@ def read_xlsx_artifact(payload_path, payload, name):
         return None, "无法读取 mq-design.xlsx: " + str(exc)
 
 
+def _cell_value(cell, shared):
+    value = ""
+    if cell.attrib.get("t") == "inlineStr":
+        value = "".join(t.text or "" for t in cell.findall(".//a:t", XLSX_NS))
+    else:
+        node = cell.find("a:v", XLSX_NS)
+        if node is not None and node.text is not None:
+            value = shared[int(node.text)] if cell.attrib.get("t") == "s" and shared else node.text
+    return value
+
+
+def read_xlsx_template_signature(path):
+    with zipfile.ZipFile(path) as workbook:
+        shared = []
+        if "xl/sharedStrings.xml" in workbook.namelist():
+            shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+            shared = [_shared_text(si) for si in shared_root.findall("a:si", XLSX_NS)]
+        rels_root = ET.fromstring(workbook.read("xl/_rels/workbook.xml.rels"))
+        rels = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels_root}
+        workbook_root = ET.fromstring(workbook.read("xl/workbook.xml"))
+        signature = {
+            "style_bytes": workbook.read("xl/styles.xml") if "xl/styles.xml" in workbook.namelist() else b"",
+            "sheet_order": [],
+            "sheets": {},
+        }
+        for sheet in workbook_root.findall(".//a:sheet", XLSX_NS):
+            sheet_name = sheet.attrib.get("name", "")
+            signature["sheet_order"].append(sheet_name)
+            rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+            target = rels.get(rel_id, "")
+            sheet_path = _normalize_xlsx_target(target)
+            sheet_root = ET.fromstring(workbook.read(sheet_path))
+            dimension = sheet_root.find("a:dimension", XLSX_NS)
+            merge_refs = [
+                merge.attrib.get("ref", "")
+                for merge in sheet_root.findall(".//a:mergeCells/a:mergeCell", XLSX_NS)
+            ]
+            cells = {}
+            for cell in sheet_root.findall(".//a:sheetData/a:row/a:c", XLSX_NS):
+                ref = cell.attrib.get("r", "")
+                cells[ref] = {
+                    "style": cell.attrib.get("s", ""),
+                    "value": _cell_value(cell, shared),
+                }
+            signature["sheets"][sheet_name] = {
+                "dimension": dimension.attrib.get("ref", "") if dimension is not None else "",
+                "merge_refs": merge_refs,
+                "cells": cells,
+            }
+        return signature
+
+
+def validate_mq_template_integrity(payload_path, payload):
+    errors = []
+    item = artifact_map(payload).get("mq-design.xlsx")
+    output_path = resolve_artifact(payload_path, item)
+    if not output_path or not output_path.exists():
+        return errors
+    template_path = Path(__file__).parents[1] / "assets" / "mq-design-template.xlsx"
+    try:
+        template = read_xlsx_template_signature(template_path)
+        output = read_xlsx_template_signature(output_path)
+    except Exception as exc:
+        return ["无法校验 mq-design.xlsx 模板一致性: " + str(exc)]
+    if output["style_bytes"] != template["style_bytes"]:
+        errors.append("mq-design.xlsx 不得修改模板样式定义 styles.xml")
+    if output["sheet_order"] != template["sheet_order"]:
+        errors.append("mq-design.xlsx 必须保留模板 sheet 名称和顺序: " + ", ".join(template["sheet_order"]))
+    for sheet_name in template["sheet_order"]:
+        expected = template["sheets"].get(sheet_name, {})
+        actual = output["sheets"].get(sheet_name, {})
+        if not actual:
+            errors.append("mq-design.xlsx 缺少模板 sheet: " + sheet_name)
+            continue
+        if actual.get("dimension") != expected.get("dimension"):
+            errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 不得追加行列或改变模板范围: {expected.get('dimension')} -> {actual.get('dimension')}")
+        if actual.get("merge_refs") != expected.get("merge_refs"):
+            errors.append("mq-design.xlsx 的 " + sheet_name + " sheet 不得修改合并单元格")
+        expected_cells = expected.get("cells", {})
+        actual_cells = actual.get("cells", {})
+        for ref, expected_cell in expected_cells.items():
+            actual_cell = actual_cells.get(ref)
+            if actual_cell is None:
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 模板单元格不得删除")
+                continue
+            if actual_cell.get("style") != expected_cell.get("style"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 不得修改模板样式")
+            if expected_cell.get("value") and actual_cell.get("value") != expected_cell.get("value"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 固定模板文本不得修改")
+        for ref, actual_cell in actual_cells.items():
+            if ref not in expected_cells and actual_cell.get("value"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 不得新增非模板单元格")
+    return errors
+
+
+def _header_index_map(header):
+    mapping = {}
+    for index, value in enumerate(header):
+        if value:
+            mapping[value] = index
+    return mapping
+
+
+def _non_empty_rows(rows):
+    result = []
+    for row_number, values in sorted(rows.items()):
+        if row_number <= 1:
+            continue
+        if any(str(value).strip() for value in values):
+            result.append((row_number, values))
+    return result
+
+
+def _validate_required_sheet_values(errors, rows, header, required_fields, sheet_name):
+    header_map = _header_index_map(header)
+    missing_headers = [field for field in required_fields if field not in header_map]
+    if missing_headers:
+        errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 缺少必填业务列: " + "、".join(missing_headers))
+        return
+    for row_number, values in _non_empty_rows(rows):
+        missing_values = []
+        for field in required_fields:
+            index = header_map[field]
+            value = values[index].strip() if index < len(values) and isinstance(values[index], str) else (str(values[index]).strip() if index < len(values) else "")
+            if not value:
+                missing_values.append(field)
+        if missing_values:
+            errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 第 {row_number} 行缺少必填业务值: " + "、".join(missing_values))
+
+
 def validate_output(payload_path, payload):
     errors = []
     workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
     if error:
         return [error]
+    errors.extend(validate_mq_template_integrity(payload_path, payload))
     sheets = workbook["sheets"]
     text = workbook["text"]
     if "mq-design.md" in artifact_map(payload):
@@ -331,6 +634,8 @@ def validate_output(payload_path, payload):
     for field in POLICY["consumer_fields"]:
         if field not in consumer_header:
             errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
+    _validate_required_sheet_values(errors, sheets.get("生产者", {}), producer_header, POLICY.get("producer_required_value_fields", []), "生产者")
+    _validate_required_sheet_values(errors, sheets.get("消费者", {}), consumer_header, POLICY.get("consumer_required_value_fields", []), "消费者")
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:
@@ -349,4 +654,7 @@ def validate_output(payload_path, payload):
 
 payload_path = Path(sys.argv[1])
 payload = load_payload(payload_path)
-fail(validate_output(payload_path, payload))
+errors = validate_preflight_order(payload_path, payload)
+if should_validate_formal_outputs(payload):
+    errors.extend(validate_output(payload_path, payload))
+fail(errors)

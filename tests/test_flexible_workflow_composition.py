@@ -21,6 +21,10 @@ class FlexibleWorkflowCompositionTests(unittest.TestCase):
             self.assertIn("start_node", workflow)
             self.assertIn("terminal_nodes", workflow)
             self.assertIn("composition_policy", workflow)
+            self.assertIn("preflight_runtime_policy", workflow)
+            self.assertEqual("preflight_input_state == ready", workflow["preflight_runtime_policy"]["formal_generation_entry_condition"])
+            self.assertTrue(workflow["preflight_runtime_policy"]["block_current_node_formal_generation"])
+            self.assertTrue(workflow["preflight_runtime_policy"]["block_next_nodes"])
             self.assertIn("from_node", workflow["composition_policy"])
             self.assertIn("single_node", workflow["composition_policy"])
             self.assertIn("auto_flow", workflow["composition_policy"])
@@ -38,6 +42,9 @@ class FlexibleWorkflowCompositionTests(unittest.TestCase):
             self.assertEqual(node["next_nodes"], expected_next)
             self.assertEqual(node["depends_on"], expected_previous)
             self.assertEqual(set(node["entry_modes"]), {"auto_flow", "from_node", "single_node"})
+            self.assertEqual(node["preflight_gate"]["formal_generation_entry_condition"], "preflight_input_state == ready")
+            self.assertTrue(node["preflight_gate"]["block_formal_generation_when_not_ready"])
+            self.assertTrue(node["preflight_gate"]["block_next_nodes_when_not_ready"])
 
     def test_workflow_orchestrator_contract_names_runtime_modes(self) -> None:
         contract = json.loads((ROOT / "skills" / "workflow-orchestrator" / "contract.yaml").read_text(encoding="utf-8"))
@@ -46,6 +53,14 @@ class FlexibleWorkflowCompositionTests(unittest.TestCase):
         self.assertEqual(set(runtime_policy["supported_entry_modes"]), {"auto_flow", "from_node", "single_node"})
         self.assertIn("start_node", runtime_policy["from_node_required_fields"])
         self.assertIn("target_node", runtime_policy["single_node_required_fields"])
+        self.assertIn("pause_when", runtime_policy["auto_transition_policy"])
+        self.assertEqual("preflight_input_state == ready", runtime_policy["auto_transition_policy"]["formal_generation_entry_condition"])
+        self.assertTrue(runtime_policy["auto_transition_policy"]["preflight_blocks_current_node_formal_generation"])
+        self.assertTrue(runtime_policy["auto_transition_policy"]["preflight_blocks_next_nodes"])
+        policy_text = json.dumps(runtime_policy, ensure_ascii=False)
+        self.assertIn("preflight_input_state != ready", policy_text)
+        self.assertIn("blocking required_information_requests", policy_text)
+        self.assertIn("human-review HTML 只作为人工填写入口", policy_text)
 
     def test_plugin_tree_receives_same_workflow_assets(self) -> None:
         source = self.load_workflow("full-feature-development")

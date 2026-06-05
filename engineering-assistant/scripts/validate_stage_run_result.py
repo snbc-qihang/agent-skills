@@ -4,6 +4,7 @@ from pathlib import Path
 
 VALID_LANGUAGE = {"zh-CN", "en"}
 VALID_STATUSES = {"succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"}
+VALID_PREFLIGHT_INPUT_STATES = {"ready", "waiting_for_input", "waiting_for_human_review", "blocked"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
@@ -36,6 +37,42 @@ def is_blocking_gate(gate: dict) -> bool:
     if raw in BLOCKING_GATE_RESULTS:
         return True
     return raw.startswith("block") or raw.startswith("fail")
+
+
+def has_blocking_information_requests(info_requests) -> bool:
+    for request in info_requests or []:
+        if request.get("blocking") is True:
+            return True
+        questions = request.get("questions") or []
+        if any(question.get("required") is True for question in questions if isinstance(question, dict)):
+            return True
+    return False
+
+
+def is_preflight_waiting_artifact(artifact) -> bool:
+    text = artifact_kind(artifact)
+    path_text = artifact_path(artifact).lower().replace("\\", "/")
+    allowed_tokens = [
+        "required-information",
+        "missing-information",
+        "human-review",
+        "approval",
+        "workflow-trace",
+        "resume",
+        "open-questions",
+        "artifact-index",
+    ]
+    return any(token in text or token in path_text for token in allowed_tokens)
+
+
+def is_formal_artifact_before_input(artifact) -> bool:
+    if is_human_html_artifact(artifact) or is_preflight_waiting_artifact(artifact):
+        return False
+    path_text = artifact_path(artifact).lower()
+    kind = artifact_kind(artifact)
+    formal_suffix = path_text.endswith((".md", ".xlsx", ".xls", ".json", ".yaml", ".yml"))
+    formal_type = any(token in kind for token in ["markdown", "xlsx", "json", "yaml"])
+    return formal_suffix or formal_type
 
 
 def resolve_artifact_file(result_path: Path, artifact):
@@ -77,16 +114,26 @@ for arg in sys.argv[1:]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("status") not in VALID_STATUSES:
         errors.append(f"{path}: status 不合法")
+    state = data.get("preflight_input_state")
+    if state not in VALID_PREFLIGHT_INPUT_STATES:
+        errors.append(f"{path}: preflight_input_state 必须为 ready、waiting_for_input、waiting_for_human_review 或 blocked")
     if data.get("language") not in VALID_LANGUAGE:
         errors.append(f"{path}: language 不能为空，且必须为 zh-CN 或 en")
     info_requests = data.get("required_information_requests", [])
     if data.get("status") == "waiting_for_input":
+        if state != "waiting_for_input":
+            errors.append(f"{path}: status=waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
         if not info_requests:
             errors.append(f"{path}: waiting_for_input 必须包含 required_information_requests")
         for index, request in enumerate(info_requests):
             if request.get("blocking") and not request.get("questions"):
                 errors.append(f"{path}: required_information_requests[{index}].questions 不能为空")
+        for artifact in data.get("artifacts", []):
+            if is_formal_artifact_before_input(artifact):
+                errors.append(f"{path}: waiting_for_input 不得登记正式阶段产物为已完成，必须先等待补充信息写回: {artifact_path(artifact) or artifact.get('name')}")
     if data.get("status") in WAITING_STATUSES:
+        if data.get("status") == "waiting_for_human_review" and state not in {"waiting_for_human_review", "blocked"}:
+            errors.append(f"{path}: status=waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review 或 blocked")
         html_artifacts = [artifact for artifact in data.get("artifacts", []) if is_human_html_artifact(artifact)]
         if not html_artifacts:
             errors.append(f"{path}: {data.get('status')} 必须在 artifacts 登记可填写的人工审阅 HTML")
@@ -95,6 +142,10 @@ for arg in sys.argv[1:]:
             if html_path is not None:
                 validate_human_html(html_path, path)
     if data.get("status") == "succeeded":
+        if state != "ready":
+            errors.append(f"{path}: succeeded 必须满足 preflight_input_state == ready")
+        if has_blocking_information_requests(info_requests):
+            errors.append(f"{path}: succeeded 不允许存在未解决的 blocking required_information_requests")
         metadata = data.get("document_metadata") or {}
         for field in DOC_REQUIRED:
             if field not in metadata or metadata.get(field) in ("", [], None):

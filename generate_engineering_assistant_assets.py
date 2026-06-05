@@ -44,6 +44,7 @@ HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS = [
     "3.3 研发视图",
     "3.4 研发结构定义",
     "4. 核心功能",
+    "4.1.2 关键协作摘要",
     "4.1.3 跨服务服务间时序图",
     "5.中间件设计",
     "6.数据视图",
@@ -109,6 +110,8 @@ HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS = [
     "单元测试步骤",
 ]
 
+HLD_FORBIDDEN_MERMAID = ["flowchart"]
+
 DETAILED_DESIGN_FORBIDDEN_HEADINGS = [
     "来源证据",
     "技术选型",
@@ -131,7 +134,7 @@ DETAILED_DESIGN_FLOW_NOTE_FIELDS = [
 
 DETAILED_DESIGN_FLOW_REQUIRED_BRANCH_TERMS = {
     "异常分支": ["异常", "失败", "校验失败", "权限失败", "状态失败", "调用失败", "超时"],
-    "失败终态": ["失败结束", "异常结束", "终止", "人工处理", "补偿完成", "回滚"],
+    "失败终态": ["失败结束", "异常结束", "终止", "失败终态", "人工处理", "补偿完成", "回滚"],
     "补偿/重试/人工处理": ["补偿", "重试", "人工处理", "回滚", "告警"],
 }
 
@@ -318,6 +321,10 @@ DB_UNRESOLVED_INFO_MARKERS = [
     "待确认",
     "未知",
     "未确认",
+    "人工评审确认",
+    "待人工补充",
+    "待用户补充",
+    "pending_confirmation",
     "TBD",
     "TODO",
     "<填写",
@@ -410,6 +417,28 @@ MQ_CONSUMER_FIELDS = [
     "备注",
 ]
 
+MQ_PRODUCER_REQUIRED_VALUE_FIELDS = [
+    "业务用途",
+    "场景应用",
+    "业务消息key",
+    "消息类型",
+    "消息体内容",
+    "目的交换机",
+    "路由key",
+    "生产服务/模块名称",
+]
+
+MQ_CONSUMER_REQUIRED_VALUE_FIELDS = [
+    "队列名称",
+    "业务用途",
+    "场景应用",
+    "绑定的Exchange/routingKey(多个）",
+    "死信队列exchange/routeKey",
+    "消费服务",
+    "消息key",
+    "运维监控",
+]
+
 COMMON_STATES = [
     "pending",
     "running",
@@ -423,6 +452,14 @@ COMMON_STATES = [
 ]
 
 WORKFLOW_ENTRY_MODES = ["auto_flow", "from_node", "single_node"]
+PREFLIGHT_INPUT_STATES = ["ready", "waiting_for_input", "waiting_for_human_review", "blocked"]
+FORMAL_GENERATION_ENTRY_CONDITION = "preflight_input_state == ready"
+PREFLIGHT_ONLY_ARTIFACTS = [
+    "required-information-request.json",
+    "docs/human-review/<run-id>.html",
+    "workflow-trace.json",
+    "resume-point.json",
+]
 
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
@@ -549,16 +586,17 @@ TEAM_RULE_CATALOG = [
     {"id": "A4", "category": "架构", "rule": "应用层只暴露 api/tapi/mapi/console，业务层和共享层只暴露 service 能力。"},
     {"id": "A5", "category": "架构", "rule": "关键跨系统场景必须进入关键场景设计；简单服务内部 CRUD 不进入关键场景文档。"},
     {"id": "A6", "category": "架构", "rule": "跨库事务优先本地消息表、事件驱动、补偿机制；必要时使用 Seata，并说明事务边界。"},
-    {"id": "H1", "category": "概要设计", "rule": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图。"},
+    {"id": "H1", "category": "概要设计", "rule": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图；核心功能下保留关键协作摘要，不生成流程图。"},
     {"id": "H2", "category": "概要设计", "rule": "明确参与系统、职责边界、调用方向、事件流和异常流。"},
     {"id": "H3", "category": "概要设计", "rule": "声明是否涉及 Redis/MQ/DB/定时任务/权限/幂等/跨系统交互。"},
     {"id": "H4", "category": "概要设计", "rule": "后端业务系统研发结构按 presentation/application/domain/port/infrastructure/common 分层；如项目 profile 另有约定，以 profile 为准。"},
     {"id": "H5", "category": "概要设计", "rule": "application 层负责编排，不直接沉淀复杂业务判断；核心业务规则进入 domain。"},
     {"id": "H6", "category": "概要设计", "rule": "聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰。"},
-    {"id": "H7", "category": "概要设计", "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；不得用通用证据/Findings/门禁决策模板替代正文。"},
+    {"id": "H7", "category": "概要设计", "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；核心功能中的 4.1.2 只写关键协作摘要，不得用通用证据/Findings/门禁决策模板替代正文。"},
     {"id": "H8", "category": "概要设计", "rule": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。"},
     {"id": "H9", "category": "概要设计", "rule": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。"},
     {"id": "H10", "category": "概要设计", "rule": "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。"},
+    {"id": "H11", "category": "概要设计", "rule": "概要设计不得生成 Mermaid flowchart；关键协作只允许文字摘要与服务间 sequenceDiagram，研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言。"},
     {"id": "D1", "category": "详细设计", "rule": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。"},
     {"id": "D2", "category": "详细设计", "rule": "列出业务规则、状态机、校验规则、异常码、幂等点、事务边界、回滚策略。"},
     {"id": "D3", "category": "详细设计", "rule": "导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理。"},
@@ -1006,7 +1044,7 @@ SKILLS = [
             "A4 应用层只暴露 api/tapi/mapi/console，业务层和共享层只暴露 service 能力",
             "A5 关键跨系统场景进入关键场景设计；简单服务内部 CRUD 不进入关键场景文档",
             "A6 跨库事务优先本地消息表、事件驱动、补偿机制；必要时使用 Seata 并说明事务边界",
-            "H1 概要设计包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图",
+            "H1 概要设计包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图，核心功能只保留关键协作摘要",
             "H2 明确参与系统、职责边界、调用方向、事件流和异常流",
             "H3 声明是否涉及 Redis、MQ、DB、定时任务、权限、幂等、跨系统交互",
             "H4 后端业务系统研发结构按 presentation/application/domain/port/infrastructure/common 分层；如项目 profile 另有约定，以 profile 为准",
@@ -1017,6 +1055,7 @@ SKILLS = [
             "H8 high-level-design.md 涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository",
             "H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态",
             "H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤",
+            "H11 high-level-design.md 不得包含 Mermaid flowchart；研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言",
         ],
     },
     {
@@ -1544,11 +1583,11 @@ def skill_routing_metadata(skill: dict) -> dict:
 
 def agents_openai_yaml(skill: dict) -> str:
     allow_implicit = "false" if skill["id"] in HIGH_RISK_SKILLS else "true"
-    default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+    default_prompt = f"使用 {skill['id']}，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后再进入 formal_generation 输出声明产物、findings、required actions 和 gate decision。"
     if template_usage_policy(skill).get("required"):
-        default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息；生成正式 Markdown 文档前先读取对应 assets template，并按模板骨架逐节填充输入事实。"
+        default_prompt = f"使用 {skill['id']}，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 assets template 并按模板骨架逐节填充输入事实。"
     if skill["id"] == "mq-design":
-        default_prompt = f"使用 {skill['id']}，先确认输出语言和必须补充的信息；生成正式 MQ Excel 文档前先读取对应 xlsx template，并按模板工作簿填充输入事实。"
+        default_prompt = f"使用 {skill['id']}，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 xlsx template 并按模板工作簿填充输入事实。"
     return f"""display_name: "{skill['name']}"
 short_description: "{skill['purpose']}"
 default_prompt: "{default_prompt}"
@@ -1558,6 +1597,11 @@ language_policy:
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
+preflight_gate:
+  state_field: "preflight_input_state"
+  states:
+{chr(10).join(f'    - "{item}"' for item in PREFLIGHT_INPUT_STATES)}
+  formal_generation_entry_condition: "{FORMAL_GENERATION_ENTRY_CONDITION}"
 policy:
   allow_implicit_invocation: {allow_implicit}
   risk_level: "{risk_level(skill)}"
@@ -1612,10 +1656,10 @@ def schema_artifact_types(skill: dict) -> list[str]:
 
 def runtime_default_prompt(skill: dict) -> str:
     if not template_usage_policy(skill).get("required"):
-        return f"使用 {skill['id']}，先确认语言和必填输入，再输出声明产物与 gate decision。"
+        return f"使用 {skill['id']}，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。"
     if skill["id"] == "mq-design":
-        return f"使用 {skill['id']}，先读取对应 xlsx template，按模板工作簿填充输入事实，再输出声明产物与 gate decision。"
-    return f"使用 {skill['id']}，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。"
+        return f"使用 {skill['id']}，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 xlsx template 生成正式产物与 gate decision。"
+    return f"使用 {skill['id']}，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。"
 
 
 def workflow_runtime_policy() -> dict:
@@ -1624,7 +1668,11 @@ def workflow_runtime_policy() -> dict:
         "default_entry_mode": "auto_flow",
         "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；遇到 waiting_for_input、waiting_for_human_review、blocked、failed 必须暂停。",
         "auto_transition_policy": {
-            "continue_when": ["StageRunResult.status == succeeded", "required_information_requests 为空", "未声明 HUMAN_APPROVAL_REQUIRED", "next_node 存在"],
+            "continue_when": ["StageRunResult.status == succeeded", "required_information_requests 为空或全部非 blocking 且已处理", "未声明 HUMAN_APPROVAL_REQUIRED", "next_node 存在"],
+            "pause_when": ["StageRunResult.status in waiting_for_input|waiting_for_human_review|blocked|failed", "preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回 StageRunRequest.context 或 artifact index"],
+            "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
+            "preflight_blocks_current_node_formal_generation": True,
+            "preflight_blocks_next_nodes": True,
             "record_required": "workflow-trace.json 必须记录 auto transition decision",
             "dialog_confirmation_required": False,
             "hld_to_detailed_design": "agent 自动流转检查，不等同于代码研发前的 design-review",
@@ -1637,7 +1685,9 @@ def workflow_runtime_policy() -> dict:
             "workflow 不是固定线路，节点可以按任务目标裁剪、跳过或从中间恢复，但必须保留输入输出契约和审批门禁。",
             "跳过节点必须写入 skip_reason、risk_impact 和 human_approval 需求；不得静默跳过质量或审批节点。",
             "只执行单节点时不得宣称全链路完成，只能给出该节点结果和建议的 next_nodes。",
-            "自动流转时下游节点只能消费已登记 artifact 或用户补充信息，不能虚构上游产物。",
+            "自动流转时下游节点只能消费已登记 Markdown/JSON/YAML artifact、StageRunRequest.context 或用户补充信息写回结果，不能虚构上游产物。",
+            "human-review HTML 只作为人工填写入口，不能作为 agent 事实源或下游正式输入。",
+            "每个节点必须先执行 preflight gate；preflight_input_state 不是 ready 时不得进入当前节点 formal_generation，也不得触发 next_nodes。",
         ],
     }
 
@@ -1655,6 +1705,10 @@ def runtime_ir(skill: dict) -> dict:
             "default_prompt": runtime_default_prompt(skill),
             "trigger_description": skill_trigger_description(skill),
             "language_policy": {"supported": ["zh-CN", "en"], "when_unspecified": "ask_user"},
+            "preflight_gate": {
+                "states": PREFLIGHT_INPUT_STATES,
+                "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
+            },
         },
         "inputs": skill["inputs"],
         "outputs": skill["outputs"],
@@ -1791,8 +1845,8 @@ TEMPLATE_GENERATION_PROTOCOL = [
 
 MQ_EXCEL_GENERATION_PROTOCOL = [
     "生成正式 MQ Excel 文档前必须先读取 `assets/mq-design-template.xlsx`，不得改用 Markdown 或通用报告替代。",
-    "以 xlsx template 作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格和格式约定。",
-    "只允许补充空白单元格、追加数据行和在既有表格范围内填充输入事实；不得删除、压缩、重命名或重排模板 sheet。",
+    "以 xlsx template 文件副本作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格、已有单元格样式和格式约定。",
+    "只允许在模板已有单元格范围内补充空白数据单元格；不得新增 sheet、不得删除 sheet、不得追加行列、不得删除或改写模板固定文本、不得修改已有样式或重排模板 sheet。",
     "输入材料缺少事实时，保留模板列头并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
     "不得额外生成 `mq-design.md` 作为正式 MQ 设计正文；Markdown 只能作为 StageRunResult 或过程摘要。",
     "模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，StageRunResult.status 必须为 blocked 或 failed。",
@@ -1894,9 +1948,10 @@ def template_execution_note(skill: dict) -> str:
     if skill["id"] == "mq-design":
         return f"""
 # 模板执行协议
+- 只有 `preflight_input_state == ready` 时才能进入 `formal_generation` 读取模板并生成正式 MQ Excel；存在 blocking 缺失信息时必须先暂停并生成补充信息入口。
 - 生成正式 MQ Excel 文档前必须先读取对应 xlsx template asset；不得凭记忆、通用模板、聊天上下文、Markdown 文档或 `assets/artifact-template.md` 生成正文。
-- 以 xlsx template 作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格和格式约定。
-- 只允许补充空白单元格、追加数据行和在既有表格范围内填充输入事实；不得删除、压缩、合并、重命名或重排模板 sheet。
+- 以 xlsx template 文件副本作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格、已有单元格样式和格式约定。
+- 只允许在模板已有单元格范围内补充空白数据单元格；不得新增 sheet、不得删除 sheet、不得追加行列、不得删除或改写模板固定文本、不得修改已有样式或重排模板 sheet。
 - 输入材料缺少事实时，保留模板列头并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
 - 模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
 
@@ -1905,6 +1960,7 @@ def template_execution_note(skill: dict) -> str:
 """
     return f"""
 # 模板执行协议
+- 只有 `preflight_input_state == ready` 时才能进入 `formal_generation` 读取模板并生成正式 Markdown；存在 blocking 缺失信息时必须先暂停并生成补充信息入口。
 - 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
 - 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
 - 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
@@ -1919,9 +1975,9 @@ def template_execution_note(skill: dict) -> str:
 def template_generation_step(skill: dict) -> str:
     if template_usage_policy(skill).get("required"):
         if skill["id"] == "mq-design":
-            return "按模板执行协议读取对应 `assets/*-template.xlsx`，复制 Excel 工作簿骨架后填充输入事实，再生成全部声明产物。"
-        return "按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。"
-    return "生成全部声明产物。"
+            return "确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.xlsx`，复制 Excel 工作簿文件副本，只在模板已有空白数据单元格内填充输入事实，再生成全部声明产物。"
+        return "确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。"
+    return "确认 `preflight_input_state == ready` 后进入 `formal_generation` 并生成全部声明产物。"
 
 
 def team_document_policy(skill: dict) -> dict:
@@ -1933,6 +1989,7 @@ def team_document_policy(skill: dict) -> dict:
             "template_usage_policy": template_usage_policy(skill),
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
+            "forbidden_mermaid": HLD_FORBIDDEN_MERMAID,
             "detailed_implementation_forbidden_terms": HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "service_sequence_policy": {
@@ -1940,8 +1997,8 @@ def team_document_policy(skill: dict) -> dict:
                 "participants_only": "services",
                 "forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
             },
-            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用", "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系", "概要设计必须保留原始需求规格或原型引用矩阵", "概要设计不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
-            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失", "缺少跨服务服务间时序图", "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象", "缺少原始需求规格或原型引用矩阵", "概要设计展开接口字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
+            "rules": ["概要设计必须保留团队模板章节顺序", "系统设计必须明确逻辑视图、设计原则、研发视图和研发结构", "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用", "概要设计不得生成流程图，4.1.2 只保留关键协作摘要文本", "跨服务核心场景必须补充服务间 sequenceDiagram，参与者只允许服务", "研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言，不使用 Controller/Mapper/Repository 等实现标签", "中间件设计只说明是否涉及并引用专项设计", "数据视图声明事实表、读模型和专项 DB 设计关系", "概要设计必须保留原始需求规格或原型引用矩阵", "概要设计不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
+            "blocked_when": ["high-level-design.md 缺少团队模板章节", "使用通用证据/Findings/门禁决策模板替代概要设计正文", "跨系统边界、事件协作、最终一致性或异常流缺失", "high-level-design.md 包含 flowchart", "缺少跨服务服务间时序图", "sequenceDiagram 参与者包含用户、页面、Controller、数据库、中间件或表对象", "缺少原始需求规格或原型引用矩阵", "概要设计展开接口字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"],
         }
     if skill["id"] == "detailed-design":
         return {
@@ -2032,6 +2089,8 @@ def team_document_policy(skill: dict) -> dict:
             "template_usage_policy": template_usage_policy(skill),
             "producer_table_fields": MQ_PRODUCER_FIELDS,
             "consumer_table_fields": MQ_CONSUMER_FIELDS,
+            "producer_required_value_fields": MQ_PRODUCER_REQUIRED_VALUE_FIELDS,
+            "consumer_required_value_fields": MQ_CONSUMER_REQUIRED_VALUE_FIELDS,
             "rules": ["MQ 只用于削峰填谷、异步执行和服务解耦", "进程内异步不默认使用 MQ", "一个服务一个队列，一个队列可绑定多个 Exchange/routingKey", "队列默认建议仲裁队列", "必须设计死信队列", "消息体默认不超过 10KB", "必须定义幂等、重试、死信、回放策略"],
             "waiting_for_human_review_when": ["MQ 新队列", "MQ 新 topic", "非仲裁队列", "消息体超过 10KB", "生产消息回放", "删除或重命名 topic/queue"],
             "blocked_when": ["缺少生产者表或消费者表", "消息体承载大查询条件、文件内容或敏感明文", "无幂等策略", "无死信队列"],
@@ -2047,9 +2106,11 @@ def team_document_note(skill: dict) -> str:
 - 不得用通用 `证据`、`Findings`、`必须补充信息`、`门禁决策` 模板替代概要设计正文；这些内容只能进入 `StageRunResult` 或评审产物。
 - `0. 原始需求与原型追溯` 必须列出原始需求规格或原型引用矩阵，字段包含 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；设计事实必须能追溯到规格或原型。
 - `系统设计` 必须覆盖系统逻辑视图、系统设计原则、研发视图和研发结构定义。
-- `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、流程、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- `核心功能` 必须按业务功能拆分，说明参与系统、职责边界、关键协作摘要、状态或异常流；涉及 Redis/MQ/DB 时只在概要层说明范围，并关联专项设计。
+- `4.1.2 关键协作摘要` 只能使用文字描述职责边界、事件方向、异常流和最终一致性；概要设计不得生成 Mermaid `flowchart`。
 - 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
-- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、Controller、数据库、Redis、MQ、表、Mapper、Repository 等非服务对象。
+- `3.3 研发视图` 和 `3.4 研发结构定义` 使用接口层、应用层、领域层、基础设施层、事件接入层等边界语言，不使用 `Controller`、`Mapper`、`Repository` 等实现标签。
+- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、数据库、Redis、MQ、表等非服务对象。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 """
     if skill["id"] == "detailed-design":
@@ -2062,9 +2123,10 @@ def team_document_note(skill: dict) -> str:
 - `2.1 原始需求与原型引用矩阵` 必须列出 `source_id`、`source_type`、`source_path_or_url`、`prototype_page_or_section`、`requirement_item`、`design_section`、`consistency_status`；每个核心流程、接口、数据对象或规则必须可追溯到原始规格或原型。
 - `数据库设计` 章节只能关联 `database-design.md` 或数据库模板；`中间件设计` 章节只能关联 `mq-design.xlsx`、`redis-design.md` 和对应规范，并登记到 `StageRunResult.artifacts`。
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
+- 每个 `3.1.x` 流程默认使用固定骨架：`触发 -> 参数/权限/状态校验 -> 核心处理 -> 外部依赖/消息协作 -> 事务/一致性处理 -> 成功终态 / 失败终态 / 重试补偿或人工处理`。
 - `flowchart` 必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
-- 异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
+- 每个 `3.1.x` 流程后都必须紧跟异常场景表；异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 """
@@ -2694,16 +2756,10 @@ source_artifacts: []
 | --- | --- |
 |  |  |
 
-#### 4.1.2 核心流程
+#### 4.1.2 关键协作摘要
 
-```mermaid
-flowchart TD
-    A["跨系统触发"] --> B["来源服务确认职责边界"]
-    B --> C["目标服务处理架构职责"]
-    C --> D["事件或开放服务完成协作"]
-```
-
-> 概要设计只说明跨系统/跨服务职责、调用/事件方向、异常流、最终一致性和专项文档引用；详细实现、接口字段、SQL/DDL、类方法和单元测试只能引用详细设计或专项文档，不在概要设计正文展开。
+- 说明跨系统触发点、来源服务职责边界、目标服务职责边界、异常流和最终一致性。
+- 只保留概要层摘要，不生成流程图；详细执行路径下沉到 `detailed-design.md` 和 DB/MQ/Redis 专项文档。
 
 #### 4.1.3 跨服务服务间时序图
 
@@ -2714,7 +2770,7 @@ sequenceDiagram
     SourceService->>TargetService: 服务间调用或事件协作
 ```
 
-> 时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。
+> 时序图参与者只允许服务，不允许用户、页面、数据存储、中间件或表对象。
 
 #### 4.1.4 状态机设计
 
@@ -2776,12 +2832,13 @@ source_artifacts: []
 
 ```mermaid
 flowchart TD
-    A["开始"] --> B{"参数/权限/状态校验通过?"}
+    A["触发"] --> B{"参数/权限/状态校验通过?"}
     B -- 否 --> E1["返回校验/权限/状态异常"]
-    B -- 是 --> C["执行业务处理"]
-    C --> D{"外部依赖调用或事务提交成功?"}
-    D -- 是 --> S["成功结束"]
-    D -- 否 --> R{"可重试或可补偿?"}
+    B -- 是 --> C["核心处理"]
+    C --> D["外部依赖/消息协作"]
+    D --> T{"事务/一致性处理成功?"}
+    T -- 否 --> R{"可重试或可补偿?"}
+    T -- 是 --> S["成功终态"]
     R -- 可重试 --> RT["记录日志告警并重试"]
     R -- 可补偿 --> CP["执行补偿/回滚"]
     R -- 不可自动处理 --> H["进入人工处理"]
@@ -2939,6 +2996,12 @@ if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
     raise SystemExit("skill_id 不匹配")
 if payload.get("status") not in schema["properties"]["status"]["enum"]:
     raise SystemExit("status 不合法")
+if payload.get("preflight_input_state") not in schema["properties"]["preflight_input_state"]["enum"]:
+    raise SystemExit("preflight_input_state 不合法")
+if payload.get("status") == "succeeded" and payload.get("preflight_input_state") != "ready":
+    raise SystemExit("succeeded 必须满足 preflight_input_state == ready")
+if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
+    raise SystemExit("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
 print("ok")
 """
 
@@ -2948,13 +3011,16 @@ def team_validator_script(skill_id: str) -> str:
         return generic_validator_script()
     policies = {
         "high-level-design": {
+            "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
             "required_sections": HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS,
             "forbidden_headings": HIGH_LEVEL_DESIGN_FORBIDDEN_HEADINGS,
+            "forbidden_mermaid": HLD_FORBIDDEN_MERMAID,
             "detailed_implementation_forbidden_terms": HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "service_sequence_forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
         },
         "detailed-design": {
+            "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
             "required_sections": DETAILED_DESIGN_MAIN_SECTIONS,
             "forbidden_headings": DETAILED_DESIGN_FORBIDDEN_HEADINGS,
             "flow_note_fields": DETAILED_DESIGN_FLOW_NOTE_FIELDS,
@@ -2965,6 +3031,7 @@ def team_validator_script(skill_id: str) -> str:
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
         },
         "code-development": {
+            "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
             "traceability_required_fields": ["source_id", "source_type", "source_path_or_url", "design_section", "code_path", "verification_evidence"],
         },
         "database-design": {
@@ -2976,13 +3043,17 @@ def team_validator_script(skill_id: str) -> str:
             "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
         },
         "redis-design": {
+            "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
             "required_sections": REDIS_REQUIRED_SECTIONS,
             "item_fields": REDIS_DESIGN_ITEM_FIELDS,
             "storage_fields": REDIS_STORAGE_FIELDS,
         },
         "mq-design": {
+            "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
             "producer_fields": MQ_PRODUCER_FIELDS,
             "consumer_fields": MQ_CONSUMER_FIELDS,
+            "producer_required_value_fields": MQ_PRODUCER_REQUIRED_VALUE_FIELDS,
+            "consumer_required_value_fields": MQ_CONSUMER_REQUIRED_VALUE_FIELDS,
         },
     }
     validator_bodies = {
@@ -3006,6 +3077,9 @@ def validate_output(payload_path, payload):
     for forbidden in POLICY["forbidden_headings"]:
         if any(heading == forbidden or heading.startswith(forbidden + " ") for heading in normalized_headings):
             errors.append("high-level-design.md 不得使用通用产物模板标题: " + forbidden)
+    for mermaid_type in POLICY.get("forbidden_mermaid", []):
+        if mermaid_blocks(text, mermaid_type):
+            errors.append("high-level-design.md 不得包含 " + mermaid_type + "；概要设计只允许关键协作摘要和服务间时序图")
     for required in ["系统逻辑视图", "系统设计原则", "研发视图", "研发结构定义", "中间件设计", "数据视图"]:
         if required not in text:
             errors.append("high-level-design.md 缺少概要设计核心内容: " + required)
@@ -3055,8 +3129,13 @@ def validate_output(payload_path, payload):
     if "flowchart" not in text:
         errors.append("detailed-design.md 必须包含 flowchart")
     flow_blocks = list(re.finditer(r"```mermaid\s*\n\s*flowchart[\s\S]*?```", text))
+    field_aliases = {
+        "异常编码": ["异常编码", "返回编码"],
+        "日志/告警": ["日志/告警", "日志要求", "告警"],
+        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
+    }
     for index, block in enumerate(flow_blocks, start=1):
-        tail = text[block.end(): block.end() + 700]
+        tail = text[block.end(): block.end() + 1200]
         flow_context = block.group(0)
         if "流程设计说明" not in tail:
             errors.append(f"第 {index} 个 flowchart 后缺少流程设计说明")
@@ -3067,20 +3146,15 @@ def validate_output(payload_path, payload):
         for field in POLICY["flow_note_fields"]:
             if field not in tail:
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
-    exception_headers = []
-    for line in text.splitlines():
-        cells = table_cells(line)
-        if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
-            exception_headers.append(cells)
-    field_aliases = {
-        "异常编码": ["异常编码", "返回编码"],
-        "日志/告警": ["日志/告警", "日志要求", "告警"],
-        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
-    }
-    if not exception_headers:
-        errors.append("异常场景表缺少字段: " + "、".join(POLICY["exception_table_required_fields"]))
-    else:
-        best_header = max(exception_headers, key=len)
+        local_headers = []
+        for line in tail.splitlines():
+            cells = table_cells(line)
+            if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
+                local_headers.append(cells)
+        if not local_headers:
+            errors.append(f"第 {index} 个 flowchart 后缺少异常场景表")
+            continue
+        best_header = max(local_headers, key=len)
         missing_fields = []
         for field in POLICY["exception_table_required_fields"]:
             aliases = field_aliases.get(field, [field])
@@ -3305,6 +3379,13 @@ def _cell_ref_to_col(ref):
     return index - 1
 
 
+def _normalize_xlsx_target(target):
+    normalized = (target or "").replace("\\", "/").lstrip("/")
+    if normalized.startswith("xl/"):
+        return normalized
+    return "xl/" + normalized
+
+
 def read_xlsx_artifact(payload_path, payload, name):
     item = artifact_map(payload).get(name)
     path = resolve_artifact(payload_path, item)
@@ -3329,7 +3410,7 @@ def read_xlsx_artifact(payload_path, payload, name):
                 target = rels.get(rel_id, "")
                 if not target:
                     continue
-                sheet_path = "xl/" + target.lstrip("/")
+                sheet_path = _normalize_xlsx_target(target)
                 sheet_root = ET.fromstring(workbook.read(sheet_path))
                 rows = {}
                 for row in sheet_root.findall(".//a:sheetData/a:row", XLSX_NS):
@@ -3356,11 +3437,142 @@ def read_xlsx_artifact(payload_path, payload, name):
         return None, "无法读取 mq-design.xlsx: " + str(exc)
 
 
+def _cell_value(cell, shared):
+    value = ""
+    if cell.attrib.get("t") == "inlineStr":
+        value = "".join(t.text or "" for t in cell.findall(".//a:t", XLSX_NS))
+    else:
+        node = cell.find("a:v", XLSX_NS)
+        if node is not None and node.text is not None:
+            value = shared[int(node.text)] if cell.attrib.get("t") == "s" and shared else node.text
+    return value
+
+
+def read_xlsx_template_signature(path):
+    with zipfile.ZipFile(path) as workbook:
+        shared = []
+        if "xl/sharedStrings.xml" in workbook.namelist():
+            shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+            shared = [_shared_text(si) for si in shared_root.findall("a:si", XLSX_NS)]
+        rels_root = ET.fromstring(workbook.read("xl/_rels/workbook.xml.rels"))
+        rels = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels_root}
+        workbook_root = ET.fromstring(workbook.read("xl/workbook.xml"))
+        signature = {
+            "style_bytes": workbook.read("xl/styles.xml") if "xl/styles.xml" in workbook.namelist() else b"",
+            "sheet_order": [],
+            "sheets": {},
+        }
+        for sheet in workbook_root.findall(".//a:sheet", XLSX_NS):
+            sheet_name = sheet.attrib.get("name", "")
+            signature["sheet_order"].append(sheet_name)
+            rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+            target = rels.get(rel_id, "")
+            sheet_path = _normalize_xlsx_target(target)
+            sheet_root = ET.fromstring(workbook.read(sheet_path))
+            dimension = sheet_root.find("a:dimension", XLSX_NS)
+            merge_refs = [
+                merge.attrib.get("ref", "")
+                for merge in sheet_root.findall(".//a:mergeCells/a:mergeCell", XLSX_NS)
+            ]
+            cells = {}
+            for cell in sheet_root.findall(".//a:sheetData/a:row/a:c", XLSX_NS):
+                ref = cell.attrib.get("r", "")
+                cells[ref] = {
+                    "style": cell.attrib.get("s", ""),
+                    "value": _cell_value(cell, shared),
+                }
+            signature["sheets"][sheet_name] = {
+                "dimension": dimension.attrib.get("ref", "") if dimension is not None else "",
+                "merge_refs": merge_refs,
+                "cells": cells,
+            }
+        return signature
+
+
+def validate_mq_template_integrity(payload_path, payload):
+    errors = []
+    item = artifact_map(payload).get("mq-design.xlsx")
+    output_path = resolve_artifact(payload_path, item)
+    if not output_path or not output_path.exists():
+        return errors
+    template_path = Path(__file__).parents[1] / "assets" / "mq-design-template.xlsx"
+    try:
+        template = read_xlsx_template_signature(template_path)
+        output = read_xlsx_template_signature(output_path)
+    except Exception as exc:
+        return ["无法校验 mq-design.xlsx 模板一致性: " + str(exc)]
+    if output["style_bytes"] != template["style_bytes"]:
+        errors.append("mq-design.xlsx 不得修改模板样式定义 styles.xml")
+    if output["sheet_order"] != template["sheet_order"]:
+        errors.append("mq-design.xlsx 必须保留模板 sheet 名称和顺序: " + ", ".join(template["sheet_order"]))
+    for sheet_name in template["sheet_order"]:
+        expected = template["sheets"].get(sheet_name, {})
+        actual = output["sheets"].get(sheet_name, {})
+        if not actual:
+            errors.append("mq-design.xlsx 缺少模板 sheet: " + sheet_name)
+            continue
+        if actual.get("dimension") != expected.get("dimension"):
+            errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 不得追加行列或改变模板范围: {expected.get('dimension')} -> {actual.get('dimension')}")
+        if actual.get("merge_refs") != expected.get("merge_refs"):
+            errors.append("mq-design.xlsx 的 " + sheet_name + " sheet 不得修改合并单元格")
+        expected_cells = expected.get("cells", {})
+        actual_cells = actual.get("cells", {})
+        for ref, expected_cell in expected_cells.items():
+            actual_cell = actual_cells.get(ref)
+            if actual_cell is None:
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 模板单元格不得删除")
+                continue
+            if actual_cell.get("style") != expected_cell.get("style"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 不得修改模板样式")
+            if expected_cell.get("value") and actual_cell.get("value") != expected_cell.get("value"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 固定模板文本不得修改")
+        for ref, actual_cell in actual_cells.items():
+            if ref not in expected_cells and actual_cell.get("value"):
+                errors.append(f"mq-design.xlsx 的 {sheet_name}!{ref} 不得新增非模板单元格")
+    return errors
+
+
+def _header_index_map(header):
+    mapping = {}
+    for index, value in enumerate(header):
+        if value:
+            mapping[value] = index
+    return mapping
+
+
+def _non_empty_rows(rows):
+    result = []
+    for row_number, values in sorted(rows.items()):
+        if row_number <= 1:
+            continue
+        if any(str(value).strip() for value in values):
+            result.append((row_number, values))
+    return result
+
+
+def _validate_required_sheet_values(errors, rows, header, required_fields, sheet_name):
+    header_map = _header_index_map(header)
+    missing_headers = [field for field in required_fields if field not in header_map]
+    if missing_headers:
+        errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 缺少必填业务列: " + "、".join(missing_headers))
+        return
+    for row_number, values in _non_empty_rows(rows):
+        missing_values = []
+        for field in required_fields:
+            index = header_map[field]
+            value = values[index].strip() if index < len(values) and isinstance(values[index], str) else (str(values[index]).strip() if index < len(values) else "")
+            if not value:
+                missing_values.append(field)
+        if missing_values:
+            errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 第 {row_number} 行缺少必填业务值: " + "、".join(missing_values))
+
+
 def validate_output(payload_path, payload):
     errors = []
     workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
     if error:
         return [error]
+    errors.extend(validate_mq_template_integrity(payload_path, payload))
     sheets = workbook["sheets"]
     text = workbook["text"]
     if "mq-design.md" in artifact_map(payload):
@@ -3377,6 +3589,8 @@ def validate_output(payload_path, payload):
     for field in POLICY["consumer_fields"]:
         if field not in consumer_header:
             errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
+    _validate_required_sheet_values(errors, sheets.get("生产者", {}), producer_header, POLICY.get("producer_required_value_fields", []), "生产者")
+    _validate_required_sheet_values(errors, sheets.get("消费者", {}), consumer_header, POLICY.get("consumer_required_value_fields", []), "消费者")
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:
@@ -3393,7 +3607,8 @@ def validate_output(payload_path, payload):
     return errors
 ''',
     }
-    policy = policies[skill_id]
+    skill = next(item for item in SKILLS if item["id"] == skill_id)
+    policy = {**policies[skill_id], "formal_outputs": [output for output in skill["outputs"] if output != "code changes"]}
     xlsx_imports = "import zipfile\nfrom xml.etree import ElementTree as ET\n" if skill_id == "mq-design" else ""
     return f"""#!/usr/bin/env python3
 import json
@@ -3441,6 +3656,129 @@ def read_artifact(payload_path, payload, name):
     if path and path.exists():
         return path.read_text(encoding="utf-8")
     return ""
+
+
+def artifact_path(item):
+    return (item or {{}}).get("path") or (item or {{}}).get("file") or (item or {{}}).get("uri") or ""
+
+
+def artifact_kind(item):
+    return " ".join(str(value).lower() for value in [
+        (item or {{}}).get("name", ""),
+        (item or {{}}).get("artifact_type", ""),
+        artifact_path(item),
+    ])
+
+
+def is_waiting_support_artifact(item):
+    text = artifact_kind(item)
+    allowed = [
+        "required-information",
+        "missing-information",
+        "human-review",
+        "approval",
+        "workflow-trace",
+        "resume",
+        "open-questions",
+        "artifact-index",
+    ]
+    return any(token in text for token in allowed)
+
+
+def is_formal_artifact(item):
+    if is_waiting_support_artifact(item):
+        return False
+    path = artifact_path(item).lower()
+    kind = artifact_kind(item)
+    return path.endswith((".md", ".xlsx", ".xls", ".json", ".yaml", ".yml")) or any(token in kind for token in ["markdown", "xlsx", "json", "yaml"])
+
+
+def blocking_information_requests(payload):
+    for request in payload.get("required_information_requests", []) or []:
+        if request.get("blocking") is True:
+            return True
+        for question in request.get("questions", []) or []:
+            if isinstance(question, dict) and question.get("required") is True:
+                return True
+    return False
+
+
+def artifact_texts(payload_path, payload):
+    for item in payload.get("artifacts", []) or []:
+        name = item.get("name", "")
+        path = artifact_path(item).lower()
+        if not (name.endswith(".md") or path.endswith(".md")):
+            continue
+        resolved = resolve_artifact(payload_path, item)
+        if resolved and resolved.exists():
+            yield name or path, resolved.read_text(encoding="utf-8")
+
+
+def unresolved_markers(text):
+    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+
+
+def candidate_project_roots(payload_path):
+    path = Path(payload_path).resolve()
+    roots = []
+    for candidate in [path.parent, *path.parents]:
+        if candidate not in roots:
+            roots.append(candidate)
+        if (candidate / "artifacts").exists():
+            break
+    cwd = Path.cwd().resolve()
+    if cwd not in roots:
+        roots.append(cwd)
+    return roots
+
+
+def leaked_formal_output_files(payload_path):
+    leaks = []
+    for output in POLICY.get("formal_outputs", []):
+        for root in candidate_project_roots(payload_path):
+            for candidate in [root / "artifacts" / SKILL_ID / output, root / output]:
+                if candidate.exists():
+                    leaks.append(str(candidate))
+    return sorted(set(leaks))
+
+
+def should_validate_formal_outputs(payload):
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if status == "waiting_for_input":
+        return False
+    return state in {"ready", "waiting_for_human_review", "blocked"} or status in {"succeeded", "failed", "blocked", "waiting_for_human_review"}
+
+
+def validate_preflight_order(payload_path, payload):
+    errors = []
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if state not in {"ready", "waiting_for_input", "waiting_for_human_review", "blocked"}:
+        errors.append("preflight_input_state 必须是 ready/waiting_for_input/waiting_for_human_review/blocked")
+    if status == "waiting_for_input":
+        if state != "waiting_for_input":
+            errors.append("status=waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+        if not payload.get("required_information_requests"):
+            errors.append("waiting_for_input 必须输出 required_information_requests 主动询问用户")
+        for item in payload.get("artifacts", []) or []:
+            if is_formal_artifact(item):
+                errors.append("waiting_for_input 不得登记正式阶段产物，必须先等待补充信息写回: " + (artifact_path(item) or item.get("name", "")))
+        leaks = leaked_formal_output_files(payload_path)
+        if leaks:
+            errors.append("waiting_for_input 不得先落盘正式阶段产物，必须先等待补充信息写回: " + ", ".join(leaks))
+    if status == "waiting_for_human_review" and state not in {"waiting_for_human_review", "blocked"}:
+        errors.append("status=waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review 或 blocked")
+    if status == "succeeded":
+        if state != "ready":
+            errors.append("succeeded 必须满足 preflight_input_state == ready")
+        if blocking_information_requests(payload):
+            errors.append("succeeded 不允许存在未解决的 blocking required_information_requests")
+        for name, text in artifact_texts(payload_path, payload):
+            unresolved = unresolved_markers(text)
+            if unresolved:
+                errors.append(name + " 包含未决信息标记，必须先 waiting_for_input 并生成 human-review HTML: " + ", ".join(sorted(set(unresolved))))
+    return errors
 
 
 def markdown_headings(text):
@@ -3600,7 +3938,10 @@ def fail(errors):
 
 payload_path = Path(sys.argv[1])
 payload = load_payload(payload_path)
-fail(validate_output(payload_path, payload))
+errors = validate_preflight_order(payload_path, payload)
+if should_validate_formal_outputs(payload):
+    errors.extend(validate_output(payload_path, payload))
+fail(errors)
 """
 
 
@@ -3623,6 +3964,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["H2", "H3", "H8", "H9"],
             "risk_focus": ["跨服务时序图", "服务参与者限制", "规格原型追溯", "设计一致性"],
             "forbidden_behavior": ["sequenceDiagram 出现用户或页面", "sequenceDiagram 出现数据库或 MQ", "缺少 source_id 引用矩阵", "设计无法追溯原始规格或原型"],
+        },
+        {
+            "case": "team_high_level_no_flowchart",
+            "title": "概要设计不得包含流程图",
+            "material": "团队要求概要设计不再生成流程图；核心功能只能保留关键协作摘要文本、服务间 sequenceDiagram、状态机和异常流/最终一致性说明。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["H1", "H7", "H8", "H10"],
+            "risk_focus": ["概要层边界", "关键协作摘要", "流程图禁用", "结构稳定"],
+            "forbidden_behavior": ["在 high-level-design.md 生成 flowchart", "用流程图替代关键协作摘要"],
         },
         {
             "case": "team_high_level_no_detailed_implementation_content",
@@ -3796,9 +4146,12 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
     )
     common_pass_criteria = [
         "StageRunResult status 合法",
+        "StageRunResult 必须包含 preflight_input_state，且 formal_generation 入口条件必须是 preflight_input_state == ready",
         "未指定 language 时必须询问用户选择 zh-CN 或 en",
         formal_document_criterion,
         "required_information_requests 在输入缺失时必须包含 questions",
+        "缺失 blocking 信息时必须先暂停在 waiting_for_input，并生成 docs/human-review/ 可填写 HTML 审阅包",
+        "blocking 信息补齐并写回 StageRunRequest.context 或 artifact index 前，不得生成或登记正式阶段 Markdown/Excel/JSON 产物",
         "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
         "forbidden_behavior 未出现在输出决策中",
     ]
@@ -3806,6 +4159,7 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
         "high-level-design": [
             "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
             "high-level-design.md 必须包含原始需求与原型追溯、版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图",
+            "high-level-design.md 必须包含 4.1.2 关键协作摘要，且不得包含 flowchart",
             "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许服务",
             "high-level-design.md 必须用 source_id 引用原始需求规格或原型，并说明一致性状态",
             "high-level-design.md 不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
@@ -3907,8 +4261,16 @@ def contract(skill: dict) -> dict:
         "non_goals": skill["non_goals"],
         "trigger_description": skill_trigger_description(skill),
         "routing": skill_routing_metadata(skill),
-        "standalone_mode": "读取输入、校验前置条件、在指定输出目录生成全部声明产物，并在阻断门禁处停止。",
-        "workflow_mode": "消费 StageRunRequest 中的上游产物，输出 StageRunResult，并把声明产物路由给下游 workflow 节点。",
+        "standalone_mode": "先执行 preflight 信息梳理；blocking 信息缺失时仅输出 required_information_requests、human-review HTML 和恢复点，补齐后再在指定输出目录生成全部声明产物。",
+        "workflow_mode": "消费 StageRunRequest 中的上游产物，先执行 preflight 信息梳理；blocking 信息缺失时暂停并等待补充写回，补齐后输出 StageRunResult 并把声明产物路由给下游 workflow 节点。",
+        "preflight_runtime_gate": {
+            "state_field": "preflight_input_state",
+            "states": PREFLIGHT_INPUT_STATES,
+            "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
+            "formal_generation_blocked_when": ["preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回机读事实源"],
+            "waiting_for_input_allowed_artifacts": PREFLIGHT_ONLY_ARTIFACTS,
+            "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。",
+        },
         "language_policy": {
             "supported": ["zh-CN", "en"],
             "when_unspecified": "ask_user",
@@ -3940,16 +4302,23 @@ def contract(skill: dict) -> dict:
             {"name": item, "type": contract_output_type_for_name(item), "path": f"artifacts/{skill['id']}/{item}", "schema": f"output.schema.json#{item}", "consumer": "workflow-orchestrator|downstream-stage|human-review"}
             for item in skill["outputs"]
         ],
-        "preconditions": ["必填输入已提供或已记录缺失处理策略", "风险策略已加载", "目标范围已明确"],
+        "preconditions": ["用户请求、仓库上下文、profile、上游产物和 artifact index 已读取或记录不可用原因", "blocking 必填信息已提供，或已进入 waiting_for_input 并生成补充信息入口", "风险策略已加载", "目标范围已明确"],
         "execution_gates": {
             "language_confirmed": True,
             "preflight_required_information": True,
+            "preflight_before_formal_artifacts": True,
+            "preflight_input_state_required": True,
+            "formal_generation_requires_ready": True,
             "formal_document_metadata_required": True,
             "stage_result_validation_required": True,
             "block_when_agent_violates_contract": True,
         },
         "required_information_policy": {
             "must_ask_when": ["必填输入缺失", "系统边界无法确认", "风险等级无法判断", "审批状态缺失", "无法基于仓库或上游产物可靠推导"],
+            "preflight_sequence": ["读取用户请求", "读取仓库上下文", "读取 profile", "读取上游产物", "读取 artifact index", "区分可自动推导信息与必须用户确认信息", "blocking 缺失项先问询并暂停", "补充答案写回后再生成正式产物"],
+            "preflight_state_field": "preflight_input_state",
+            "preflight_state_values": PREFLIGHT_INPUT_STATES,
+            "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
             "question_output": "required_information_requests",
             "blocking_status": "waiting_for_input",
             "human_review_html_required": True,
@@ -3957,8 +4326,11 @@ def contract(skill: dict) -> dict:
             "minimum_question_fields": ["id", "question", "reason", "required", "priority", "expected_format"],
             "question_order": ["critical", "major", "minor"],
             "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。",
+            "formal_artifacts_allowed_when": "不存在 blocking required_information_requests，或用户补充答案已写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源。",
+            "waiting_for_input_artifacts": PREFLIGHT_ONLY_ARTIFACTS,
+            "forbidden_before_writeback": "不得生成或登记正式阶段 Markdown/Excel/JSON 产物为完成产物，不得继续下游节点。",
         },
-        "postconditions": ["全部输出产物已生成，或已输出明确的阻断结果", "质量门禁已评估", "需要人工审批的事项已列出"],
+        "postconditions": ["blocking 信息缺失时已暂停在 waiting_for_input，且只登记补充信息请求、human-review HTML 和恢复点", "blocking 信息已补齐时全部正式输出产物已生成并登记", "质量门禁已评估", "需要人工审批的事项已列出"],
         "dependencies": ["团队规范", "文档模板", "仓库上下文", "风险策略", "校验脚本"],
         "permissions": {
             "allowed_actions": ["读取仓库文件", "生成产物", "运行确定性校验", "请求人工审批"],
@@ -3994,6 +4366,8 @@ def contract(skill: dict) -> dict:
                 "artifact": f"artifacts/{skill['id']}/required-information-request.json",
                 "schema": "engineering-assistant/schemas/required-information-request.schema.json",
                 "status_when_blocking": "waiting_for_input",
+                "must_precede_formal_artifacts": True,
+                "resume_after_writeback": "StageRunRequest.context 或 artifact index 已记录用户补充答案和来源时间",
             },
             "state_transitions": COMMON_STATES,
             "gate_decision": ["continue", "pause", "retry", "skip", "block", "stop"],
@@ -4028,17 +4402,18 @@ def output_schema(skill: dict) -> dict:
         "$id": f"https://example.internal/engineering-assistant/{skill['id']}/output.schema.json",
         "title": f"{skill['name']} 输出 Schema",
         "type": "object",
-        "required": ["run_id", "skill_id", "status", "language", "trace_id", "document_metadata", "artifacts", "quality_gates", "findings", "required_human_reviews", "required_information_requests", "repair_summary", "next_action"],
+        "required": ["run_id", "skill_id", "status", "preflight_input_state", "language", "trace_id", "document_metadata", "artifacts", "quality_gates", "findings", "required_human_reviews", "required_information_requests", "repair_summary", "next_action"],
         "properties": {
             "run_id": {"type": "string"},
             "skill_id": {"const": skill["id"]},
             "status": {"enum": ["succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"]},
+            "preflight_input_state": {"enum": PREFLIGHT_INPUT_STATES},
             "language": {"enum": ["zh-CN", "en"]},
             "trace_id": {"type": "string"},
             "document_metadata": document_lifecycle_schema(),
             "artifacts": {
                 "type": "array",
-                "minItems": len(required),
+                "minItems": 0,
                 "items": {
                     "type": "object",
                     "required": ["name", "path", "artifact_type", "producer_skill"],
@@ -4085,6 +4460,16 @@ def document_governance_note(skill: dict) -> str:
 """
 
 
+def preflight_runtime_note(skill: dict) -> str:
+    return f"""
+# Preflight 运行门闩
+- 每次运行必须先输出并维护 `preflight_input_state`，取值只能是 `{", ".join(PREFLIGHT_INPUT_STATES)}`。
+- 只有 `{FORMAL_GENERATION_ENTRY_CONDITION}` 时才能进入 `formal_generation`，读取模板、填充正文、写入正式 Markdown/Excel/JSON，并登记正式 artifact。
+- `waiting_for_input` 时只允许登记 `required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json`；不得写入或登记正式阶段产物。
+- 用户补充答案必须写回 `StageRunRequest.context`、artifact index 或 MD/JSON/YAML，并保留来源和时间，之后才能把 `preflight_input_state` 置为 `ready`。
+"""
+
+
 def workflow_runtime_note(skill: dict) -> str:
     if skill["id"] != "workflow-orchestrator":
         return ""
@@ -4092,11 +4477,14 @@ def workflow_runtime_note(skill: dict) -> str:
 # Workflow 运行模式
 - `auto_flow`：默认模式，从 workflow 的 `start_node` 开始，按 `next_nodes` 自动流转；任何节点返回 `waiting_for_input`、`waiting_for_human_review`、`blocked` 或 `failed` 时必须暂停。
 - `auto_flow` 中，节点返回 `succeeded` 且 `required_information_requests` 为空、未声明 `HUMAN_APPROVAL_REQUIRED` 时，workflow-orchestrator 必须自动确认进入 `next_node`，并在 `workflow-trace.json` 记录 auto transition decision；不得要求用户通过对话确认。
+- 任一节点存在 blocking `required_information_requests` 时，workflow-orchestrator 必须先生成或确认 `docs/human-review/` HTML 审阅包并暂停；用户补充答案写回 `StageRunRequest.context`、artifact index 或可机读 MD/JSON/YAML 前，不得进入后续节点。
+- human-review HTML 只作为人工填写入口；workflow-orchestrator 不得把 HTML 当作上游设计、需求、审批或实现事实源。
 - `high-level-design -> detailed-design` 属于 agent 自动流转检查，不等同于解锁代码的 `design-review`；只有代码研发前的设计总评审才判断是否可以进入代码阶段。
 - `from_node`：从用户指定的 `start_node` 开始继续流转；必须先校验该节点存在，并确认上游必需产物已由用户、artifact index 或仓库上下文提供。
 - `single_node`：只执行用户指定的 `target_node`；不得自动触发后续节点，也不得宣称全链路完成。
 - workflow 可以按任务目标裁剪或组合节点，但不得静默跳过质量门禁、人工审批、必填输入检查或产物 schema 校验。
 - 每次运行必须在 `workflow-trace.json` 记录 `entry_mode`、实际执行节点、跳过节点及原因、暂停原因、恢复点和下一个建议节点。
+- 每个节点必须先执行 preflight gate；`preflight_input_state != ready` 时不得进入当前节点 `formal_generation`，也不得触发下游 `next_nodes`。
 """
 
 
@@ -4206,7 +4594,8 @@ description: {skill_trigger_description(skill)}
 - 加载适用的团队规范、`engineering-assistant/profiles/rrq-yq-team.yaml`、`engineering-assistant/registry/team-rule-catalog.yaml` 和风险策略。
 - 若目标项目提供更具体的 profile，以目标项目 profile 为准，并记录与团队默认 profile 的冲突。
 - 确认目标范围和运行模式。
-- 如果必填输入缺失或关键边界无法确认，必须主动询问用户；不得跨越未知边界猜测。
+- 正式产物生成前必须先读取用户请求、仓库上下文、profile、上游产物和 artifact index，并完成必须信息梳理。
+- 如果必填输入缺失或关键边界无法确认，必须先主动询问用户；不得跨越未知边界猜测或先生成半成品。
 
 # 语言策略
 - 未指定输出语言时，必须先询问用户选择 `zh-CN`（简体中文）或 `en`（English）。
@@ -4216,8 +4605,9 @@ description: {skill_trigger_description(skill)}
 # 主动询问策略
 - 执行前先检查输入、仓库上下文、上游产物和 profile，区分“可推导信息”和“必须用户确认信息”。
 - 对必须用户确认的信息，输出 `required_information_requests`，每个问题包含 `question`、`reason`、`required`、`priority`、`expected_format` 和可选示例。
-- blocking 问题未回答时，`StageRunResult.status` 必须为 `waiting_for_input`，不得继续生成通过性结论或正式文档。
+- blocking 问题未回答时，`StageRunResult.status` 必须为 `waiting_for_input`，不得继续生成通过性结论、正式文档或下游节点输入。
 - 进入 `waiting_for_input` 或 `waiting_for_human_review` 时，必须在目标项目 `docs/human-review/` 生成可填写的 HTML 人工审阅包；页面必须支持填写每个待确认项并复制或下载结构化答案 JSON；agent 不得把 HTML 作为事实输入源。
+- HTML 审阅包只用于人工填写；用户答案必须写回 `StageRunRequest.context`、artifact index 或可机读 MD/JSON/YAML 后，才能继续正式产物生成。
 - 一次只询问完成本阶段所需的最小问题集，优先级按 `critical`、`major`、`minor` 排序。
 - 用户补充后，将答案写回 `StageRunRequest.context` 或 artifact index，并保留来源。
 
@@ -4229,11 +4619,12 @@ description: {skill_trigger_description(skill)}
 - 任何技术替换、绕过现有 mapper/repository 模式、前端技术栈/组件库变更、测试框架或构建工具替换都必须进入 `required_information_requests` 或人工评审。
 
 # 执行门禁
-- preflight 阶段必须先完成语言确认和必须信息检查。
+- preflight 阶段必须先完成语言确认、上下文读取和必须信息检查；preflight 未通过前不得生成正式阶段 Markdown/Excel/JSON 产物。
 - 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
-- 暂停等待人工输入或审批时，`StageRunResult.artifacts` 必须登记 HTML 审阅包，且该 HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
+- 暂停等待人工输入或审批时，`StageRunResult.artifacts` 只登记补充信息请求、HTML 审阅包和恢复点，不得登记正式阶段产物为已完成；HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
 - 生成{formal_document_kind}时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
 - 输出 `StageRunResult` 后必须运行 `engineering-assistant/scripts/validate_stage_run_result.py`；校验失败视为阶段节点未遵守契约，workflow 必须 `blocked`。
+{preflight_runtime_note(skill)}
 {workflow_runtime_note(skill)}
 {static_analysis_runtime_note(skill)}
 {rich_html_report_note(skill)}
@@ -4243,12 +4634,13 @@ description: {skill_trigger_description(skill)}
 
 # 操作流程
 1. 将请求规范化为 `StageRunRequest`。
-2. 校验必填输入并记录假设。
-3. 基于来源证据执行以下检查。
+2. 读取用户请求、仓库上下文、profile、上游产物和 artifact index，记录不可用来源。
+3. 区分可自动推导信息与必须用户确认信息；如存在 blocking 缺失项，输出 `required_information_requests`，生成 `docs/human-review/` HTML，状态置为 `waiting_for_input` 后暂停。
+4. 仅当 blocking 信息已补齐并写回 `StageRunRequest.context` 或 artifact index 后，基于来源证据执行以下检查。
 {checks}
-4. {generation_step}
-5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
-6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
+5. {generation_step}
+6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
+7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
 
 # 输出契约
 在 `artifacts/{skill['id']}/` 下生成以下产物：
@@ -4357,9 +4749,12 @@ def eval_case(skill: dict, case: str) -> dict:
     )
     pass_criteria = [
         "StageRunResult status 合法",
+        "StageRunResult 必须包含 preflight_input_state，且 formal_generation 入口条件必须是 preflight_input_state == ready",
         "未指定 language 时必须询问用户选择 zh-CN 或 en",
         formal_document_criterion,
         "missing_required_input 场景必须输出非空 required_information_requests.questions",
+        "missing_required_input 场景必须先暂停在 waiting_for_input，并生成 docs/human-review/ 可填写 HTML 审阅包",
+        "blocking 信息补齐并写回 StageRunRequest.context 或 artifact index 前，不得生成或登记正式阶段 Markdown/Excel/JSON 产物",
         "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
         "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
         "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
@@ -4434,7 +4829,14 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
         "depends_on": depends_on or [],
         "inputs": skill["inputs"],
         "outputs": skill["outputs"],
-        "preconditions": ["contract 输入可用", "风险策略已加载"],
+        "preconditions": ["contract 输入可用", "风险策略已加载", "preflight gate 已执行"],
+        "preflight_gate": {
+            "state_field": "preflight_input_state",
+            "states": PREFLIGHT_INPUT_STATES,
+            "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
+            "block_formal_generation_when_not_ready": True,
+            "block_next_nodes_when_not_ready": True,
+        },
         "postconditions": ["StageRunResult 已输出", "产物已登记索引"],
         "quality_gates": skill["gates"],
         "approval_policy": {"required_for": skill["approvals"], "decision": ["pending", "approved", "rejected"]},
@@ -4508,10 +4910,19 @@ def workflow(name: str, nodes: list[str]) -> dict:
         "start_node": nodes[0],
         "terminal_nodes": [nodes[-1]],
         "composition_policy": {
-            "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；遇到阻断、等待输入或等待人工审批时暂停。",
+            "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
             "from_node": "从用户指定 start_node 开始继续流转；必须校验该节点存在，并确认所需上游 artifacts 已提供或可从 artifact_index 获取。",
             "single_node": "只执行用户指定 target_node，不自动进入 next_nodes；输出该节点 StageRunResult 和可继续执行的后续节点建议。",
             "custom": "可按任务目标裁剪节点集合，但必须保留节点输入输出契约、失败策略、审批策略和产物路由。",
+        },
+        "preflight_runtime_policy": {
+            "state_field": "preflight_input_state",
+            "states": PREFLIGHT_INPUT_STATES,
+            "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
+            "pause_when": ["preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回机读事实源"],
+            "allowed_artifacts_when_waiting_for_input": PREFLIGHT_ONLY_ARTIFACTS,
+            "block_current_node_formal_generation": True,
+            "block_next_nodes": True,
         },
         "nodes": workflow_nodes,
         "artifact_routing": "每个节点的输出进入 artifact-index.json，并映射到下游 StageRunRequest.artifacts",
@@ -5177,10 +5588,24 @@ for arg in sys.argv[1:]:
     for mode in VALID_ENTRY_MODES:
         if mode not in data.get("composition_policy", {}):
             raise SystemExit(f"{arg}: composition_policy 缺少 {mode}")
+    preflight_policy = data.get("preflight_runtime_policy", {})
+    if preflight_policy.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        raise SystemExit(f"{arg}: preflight_runtime_policy.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+    if preflight_policy.get("block_current_node_formal_generation") is not True:
+        raise SystemExit(f"{arg}: preflight_runtime_policy.block_current_node_formal_generation 必须为 true")
+    if preflight_policy.get("block_next_nodes") is not True:
+        raise SystemExit(f"{arg}: preflight_runtime_policy.block_next_nodes 必须为 true")
     for node in data["nodes"]:
-        for field in ["node_id", "skill_id", "entry_modes", "depends_on", "inputs", "outputs", "approval_policy", "failure_policy", "next_nodes"]:
+        for field in ["node_id", "skill_id", "entry_modes", "depends_on", "inputs", "outputs", "preflight_gate", "approval_policy", "failure_policy", "next_nodes"]:
             if field not in node:
                 raise SystemExit(f"{arg}: node 缺少字段 {field}")
+        gate = node.get("preflight_gate", {})
+        if gate.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+        if gate.get("block_formal_generation_when_not_ready") is not True:
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.block_formal_generation_when_not_ready 必须为 true")
+        if gate.get("block_next_nodes_when_not_ready") is not True:
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.block_next_nodes_when_not_ready 必须为 true")
         if set(node.get("entry_modes", [])) != VALID_ENTRY_MODES:
             raise SystemExit(f"{arg}: {node.get('node_id')} entry_modes 不合法")
         for next_node in node.get("next_nodes", []):
@@ -6197,6 +6622,7 @@ from pathlib import Path
 
 VALID_LANGUAGE = {"zh-CN", "en"}
 VALID_STATUSES = {"succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"}
+VALID_PREFLIGHT_INPUT_STATES = {"ready", "waiting_for_input", "waiting_for_human_review", "blocked"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
@@ -6229,6 +6655,42 @@ def is_blocking_gate(gate: dict) -> bool:
     if raw in BLOCKING_GATE_RESULTS:
         return True
     return raw.startswith("block") or raw.startswith("fail")
+
+
+def has_blocking_information_requests(info_requests) -> bool:
+    for request in info_requests or []:
+        if request.get("blocking") is True:
+            return True
+        questions = request.get("questions") or []
+        if any(question.get("required") is True for question in questions if isinstance(question, dict)):
+            return True
+    return False
+
+
+def is_preflight_waiting_artifact(artifact) -> bool:
+    text = artifact_kind(artifact)
+    path_text = artifact_path(artifact).lower().replace("\\\\", "/")
+    allowed_tokens = [
+        "required-information",
+        "missing-information",
+        "human-review",
+        "approval",
+        "workflow-trace",
+        "resume",
+        "open-questions",
+        "artifact-index",
+    ]
+    return any(token in text or token in path_text for token in allowed_tokens)
+
+
+def is_formal_artifact_before_input(artifact) -> bool:
+    if is_human_html_artifact(artifact) or is_preflight_waiting_artifact(artifact):
+        return False
+    path_text = artifact_path(artifact).lower()
+    kind = artifact_kind(artifact)
+    formal_suffix = path_text.endswith((".md", ".xlsx", ".xls", ".json", ".yaml", ".yml"))
+    formal_type = any(token in kind for token in ["markdown", "xlsx", "json", "yaml"])
+    return formal_suffix or formal_type
 
 
 def resolve_artifact_file(result_path: Path, artifact):
@@ -6270,16 +6732,26 @@ for arg in sys.argv[1:]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("status") not in VALID_STATUSES:
         errors.append(f"{path}: status 不合法")
+    state = data.get("preflight_input_state")
+    if state not in VALID_PREFLIGHT_INPUT_STATES:
+        errors.append(f"{path}: preflight_input_state 必须为 ready、waiting_for_input、waiting_for_human_review 或 blocked")
     if data.get("language") not in VALID_LANGUAGE:
         errors.append(f"{path}: language 不能为空，且必须为 zh-CN 或 en")
     info_requests = data.get("required_information_requests", [])
     if data.get("status") == "waiting_for_input":
+        if state != "waiting_for_input":
+            errors.append(f"{path}: status=waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
         if not info_requests:
             errors.append(f"{path}: waiting_for_input 必须包含 required_information_requests")
         for index, request in enumerate(info_requests):
             if request.get("blocking") and not request.get("questions"):
                 errors.append(f"{path}: required_information_requests[{index}].questions 不能为空")
+        for artifact in data.get("artifacts", []):
+            if is_formal_artifact_before_input(artifact):
+                errors.append(f"{path}: waiting_for_input 不得登记正式阶段产物为已完成，必须先等待补充信息写回: {artifact_path(artifact) or artifact.get('name')}")
     if data.get("status") in WAITING_STATUSES:
+        if data.get("status") == "waiting_for_human_review" and state not in {"waiting_for_human_review", "blocked"}:
+            errors.append(f"{path}: status=waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review 或 blocked")
         html_artifacts = [artifact for artifact in data.get("artifacts", []) if is_human_html_artifact(artifact)]
         if not html_artifacts:
             errors.append(f"{path}: {data.get('status')} 必须在 artifacts 登记可填写的人工审阅 HTML")
@@ -6288,6 +6760,10 @@ for arg in sys.argv[1:]:
             if html_path is not None:
                 validate_human_html(html_path, path)
     if data.get("status") == "succeeded":
+        if state != "ready":
+            errors.append(f"{path}: succeeded 必须满足 preflight_input_state == ready")
+        if has_blocking_information_requests(info_requests):
+            errors.append(f"{path}: succeeded 不允许存在未解决的 blocking required_information_requests")
         metadata = data.get("document_metadata") or {}
         for field in DOC_REQUIRED:
             if field not in metadata or metadata.get(field) in ("", [], None):
@@ -6538,11 +7014,19 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
     if "JDBC" not in technology_selection_policy.get("requires_review", []):
         errors.append(f"{contract_path}: technology_selection_policy.requires_review 必须包含 JDBC")
     execution_gates = contract.get("execution_gates", {})
-    for gate in ["preflight_required_information", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
+    for gate in ["preflight_required_information", "preflight_before_formal_artifacts", "preflight_input_state_required", "formal_generation_requires_ready", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
         if execution_gates.get(gate) is not True:
             errors.append(f"{contract_path}: execution_gates.{gate} 必须为 true")
+    runtime_gate = contract.get("preflight_runtime_gate", {})
+    if runtime_gate.get("state_field") != "preflight_input_state":
+        errors.append(f"{contract_path}: preflight_runtime_gate.state_field 必须为 preflight_input_state")
+    if runtime_gate.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        errors.append(f"{contract_path}: preflight_runtime_gate.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+    required_policy = contract.get("required_information_policy", {})
+    if required_policy.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        errors.append(f"{contract_path}: required_information_policy.formal_generation_entry_condition 必须为 preflight_input_state == ready")
     required_schema_fields = set(output_schema.get("required", []))
-    for field in ["language", "document_metadata", "required_information_requests"]:
+    for field in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
         if field not in required_schema_fields:
             errors.append(f"{skill / 'output.schema.json'}: required 缺少 {field}")
     fingerprints = set()
@@ -6580,7 +7064,7 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         if len(data.get("pass_criteria", [])) < 5:
             errors.append(f"{path}: pass_criteria 过少，无法形成团队门禁")
         criteria_text = "\\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "document_metadata", "required_information_requests"]:
+        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
             if required_text not in criteria_text:
                 errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
         if skill.name in {"code-development", "detailed-design", "design-review", "code-review", "code-quality-governor"} and "framework" not in criteria_text and "mybatis-plus" not in criteria_text:
@@ -6591,8 +7075,10 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
                     errors.append(f"{path}: pass_criteria 缺少静态分析/HTML 防回归断言 {required_text}")
         if skill.name in {"frontend-design", "frontend-development"} and "frontend" not in criteria_text:
             errors.append(f"{path}: pass_criteria 缺少 frontend 防回归断言")
-        if case == "missing_required_input" and "questions" not in criteria_text:
-            errors.append(f"{path}: missing_required_input 必须断言 questions 非空")
+        if case == "missing_required_input":
+            for required_text in ["questions", "waiting_for_input", "docs/human-review", "不得生成或登记正式阶段", "preflight_input_state"]:
+                if required_text not in criteria_text:
+                    errors.append(f"{path}: missing_required_input 必须断言 {required_text}")
         stage_request = data.get("input", {}).get("stage_run_request", {})
         if stage_request.get("skill_id") != skill.name:
             errors.append(f"{path}: stage_run_request.skill_id 与目录不一致")
@@ -6628,7 +7114,7 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         if len(scenario.get("team_rule_refs", [])) < 3:
             errors.append(f"{path}: 团队专项 eval 至少引用 3 条团队规范")
         criteria_text = "\\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "document_metadata", "required_information_requests"]:
+        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
             if required_text not in criteria_text:
                 errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
         for required_text in ["detailed-design.md", "sequenceDiagram", "flowchart", "StageRunResult.artifacts"]:

@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "MQ Design",
     "short_description": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
-    "default_prompt": "使用 mq-design，先读取对应 xlsx template，按模板工作簿填充输入事实，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 mq-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 xlsx template 生成正式产物与 gate decision。",
     "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
     "language_policy": {
       "supported": [
@@ -14,6 +14,15 @@
         "en"
       ],
       "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
     }
   },
   "inputs": [

@@ -37,6 +37,120 @@ def write_inline_string_cell(sheet_xml: Path, cell_ref: str, value: str) -> None
     sheet_xml.write_bytes(ET.tostring(root, encoding="utf-8", xml_declaration=True))
 
 
+def _sheet_name_to_path(temp: Path) -> dict[str, Path]:
+    ns = {
+        "a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        "pkg": "http://schemas.openxmlformats.org/package/2006/relationships",
+    }
+    rels_root = ET.fromstring((temp / "xl" / "_rels" / "workbook.xml.rels").read_bytes())
+    rels = {rel.attrib["Id"]: rel.attrib["Target"] for rel in rels_root.findall("pkg:Relationship", ns)}
+    workbook_root = ET.fromstring((temp / "xl" / "workbook.xml").read_bytes())
+    mapping = {}
+    for sheet in workbook_root.findall(".//a:sheet", ns):
+        name = sheet.attrib.get("name", "")
+        rel_id = sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+        target = rels.get(rel_id, "").lstrip("/")
+        if target.startswith("xl/"):
+            mapping[name] = temp / target
+        else:
+            mapping[name] = temp / "xl" / target
+    return mapping
+
+
+def _write_xlsx_row_by_headers(target: Path, sheet_name: str, row_number: int, values: dict[str, str]) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp = Path(temp_dir)
+        with zipfile.ZipFile(target) as src:
+            src.extractall(temp)
+        sheet_paths = _sheet_name_to_path(temp)
+        sheet_xml = sheet_paths[sheet_name]
+        root = ET.fromstring(sheet_xml.read_bytes())
+        row = root.find(f".//{{{XLSX_NS}}}row[@r='1']")
+        if row is None:
+            raise AssertionError(f"sheet {sheet_name} missing header row")
+        header_to_col = {}
+        for cell in row.findall(f"{{{XLSX_NS}}}c"):
+            ref = cell.attrib.get("r", "")
+            col_letters = "".join(ch for ch in ref if ch.isalpha())
+            text = ""
+            if cell.attrib.get("t") == "inlineStr":
+                text = "".join(t.text or "" for t in cell.findall(f".//{{{XLSX_NS}}}t"))
+            else:
+                node = cell.find(f"{{{XLSX_NS}}}v")
+                if node is not None and node.text:
+                    # The template headers are stored as shared strings, but we only need stable refs used in the template.
+                    # The current team template keeps header order fixed, so the known column letters are sufficient.
+                    pass
+            if text:
+                header_to_col[text] = col_letters
+        if not header_to_col:
+            known_headers = {
+                "消费者": {
+                    "队列名称": "A",
+                    "业务用途": "B",
+                    "场景应用": "C",
+                    "单消费节点消费": "D",
+                    "队列类型": "E",
+                    "优先队列": "F",
+                    "是否持久化": "G",
+                    "自动删除": "H",
+                    "TTL": "I",
+                    "消息大小": "J",
+                    "绑定的Exchange/routingKey(多个）": "K",
+                    "死信队列exchange/routeKey": "M",
+                    "消费服务": "N",
+                    "消息key": "O",
+                    "运维监控": "P",
+                    "软件需求号/bug号": "Q",
+                    "设计日期": "R",
+                    "设计者": "S",
+                    "备注": "T",
+                },
+                "生产者": {
+                    "业务用途": "A",
+                    "场景应用": "B",
+                    "业务消息key": "C",
+                    "消息类型": "D",
+                    "消息体内容": "E",
+                    "优先等级": "F",
+                    "消息TTL（毫秒）": "G",
+                    "持久化": "H",
+                    "目的交换机": "I",
+                    "路由key": "J",
+                    "消息预估大小": "K",
+                    "生产服务/模块名称": "L",
+                    "软件需求号/bug号": "M",
+                    "设计日期": "N",
+                    "设计者": "O",
+                    "备注": "P",
+                },
+            }
+            header_to_col = known_headers[sheet_name]
+        for header, value in values.items():
+            cell_ref = f"{header_to_col[header]}{row_number}"
+            write_inline_string_cell(sheet_xml, cell_ref, value)
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as dst:
+            for file in temp.rglob("*"):
+                if file.is_file():
+                    dst.write(file, file.relative_to(temp).as_posix())
+
+
+def rewrite_workbook_targets_absolute(target: Path) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp = Path(temp_dir)
+        with zipfile.ZipFile(target) as src:
+            src.extractall(temp)
+        rels = temp / "xl" / "_rels" / "workbook.xml.rels"
+        text = rels.read_text(encoding="utf-8")
+        text = text.replace('Target="worksheets/', 'Target="/xl/worksheets/')
+        rels.write_text(text, encoding="utf-8")
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as dst:
+            for file in temp.rglob("*"):
+                if file.is_file():
+                    dst.write(file, file.relative_to(temp).as_posix())
+
+
 def make_mq_xlsx(target: Path, producer_values: dict[str, str] | None = None, consumer_values: dict[str, str] | None = None) -> None:
     shutil.copyfile(ROOT / "inputs" / "xxxMQ设计.xlsx", target)
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -64,10 +178,19 @@ def run_validator(skill_id: str, payload_path: Path) -> subprocess.CompletedProc
 
 
 def payload(skill_id: str, artifacts: list[dict[str, str]], status: str = "succeeded", document_status: str = "draft") -> dict:
+    preflight_state = {
+        "succeeded": "ready",
+        "waiting_for_input": "waiting_for_input",
+        "waiting_for_human_review": "waiting_for_human_review",
+        "blocked": "blocked",
+        "failed": "blocked",
+        "skipped": "blocked",
+    }.get(status, "ready")
     return {
         "run_id": "run-team-doc-001",
         "skill_id": skill_id,
         "status": status,
+        "preflight_input_state": preflight_state,
         "language": "zh-CN",
         "trace_id": "trace-team-doc-001",
         "document_metadata": {
@@ -105,7 +228,8 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
         self.assertTrue(template_policy["must_read_template_before_generation"])
         self.assertIn("skills/high-level-design/assets/high-level-design-template.md", json.dumps(template_policy, ensure_ascii=False))
         self.assertIn("不得凭记忆", "\n".join(template_policy["generation_protocol"]))
-        for section in ["1. 版本变更记录", "2. 平台概述", "3. 系统设计", "5.中间件设计", "6.数据视图"]:
+        self.assertIn("flowchart", policy["forbidden_mermaid"])
+        for section in ["1. 版本变更记录", "2. 平台概述", "3. 系统设计", "4.1.2 关键协作摘要", "5.中间件设计", "6.数据视图"]:
             self.assertIn(section, policy["required_sections"])
 
         skill_md = (ROOT / "skills" / "high-level-design" / "SKILL.md").read_text(encoding="utf-8")
@@ -177,8 +301,9 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             self.assertTrue(path.exists(), f"missing template: {path}")
 
         hld_template = expected[0].read_text(encoding="utf-8")
-        for text in ["0. 原始需求与原型追溯", "source_id", "1. 版本变更记录", "2. 平台概述", "3.1 系统逻辑视图", "4.1.3 跨服务服务间时序图", "sequenceDiagram", "5.中间件设计", "6.数据视图"]:
+        for text in ["0. 原始需求与原型追溯", "source_id", "1. 版本变更记录", "2. 平台概述", "3.1 系统逻辑视图", "4.1.2 关键协作摘要", "4.1.3 跨服务服务间时序图", "sequenceDiagram", "5.中间件设计", "6.数据视图"]:
             self.assertIn(text, hld_template)
+        self.assertNotIn("flowchart TD", hld_template)
         self.assertNotIn("## 证据", hld_template)
         self.assertNotIn("## Findings", hld_template)
 
@@ -320,7 +445,99 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             for forbidden in forbidden_items:
                 self.assertNotIn(forbidden, scripts[skill_id], f"{skill_id} validator leaked {forbidden}")
             self.assertIn("def validate_output", scripts[skill_id])
-            self.assertIn("fail(validate_output(payload_path, payload))", scripts[skill_id])
+            self.assertIn("should_validate_formal_outputs(payload)", scripts[skill_id])
+            self.assertIn("errors.extend(validate_output(payload_path, payload))", scripts[skill_id])
+
+    def test_waiting_for_input_skips_formal_output_validation_until_writeback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            result_payload = payload("detailed-design", [], status="waiting_for_input")
+            result_payload["required_information_requests"] = [
+                {
+                    "id": "REQ-INFO-001",
+                    "blocking": True,
+                    "questions": [
+                        {
+                            "id": "Q1",
+                            "question": "请补充业务边界。",
+                            "reason": "缺少边界不能生成正式详细设计。",
+                            "required": True,
+                            "priority": "critical",
+                            "expected_format": "JSON",
+                        }
+                    ],
+                }
+            ]
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_waiting_for_input_blocks_formal_file_written_before_writeback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            leaked = root / "artifacts" / "detailed-design" / "detailed-design.md"
+            leaked.parent.mkdir(parents=True)
+            leaked.write_text("# 不应提前生成的详细设计\n", encoding="utf-8")
+            result_payload = payload("detailed-design", [], status="waiting_for_input")
+            result_payload["required_information_requests"] = [
+                {
+                    "id": "REQ-INFO-001",
+                    "blocking": True,
+                    "questions": [
+                        {
+                            "id": "Q1",
+                            "question": "请补充业务边界。",
+                            "reason": "缺少边界不能生成正式详细设计。",
+                            "required": True,
+                            "priority": "critical",
+                            "expected_format": "JSON",
+                        }
+                    ],
+                }
+            ]
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("waiting_for_input 不得先落盘正式阶段产物", output)
+        self.assertIn("detailed-design.md", output)
+
+    def test_detailed_design_validator_blocks_manual_review_confirmation_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "detailed-design.md"
+            template = (ROOT / "skills" / "detailed-design" / "assets" / "detailed-design-template.md").read_text(encoding="utf-8")
+            design.write_text(
+                template.replace("matched / pending_confirmation / conflict", "人工评审确认"),
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "detailed-design",
+                [
+                    {"name": "detailed-design.md", "path": str(design)},
+                    {"name": "database-design.md", "path": str(root / "database-design.md")},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
+                    {"name": "redis-design.md", "path": str(root / "redis-design.md")},
+                    {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
+                    {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
+                ],
+            )
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("人工评审确认", output)
+        self.assertIn("waiting_for_input", output)
+        self.assertIn("human-review HTML", output)
 
     def test_detailed_design_validator_blocks_forbidden_sections_and_sequence_diagram(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -396,6 +613,68 @@ sequenceDiagram
         output = result.stdout + result.stderr
         self.assertIn("缺少团队概要设计模板章节", output)
         self.assertIn("通用产物模板标题", output)
+
+    def test_high_level_design_validator_blocks_flowchart(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 开通
+#### 4.1.1 参与系统与职责设计
+| 系统 | 职责 |
+| --- | --- |
+| 订单服务 | 负责订单事实 |
+#### 4.1.2 关键协作摘要
+
+```mermaid
+flowchart TD
+    A["触发"] --> B["处理"]
+```
+
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant OrderService as 订单服务
+    participant MemberService as 会员服务
+    OrderService->>MemberService: 服务间协作
+```
+## 5.中间件设计
+## 6.数据视图
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("不得包含 flowchart", output)
 
     def test_high_level_design_validator_blocks_non_service_sequence_participants(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -693,6 +972,101 @@ flowchart TD
             self.assertIn("幂等", mq_output)
             self.assertIn("超过 10KB", mq_output)
 
+    def test_mq_validator_blocks_template_text_and_range_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(
+                mq_doc,
+                producer_values={"A1": "修改后的表头", "A3": "新增模板外数据"},
+            )
+            mq_payload = root / "mq-stage-run-result.json"
+            mq_payload.write_text(
+                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}]), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = run_validator("mq-design", mq_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("固定模板文本不得修改", output)
+        self.assertIn("不得新增非模板单元格", output)
+
+    def test_mq_validator_accepts_absolute_relationship_targets_and_header_aligned_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(mq_doc)
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "生产者",
+                2,
+                {
+                    "业务用途": "待支付订单创建快照",
+                    "场景应用": "待支付订单列表",
+                    "业务消息key": "pending.pay.order.created",
+                    "消息类型": "订单创建事件",
+                    "消息体内容": "包含 orderId、tenantId、facilitatorId、snapshot，定义幂等、重试、回放策略",
+                    "目的交换机": "pending.pay.exchange",
+                    "路由key": "pending.pay.created",
+                    "生产服务/模块名称": "facilitator-statistic-service",
+                },
+            )
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "消费者",
+                2,
+                {
+                    "队列名称": "pending.pay.order.created.queue",
+                    "业务用途": "落待支付快照",
+                    "场景应用": "待支付订单列表",
+                    "绑定的Exchange/routingKey(多个）": "pending.pay.exchange/pending.pay.created",
+                    "死信队列exchange/routeKey": "pending.pay.dlx/pending.pay.created.dlq",
+                    "消费服务": "facilitator-statistic-service",
+                    "消息key": "pending.pay.order.created",
+                    "运维监控": "幂等、死信、重试、回放告警",
+                },
+            )
+            rewrite_workbook_targets_absolute(mq_doc)
+            mq_payload = root / "mq-stage-run-result.json"
+            mq_payload.write_text(
+                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}], status="waiting_for_human_review"), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = run_validator("mq-design", mq_payload)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_mq_validator_blocks_header_misaligned_business_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(mq_doc)
+            with tempfile.TemporaryDirectory() as unzip_dir:
+                temp = Path(unzip_dir)
+                with zipfile.ZipFile(mq_doc) as src:
+                    src.extractall(temp)
+                write_inline_string_cell(temp / "xl" / "worksheets" / "sheet2.xml", "I2", "误放到交换机列的业务消息key")
+                write_inline_string_cell(temp / "xl" / "worksheets" / "sheet2.xml", "J2", "误放到路由列的业务用途")
+                with zipfile.ZipFile(mq_doc, "w", zipfile.ZIP_DEFLATED) as dst:
+                    for file in temp.rglob("*"):
+                        if file.is_file():
+                            dst.write(file, file.relative_to(temp).as_posix())
+            mq_payload = root / "mq-stage-run-result.json"
+            mq_payload.write_text(
+                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}], status="waiting_for_human_review"), ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = run_validator("mq-design", mq_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("生产者 sheet 第 2 行缺少必填业务值", output)
+        self.assertIn("业务消息key", output)
+
     def test_database_validator_blocks_unresolved_info_and_requires_questions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -736,6 +1110,176 @@ flowchart TD
         self.assertIn("缺少 OLTP 模板固定内容: 应写明：", output)
         self.assertIn("缺少 OLTP 模板固定内容: 不应重复：", output)
         self.assertIn("缺少 OLTP 模板固定内容: 编写要点：", output)
+
+    def test_design_run_stability_script_normalizes_noise_and_detects_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            left = root / "run-a"
+            right = root / "run-b"
+            for run_root in [left, right]:
+                (run_root / "artifacts" / "high-level-design").mkdir(parents=True)
+                (run_root / "artifacts" / "detailed-design").mkdir(parents=True)
+                (run_root / "artifacts" / "database-design").mkdir(parents=True)
+                (run_root / "artifacts" / "mq-design").mkdir(parents=True)
+
+                (run_root / "artifacts" / "high-level-design" / "high-level-design.md").write_text(
+                    """# 概要设计
+## 0. 原始需求与原型追溯
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 待支付订单
+#### 4.1.2 关键协作摘要
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant OrderService as 订单服务
+    participant StatisticService as 统计服务
+    OrderService->>StatisticService: 服务间协作
+```
+## 5.中间件设计
+## 6.数据视图
+""",
+                    encoding="utf-8",
+                )
+                (run_root / "artifacts" / "detailed-design" / "detailed-design.md").write_text(
+                    """# 详细设计
+## 1. 修订历史
+## 2. 设计背景与目标摘要
+### 2.1 原始需求与原型引用矩阵
+## 3. 模块/功能详细设计
+### 3.1. 业务流程图
+```mermaid
+flowchart TD
+    A[触发] --> B{参数/权限/状态校验通过?}
+    B -- 否 --> F[失败结束]
+    B -- 是 --> C[核心处理]
+    C --> D[外部依赖/消息协作]
+    D --> E{事务/一致性处理成功?}
+    E -- 是 --> S[成功终态]
+    E -- 否 --> R{可重试或可补偿?}
+    R --> M[人工处理]
+    M --> F
+```
+流程设计说明：
+- 业务规则：主表快照
+- 校验规则：必填校验
+- 事务边界：主明细同事务
+- 幂等与一致性：orderId 幂等
+- 异常场景：见下表
+- 日志要求：traceId
+| 场景 | 触发条件 | 异常编码 | 异常信息 | 系统处理动作 | 数据状态 | 日志/告警 | 补偿/重试/人工处理 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 参数错误 | 空值 | 1001 | bad request | 拒绝 | 不落库 | 记录 | 无 |
+## 4. 数据库设计
+## 5. 接口定义
+### 5.1. API接口列表
+### 5.2. 中间件设计
+## 6. 单元测试
+## 7. 性能与扩展性设计
+## 8. 人工评审项
+""",
+                    encoding="utf-8",
+                )
+                (run_root / "artifacts" / "database-design" / "database-design.md").write_text(
+                    """# 待支付订单表组 关系型（OLTP）详细设计
+## 1. 文档信息
+| 项目 | 内容 |
+| --- | --- |
+| 设计对象 | 强耦合表组：t_pending_order、t_pending_order_item |
+**应写明：**
+**不应重复：**
+**编写要点：**
+样例 SQL（MySQL 风格，可按项目替换）
+文档结束
+""",
+                    encoding="utf-8",
+                )
+                mq_doc = run_root / "artifacts" / "mq-design" / "mq-design.xlsx"
+                make_mq_xlsx(mq_doc)
+                _write_xlsx_row_by_headers(
+                    mq_doc,
+                    "生产者",
+                    2,
+                    {
+                        "业务用途": "写待支付快照",
+                        "场景应用": "待支付订单",
+                        "业务消息key": "pending.pay.created",
+                        "消息类型": "订单创建",
+                        "消息体内容": "含幂等、重试、回放和死信处理",
+                        "目的交换机": "pending.pay.exchange",
+                        "路由key": "pending.pay.created",
+                        "生产服务/模块名称": "order-service",
+                    },
+                )
+                _write_xlsx_row_by_headers(
+                    mq_doc,
+                    "消费者",
+                    2,
+                    {
+                        "队列名称": "pending.pay.created.queue",
+                        "业务用途": "写快照",
+                        "场景应用": "待支付订单",
+                        "绑定的Exchange/routingKey(多个）": "pending.pay.exchange/pending.pay.created",
+                        "死信队列exchange/routeKey": "pending.pay.dlx/pending.pay.created.dlq",
+                        "消费服务": "statistic-service",
+                        "消息key": "pending.pay.created",
+                        "运维监控": "幂等、重试、回放、死信告警",
+                    },
+                )
+            (left / "stage-run-result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "waiting_for_human_review",
+                        "preflight_input_state": "waiting_for_human_review",
+                        "artifacts": [{"name": "artifact-index"}, {"name": "human-review-html"}],
+                        "findings": [{"id": "DR-001", "severity": "blocker"}],
+                        "document_metadata": {"document_number": "DOC-A", "owner": "A"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (right / "stage-run-result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "waiting_for_human_review",
+                        "preflight_input_state": "waiting_for_human_review",
+                        "artifacts": [{"name": "artifact-index"}, {"name": "human-review-html"}],
+                        "findings": [{"id": "DR-001", "severity": "blocker"}],
+                        "document_metadata": {"document_number": "DOC-B", "owner": "B"},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            stable = subprocess.run(
+                ["python3", str(ROOT / "engineering-assistant" / "scripts" / "check_design_run_stability.py"), str(left), str(right)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, stable.returncode, stable.stdout + stable.stderr)
+
+            (right / "artifacts" / "high-level-design" / "high-level-design.md").write_text(
+                read_text := (left / "artifacts" / "high-level-design" / "high-level-design.md").read_text(encoding="utf-8").replace("#### 4.1.2 关键协作摘要", "#### 4.1.2 核心流程"),
+                encoding="utf-8",
+            )
+            drift = subprocess.run(
+                ["python3", str(ROOT / "engineering-assistant" / "scripts" / "check_design_run_stability.py"), str(left), str(right)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(0, drift.returncode)
 
     def test_database_validator_blocks_inconsistent_strong_table_group_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

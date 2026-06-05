@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Database Design",
     "short_description": "设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。",
-    "default_prompt": "使用 database-design，先读取对应 assets template，按模板骨架逐节填充输入事实，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 database-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。",
     "trigger_description": "Use when the request is about 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。",
     "language_policy": {
       "supported": [
@@ -14,6 +14,15 @@
         "en"
       ],
       "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
     }
   },
   "inputs": [

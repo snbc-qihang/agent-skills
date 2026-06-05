@@ -19,10 +19,24 @@ for arg in sys.argv[1:]:
     for mode in VALID_ENTRY_MODES:
         if mode not in data.get("composition_policy", {}):
             raise SystemExit(f"{arg}: composition_policy 缺少 {mode}")
+    preflight_policy = data.get("preflight_runtime_policy", {})
+    if preflight_policy.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+        raise SystemExit(f"{arg}: preflight_runtime_policy.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+    if preflight_policy.get("block_current_node_formal_generation") is not True:
+        raise SystemExit(f"{arg}: preflight_runtime_policy.block_current_node_formal_generation 必须为 true")
+    if preflight_policy.get("block_next_nodes") is not True:
+        raise SystemExit(f"{arg}: preflight_runtime_policy.block_next_nodes 必须为 true")
     for node in data["nodes"]:
-        for field in ["node_id", "skill_id", "entry_modes", "depends_on", "inputs", "outputs", "approval_policy", "failure_policy", "next_nodes"]:
+        for field in ["node_id", "skill_id", "entry_modes", "depends_on", "inputs", "outputs", "preflight_gate", "approval_policy", "failure_policy", "next_nodes"]:
             if field not in node:
                 raise SystemExit(f"{arg}: node 缺少字段 {field}")
+        gate = node.get("preflight_gate", {})
+        if gate.get("formal_generation_entry_condition") != "preflight_input_state == ready":
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.formal_generation_entry_condition 必须为 preflight_input_state == ready")
+        if gate.get("block_formal_generation_when_not_ready") is not True:
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.block_formal_generation_when_not_ready 必须为 true")
+        if gate.get("block_next_nodes_when_not_ready") is not True:
+            raise SystemExit(f"{arg}: {node.get('node_id')} preflight_gate.block_next_nodes_when_not_ready 必须为 true")
         if set(node.get("entry_modes", [])) != VALID_ENTRY_MODES:
             raise SystemExit(f"{arg}: {node.get('node_id')} entry_modes 不合法")
         for next_node in node.get("next_nodes", []):

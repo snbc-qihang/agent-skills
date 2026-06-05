@@ -52,8 +52,30 @@
     ],
     "allow_implicit_invocation": false
   },
-  "standalone_mode": "读取输入、校验前置条件、在指定输出目录生成全部声明产物，并在阻断门禁处停止。",
-  "workflow_mode": "消费 StageRunRequest 中的上游产物，输出 StageRunResult，并把声明产物路由给下游 workflow 节点。",
+  "standalone_mode": "先执行 preflight 信息梳理；blocking 信息缺失时仅输出 required_information_requests、human-review HTML 和恢复点，补齐后再在指定输出目录生成全部声明产物。",
+  "workflow_mode": "消费 StageRunRequest 中的上游产物，先执行 preflight 信息梳理；blocking 信息缺失时暂停并等待补充写回，补齐后输出 StageRunResult 并把声明产物路由给下游 workflow 节点。",
+  "preflight_runtime_gate": {
+    "state_field": "preflight_input_state",
+    "states": [
+      "ready",
+      "waiting_for_input",
+      "waiting_for_human_review",
+      "blocked"
+    ],
+    "formal_generation_entry_condition": "preflight_input_state == ready",
+    "formal_generation_blocked_when": [
+      "preflight_input_state != ready",
+      "存在 blocking required_information_requests",
+      "human-review HTML 已生成但补充答案未写回机读事实源"
+    ],
+    "waiting_for_input_allowed_artifacts": [
+      "required-information-request.json",
+      "docs/human-review/<run-id>.html",
+      "workflow-trace.json",
+      "resume-point.json"
+    ],
+    "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
+  },
   "language_policy": {
     "supported": [
       "zh-CN",
@@ -241,13 +263,17 @@
     }
   ],
   "preconditions": [
-    "必填输入已提供或已记录缺失处理策略",
+    "用户请求、仓库上下文、profile、上游产物和 artifact index 已读取或记录不可用原因",
+    "blocking 必填信息已提供，或已进入 waiting_for_input 并生成补充信息入口",
     "风险策略已加载",
     "目标范围已明确"
   ],
   "execution_gates": {
     "language_confirmed": true,
     "preflight_required_information": true,
+    "preflight_before_formal_artifacts": true,
+    "preflight_input_state_required": true,
+    "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
     "block_when_agent_violates_contract": true
@@ -260,6 +286,24 @@
       "审批状态缺失",
       "无法基于仓库或上游产物可靠推导"
     ],
+    "preflight_sequence": [
+      "读取用户请求",
+      "读取仓库上下文",
+      "读取 profile",
+      "读取上游产物",
+      "读取 artifact index",
+      "区分可自动推导信息与必须用户确认信息",
+      "blocking 缺失项先问询并暂停",
+      "补充答案写回后再生成正式产物"
+    ],
+    "preflight_state_field": "preflight_input_state",
+    "preflight_state_values": [
+      "ready",
+      "waiting_for_input",
+      "waiting_for_human_review",
+      "blocked"
+    ],
+    "formal_generation_entry_condition": "preflight_input_state == ready",
     "question_output": "required_information_requests",
     "blocking_status": "waiting_for_input",
     "human_review_html_required": true,
@@ -284,10 +328,19 @@
       "major",
       "minor"
     ],
-    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。"
+    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。",
+    "formal_artifacts_allowed_when": "不存在 blocking required_information_requests，或用户补充答案已写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源。",
+    "waiting_for_input_artifacts": [
+      "required-information-request.json",
+      "docs/human-review/<run-id>.html",
+      "workflow-trace.json",
+      "resume-point.json"
+    ],
+    "forbidden_before_writeback": "不得生成或登记正式阶段 Markdown/Excel/JSON 产物为完成产物，不得继续下游节点。"
   },
   "postconditions": [
-    "全部输出产物已生成，或已输出明确的阻断结果",
+    "blocking 信息缺失时已暂停在 waiting_for_input，且只登记补充信息请求、human-review HTML 和恢复点",
+    "blocking 信息已补齐时全部正式输出产物已生成并登记",
     "质量门禁已评估",
     "需要人工审批的事项已列出"
   ],
@@ -457,7 +510,9 @@
     "required_information_requests": {
       "artifact": "artifacts/implementation-controller/required-information-request.json",
       "schema": "engineering-assistant/schemas/required-information-request.schema.json",
-      "status_when_blocking": "waiting_for_input"
+      "status_when_blocking": "waiting_for_input",
+      "must_precede_formal_artifacts": true,
+      "resume_after_writeback": "StageRunRequest.context 或 artifact index 已记录用户补充答案和来源时间"
     },
     "state_transitions": [
       "pending",

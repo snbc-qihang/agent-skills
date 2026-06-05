@@ -6,6 +6,22 @@ from pathlib import Path
 
 SKILL_ID = "detailed-design"
 POLICY = {
+  "unresolved_markers": [
+    "{",
+    "}",
+    "待补充",
+    "待确认",
+    "未知",
+    "未确认",
+    "人工评审确认",
+    "待人工补充",
+    "待用户补充",
+    "pending_confirmation",
+    "TBD",
+    "TODO",
+    "<填写",
+    "请替换"
+  ],
   "required_sections": [
     "1. 修订历史",
     "2. 设计背景与目标摘要",
@@ -53,6 +69,7 @@ POLICY = {
       "失败结束",
       "异常结束",
       "终止",
+      "失败终态",
       "人工处理",
       "补偿完成",
       "回滚"
@@ -94,7 +111,16 @@ POLICY = {
     "interface-contracts.yaml": "接口契约",
     "test-strategy.md": "测试策略"
   },
-  "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |"
+  "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |",
+  "formal_outputs": [
+    "detailed-design.md",
+    "implementation-plan.md",
+    "interface-contracts.yaml",
+    "test-strategy.md",
+    "database-design.md",
+    "mq-design.xlsx",
+    "redis-design.md"
+  ]
 }
 
 
@@ -134,6 +160,129 @@ def read_artifact(payload_path, payload, name):
     if path and path.exists():
         return path.read_text(encoding="utf-8")
     return ""
+
+
+def artifact_path(item):
+    return (item or {}).get("path") or (item or {}).get("file") or (item or {}).get("uri") or ""
+
+
+def artifact_kind(item):
+    return " ".join(str(value).lower() for value in [
+        (item or {}).get("name", ""),
+        (item or {}).get("artifact_type", ""),
+        artifact_path(item),
+    ])
+
+
+def is_waiting_support_artifact(item):
+    text = artifact_kind(item)
+    allowed = [
+        "required-information",
+        "missing-information",
+        "human-review",
+        "approval",
+        "workflow-trace",
+        "resume",
+        "open-questions",
+        "artifact-index",
+    ]
+    return any(token in text for token in allowed)
+
+
+def is_formal_artifact(item):
+    if is_waiting_support_artifact(item):
+        return False
+    path = artifact_path(item).lower()
+    kind = artifact_kind(item)
+    return path.endswith((".md", ".xlsx", ".xls", ".json", ".yaml", ".yml")) or any(token in kind for token in ["markdown", "xlsx", "json", "yaml"])
+
+
+def blocking_information_requests(payload):
+    for request in payload.get("required_information_requests", []) or []:
+        if request.get("blocking") is True:
+            return True
+        for question in request.get("questions", []) or []:
+            if isinstance(question, dict) and question.get("required") is True:
+                return True
+    return False
+
+
+def artifact_texts(payload_path, payload):
+    for item in payload.get("artifacts", []) or []:
+        name = item.get("name", "")
+        path = artifact_path(item).lower()
+        if not (name.endswith(".md") or path.endswith(".md")):
+            continue
+        resolved = resolve_artifact(payload_path, item)
+        if resolved and resolved.exists():
+            yield name or path, resolved.read_text(encoding="utf-8")
+
+
+def unresolved_markers(text):
+    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+
+
+def candidate_project_roots(payload_path):
+    path = Path(payload_path).resolve()
+    roots = []
+    for candidate in [path.parent, *path.parents]:
+        if candidate not in roots:
+            roots.append(candidate)
+        if (candidate / "artifacts").exists():
+            break
+    cwd = Path.cwd().resolve()
+    if cwd not in roots:
+        roots.append(cwd)
+    return roots
+
+
+def leaked_formal_output_files(payload_path):
+    leaks = []
+    for output in POLICY.get("formal_outputs", []):
+        for root in candidate_project_roots(payload_path):
+            for candidate in [root / "artifacts" / SKILL_ID / output, root / output]:
+                if candidate.exists():
+                    leaks.append(str(candidate))
+    return sorted(set(leaks))
+
+
+def should_validate_formal_outputs(payload):
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if status == "waiting_for_input":
+        return False
+    return state in ('ready', 'waiting_for_human_review', 'blocked') or status in ('succeeded', 'failed', 'blocked', 'waiting_for_human_review')
+
+
+def validate_preflight_order(payload_path, payload):
+    errors = []
+    status = payload.get("status")
+    state = payload.get("preflight_input_state")
+    if state not in ('ready', 'waiting_for_input', 'waiting_for_human_review', 'blocked'):
+        errors.append("preflight_input_state 必须是 ready/waiting_for_input/waiting_for_human_review/blocked")
+    if status == "waiting_for_input":
+        if state != "waiting_for_input":
+            errors.append("status=waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+        if not payload.get("required_information_requests"):
+            errors.append("waiting_for_input 必须输出 required_information_requests 主动询问用户")
+        for item in payload.get("artifacts", []) or []:
+            if is_formal_artifact(item):
+                errors.append("waiting_for_input 不得登记正式阶段产物，必须先等待补充信息写回: " + (artifact_path(item) or item.get("name", "")))
+        leaks = leaked_formal_output_files(payload_path)
+        if leaks:
+            errors.append("waiting_for_input 不得先落盘正式阶段产物，必须先等待补充信息写回: " + ", ".join(leaks))
+    if status == "waiting_for_human_review" and state not in ('waiting_for_human_review', 'blocked'):
+        errors.append("status=waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review 或 blocked")
+    if status == "succeeded":
+        if state != "ready":
+            errors.append("succeeded 必须满足 preflight_input_state == ready")
+        if blocking_information_requests(payload):
+            errors.append("succeeded 不允许存在未解决的 blocking required_information_requests")
+        for name, text in artifact_texts(payload_path, payload):
+            unresolved = unresolved_markers(text)
+            if unresolved:
+                errors.append(name + " 包含未决信息标记，必须先 waiting_for_input 并生成 human-review HTML: " + ", ".join(sorted(set(unresolved))))
+    return errors
 
 
 def markdown_headings(text):
@@ -314,8 +463,13 @@ def validate_output(payload_path, payload):
     if "flowchart" not in text:
         errors.append("detailed-design.md 必须包含 flowchart")
     flow_blocks = list(re.finditer(r"```mermaid\s*\n\s*flowchart[\s\S]*?```", text))
+    field_aliases = {
+        "异常编码": ["异常编码", "返回编码"],
+        "日志/告警": ["日志/告警", "日志要求", "告警"],
+        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
+    }
     for index, block in enumerate(flow_blocks, start=1):
-        tail = text[block.end(): block.end() + 700]
+        tail = text[block.end(): block.end() + 1200]
         flow_context = block.group(0)
         if "流程设计说明" not in tail:
             errors.append(f"第 {index} 个 flowchart 后缺少流程设计说明")
@@ -326,20 +480,15 @@ def validate_output(payload_path, payload):
         for field in POLICY["flow_note_fields"]:
             if field not in tail:
                 errors.append(f"第 {index} 个 flowchart 的流程设计说明缺少 {field}")
-    exception_headers = []
-    for line in text.splitlines():
-        cells = table_cells(line)
-        if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
-            exception_headers.append(cells)
-    field_aliases = {
-        "异常编码": ["异常编码", "返回编码"],
-        "日志/告警": ["日志/告警", "日志要求", "告警"],
-        "补偿/重试/人工处理": ["补偿/重试/人工处理", "补偿", "重试", "人工处理"],
-    }
-    if not exception_headers:
-        errors.append("异常场景表缺少字段: " + "、".join(POLICY["exception_table_required_fields"]))
-    else:
-        best_header = max(exception_headers, key=len)
+        local_headers = []
+        for line in tail.splitlines():
+            cells = table_cells(line)
+            if cells and not is_separator_row(line) and "场景" in cells and "触发条件" in cells:
+                local_headers.append(cells)
+        if not local_headers:
+            errors.append(f"第 {index} 个 flowchart 后缺少异常场景表")
+            continue
+        best_header = max(local_headers, key=len)
         missing_fields = []
         for field in POLICY["exception_table_required_fields"]:
             aliases = field_aliases.get(field, [field])
@@ -364,4 +513,7 @@ def validate_output(payload_path, payload):
 
 payload_path = Path(sys.argv[1])
 payload = load_payload(payload_path)
-fail(validate_output(payload_path, payload))
+errors = validate_preflight_order(payload_path, payload)
+if should_validate_formal_outputs(payload):
+    errors.extend(validate_output(payload_path, payload))
+fail(errors)

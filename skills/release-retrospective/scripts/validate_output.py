@@ -12,4 +12,10 @@ if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
     raise SystemExit("skill_id 不匹配")
 if payload.get("status") not in schema["properties"]["status"]["enum"]:
     raise SystemExit("status 不合法")
+if payload.get("preflight_input_state") not in schema["properties"]["preflight_input_state"]["enum"]:
+    raise SystemExit("preflight_input_state 不合法")
+if payload.get("status") == "succeeded" and payload.get("preflight_input_state") != "ready":
+    raise SystemExit("succeeded 必须满足 preflight_input_state == ready")
+if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
+    raise SystemExit("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
 print("ok")

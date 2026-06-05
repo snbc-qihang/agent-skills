@@ -6,7 +6,7 @@
   "prompt_pack": {
     "display_name": "Code Development",
     "short_description": "基于设计文档进行最小必要代码变更或生成代码修改计划。",
-    "default_prompt": "使用 code-development，先确认语言和必填输入，再输出声明产物与 gate decision。",
+    "default_prompt": "使用 code-development，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
     "trigger_description": "Use when the request is about 基于设计文档进行最小必要代码变更或生成代码修改计划。；Do not use when 不修改无关模块；不绕过测试。",
     "language_policy": {
       "supported": [
@@ -14,6 +14,15 @@
         "en"
       ],
       "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
     }
   },
   "inputs": [

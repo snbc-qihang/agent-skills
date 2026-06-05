@@ -31,10 +31,33 @@
     "release-retrospective"
   ],
   "composition_policy": {
-    "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；遇到阻断、等待输入或等待人工审批时暂停。",
+    "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
     "from_node": "从用户指定 start_node 开始继续流转；必须校验该节点存在，并确认所需上游 artifacts 已提供或可从 artifact_index 获取。",
     "single_node": "只执行用户指定 target_node，不自动进入 next_nodes；输出该节点 StageRunResult 和可继续执行的后续节点建议。",
     "custom": "可按任务目标裁剪节点集合，但必须保留节点输入输出契约、失败策略、审批策略和产物路由。"
+  },
+  "preflight_runtime_policy": {
+    "state_field": "preflight_input_state",
+    "states": [
+      "ready",
+      "waiting_for_input",
+      "waiting_for_human_review",
+      "blocked"
+    ],
+    "formal_generation_entry_condition": "preflight_input_state == ready",
+    "pause_when": [
+      "preflight_input_state != ready",
+      "存在 blocking required_information_requests",
+      "human-review HTML 已生成但补充答案未写回机读事实源"
+    ],
+    "allowed_artifacts_when_waiting_for_input": [
+      "required-information-request.json",
+      "docs/human-review/<run-id>.html",
+      "workflow-trace.json",
+      "resume-point.json"
+    ],
+    "block_current_node_formal_generation": true,
+    "block_next_nodes": true
   },
   "nodes": [
     {
@@ -64,8 +87,21 @@
       ],
       "preconditions": [
         "contract 输入可用",
-        "风险策略已加载"
+        "风险策略已加载",
+        "preflight gate 已执行"
       ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
       "postconditions": [
         "StageRunResult 已输出",
         "产物已登记索引"
@@ -145,8 +181,21 @@
       ],
       "preconditions": [
         "contract 输入可用",
-        "风险策略已加载"
+        "风险策略已加载",
+        "preflight gate 已执行"
       ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
       "postconditions": [
         "StageRunResult 已输出",
         "产物已登记索引"
@@ -223,8 +272,21 @@
       ],
       "preconditions": [
         "contract 输入可用",
-        "风险策略已加载"
+        "风险策略已加载",
+        "preflight gate 已执行"
       ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
       "postconditions": [
         "StageRunResult 已输出",
         "产物已登记索引"
