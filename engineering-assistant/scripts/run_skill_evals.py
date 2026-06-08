@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -126,6 +127,55 @@ def run_scored_evals() -> dict:
             except (json.JSONDecodeError, IndexError):
                 personal_manifest_ok = False
         plugin_sync.append({"left": "personal-marketplace", "right": str(personal_marketplace), "status": "pass" if personal_manifest_ok else "block", "detail": personal_result.stdout + personal_result.stderr})
+        hermes_root = Path(temp_dir) / "hermes"
+        hermes_result = subprocess.run(
+            [
+                sys.executable,
+                "engineering-assistant/scripts/publish_plugin.py",
+                "--layout",
+                "hermes",
+                "--publish-root",
+                str(hermes_root),
+                "--enable",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        hermes_plugin_root = hermes_root / "plugins" / "engineering-assistant"
+        hermes_manifest_ok = (
+            hermes_result.returncode == 0
+            and (hermes_plugin_root / "plugin.yaml").exists()
+            and (hermes_plugin_root / "__init__.py").exists()
+            and (hermes_plugin_root / "skills").exists()
+            and (hermes_plugin_root / "engineering-assistant").exists()
+            and (hermes_root / "config.yaml").exists()
+        )
+        if hermes_manifest_ok:
+            registered = []
+
+            class FakeHermesContext:
+                def register_skill(self, name, path, description=""):
+                    registered.append({"name": name, "path": str(path), "description": description})
+
+            try:
+                spec = importlib.util.spec_from_file_location("engineering_assistant_hermes_plugin", hermes_plugin_root / "__init__.py")
+                module = importlib.util.module_from_spec(spec)
+                assert spec.loader is not None
+                spec.loader.exec_module(module)
+                module.register(FakeHermesContext())
+                expected = sorted(path.parent.name for path in Path("skills").glob("*/SKILL.md"))
+                hermes_manifest_ok = (
+                    sorted(item["name"] for item in registered) == expected
+                    and len(registered) == len(expected)
+                    and all(Path(item["path"]).exists() for item in registered)
+                    and all(item["description"] for item in registered)
+                    and "engineering-assistant" in (hermes_root / "config.yaml").read_text(encoding="utf-8")
+                )
+            except Exception as exc:
+                hermes_manifest_ok = False
+                hermes_result.stderr += f"\nHermes entrypoint check failed: {exc}"
+        plugin_sync.append({"left": "hermes-plugin", "right": str(hermes_plugin_root), "status": "pass" if hermes_manifest_ok else "block", "detail": hermes_result.stdout + hermes_result.stderr})
     checks.extend({"id": f"plugin-sync-{Path(item['left']).name}", **item} for item in plugin_sync)
     passed = sum(1 for check in checks if check["status"] == "pass")
     report = {

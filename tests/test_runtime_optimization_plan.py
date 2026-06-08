@@ -54,6 +54,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
             "run_skill_evals.py --mode scored",
             "validate_skill_metadata.py",
             "publish_plugin.py",
+            "publish_plugin.py --layout hermes --publish-root /tmp/engineering-assistant-hermes --enable",
             "diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills",
             "diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/engineering-assistant/engineering-assistant",
         ]:
@@ -65,7 +66,10 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         self.assertIn("publish_plugin.py", text)
         self.assertIn(".agent/plugins/publish-config.json", text)
         self.assertIn("--layout personal", text)
+        self.assertIn("--layout hermes --enable", text)
+        self.assertIn("engineering-assistant:requirement-intake", text)
         self.assertIn("~/.agents/plugins/marketplace.json", text)
+        self.assertIn("~/.hermes/plugins/engineering-assistant/plugin.yaml", text)
         self.assertIn("/Users/sunliming/work/project/personal/ai-platform-v1", text)
         self.assertIn("run_skill_evals.py --mode scored", text)
 
@@ -123,6 +127,8 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
 
     def test_context_pack_uses_only_allowed_ai_platform_sources(self) -> None:
         fixture = json.loads((ROOT / "engineering-assistant" / "evals" / "fixtures" / "ai-platform-v1.json").read_text(encoding="utf-8"))
+        if not Path(fixture["root"]).exists():
+            self.skipTest(f"external canary root is unavailable: {fixture['root']}")
         result = run_script(
             "recommend_context.py",
             "--root",

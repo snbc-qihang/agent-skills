@@ -51,6 +51,30 @@ local-root 会读取 `.agent/plugins/publish-config.json`，生成：
 
 Codex 使用对应 marketplace 后即可识别 `engineering-assistant` 插件。仓库内仍不保留 `plugins/` 临时发布目录。
 
+## 发布给 Hermes 使用
+
+Hermes 使用目录插件布局，skills 以插件限定名显式加载，不进入全局 skill 列表：
+
+```bash
+python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --enable
+```
+
+该方式生成：
+
+- `~/.hermes/plugins/engineering-assistant/plugin.yaml`
+- `~/.hermes/plugins/engineering-assistant/__init__.py`
+- `~/.hermes/plugins/engineering-assistant/skills/`
+- `~/.hermes/plugins/engineering-assistant/engineering-assistant/`
+
+`--enable` 会把 `engineering-assistant` 幂等加入 `~/.hermes/config.yaml` 的 `plugins.enabled`；不传 `--enable` 只生成插件目录，不修改 Hermes 配置。
+
+在 Hermes 中使用时加载限定名，例如：
+
+```bash
+hermes --skills engineering-assistant:requirement-intake
+hermes --skills engineering-assistant:repo-context-miner
+```
+
 ## 验证命令
 
 ```bash
@@ -63,6 +87,7 @@ python3 engineering-assistant/scripts/run_skill_evals.py --mode scored --no-writ
 python3 engineering-assistant/scripts/validate_skill_metadata.py
 python3 engineering-assistant/scripts/validate_plugin_manifest.py
 python3 engineering-assistant/scripts/publish_plugin.py --layout personal --publish-root /tmp/engineering-assistant-personal
+python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --publish-root /tmp/engineering-assistant-hermes --enable
 python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json
 diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills
 diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/engineering-assistant/engineering-assistant

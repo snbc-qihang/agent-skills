@@ -2757,6 +2757,11 @@ import json
 import shutil
 from pathlib import Path
 
+try:
+    import yaml
+except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation-only mode can still work without it.
+    yaml = None
+
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
 
 
@@ -2784,6 +2789,13 @@ def copy_tree(source: Path, target: Path) -> None:
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(source, target)
+
+
+def read_codex_manifest(repo_root: Path) -> dict:
+    manifest = repo_root / "engineering-assistant" / "plugin" / "plugin.json"
+    if not manifest.exists():
+        raise SystemExit(f"missing plugin manifest source: {manifest}")
+    return json.loads(manifest.read_text(encoding="utf-8"))
 
 
 def marketplace_payload(config: dict) -> dict:
@@ -2816,10 +2828,132 @@ def apply_layout(config: dict, layout: str) -> dict:
         resolved["marketplace_path"] = "~/.agents/plugins/marketplace.json"
         resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'engineering-assistant')}"
         return resolved
+    if layout == "hermes":
+        resolved["publish_root"] = resolved.get("hermes_publish_root", "~/.hermes")
+        resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'engineering-assistant')}"
+        return resolved
     raise SystemExit(f"unsupported publish layout: {layout}")
 
 
-def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root") -> dict:
+def hermes_plugin_yaml(plugin_name: str, manifest: dict) -> str:
+    author = manifest.get("author", {})
+    author_name = author.get("name", "") if isinstance(author, dict) else str(author)
+    payload = {
+        "name": plugin_name,
+        "version": str(manifest.get("version", "1.0.0")),
+        "description": manifest.get("description", ""),
+        "author": author_name,
+        "kind": "standalone",
+        "platforms": ["linux", "macos", "windows"],
+    }
+    if yaml is not None:
+        return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\\n"
+
+
+def hermes_entrypoint() -> str:
+    return '''# Hermes adapter for the engineering-assistant skill bundle.
+
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def _skill_description(skill_md: Path) -> str:
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\\\\n---", 3)
+    if end == -1:
+        return ""
+    for line in text[3:end].splitlines():
+        if line.startswith("description:"):
+            value = line.partition(":")[2].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            return value
+    return ""
+
+
+def register(ctx) -> None:
+    root = Path(__file__).resolve().parent
+    skills_root = root / "skills"
+    for skill_md in sorted(skills_root.glob("*/SKILL.md")):
+        skill_name = skill_md.parent.name
+        ctx.register_skill(
+            skill_name,
+            skill_md,
+            description=_skill_description(skill_md),
+        )
+'''
+
+
+def enable_hermes_plugin(hermes_home: Path, plugin_name: str) -> bool:
+    config_path = hermes_home / "config.yaml"
+    if not config_path.exists():
+        config_path.write_text(
+            "plugins:\\n  enabled:\\n    - " + plugin_name + "\\n",
+            encoding="utf-8",
+        )
+        return True
+    if yaml is None:
+        if plugin_name in config_path.read_text(encoding="utf-8"):
+            return True
+        raise SystemExit("PyYAML is required to update an existing Hermes config.yaml")
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(config, dict):
+        raise SystemExit(f"unsupported Hermes config shape: {config_path}")
+    plugins = config.setdefault("plugins", {})
+    if not isinstance(plugins, dict):
+        raise SystemExit(f"unsupported Hermes plugins config shape: {config_path}")
+    enabled = plugins.setdefault("enabled", [])
+    if enabled is None:
+        enabled = []
+        plugins["enabled"] = enabled
+    if not isinstance(enabled, list):
+        raise SystemExit(f"unsupported Hermes plugins.enabled config shape: {config_path}")
+    if plugin_name not in enabled:
+        enabled.append(plugin_name)
+    config_path.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return True
+
+
+def publish_hermes(repo_root: Path, config: dict, publish_root=None, enable=False) -> dict:
+    plugin_name = config.get("plugin_name", "engineering-assistant")
+    publish_root = publish_root or expand(config["publish_root"])
+    plugin_relative = Path(config.get("plugin_relative_path", f"plugins/{plugin_name}"))
+    plugin_root = publish_root / plugin_relative
+    ensure_not_repo_path(repo_root, publish_root)
+
+    skills = repo_root / "skills"
+    runtime = repo_root / "engineering-assistant"
+    manifest = read_codex_manifest(repo_root)
+
+    plugin_root.parent.mkdir(parents=True, exist_ok=True)
+    if plugin_root.exists():
+        shutil.rmtree(plugin_root)
+    plugin_root.mkdir(parents=True)
+    copy_tree(skills, plugin_root / "skills")
+    copy_tree(runtime, plugin_root / "engineering-assistant")
+    (plugin_root / "plugin.yaml").write_text(hermes_plugin_yaml(plugin_name, manifest), encoding="utf-8")
+    (plugin_root / "__init__.py").write_text(hermes_entrypoint(), encoding="utf-8")
+
+    hermes_enabled = enable_hermes_plugin(publish_root, plugin_name) if enable else False
+    return {
+        "status": "published",
+        "layout": "hermes",
+        "plugin_root": str(plugin_root),
+        "hermes_plugin_manifest": str(plugin_root / "plugin.yaml"),
+        "hermes_plugin_entrypoint": str(plugin_root / "__init__.py"),
+        "hermes_enabled": hermes_enabled,
+        "registered_skill_count": len(list((plugin_root / "skills").glob("*/SKILL.md"))),
+    }
+
+
+def publish_codex(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root") -> dict:
     config = apply_layout(config, layout)
     plugin_name = config.get("plugin_name", "engineering-assistant")
     publish_root_override = publish_root is not None
@@ -2859,18 +2993,28 @@ def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=N
     }
 
 
+def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root", enable=False) -> dict:
+    config = apply_layout(config, layout)
+    if layout == "hermes":
+        return publish_hermes(repo_root, config, publish_root=publish_root, enable=enable)
+    if enable:
+        raise SystemExit("--enable is only supported with --layout hermes")
+    return publish_codex(repo_root, config, publish_root=publish_root, marketplace_path=marketplace_path, layout=layout)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Publish engineering-assistant as a Codex-recognizable local plugin.")
+    parser = argparse.ArgumentParser(description="Publish engineering-assistant as a Codex or Hermes local plugin.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
-    parser.add_argument("--layout", choices=["local-root", "personal"], default="local-root", help="local-root uses configured publish_root; personal writes the canonical Codex personal marketplace under ~/.agents/plugins.")
+    parser.add_argument("--layout", choices=["local-root", "personal", "hermes"], default="local-root", help="local-root uses configured Codex publish_root; personal writes the canonical Codex personal marketplace; hermes writes a Hermes directory plugin.")
     parser.add_argument("--publish-root")
     parser.add_argument("--marketplace-path")
+    parser.add_argument("--enable", action="store_true", help="For --layout hermes, add the plugin to <publish-root>/config.yaml plugins.enabled.")
     args = parser.parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     config = load_config(repo_root / args.config if not Path(args.config).is_absolute() else Path(args.config))
     publish_root = expand(args.publish_root) if args.publish_root else None
     marketplace_path = expand(args.marketplace_path) if args.marketplace_path else None
-    print(json.dumps(publish(repo_root, config, publish_root, marketplace_path, args.layout), ensure_ascii=False, indent=2))
+    print(json.dumps(publish(repo_root, config, publish_root, marketplace_path, args.layout, args.enable), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
@@ -3575,6 +3719,7 @@ print("ok")
 """,
         "run_skill_evals.py": """#!/usr/bin/env python3
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
@@ -3701,6 +3846,55 @@ def run_scored_evals() -> dict:
             except (json.JSONDecodeError, IndexError):
                 personal_manifest_ok = False
         plugin_sync.append({"left": "personal-marketplace", "right": str(personal_marketplace), "status": "pass" if personal_manifest_ok else "block", "detail": personal_result.stdout + personal_result.stderr})
+        hermes_root = Path(temp_dir) / "hermes"
+        hermes_result = subprocess.run(
+            [
+                sys.executable,
+                "engineering-assistant/scripts/publish_plugin.py",
+                "--layout",
+                "hermes",
+                "--publish-root",
+                str(hermes_root),
+                "--enable",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        hermes_plugin_root = hermes_root / "plugins" / "engineering-assistant"
+        hermes_manifest_ok = (
+            hermes_result.returncode == 0
+            and (hermes_plugin_root / "plugin.yaml").exists()
+            and (hermes_plugin_root / "__init__.py").exists()
+            and (hermes_plugin_root / "skills").exists()
+            and (hermes_plugin_root / "engineering-assistant").exists()
+            and (hermes_root / "config.yaml").exists()
+        )
+        if hermes_manifest_ok:
+            registered = []
+
+            class FakeHermesContext:
+                def register_skill(self, name, path, description=""):
+                    registered.append({"name": name, "path": str(path), "description": description})
+
+            try:
+                spec = importlib.util.spec_from_file_location("engineering_assistant_hermes_plugin", hermes_plugin_root / "__init__.py")
+                module = importlib.util.module_from_spec(spec)
+                assert spec.loader is not None
+                spec.loader.exec_module(module)
+                module.register(FakeHermesContext())
+                expected = sorted(path.parent.name for path in Path("skills").glob("*/SKILL.md"))
+                hermes_manifest_ok = (
+                    sorted(item["name"] for item in registered) == expected
+                    and len(registered) == len(expected)
+                    and all(Path(item["path"]).exists() for item in registered)
+                    and all(item["description"] for item in registered)
+                    and "engineering-assistant" in (hermes_root / "config.yaml").read_text(encoding="utf-8")
+                )
+            except Exception as exc:
+                hermes_manifest_ok = False
+                hermes_result.stderr += f"\\nHermes entrypoint check failed: {exc}"
+        plugin_sync.append({"left": "hermes-plugin", "right": str(hermes_plugin_root), "status": "pass" if hermes_manifest_ok else "block", "detail": hermes_result.stdout + hermes_result.stderr})
     checks.extend({"id": f"plugin-sync-{Path(item['left']).name}", **item} for item in plugin_sync)
     passed = sum(1 for check in checks if check["status"] == "pass")
     report = {
@@ -5667,6 +5861,30 @@ local-root 会读取 `.agent/plugins/publish-config.json`，生成：
 
 Codex 使用对应 marketplace 后即可识别 `engineering-assistant` 插件。仓库内仍不保留 `plugins/` 临时发布目录。
 
+## 发布给 Hermes 使用
+
+Hermes 使用目录插件布局，skills 以插件限定名显式加载，不进入全局 skill 列表：
+
+```bash
+python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --enable
+```
+
+该方式生成：
+
+- `~/.hermes/plugins/engineering-assistant/plugin.yaml`
+- `~/.hermes/plugins/engineering-assistant/__init__.py`
+- `~/.hermes/plugins/engineering-assistant/skills/`
+- `~/.hermes/plugins/engineering-assistant/engineering-assistant/`
+
+`--enable` 会把 `engineering-assistant` 幂等加入 `~/.hermes/config.yaml` 的 `plugins.enabled`；不传 `--enable` 只生成插件目录，不修改 Hermes 配置。
+
+在 Hermes 中使用时加载限定名，例如：
+
+```bash
+hermes --skills engineering-assistant:requirement-intake
+hermes --skills engineering-assistant:repo-context-miner
+```
+
 ## 验证命令
 
 ```bash
@@ -5679,6 +5897,7 @@ python3 engineering-assistant/scripts/run_skill_evals.py --mode scored --no-writ
 python3 engineering-assistant/scripts/validate_skill_metadata.py
 python3 engineering-assistant/scripts/validate_plugin_manifest.py
 python3 engineering-assistant/scripts/publish_plugin.py --layout personal --publish-root /tmp/engineering-assistant-personal
+python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --publish-root /tmp/engineering-assistant-hermes --enable
 python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json
 diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills
 diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/engineering-assistant/engineering-assistant
@@ -5710,6 +5929,7 @@ def generate_root_ci() -> None:
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
                 {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Publish plugin package", "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json"},
+                {"name": "Publish Hermes plugin package", "run": "python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --publish-root /tmp/engineering-assistant-hermes --enable"},
                 {"name": "Check published skill sync", "run": "diff -qr skills /tmp/engineering-assistant-plugin/plugins/engineering-assistant/skills"},
                 {"name": "Check published governance sync", "run": "diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/engineering-assistant/engineering-assistant"},
             ]}},
