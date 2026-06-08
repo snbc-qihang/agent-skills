@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import tempfile
@@ -33,6 +34,20 @@ def publish_to_temp(test_case: unittest.TestCase) -> Path:
     )
     test_case.assertEqual(0, result.returncode, result.stderr + result.stdout)
     return publish_root / "plugins" / "teamwork-engineering-assistant"
+
+
+def run_publish(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "python3",
+            str(ROOT / "engineering-assistant" / "scripts" / "publish_plugin.py"),
+            *args,
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
 
 class PluginRuntimeRefactorTests(unittest.TestCase):
@@ -96,6 +111,55 @@ class PluginRuntimeRefactorTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_hermes_layout_registers_all_skills_with_qualified_plugin_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hermes_root = Path(temp_dir) / "hermes"
+            result = run_publish("--layout", "hermes", "--publish-root", str(hermes_root))
+            self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+
+            plugin_root = hermes_root / "plugins" / "teamwork-engineering-assistant"
+            self.assertTrue((plugin_root / "plugin.yaml").exists())
+            self.assertTrue((plugin_root / "__init__.py").exists())
+            self.assertTrue((plugin_root / "skills").exists())
+            self.assertTrue((plugin_root / "engineering-assistant").exists())
+            payload = json.loads(result.stdout)
+            self.assertEqual("hermes", payload["layout"])
+            self.assertEqual(str((plugin_root / "plugin.yaml").resolve()), payload["hermes_plugin_manifest"])
+            self.assertEqual(str((plugin_root / "__init__.py").resolve()), payload["hermes_plugin_entrypoint"])
+            self.assertFalse(payload["hermes_enabled"])
+
+            registered: list[tuple[str, Path, str]] = []
+
+            class FakeHermesContext:
+                def register_skill(self, name, path, description=""):
+                    registered.append((name, Path(path), description))
+
+            spec = importlib.util.spec_from_file_location("teamwork_engineering_assistant_hermes_plugin_test", plugin_root / "__init__.py")
+            self.assertIsNotNone(spec)
+            self.assertIsNotNone(spec.loader)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.register(FakeHermesContext())
+
+            expected = sorted(path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md"))
+            self.assertEqual(expected, sorted(name for name, _, _ in registered))
+            self.assertEqual(len(expected), len(registered))
+            self.assertTrue(all(path.exists() for _, path, _ in registered))
+            self.assertTrue(all(description for _, _, description in registered))
+
+    def test_hermes_enable_updates_config_idempotently(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hermes_root = Path(temp_dir) / "hermes"
+            first = run_publish("--layout", "hermes", "--publish-root", str(hermes_root), "--enable")
+            self.assertEqual(0, first.returncode, first.stderr + first.stdout)
+            second = run_publish("--layout", "hermes", "--publish-root", str(hermes_root), "--enable")
+            self.assertEqual(0, second.returncode, second.stderr + second.stdout)
+
+            config_text = (hermes_root / "config.yaml").read_text(encoding="utf-8")
+            self.assertEqual(1, config_text.count("teamwork-engineering-assistant"))
+            self.assertTrue(json.loads(first.stdout)["hermes_enabled"])
+            self.assertTrue(json.loads(second.stdout)["hermes_enabled"])
 
 
 if __name__ == "__main__":

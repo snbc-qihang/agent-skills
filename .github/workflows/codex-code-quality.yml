@@ -55,6 +55,10 @@
           "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/teamwork-engineering-assistant-plugin --marketplace-path /tmp/teamwork-engineering-assistant-plugin/.agents/plugins/marketplace.json"
         },
         {
+          "name": "Publish Hermes plugin package",
+          "run": "python3 engineering-assistant/scripts/publish_plugin.py --layout hermes --publish-root /tmp/teamwork-engineering-assistant-hermes --enable"
+        },
+        {
           "name": "Check published skill sync",
           "run": "diff -qr skills /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/skills"
         },

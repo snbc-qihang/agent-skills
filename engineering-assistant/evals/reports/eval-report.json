@@ -1,8 +1,8 @@
 {
   "status": "pass",
   "metrics": {
-    "checks_total": 10,
-    "checks_passed": 10,
+    "checks_total": 11,
+    "checks_passed": 11,
     "route_accuracy": 1.0,
     "schema_pass": 1.0,
     "distribution_surface_status": 1.0,
@@ -339,6 +339,13 @@
       "right": "$EVAL_TEMP/personal/.agents/plugins/marketplace.json",
       "status": "pass",
       "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"$EVAL_TEMP/personal/plugins/teamwork-engineering-assistant\",\n  \"marketplace_path\": \"$EVAL_TEMP/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"$EVAL_TEMP/personal/plugins/teamwork-engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+    },
+    {
+      "id": "plugin-sync-hermes-plugin",
+      "left": "hermes-plugin",
+      "right": "$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant",
+      "status": "pass",
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant\",\n  \"hermes_plugin_manifest\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 21\n}\n"
     }
   ]
 }

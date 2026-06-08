@@ -54,6 +54,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
             "run_skill_evals.py --mode scored",
             "validate_skill_metadata.py",
             "publish_plugin.py",
+            "publish_plugin.py --layout hermes --publish-root /tmp/teamwork-engineering-assistant-hermes --enable",
             "diff -qr skills /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/skills",
             "diff -qr engineering-assistant /tmp/teamwork-engineering-assistant-plugin/plugins/teamwork-engineering-assistant/engineering-assistant",
         ]:
@@ -65,7 +66,10 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         self.assertIn("publish_plugin.py", text)
         self.assertIn(".agent/plugins/publish-config.json", text)
         self.assertIn("--layout personal", text)
+        self.assertIn("--layout hermes --enable", text)
+        self.assertIn("teamwork-engineering-assistant:requirement-intake", text)
         self.assertIn("~/.agents/plugins/marketplace.json", text)
+        self.assertIn("~/.hermes/plugins/teamwork-engineering-assistant/plugin.yaml", text)
         self.assertIn("/Users/sunliming/work/project/personal/ai-platform-v1", text)
         self.assertIn("run_skill_evals.py --mode scored", text)
         self.assertIn("upstream-main-capability-matrix.md", text)
@@ -177,6 +181,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         for check in plugin_sync_checks:
             self.assertIn("$EVAL_TEMP", check["right"])
             self.assertNotIn("/tmp/", check["right"])
+        self.assertIn("plugin-sync-hermes-plugin", {check["id"] for check in report["checks"]})
 
         before = (ROOT / "engineering-assistant" / "evals" / "reports" / "eval-report.json").read_text(encoding="utf-8")
         readonly = run_script("run_skill_evals.py", "--mode", "scored", "--no-write-report")

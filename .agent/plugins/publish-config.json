@@ -6,6 +6,7 @@
   "plugin_name": "teamwork-engineering-assistant",
   "compatibility_alias": "engineering-assistant",
   "publish_root": "~/.codex/local-plugins/local-teamwork-engineering",
+  "hermes_publish_root": "~/.hermes",
   "marketplace_path": "~/.codex/local-plugins/local-teamwork-engineering/.agents/plugins/marketplace.json",
   "plugin_relative_path": "plugins/teamwork-engineering-assistant",
   "policy": {
