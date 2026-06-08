@@ -34,6 +34,65 @@ EVAL_CASES = [
 
 TEAM_DOC_TARGET_SKILLS = {"high-level-design", "detailed-design", "database-design", "redis-design", "mq-design", "code-development"}
 
+UPSTREAM_MAIN_INCREMENT_CAPABILITIES = [
+    {
+        "domain": "manifest / distribution surface",
+        "capability": "插件 manifest 的 `metadata_status`、`distribution_notes`、runtime policy pack 和 hooks packaging 校验",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已由 `plugin_manifest()`、`validate_plugin_manifest.py`、`tests/test_plugin_distribution_surface.py` 和 `run_skill_evals.py --mode scored` 覆盖。",
+        "why": "保留 upstream 的分发表面门禁，同时继续使用 teamwork 的插件身份和占位 metadata 人审策略。",
+    },
+    {
+        "domain": "manifest / distribution surface",
+        "capability": "通用 `engineering-assistant` 插件名、展示名、默认提示词和关键词集合",
+        "status": "do-not-import",
+        "teamwork_handling": "保留 `teamwork-engineering-assistant`、团队展示名、团队默认提示词、团队关键词和 `rrq-yq-team` profile 入口。",
+        "why": "直接导入会覆盖 teamwork 插件身份，并削弱团队 profile、团队规则和团队发布语义。",
+    },
+    {
+        "domain": "manifest / distribution surface",
+        "capability": "personal/local-root 发布布局与 published plugin sync 校验",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已由 `publish_plugin.py`、`.agent/plugins/publish-config.json`、teamwork 路径回归测试和 scored eval 覆盖。",
+        "why": "保留 teamwork 发布目录、marketplace entry 和 Codex 可识别插件结构。",
+    },
+    {
+        "domain": "manifest / distribution surface",
+        "capability": "仅按通用插件路径发布、不保留 `compatibility_alias=engineering-assistant` 的策略",
+        "status": "do-not-import",
+        "teamwork_handling": "继续保留 `compatibility_alias`，在 personal 布局下允许 teamwork 插件和通用别名共存。",
+        "why": "删除兼容别名会破坏当前 Codex 安装兼容面和既有用户入口。",
+    },
+    {
+        "domain": "traceability / implementation control",
+        "capability": "`artifacts/_control/traceability-matrix.json` 作为 agent 事实源，`docs/human-readable/traceability-report.html` 只做人读入口",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已由 `compile_design_contract.py`、`build_traceability_report.py`、workflow contract、validator 和专项测试覆盖。",
+        "why": "保留 upstream 追踪矩阵能力，同时确保 HTML 不反向作为 agent 事实输入。",
+    },
+    {
+        "domain": "traceability / implementation control",
+        "capability": "implementation-controller / code-development 的 traceability 输出、gate 和脚本链路",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已在 teamwork 的 contract、workflow、SKILL.md、runtime 脚本和 `test_team_document_design_rules.py` 中强化实现。",
+        "why": "teamwork 已完整吸收并扩展该能力，不需要回退到更弱的通用版本。",
+    },
+    {
+        "domain": "scored eval / workflow / regression",
+        "capability": "scored eval 的 plugin manifest gate、distribution surface metric 和 published plugin sync 检查",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已由 `run_skill_evals.py --mode scored` 实现，并由 runtime 回归测试和 distribution surface 测试约束。",
+        "why": "保留 upstream 的 scored eval 能力，同时继续验证 teamwork 发布路径和 manifest 约束。",
+    },
+    {
+        "domain": "scored eval / workflow / regression",
+        "capability": "只保留通用强度的 preflight / required-information / eval 断言，不带团队专项规则密度",
+        "status": "do-not-import",
+        "teamwork_handling": "继续使用 teamwork 更强的 preflight、required-information、team eval 和专项设计门禁。",
+        "why": "回退到通用断言会削弱 teamwork 现有更强的门禁和团队规则覆盖面。",
+    },
+]
+
 HIGH_LEVEL_DESIGN_REQUIRED_SECTIONS = [
     "0. 原始需求与原型追溯",
     "1. 版本变更记录",
@@ -5464,6 +5523,7 @@ def generate_engineering_assistant() -> None:
     }
     for file_name, items in checklists.items():
         write_text(base / "checklists" / file_name, f"# {Path(file_name).stem}\n\n" + "\n".join(f"- [ ] {item}" for item in items))
+    write_text(base / "checklists" / "upstream-main-capability-matrix.md", upstream_main_capability_matrix_doc())
 
     schemas = {
         "skill-contract.schema.json": {"type": "object", "required": ["skill_id", "version", "stage", "type", "inputs", "outputs", "quality_gates", "workflow_interface", "owner"], "properties": {"skill_id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}, "version": {"type": "string"}, "type": {"enum": ["stage_skill", "cross_cutting_skill", "workflow_skill", "audit_skill", "control_skill"]}}},
@@ -8757,6 +8817,38 @@ def generate_plugin_publish_config() -> None:
     })
 
 
+def upstream_main_capability_matrix_doc() -> str:
+    rows = "\n".join(
+        f"| {item['domain']} | {item['capability']} | `{item['status']}` | {item['teamwork_handling']} | {item['why']} |"
+        for item in UPSTREAM_MAIN_INCREMENT_CAPABILITIES
+    )
+    return f"""# upstream-main-capability-matrix
+
+## 适用范围
+
+- 本矩阵只覆盖当前仓库快照下，`main` 相对公共祖先的当前可见增量。
+- 目标是判断哪些 upstream 能力已经被 `teamwork` 吸收，哪些属于团队硬约束不能导入。
+- 本矩阵是生成器驱动的治理产物，不允许手工只改发布包镜像。
+
+## 判定规则
+
+- `already-covered-by-teamwork`：`teamwork` 已有等价或更强实现，可直接视为已吸收。
+- `needs-backport`：`teamwork` 当前缺失 upstream 通用能力，需要补回生成器和回归护栏。
+- `do-not-import`：若导入会覆盖 `teamwork-engineering-assistant` 插件身份、削弱团队 profile/团队规则、把更强门禁退化回通用门禁，或破坏 personal/local-root/compatibility alias 发布策略。
+
+## 当前结论
+
+- 当前 `main` 可见增量未发现 `needs-backport` 项；现阶段以“已覆盖”或“禁止导入”两类结论为主。
+- 后续若 `main` 再出现新的通用能力，应先更新本矩阵，再决定是否回收到生成器。
+
+## Capability Matrix
+
+| domain | upstream capability | status | teamwork handling | why |
+|---|---|---|---|---|
+{rows}
+"""
+
+
 def delivery_doc() -> str:
     skill_rows = "\n".join(
         f"| {s['id']} | {s['type']} | {s['description']} | {', '.join(s['inputs'][:2])} | {', '.join(s['outputs'][:3])} | 是 | 是 | {'; '.join(s['gates'][:2])} | {'; '.join(s['approvals'][:2])} | {s['owner']} |"
@@ -8931,11 +9023,17 @@ CI/CD 级：PR、skill eval、knowledge mining 三类 workflow 样例存在，�
 
 组织风险：owner 缺失。缓解：registry/owners.yaml 强制登记 owner，缺 owner 的 skill 不入库。
 
-# 16. 首次落地文件清单
+# 16. Main 增量对照
+当前 `main` 可见增量到 `teamwork` 的能力对照矩阵统一维护在 `engineering-assistant/checklists/upstream-main-capability-matrix.md`。使用规则：
+- 先判断是 `already-covered-by-teamwork`、`needs-backport` 还是 `do-not-import`
+- 只允许修改生成器和回归测试，不允许直接改发布镜像
+- 团队插件身份、团队 profile、团队规则和 compatibility alias 视为硬约束
+
+# 17. 首次落地文件清单
 首次已创建文件清单由以下命令查看：
 `find skills engineering-assistant -type f | sort`
 
-# 17. 下一步执行命令
+# 18. 下一步执行命令
 ```bash
 python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml
 python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml
@@ -8959,6 +9057,7 @@ def root_readme() -> str:
 
 - `skills/`：可触发 skill 源树，包含 `SKILL.md`、`contract.yaml`、`output.schema.json`、eval 和 workflow node。
 - `engineering-assistant/`：治理与运行时资产，包含 standards、schemas、scripts、workflows、registry、runtime policy、compiled skill IR 和 eval fixtures。
+- `engineering-assistant/checklists/upstream-main-capability-matrix.md`：当前 `main` 可见增量到 `teamwork` 的能力对照、导入结论和禁止导入边界。
 - `.agent/plugins/publish-config.json`：本地发布配置，指定默认发布根目录和 marketplace 输出路径。
 - 发布目录：由 `publish_plugin.py` 生成，不能手补回仓库；默认 local-root 发布到 `~/.codex/local-plugins/local-teamwork-engineering/plugins/teamwork-engineering-assistant/`。
 
@@ -8971,6 +9070,8 @@ python3 generate_engineering_assistant_assets.py
 ```
 
 生成器会刷新 `skills/`、`engineering-assistant/`、发布脚本输入和本地发布配置。新增运行时能力也必须进入生成器、schema、测试，并通过发布脚本进入 Codex 插件包。
+
+`main` 当前可见增量与 `teamwork` 的对照结论统一维护在 `engineering-assistant/checklists/upstream-main-capability-matrix.md`；先更新矩阵，再决定是否吸收 upstream 能力。
 
 ## 发布给 Codex 使用
 

@@ -483,11 +483,17 @@ CI/CD 级：PR、skill eval、knowledge mining 三类 workflow 样例存在，�
 
 组织风险：owner 缺失。缓解：registry/owners.yaml 强制登记 owner，缺 owner 的 skill 不入库。
 
-# 16. 首次落地文件清单
+# 16. Main 增量对照
+当前 `main` 可见增量到 `teamwork` 的能力对照矩阵统一维护在 `engineering-assistant/checklists/upstream-main-capability-matrix.md`。使用规则：
+- 先判断是 `already-covered-by-teamwork`、`needs-backport` 还是 `do-not-import`
+- 只允许修改生成器和回归测试，不允许直接改发布镜像
+- 团队插件身份、团队 profile、团队规则和 compatibility alias 视为硬约束
+
+# 17. 首次落地文件清单
 首次已创建文件清单由以下命令查看：
 `find skills engineering-assistant -type f | sort`
 
-# 17. 下一步执行命令
+# 18. 下一步执行命令
 ```bash
 python3 engineering-assistant/scripts/validate_skill_contract.py skills/*/contract.yaml
 python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml

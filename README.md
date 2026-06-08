@@ -6,6 +6,7 @@
 
 - `skills/`：可触发 skill 源树，包含 `SKILL.md`、`contract.yaml`、`output.schema.json`、eval 和 workflow node。
 - `engineering-assistant/`：治理与运行时资产，包含 standards、schemas、scripts、workflows、registry、runtime policy、compiled skill IR 和 eval fixtures。
+- `engineering-assistant/checklists/upstream-main-capability-matrix.md`：当前 `main` 可见增量到 `teamwork` 的能力对照、导入结论和禁止导入边界。
 - `.agent/plugins/publish-config.json`：本地发布配置，指定默认发布根目录和 marketplace 输出路径。
 - 发布目录：由 `publish_plugin.py` 生成，不能手补回仓库；默认 local-root 发布到 `~/.codex/local-plugins/local-teamwork-engineering/plugins/teamwork-engineering-assistant/`。
 
@@ -18,6 +19,8 @@ python3 generate_engineering_assistant_assets.py
 ```
 
 生成器会刷新 `skills/`、`engineering-assistant/`、发布脚本输入和本地发布配置。新增运行时能力也必须进入生成器、schema、测试，并通过发布脚本进入 Codex 插件包。
+
+`main` 当前可见增量与 `teamwork` 的对照结论统一维护在 `engineering-assistant/checklists/upstream-main-capability-matrix.md`；先更新矩阵，再决定是否吸收 upstream 能力。
 
 ## 发布给 Codex 使用
 

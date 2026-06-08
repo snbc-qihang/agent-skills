@@ -68,6 +68,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         self.assertIn("~/.agents/plugins/marketplace.json", text)
         self.assertIn("/Users/sunliming/work/project/personal/ai-platform-v1", text)
         self.assertIn("run_skill_evals.py --mode scored", text)
+        self.assertIn("upstream-main-capability-matrix.md", text)
 
     def test_repository_does_not_keep_temporary_plugin_publish_dir(self) -> None:
         self.assertFalse((ROOT / "plugins").exists())
@@ -168,8 +169,14 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr + result.stdout)
         report = json.loads((ROOT / "engineering-assistant" / "evals" / "reports" / "eval-report.json").read_text(encoding="utf-8"))
         self.assertEqual("pass", report["status"])
-        for metric in ["route_accuracy", "control_plane_pass", "context_source_validity", "plugin_sync_status"]:
+        for metric in ["route_accuracy", "distribution_surface_status", "control_plane_pass", "context_source_validity", "plugin_sync_status"]:
             self.assertEqual(1.0, report["metrics"][metric])
+        self.assertIn("plugin-manifest-metadata", {check["id"] for check in report["checks"]})
+        plugin_sync_checks = [check for check in report["checks"] if check["id"].startswith("plugin-sync-")]
+        self.assertTrue(plugin_sync_checks)
+        for check in plugin_sync_checks:
+            self.assertIn("$EVAL_TEMP", check["right"])
+            self.assertNotIn("/tmp/", check["right"])
 
         before = (ROOT / "engineering-assistant" / "evals" / "reports" / "eval-report.json").read_text(encoding="utf-8")
         readonly = run_script("run_skill_evals.py", "--mode", "scored", "--no-write-report")

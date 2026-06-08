@@ -138,6 +138,23 @@ class DocumentGovernanceSourceSyncTest(unittest.TestCase):
         self.assertNotIn('plugin_root / "templates"', generator)
         self.assertNotIn('plugin_root / "marketplace.example.json"', generator)
 
+    def test_upstream_capability_matrix_is_generated_and_packaged(self) -> None:
+        matrix_path = ROOT / "engineering-assistant" / "checklists" / "upstream-main-capability-matrix.md"
+        self.assertTrue(matrix_path.exists(), "missing upstream capability matrix")
+
+        matrix = matrix_path.read_text(encoding="utf-8")
+        self.assertIn("already-covered-by-teamwork", matrix)
+        self.assertIn("needs-backport", matrix)
+        self.assertIn("do-not-import", matrix)
+        self.assertIn("manifest / distribution surface", matrix)
+        self.assertIn("traceability / implementation control", matrix)
+        self.assertIn("scored eval / workflow / regression", matrix)
+        self.assertIn("compatibility alias", matrix)
+        self.assertIn("当前 `main` 可见增量未发现 `needs-backport` 项", matrix)
+
+        plugin_root = publish_to_temp(self)
+        self.assertTrue((plugin_root / "engineering-assistant" / "checklists" / "upstream-main-capability-matrix.md").exists())
+
     def test_plugin_has_no_root_level_source_mirrors(self) -> None:
         plugin_root = publish_to_temp(self)
         forbidden = [
