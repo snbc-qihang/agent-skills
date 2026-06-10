@@ -88,8 +88,69 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - `3.3 研发视图` 和 `3.4 研发结构定义` 使用接口层、应用层、领域层、基础设施层、事件接入层等边界语言，不使用 `Controller`、`Mapper`、`Repository` 等实现标签。
 - 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、数据库、Redis、MQ、表等非服务对象。
+- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、已有设计文档或用户明确补充。不得把“支付通知服务”“权限组织服务”等抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
+- 推荐为概要设计补充或消费 `repo-context/participant-evidence-map.json`，记录 participant、证据类型、证据路径、确认状态。缺少 evidence 的 participant 应视为质量门禁失败。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 
+
+# 架构巡检 / 既有系统治理补充规则
+
+当用户要求对既有系统做架构巡检、问题排查、重构方向、核心链路治理或服务边界梳理时，不要直接从局部代码问题进入修复建议。必须先建立业务域蓝图，再把局部问题归位。
+
+## 最终文档与过程文档分离
+
+架构巡检会产生大量中间草稿、机器证据、候选矩阵和 ADR。人工真正需要的是最终领域/架构梳理文档，而不是过程目录的堆叠。
+
+执行要求：
+1. 每个阶段结束时必须收敛一个 `final/` 或等价目录作为人工入口。
+2. 最终人工文档只保留结论、架构图、领域边界、业务能力、数据边界、关键决策和下一阶段入口规则。
+3. 过程分析、证据链、决策矩阵、open questions、扫描结果进入 `machine/`、`learning/`、`references/` 或阶段草稿目录，不作为日常阅读入口。
+4. 如果用户指出“过程文档太多”，立即停止继续扩写过程产物，生成或更新最终入口 README 和最终架构文档。
+5. 最终文档必须能独立阅读，不要求读者回看前面的对话或中间分析文件。
+
+
+## YQ / 萤启-人人取一阶段优先规则
+
+当目标系统是 yq/萤启/人人取相关系统时，第一阶段必须先收束架构基线：领域划分、业务划分、数据划分、萤启-人人取总体架构图、领域架构图。未确认前，不要进入 MQ listener 改造、Feign fallback、表迁移、服务拆分或代码重构等第二阶段治理。
+
+已确认基线：萤启业务系统 + 人人取基础能力平台；平台防腐层承接 API/MQ/DTO 转换/状态映射/副本同步。会员和优惠券属于萤启；人人取维护标准订单、标准商品、价格策略计算与下发、支付、设备/开门基础能力等；萤启在其上扩展 SVIP/随单购卡、定制化商品/价格/场景价、经营关系和履约扩展。
+
+YQ/既有系统架构巡检的人工阅读入口必须收敛：最终项目知识库放在 `artifacts/project-inspection/final/`，过程学习和个人能力收获放在 `artifacts/project-inspection/learning/`，机器证据放在 `artifacts/project-inspection/machine/`。不要让候选草案、决策矩阵和扫描过程淹没最终文档；最终文档只放已确认架构结论、架构图、领域边界、业务能力、数据边界和下一阶段入口规则。
+
+所有无代码证据、文档证据或用户确认的内容必须作为 discussion/open question/ADR 沉淀，不能进入最终结论。人工材料只给结果和决策项；机器材料保留证据链。
+
+### YQ 最终文档收敛规则
+
+用户不希望过程文档淹没最终文档。做 YQ 架构巡检/优化时必须把产物分层：
+
+- `final/`：最终项目知识库，只放可传递的领域与架构梳理文档；人工日常入口应尽量收敛为一个主文档。
+- `learning/`：过程收获、个人能力提升、苏格拉底式画像记录；不作为项目最终结论。
+- `machine/`：证据链、索引、扫描结果、可追溯数据。
+- 其它 `human/`、阶段目录、ADR/草稿：只做追溯材料，不推荐作为人工日常入口。
+
+当用户要求“最终领域/架构梳理文档”时，不要继续堆过程分析；生成一个最终文档，包含总体架构关系、D1-D7 决策、架构图、领域架构图、业务能力地图、数据边界、平台防腐层边界和下一阶段入口规则。
+
+YQ/萤启项目必须额外遵守 `references/yq-ddd-first-architecture.md`：先完成萤启-人人取总体架构、领域架构、业务能力地图、数据边界和 open questions；这些未形成基线前，不得进入 MQ/Feign/表拆分/代码治理等第二阶段。
+
+当巡检过程文档膨胀时，遵守 `references/yq-architecture-inspection-artifact-governance.md`：final/ 只放最终人工知识库，learning/ 放过程学习和个人画像，machine/ 放证据链；不要让过程材料淹没最终架构文档。
+
+执行顺序：
+1. 先抽取业务域和限界上下文，而不是按现有服务名或代码目录作为架构边界。
+2. 按 DDD 视角标注 `核心域 / 支撑域 / 通用域 / 外部能力`。
+3. 绘制上下文关系：Customer/Supplier、Partnership、Shared Kernel、Conformist、Anti-Corruption Layer、Event Subscriber 等。
+4. 明确每个上下文的目标边界、开放能力、事件方向、一致性策略和防腐层。
+5. 再把已发现的 MQ、Feign、事务、长类、重复 DTO、动态 SQL、测试缺口等问题归属到对应业务域。
+6. 输出建议时使用“领域治理路线图”，不要只输出“局部代码重构清单”。
+
+关键坑：
+- `mp-mall`、`franchisemanagement`、`coupon-activity` 这类服务通常只是历史代码容器，不等同于业务边界。
+- “修 MQ”“拆长类”“收敛 Feign”“加 fallback”如果没有所属业务域和目标边界，容易变成工程洁癖。
+- 对交易类链路，优先识别交易履约域、支付域、会员权益域、营销活动与券域、设备售卖与开门域，再讨论状态机、幂等、事件和补偿。
+- 对 YQ 架构设计，必须区分萤启业务域和人人取平台能力域；会员业务/会员数据属于萤启，不属于人人取平台。
+- Feign target 只能证明当前调用方向，不能直接证明目标业务边界；无代码证据、文档证据或已确认 ADR 的内容，只能作为待讨论问题沉淀，不能写入最终架构结论。
+- 人工设计评审材料只展示结论、影响、风险、待决策问题和下一步动作；代码证据、推导链、扫描明细进入机器可读 JSON/YAML/CSV 或 references，不要让人工阅读分析过程。
+
+参考：`references/ddd-architecture-inspection-blueprint.md` 提供既有多服务系统架构巡检的 DDD-first 产出顺序、上下文候选和局部问题归位示例。
 
 # 操作流程
 1. 将请求规范化为 `StageRunRequest`。
@@ -174,6 +235,32 @@ description: Use when the request is about 从需求契约生成概要设计，�
 独立运行："使用 `high-level-design` 基于当前设计文档生成本阶段产物。"
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `high-level-design` 发送给本 skill，并等待 `StageRunResult`。
+
+# 校验踩坑与修复模式
+
+## StageRunResult 最小完整字段
+执行正式产物校验时，不只运行通用 `validate_stage_run_result.py`，还必须运行本 skill 的 `scripts/validate_output.py`。`stage-run-result.json` 除通用字段外必须包含：
+- `run_id`
+- `trace_id`
+- `required_human_reviews`
+- `repair_summary`
+- `next_action`
+
+`artifacts[]` 每项必须包含：
+- `name`
+- `path`
+- `artifact_type`
+- `producer_skill`
+- 可选 `consumer_skills`
+
+`artifact_type` 使用 schema 枚举值，不要直接写文件后缀：`.md -> markdown`、`.json -> json`、`.yaml/.yml -> yaml`、`.html -> html`。概要设计 schema 不接受 `xlsx` artifact；不要把详细设计的 MQ Excel 登记到 high-level-design 的 StageRunResult。
+
+## 校验执行顺序
+生成概要设计后至少执行：
+1. `engineering-assistant/scripts/validate_stage_run_result.py <stage-run-result.json>`
+2. `skills/high-level-design/scripts/validate_output.py <stage-run-result.json>`
+
+两者都通过后，才声明概要设计完成。
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。

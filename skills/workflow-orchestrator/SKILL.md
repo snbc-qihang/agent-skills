@@ -118,6 +118,15 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - 产物 schema 合规
 - 高风险动作进入审批
 
+# 缺陷分析与专项校验冒泡
+
+- 当用户指出 workflow 生成产物存在质量问题、脱离代码实际、模板裁剪、门禁误报等问题时，必须先进入 defect-analysis 模式，不得直接重写正式文档。
+- defect-analysis 模式必须先输出并落盘根因信息：`symptom`、`evidence`、`violated_rule`、`root_cause`、`required_plugin_control`、`whether_artifact_should_be_invalidated`。根因明确后才能进入 repair_generation。
+- repair_generation 必须生成新的 run 目录，不覆盖错误样本；错误样本保留为回归用例输入。
+- workflow-orchestrator 必须汇总所有正式专项产物的 validator 结果。任一正式专项 validator 失败时，总 workflow 不得为 `succeeded` 或“已完成”，必须置为 `blocked`，并在 `validator-summary.json` 或 StageRunResult findings 中列出失败节点。
+- 不允许“主 stage-run-result 校验通过，但数据库/MQ/Redis/概要等专项 validator 失败”后继续汇报完成。
+- 回归样例参考：`references/dfz-001-plugin-control-regression.md`。
+
 # 失败处理
 - `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
 - `INVALID_OUTPUT_SCHEMA`：重新生成不合规产物并再次运行校验。
