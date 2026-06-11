@@ -168,6 +168,36 @@ HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS = [
     "Repository",
 ]
 
+HLD_ABSTRACT_PARTICIPANT_LABEL_TERMS = [
+    "权限组织服务",
+    "数据权限服务",
+    "支付通知服务",
+    "查询服务",
+    "组织服务",
+    "风控服务",
+]
+
+HLD_EVENT_DRIVEN_TERMS = ["MQ", "消息", "事件", "异步"]
+HLD_CREATE_EVENT_TERMS = ["创建类消息", "新增类消息", "产生类消息", "创建消息", "新增消息", "产生消息"]
+HLD_STATE_EVENT_TERMS = ["状态变更消息", "删除消息", "失效消息", "状态变更类消息", "删除类消息", "失效类消息"]
+HLD_INTERNAL_SEQUENCE_TERMS = ["校验", "幂等", "处理记录"]
+HLD_INTERNAL_SEQUENCE_OUTCOME_TERMS = ["查询", "事实详情", "保存", "写入", "删除", "移除", "本地读模型", "重试", "死信"]
+
+DETAILED_MQ_DB_REDIS_REQUIRED_TERMS = {
+    "Redis / 缓存 / 状态处理记录 / 幂等记录": ["Redis", "缓存", "状态处理记录", "幂等记录"],
+    "幂等": ["幂等"],
+    "DB / 数据库 / 主表 / 明细": ["DB", "数据库", "主表", "明细"],
+    "事务": ["事务"],
+    "回滚": ["回滚"],
+    "重试": ["重试"],
+    "死信": ["死信"],
+    "人工处理": ["人工处理"],
+    "外部详情查询或事实服务查询": ["外部详情查询", "事实服务查询", "查询当前详情", "查询事实详情"],
+}
+
+REDIS_FORBIDDEN_FORMAL_TERMS = ["终态水位", "水位"]
+REDIS_BUSINESS_TERMS = ["状态处理记录", "已处理状态记录", "消息幂等记录", "短期处理记录", "乱序保护记录"]
+
 HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS = [
     "请求字段",
     "返回字段",
@@ -1130,6 +1160,8 @@ SKILLS = [
             "H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态",
             "H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤",
             "H11 high-level-design.md 不得包含 Mermaid flowchart；研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言",
+            "H12 Mermaid sequenceDiagram 的 participant 只能是真实系统/服务/应用边界，必须有 participant-evidence-map.json 证据；抽象能力名或无证据 participant 不得进入正式图",
+            "H13 MQ / 事件 / 异步消息场景必须覆盖创建/新增/产生类消息和状态变更/删除/失效类消息；时序图必须包含服务 self-call 表达校验、幂等、状态/顺序判断、处理记录、本地读模型写入/移除、重试/死信等内部关键阶段",
         ],
     },
     {
@@ -1182,6 +1214,7 @@ SKILLS = [
             "P5 高竞争写使用悲观锁，低冲突场景使用乐观锁/version",
             "P6 分布式锁必须有超时时间和兜底方案",
             "P7 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，详细设计阶段状态必须为 waiting_for_human_review，不得直接 succeeded",
+            "D15 MQ + DB + Redis 场景的详细设计流程图或流程说明必须体现消息接收、解析校验、幂等、状态/顺序判断、外部详情查询、DB 主表/明细写入或删除、Redis 读写、事务、回滚、重试、死信和人工处理；本地读模型写入/删除和查询/导出流程必须写清关键执行顺序",
             "DG1-DG5 正式详细设计必须有文档编号、状态和留存策略；任务过程和待确认清单只作为 run artifact",
         ],
     },
@@ -1212,6 +1245,7 @@ SKILLS = [
             "R11 Spring 接入优先 StringRedisTemplate，复杂结构才使用 RedisTemplate<String,Object>",
             "R12 库存扣减、分布式锁、幂等、延迟双删、排行榜、Pipeline 不使用 Spring Cache 注解",
             "R13 Redis 部署版本、拓扑、持久化和淘汰策略由项目 profile 或 repo_context 注入",
+            "R14 Redis 设计术语必须业务可理解，禁止默认使用水位/终态水位；优先使用状态处理记录、消息幂等记录、短期处理记录、乱序保护记录；Redis 不可用时不得绕过记录直接写库或删库，必须进入 MQ 重试/死信、告警并说明人工回放",
         ],
     },
     {
@@ -1539,7 +1573,7 @@ SKILLS = [
         "outputs": ["workflow-trace.json", "workflow-summary.md", "approval-requests.json", "artifact-index.json", "validator-summary.json"],
         "gates": ["节点 contract 匹配", "前置条件满足", "产物 schema 合规", "专项 validator 结果全部通过或向上冒泡为 blocked", "高风险动作进入审批"],
         "approvals": ["人工审批网关", "跳过阻断节点", "恢复 blocked workflow", "高风险动作执行"],
-        "checks": ["阶段选择", "状态流转", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "validator-summary 汇总", "defect-analysis 根因分析", "DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录"],
+        "checks": ["阶段选择", "状态流转", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "design-only 完成前运行 high-level/detailed/database/mq/redis 专项 validator", "validator-summary 汇总 stage、validator、failed_rule、error_message、suggested_repair", "任一专项 validator 失败时 workflow 总状态不得 succeeded", "waiting_for_human_review 不得宣称 approved/final/succeeded", "defect-analysis 根因分析", "DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录"],
     },
 ]
 
@@ -2152,10 +2186,12 @@ def team_document_policy(skill: dict) -> dict:
             "required_sections": REDIS_REQUIRED_SECTIONS,
             "design_item_required_fields": REDIS_DESIGN_ITEM_FIELDS,
             "storage_required_fields": REDIS_STORAGE_FIELDS,
-            "rules": ["Redis 只做加速层、协调层、短态承载层", "Redis 不做事实库", "Redis 不做消息队列", "所有 Key 必须设置 TTL，最大不超过 30 天", "Redis 不可用必须有降级策略"],
+            "rules": ["Redis 只做加速层、协调层、幂等层、短态承载层", "Redis 不做事实库", "Redis 不做消息队列", "Redis 不做跨服务共享事实源", "Redis 不做长期审计库", "所有 Key 必须设置 TTL，最大不超过 30 天", "Redis 不可用必须进入 MQ 重试 / 死信并告警"],
+            "required_business_terms": REDIS_BUSINESS_TERMS,
+            "forbidden_formal_terms": REDIS_FORBIDDEN_FORMAL_TERMS,
             "waiting_for_input_when": ["Redis 版本无法确认", "拓扑无法确认", "持久化策略无法确认", "淘汰策略无法确认"],
             "waiting_for_human_review_when": ["Redis 新 Key", "批量 Key", "Key 批量删除", "Value 单 Key 超过 1MB"],
-            "blocked_when": ["Redis 作为事实库", "RabbitMQ 项目设计 Redis 发布订阅或 Redis 延迟队列", "缺少 TTL 或 TTL 单位", "缺少不可用降级策略"],
+            "blocked_when": ["Redis 作为事实库", "Redis 作为跨服务共享事实源", "Redis 作为长期审计库", "RabbitMQ 项目设计 Redis 发布订阅或 Redis 延迟队列", "使用水位/终态水位作为正式术语", "缺少 TTL 或 TTL 单位", "Redis 不可用时继续写库或删除", "缺少不可用降级策略、告警或人工回放策略"],
         }
     if skill["id"] == "mq-design":
         return {
@@ -2184,9 +2220,11 @@ def team_document_note(skill: dict) -> str:
 - `4.1.2 关键协作摘要` 只能使用文字描述职责边界、事件方向、异常流和最终一致性；概要设计不得生成 Mermaid `flowchart`。
 - 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - `3.3 研发视图` 和 `3.4 研发结构定义` 使用接口层、应用层、领域层、基础设施层、事件接入层等边界语言，不使用 `Controller`、`Mapper`、`Repository` 等实现标签。
-- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、数据库、Redis、MQ、表等非服务对象。
-- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、已有设计文档或用户明确补充。不得把“支付通知服务”“权限组织服务”等抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
-- 概要设计必须补充或消费 `participant-evidence-map.json`，记录 participant、证据类型、证据路径、确认状态。缺少 evidence 或状态为 unknown/proposed 的 participant 视为质量门禁失败。
+- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许真实系统 / 服务 / 应用边界，禁止出现用户、页面、数据库、Redis、MQ、表、Controller、Mapper、Repository 等非服务对象。
+- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、服务注册证据、已有设计文档或用户明确补充。不得把抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
+- 如果某能力由现有代码流程完成，应描述“沿用现有代码流程”，不得凭空拆出外部服务。
+- 概要设计必须补充或消费 `participant-evidence-map.json`，记录 participant、display_name、status、evidence_type、repo_context、code_path、source_artifacts 等证据。缺少 evidence 或状态为 unknown/proposed/assumed/pending/unconfirmed 的 participant 视为质量门禁失败。
+- 涉及 MQ / 事件 / 异步消息时，概要设计必须覆盖核心消息场景：创建 / 新增 / 产生类消息，以及状态变更 / 删除 / 失效类消息；两类消息都存在时必须分别给出核心时序。时序图只使用服务 participant，但允许服务 self-call 表达校验消息、幂等、状态/顺序判断、处理记录、本地读模型写入/移除、重试/死信等内部关键阶段；只有消息收发、没有内部处理步骤的核心链路必须阻断。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 """
     if skill["id"] == "detailed-design":
@@ -2201,6 +2239,9 @@ def team_document_note(skill: dict) -> str:
 - 流程必须使用 Mermaid `flowchart`，禁止用 `sequenceDiagram` 替代；每个 `flowchart` 后必须紧跟“流程设计说明”。
 - 每个 `3.1.x` 流程默认使用固定骨架：`触发 -> 参数/权限/状态校验 -> 核心处理 -> 外部依赖/消息协作 -> 事务/一致性处理 -> 成功终态 / 失败终态 / 重试补偿或人工处理`。
 - `flowchart` 必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。
+- MQ 消费流程必须明确消息接收、解析与校验、幂等判断、状态 / 顺序判断、外部详情查询、DB 写入 / 删除、Redis 写入 / 读取、事务边界、失败回滚、重试、死信和人工处理。
+- 本地读模型写入流程必须明确主表写入或更新、明细表写入 / 更新 / 重建、主明细事务关系；删除流程必须明确状态处理记录写入、先删明细再删主表、删除失败处理。
+- 查询 / 导出流程必须明确登录态或数据范围获取、强制合并可见范围、参数校验、DB 查询 / 汇总 / 分批导出、导出上限、文件生成失败处理。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
 - 每个 `3.1.x` 流程后都必须紧跟异常场景表；异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
@@ -2231,10 +2272,12 @@ def team_document_note(skill: dict) -> str:
 - Redis 设计必须生成独立 `redis-design.md`，不得在主详细设计中展开。
 - 文档必须按 `assets/redis-design-template.md` 组织，并覆盖历史版本信息、前言、公共配置、Redis版本、集群配置、持久化策略、过期淘汰策略、设计项、资源申请和运维监控。
 - 每个设计项必须包含特性用途、业务说明、存储设计、预估数据、多团队协同；存储设计必须列出库、数据结构、ttl、key 和数据格式。
-- Redis 只做加速层、协调层、短态承载层，不做事实库、不做消息队列；已使用 RabbitMQ 的项目不得设计 Redis 发布订阅或 Redis 延迟队列。
+- Redis 只做加速层、协调层、幂等层、短态承载层，不做事实库、不做消息队列、不做跨服务共享事实源、不做长期审计库；已使用 RabbitMQ 的项目不得设计 Redis 发布订阅或 Redis 延迟队列。
+- Redis 设计术语必须贴近业务语义，优先使用“状态处理记录 / 已处理状态记录 / 消息幂等记录 / 短期处理记录 / 乱序保护记录”等显式术语；不得默认用“水位 / 终态水位”作为正式术语。
 - Key 默认使用 db0，建议格式 `{服务模块}:{租户ID}:{数据结构}:{业务Key}`，长度不超过 100 字节。
-- 所有 Key 必须设置 TTL，最大不超过 30 天；大批量 Key 必须有随机 TTL 抖动；Redis 不可用必须有降级策略。
-- Redis 版本、拓扑、持久化、淘汰策略无法确认时，状态必须为 `waiting_for_input` 或 `waiting_for_human_review`。
+- 所有 Key 必须设置 TTL，最大不超过 30 天；大批量 Key 必须有随机 TTL 抖动。
+- Redis 不可用时不得绕过幂等 / 状态处理记录直接写 DB，也不得绕过状态处理记录直接删 DB；消费者应抛异常进入 MQ 重试 / 死信，必须有告警，并说明人工回放策略。
+- Redis 版本、拓扑、持久化、淘汰策略无法确认时，状态必须为 `waiting_for_input` 或 `waiting_for_human_review`.
 """
     if skill["id"] == "mq-design":
         return template_execution_note(skill) + """
@@ -3138,20 +3181,34 @@ def read_json_artifact(name):
         errors.append(f"{name} 不是合法 JSON: {exc}")
         return None
 
+validator_summary = read_json_artifact("validator-summary.json")
 if payload.get("status") == "succeeded":
-    validator_summary = read_json_artifact("validator-summary.json")
     if validator_summary is None:
         errors.append("workflow-orchestrator succeeded 必须登记并生成 validator-summary.json，汇总所有专项 validator 结果")
     else:
         validators = validator_summary.get("validators") or validator_summary.get("results") or []
         if not validators:
             errors.append("validator-summary.json 必须包含 validators/results 列表")
+        required_validators = {"high-level-design", "detailed-design", "database-design", "mq-design", "redis-design"}
+        seen = {str(item.get("stage") or item.get("skill_id") or item.get("validator") or item.get("name") or "") for item in validators if isinstance(item, dict)}
+        missing_validators = sorted(required_validators - seen)
+        if missing_validators:
+            errors.append("design-only workflow succeeded 前必须汇总所有相关专项 validator，缺少: " + ", ".join(missing_validators))
         for item in validators:
             status = str(item.get("status") or item.get("result") or "").lower()
             exit_code = item.get("exit_code")
             if status in {"failed", "fail", "error", "blocked"} or (exit_code not in (None, 0, "0")):
                 skill_id = item.get("skill_id") or item.get("validator") or item.get("name") or "unknown"
                 errors.append(f"专项 validator 失败必须向 workflow-orchestrator 冒泡为 blocked，不得 succeeded: {skill_id}")
+if validator_summary is not None:
+    validators = validator_summary.get("validators") or validator_summary.get("results") or []
+    for index, item in enumerate(validators, start=1):
+        status = str(item.get("status") or item.get("result") or "").lower() if isinstance(item, dict) else ""
+        exit_code = item.get("exit_code") if isinstance(item, dict) else None
+        if status in {"failed", "fail", "error", "blocked"} or (exit_code not in (None, 0, "0")):
+            for field in ["stage", "validator", "failed_rule", "error_message", "suggested_repair"]:
+                if not item.get(field):
+                    errors.append(f"validator-summary.json 第 {index} 个失败项缺少字段: {field}")
 
 quality_defect_terms = ["脱离代码实际", "模板裁剪", "validator 失败", "门禁失败", "产物质量问题", "用户指出"]
 quality_text = json.dumps(payload.get("findings", []), ensure_ascii=False) + "\\n" + read_text_artifact("workflow-summary.md")
@@ -3182,6 +3239,12 @@ def team_validator_script(skill_id: str) -> str:
             "detailed_implementation_forbidden_terms": HLD_DETAILED_IMPLEMENTATION_FORBIDDEN_TERMS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "service_sequence_forbidden_participants": HLD_SERVICE_SEQUENCE_FORBIDDEN_PARTICIPANTS,
+            "abstract_participant_label_terms": HLD_ABSTRACT_PARTICIPANT_LABEL_TERMS,
+            "event_driven_terms": HLD_EVENT_DRIVEN_TERMS,
+            "create_event_terms": HLD_CREATE_EVENT_TERMS,
+            "state_event_terms": HLD_STATE_EVENT_TERMS,
+            "internal_sequence_terms": HLD_INTERNAL_SEQUENCE_TERMS,
+            "internal_sequence_outcome_terms": HLD_INTERNAL_SEQUENCE_OUTCOME_TERMS,
         },
         "detailed-design": {
             "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
@@ -3193,6 +3256,7 @@ def team_validator_script(skill_id: str) -> str:
             "ddd_terms": DETAILED_DESIGN_DDD_TERMS,
             "specialty_docs": DETAILED_DESIGN_SPECIALTY_DOCS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
+            "mq_db_redis_required_terms": DETAILED_MQ_DB_REDIS_REQUIRED_TERMS,
         },
         "code-development": {
             "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
@@ -3211,6 +3275,8 @@ def team_validator_script(skill_id: str) -> str:
             "required_sections": REDIS_REQUIRED_SECTIONS,
             "item_fields": REDIS_DESIGN_ITEM_FIELDS,
             "storage_fields": REDIS_STORAGE_FIELDS,
+            "forbidden_formal_terms": REDIS_FORBIDDEN_FORMAL_TERMS,
+            "business_terms": REDIS_BUSINESS_TERMS,
         },
         "mq-design": {
             "unresolved_markers": DB_UNRESOLVED_INFO_MARKERS,
@@ -3255,6 +3321,16 @@ def validate_output(payload_path, payload):
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
     if not sequence_blocks:
         errors.append("high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图")
+    if is_event_driven_design(text, POLICY["event_driven_terms"]):
+        create_present = any(term in text for term in POLICY["create_event_terms"])
+        state_present = any(term in text for term in POLICY["state_event_terms"])
+        if not sequence_blocks:
+            errors.append("MQ / 事件 / 异步消息场景至少必须包含一个 sequenceDiagram")
+        if create_present and state_present and len(sequence_blocks) < 2:
+            errors.append("同时包含创建类消息和状态变更/删除/失效类消息时，概要设计必须至少包含两个核心 sequenceDiagram")
+        for block_index, block in enumerate(sequence_blocks, start=1):
+            if not sequence_has_internal_processing(block, POLICY["internal_sequence_terms"], POLICY["internal_sequence_outcome_terms"]):
+                errors.append(f"第 {block_index} 个事件驱动 sequenceDiagram 只有消息收发或缺少服务内部关键处理 self-call")
     evidence_entries = participant_evidence_entries(payload_path, payload)
     for block_index, block in enumerate(sequence_blocks, start=1):
         participants = service_sequence_participants(block)
@@ -3263,6 +3339,8 @@ def validate_output(payload_path, payload):
         if participants and evidence_entries is None:
             errors.append("high-level-design.md sequenceDiagram participant 必须提供 participant-evidence-map.json，追溯到 repo_context/代码/服务注册证据: " + ", ".join(participants.keys()))
         for alias, label in participants.items():
+            if has_abstract_participant_label(label, POLICY["abstract_participant_label_terms"]):
+                errors.append(f"第 {block_index} 个 sequenceDiagram participant 是无证据抽象能力名，不得进入正式时序图: {label}")
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram participant 不是服务: {label}")
             if evidence_entries is not None:
@@ -3345,6 +3423,16 @@ def validate_output(payload_path, payload):
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:
         errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
+    if is_mq_db_redis_flow(text):
+        for label, terms in POLICY["mq_db_redis_required_terms"].items():
+            if not any(term in text for term in terms):
+                errors.append("MQ + DB + Redis 详细设计关键执行路径缺少: " + label)
+    if is_local_read_model_write(text) and not all(any(term in text for term in group) for group in [["主表"], ["明细"], ["事务"]]):
+        errors.append("本地读模型写入流程必须明确主表写入或更新、明细表写入/更新/重建和主明细事务关系")
+    if is_local_read_model_delete(text) and not all(any(term in text for term in group) for group in [["状态处理记录"], ["先删明细", "明细删除"], ["再删主表", "主表删除"], ["删除失败", "回滚", "重试", "死信"]]):
+        errors.append("本地读模型删除流程必须明确状态处理记录、明细删除、主表删除、删除顺序和失败处理")
+    if is_query_or_export_flow(text) and not all(any(term in text for term in group) for group in [["登录态", "数据范围"], ["可见范围"], ["参数校验"], ["DB 查询", "数据库查询", "分批导出"], ["导出上限"], ["文件生成失败", "生成失败"]]):
+        errors.append("查询 / 导出流程必须明确登录态或数据范围、可见范围合并、参数校验、DB 查询/分批导出、导出上限和文件生成失败处理")
     artifacts = artifact_map(payload)
     for doc_name in POLICY["specialty_docs"]:
         if doc_name not in artifacts:
@@ -3526,14 +3614,26 @@ def validate_output(payload_path, payload):
     for field in POLICY["storage_fields"]:
         if field not in text:
             errors.append("redis-design.md 存储设计缺少字段: " + field)
-    if re.search(r"Redis\s*(作为|做|充当).{0,12}事实库", text):
-        errors.append("Redis 不得作为事实库")
+    for term in POLICY["forbidden_formal_terms"]:
+        if term in text:
+            errors.append("Redis 设计不得使用“" + term + "”作为正式术语，应改为状态处理记录 / 消息幂等记录 / 乱序保护记录等业务可理解术语")
+    if any(term in text for term in ["乱序", "幂等", "状态处理", "过程信息"]):
+        if not any(term in text for term in POLICY["business_terms"]):
+            errors.append("Redis 设计涉及乱序/幂等/状态处理时必须使用状态处理记录、消息幂等记录或乱序保护记录等显式业务术语")
+    if re.search(r"Redis\s*(作为|做|充当).{0,18}(事实库|事实源|共享事实源|长期审计库|审计库)", text):
+        errors.append("Redis 不得作为事实库、跨服务共享事实源或长期审计库")
     if re.search(r"Redis\s*(作为|做|充当).{0,12}消息队列", text):
         errors.append("Redis 不得作为消息队列")
     if not re.search(r"TTL[^\n]*(秒|分钟|小时|天|ms|s|min|hour|day)", text, re.IGNORECASE):
         errors.append("TTL 必须带单位")
-    if "降级" not in text:
+    if "降级" not in text and "不可用" not in text:
         errors.append("Redis 不可用必须有降级策略")
+    if "不可用" in text or "降级" in text:
+        if re.search(r"Redis.{0,10}不可用[\s\S]{0,80}(继续|直接|绕过)[\s\S]{0,40}(写库|写 DB|落库|删除|删 DB)", text):
+            errors.append("Redis 不可用时不得绕过幂等 / 状态处理记录直接写 DB 或删除 DB")
+        for required in ["重试", "死信", "告警", "人工回放"]:
+            if required not in text:
+                errors.append("Redis 不可用策略缺少: " + required)
     if payload.get("status") == "succeeded" and any(term in text for term in ["版本待确认", "拓扑待确认", "持久化待确认", "淘汰策略待确认"]):
         errors.append("Redis 版本、拓扑、持久化或淘汰策略无法确认时不得 succeeded")
     if payload.get("status") == "succeeded" and any(term in text for term in ["Redis 新 Key", "新增 Key", "新 Key"]):
@@ -4098,6 +4198,53 @@ def is_service_label(label, forbidden_terms):
     return "服务" in label or "Service" in label or label.endswith("Svc")
 
 
+def has_abstract_participant_label(label, abstract_terms):
+    label = str(label).strip()
+    return any(term and term in label for term in abstract_terms)
+
+
+def is_event_driven_design(text, event_terms):
+    return any(term in text for term in event_terms)
+
+
+def sequence_has_internal_processing(block, required_terms, outcome_terms):
+    participants = service_sequence_participants(block)
+    has_self_call = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_\u4e00-\u9fff]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_\u4e00-\u9fff]+)\s*:\s*(.*)", line)
+        if not match:
+            continue
+        left, right, message = match.group(1), match.group(2), match.group(3)
+        if left == right:
+            has_self_call = True
+            if all(term in message for term in required_terms) and any(term in message for term in outcome_terms):
+                return True
+    if not has_self_call:
+        return False
+    # Allow split self-calls as long as the block as a whole shows the internal path.
+    return all(term in block for term in required_terms) and any(term in block for term in outcome_terms)
+
+
+def is_mq_db_redis_flow(text):
+    has_mq = any(term in text for term in ["MQ", "消息", "消费", "队列", "死信"])
+    has_db = any(term in text for term in ["DB", "数据库", "主表", "明细", "读模型"])
+    has_redis = any(term in text for term in ["Redis", "缓存", "幂等记录", "状态处理记录", "乱序保护记录"])
+    return has_mq and has_db and has_redis
+
+
+def is_local_read_model_write(text):
+    return "本地读模型" in text and any(term in text for term in ["写入", "保存", "upsert", "重建"])
+
+
+def is_local_read_model_delete(text):
+    return "本地读模型" in text and any(term in text for term in ["删除", "移除", "失效"])
+
+
+def is_query_or_export_flow(text):
+    return any(term in text for term in ["查询流程", "导出流程", "查询 / 导出", "列表查询", "分批导出"])
+
+
 def read_json_artifact(payload_path, payload, name):
     text = read_artifact(payload_path, payload, name)
     if not text:
@@ -4197,6 +4344,24 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["H7", "H8", "H9", "H10"],
             "risk_focus": ["概要与详细职责边界", "详细实现泄漏", "跨服务时序", "专项文档引用"],
             "forbidden_behavior": ["在 high-level-design.md 展开请求字段或返回字段", "在概要设计正文写 SQL/DDL", "在概要设计正文写 Controller/Mapper/Repository 或单元测试步骤"],
+        },
+        {
+            "case": "no-invented-participant-for-data-scope",
+            "title": "概要设计不得为数据范围过滤虚构外部 participant",
+            "material": "需求要求按当前用户可见范围进行数据隔离；repo_context 只证明现有登录态和查询条件过滤，没有外部权限服务证据。正确输出应描述沿用现有登录态与数据范围过滤流程，不生成外部权限服务 participant，participant-evidence-map.json 不包含虚构服务。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["H2", "H8", "H12"],
+            "risk_focus": ["participant 真实性", "repo_context 证据", "登录态", "数据范围过滤"],
+            "forbidden_behavior": ["把权限组织服务、数据权限服务或查询服务作为 participant", "缺少 participant-evidence-map.json", "无代码/配置/文档/用户确认仍进入正式时序图"],
+        },
+        {
+            "case": "event-driven-sequence-not-too-simple",
+            "title": "事件驱动概要时序图不得只有消息收发",
+            "material": "需求包含创建类消息和状态变更类消息；下游业务系统维护本地读模型。概要设计必须至少包含创建类消息处理、状态变更类消息处理两个核心 sequenceDiagram，并通过服务 self-call 表达校验、幂等、状态/顺序判断、处理记录、事实详情查询、本地读模型写入或移除、重试/死信等内部关键阶段。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["H8", "H12", "H13"],
+            "risk_focus": ["事件驱动", "核心消息场景", "本地读模型", "内部处理步骤"],
+            "forbidden_behavior": ["只有 A-->>B 发送消息", "只有 B->>A 查询详情", "创建类和状态变更类消息合并成一个过度简化时序", "无证据 participant"],
         }
     ],
     "detailed-design": [
@@ -4246,6 +4411,15 @@ EXTRA_EVAL_SCENARIOS = {
             "forbidden_behavior": ["只有主干 flowchart 就放行", "异常场景没有触发条件和异常编码", "缺少补偿/重试/人工处理路径"],
         },
         {
+            "case": "detailed-design-db-redis-mq-flow-required",
+            "title": "详细设计必须体现 MQ / Redis / DB 关键执行路径",
+            "material": "需求包含 MQ 消费、Redis 消息幂等记录/状态处理记录、DB 主表和明细表本地读模型。详细设计 flowchart 必须体现消息接收、解析校验、幂等、状态/顺序判断、外部详情查询、Redis 读写、DB 主表 upsert、明细重建或删除、事务、回滚、重试、死信和人工处理。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["D13", "D14", "D15", "P3", "P4"],
+            "risk_focus": ["MQ 消费", "Redis 幂等", "DB 主明细", "事务回滚", "死信"],
+            "forbidden_behavior": ["只写处理消息", "只写保存数据或删除数据", "缺少外部详情查询", "缺少事务/回滚/重试/死信/人工处理"],
+        },
+        {
             "case": "team_rules_under_flow",
             "title": "业务规则异常事务放到流程图模块下",
             "material": "用户要求业务规则、异常、事务、幂等和日志放到流程图模块下；不得生成独立业务规则、异常、幂等章节。",
@@ -4293,6 +4467,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["R7", "R8", "R9", "R10"],
             "risk_focus": ["Redis 版本", "TTL 单位", "降级策略"],
             "forbidden_behavior": ["版本拓扑待确认但 succeeded", "没有 TTL 单位"],
+        },
+        {
+            "case": "redis-term-must-be-explicit",
+            "title": "Redis 设计术语必须业务可理解",
+            "material": "用户描述使用 Redis 保存过程信息解决消息乱序。Redis 设计应使用状态处理记录、消息幂等记录、乱序保护记录等显式术语，不使用水位或终态水位作为正式术语；Redis 不作为事实源；Redis 不可用时消费者进入 MQ 重试/死信、告警并说明人工回放策略。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["R1", "R6", "R10", "R14"],
+            "risk_focus": ["业务术语", "乱序保护", "Redis 不可用", "人工回放"],
+            "forbidden_behavior": ["使用水位或终态水位作为正式术语", "Redis 被描述为事实源", "Redis 不可用时继续写库或删除", "无 TTL", "无告警或人工回放策略"],
         }
     ],
     "database-design": [
@@ -4304,6 +4487,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["DB7", "DB8", "DB9", "DB10"],
             "risk_focus": ["OLTP 模板", "OLAP 模板", "DDL 审批"],
             "forbidden_behavior": ["用主文档字段表替代专项", "未确认库名实例却 final"],
+        },
+        {
+            "case": "database-design-template-not-truncated",
+            "title": "数据库设计不得裁剪 OLTP 团队模板",
+            "material": "一个需求需要新增主表 + 明细表，存在 DDL，但缺少库名、实例、DBA 负责人。database-design.md 必须完整保留 OLTP 模板全部章节、固定提示块、表格列头、附录和文档结束；状态进入 waiting_for_input 或 waiting_for_human_review，不允许输出简化数据库设计。",
+            "expected_gate_decision": "waiting_for_input",
+            "rule_refs": ["DB7", "DB11", "DB12", "DB13", "DB14"],
+            "risk_focus": ["OLTP 模板完整性", "强耦合表组", "缺失事实", "人工输入"],
+            "forbidden_behavior": ["裁剪容量设计、CRUD 契约、事务边界、禁止操作、批量修复、安全审计或测试验收章节", "删除不适用章节", "缺失库名实例负责人仍 succeeded"],
         },
         {
             "case": "team_database_missing_info_must_ask",
@@ -4375,7 +4567,9 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
             "high-level-design.md 必须包含原始需求与原型追溯、版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图",
             "high-level-design.md 必须包含 4.1.2 关键协作摘要，且不得包含 flowchart",
-            "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许服务",
+            "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许有证据的真实系统/服务/应用边界",
+            "sequenceDiagram participant 必须登记 participant-evidence-map.json，状态不得为 unknown/proposed/assumed/pending/unconfirmed；抽象能力名不得进入正式时序图",
+            "MQ / 事件 / 异步消息场景必须覆盖创建/新增/产生类消息和状态变更/删除/失效类消息，且时序图必须包含服务内部关键处理 self-call",
             "high-level-design.md 必须用 source_id 引用原始需求规格或原型，并说明一致性状态",
             "high-level-design.md 不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
             "high-level-design.md 不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤",
@@ -4387,6 +4581,7 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
             "detailed-design.md 的 flowchart 必须覆盖异常分支、失败终态以及补偿/重试/人工处理路径",
             "detailed-design.md 的异常场景表必须包含场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
+            "MQ + DB + Redis 场景必须体现消息校验、幂等、状态处理记录、外部详情查询、DB 主表/明细、Redis 读写、事务、回滚、重试、死信和人工处理",
             "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
             "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts",
             "存在 DDL、MQ 新队列或 Redis 新 Key 时必须 waiting_for_human_review",
@@ -4395,6 +4590,8 @@ def extra_eval_case(skill: dict, scenario: dict) -> dict:
             "redis-design.md 必须按 assets/redis-design-template.md 生成",
             "Redis 设计项必须包含特性用途、业务说明、存储设计、预估数据、多团队协同",
             "存储设计必须包含库、数据结构、ttl、key、数据格式，且 TTL 必须带单位",
+            "Redis 术语必须使用状态处理记录、消息幂等记录、乱序保护记录等业务可理解表达，不得使用水位/终态水位作为正式术语",
+            "Redis 不可用时不得绕过幂等/状态处理记录直接写 DB 或删 DB，必须进入 MQ 重试/死信、告警并说明人工回放策略",
         ],
         "mq-design": [
             "mq-design.xlsx 必须按 assets/mq-design-template.xlsx 生成",

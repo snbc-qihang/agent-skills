@@ -19,3 +19,5 @@
 - H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态
 - H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤
 - H11 high-level-design.md 不得包含 Mermaid flowchart；研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言
+- H12 Mermaid sequenceDiagram 的 participant 只能是真实系统/服务/应用边界，必须有 participant-evidence-map.json 证据；抽象能力名或无证据 participant 不得进入正式图
+- H13 MQ / 事件 / 异步消息场景必须覆盖创建/新增/产生类消息和状态变更/删除/失效类消息；时序图必须包含服务 self-call 表达校验、幂等、状态/顺序判断、处理记录、本地读模型写入/移除、重试/死信等内部关键阶段

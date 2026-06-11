@@ -80,6 +80,52 @@ POLICY = {
     "Mapper",
     "Repository"
   ],
+  "abstract_participant_label_terms": [
+    "权限组织服务",
+    "数据权限服务",
+    "支付通知服务",
+    "查询服务",
+    "组织服务",
+    "风控服务"
+  ],
+  "event_driven_terms": [
+    "MQ",
+    "消息",
+    "事件",
+    "异步"
+  ],
+  "create_event_terms": [
+    "创建类消息",
+    "新增类消息",
+    "产生类消息",
+    "创建消息",
+    "新增消息",
+    "产生消息"
+  ],
+  "state_event_terms": [
+    "状态变更消息",
+    "删除消息",
+    "失效消息",
+    "状态变更类消息",
+    "删除类消息",
+    "失效类消息"
+  ],
+  "internal_sequence_terms": [
+    "校验",
+    "幂等",
+    "处理记录"
+  ],
+  "internal_sequence_outcome_terms": [
+    "查询",
+    "事实详情",
+    "保存",
+    "写入",
+    "删除",
+    "移除",
+    "本地读模型",
+    "重试",
+    "死信"
+  ],
   "formal_outputs": [
     "high-level-design.md",
     "architecture-decision-record.md",
@@ -388,6 +434,53 @@ def is_service_label(label, forbidden_terms):
     return "服务" in label or "Service" in label or label.endswith("Svc")
 
 
+def has_abstract_participant_label(label, abstract_terms):
+    label = str(label).strip()
+    return any(term and term in label for term in abstract_terms)
+
+
+def is_event_driven_design(text, event_terms):
+    return any(term in text for term in event_terms)
+
+
+def sequence_has_internal_processing(block, required_terms, outcome_terms):
+    participants = service_sequence_participants(block)
+    has_self_call = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_一-鿿]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_一-鿿]+)\s*:\s*(.*)", line)
+        if not match:
+            continue
+        left, right, message = match.group(1), match.group(2), match.group(3)
+        if left == right:
+            has_self_call = True
+            if all(term in message for term in required_terms) and any(term in message for term in outcome_terms):
+                return True
+    if not has_self_call:
+        return False
+    # Allow split self-calls as long as the block as a whole shows the internal path.
+    return all(term in block for term in required_terms) and any(term in block for term in outcome_terms)
+
+
+def is_mq_db_redis_flow(text):
+    has_mq = any(term in text for term in ["MQ", "消息", "消费", "队列", "死信"])
+    has_db = any(term in text for term in ["DB", "数据库", "主表", "明细", "读模型"])
+    has_redis = any(term in text for term in ["Redis", "缓存", "幂等记录", "状态处理记录", "乱序保护记录"])
+    return has_mq and has_db and has_redis
+
+
+def is_local_read_model_write(text):
+    return "本地读模型" in text and any(term in text for term in ["写入", "保存", "upsert", "重建"])
+
+
+def is_local_read_model_delete(text):
+    return "本地读模型" in text and any(term in text for term in ["删除", "移除", "失效"])
+
+
+def is_query_or_export_flow(text):
+    return any(term in text for term in ["查询流程", "导出流程", "查询 / 导出", "列表查询", "分批导出"])
+
+
 def read_json_artifact(payload_path, payload, name):
     text = read_artifact(payload_path, payload, name)
     if not text:
@@ -473,6 +566,16 @@ def validate_output(payload_path, payload):
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
     if not sequence_blocks:
         errors.append("high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图")
+    if is_event_driven_design(text, POLICY["event_driven_terms"]):
+        create_present = any(term in text for term in POLICY["create_event_terms"])
+        state_present = any(term in text for term in POLICY["state_event_terms"])
+        if not sequence_blocks:
+            errors.append("MQ / 事件 / 异步消息场景至少必须包含一个 sequenceDiagram")
+        if create_present and state_present and len(sequence_blocks) < 2:
+            errors.append("同时包含创建类消息和状态变更/删除/失效类消息时，概要设计必须至少包含两个核心 sequenceDiagram")
+        for block_index, block in enumerate(sequence_blocks, start=1):
+            if not sequence_has_internal_processing(block, POLICY["internal_sequence_terms"], POLICY["internal_sequence_outcome_terms"]):
+                errors.append(f"第 {block_index} 个事件驱动 sequenceDiagram 只有消息收发或缺少服务内部关键处理 self-call")
     evidence_entries = participant_evidence_entries(payload_path, payload)
     for block_index, block in enumerate(sequence_blocks, start=1):
         participants = service_sequence_participants(block)
@@ -481,6 +584,8 @@ def validate_output(payload_path, payload):
         if participants and evidence_entries is None:
             errors.append("high-level-design.md sequenceDiagram participant 必须提供 participant-evidence-map.json，追溯到 repo_context/代码/服务注册证据: " + ", ".join(participants.keys()))
         for alias, label in participants.items():
+            if has_abstract_participant_label(label, POLICY["abstract_participant_label_terms"]):
+                errors.append(f"第 {block_index} 个 sequenceDiagram participant 是无证据抽象能力名，不得进入正式时序图: {label}")
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram participant 不是服务: {label}")
             if evidence_entries is not None:

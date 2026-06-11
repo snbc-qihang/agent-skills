@@ -87,9 +87,11 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - `4.1.2 关键协作摘要` 只能使用文字描述职责边界、事件方向、异常流和最终一致性；概要设计不得生成 Mermaid `flowchart`。
 - 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - `3.3 研发视图` 和 `3.4 研发结构定义` 使用接口层、应用层、领域层、基础设施层、事件接入层等边界语言，不使用 `Controller`、`Mapper`、`Repository` 等实现标签。
-- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、数据库、Redis、MQ、表等非服务对象。
-- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、已有设计文档或用户明确补充。不得把“支付通知服务”“权限组织服务”等抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
-- 概要设计必须补充或消费 `participant-evidence-map.json`，记录 participant、证据类型、证据路径、确认状态。缺少 evidence 或状态为 unknown/proposed 的 participant 视为质量门禁失败。
+- 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许真实系统 / 服务 / 应用边界，禁止出现用户、页面、数据库、Redis、MQ、表、Controller、Mapper、Repository 等非服务对象。
+- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、服务注册证据、已有设计文档或用户明确补充。不得把抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
+- 如果某能力由现有代码流程完成，应描述“沿用现有代码流程”，不得凭空拆出外部服务。
+- 概要设计必须补充或消费 `participant-evidence-map.json`，记录 participant、display_name、status、evidence_type、repo_context、code_path、source_artifacts 等证据。缺少 evidence 或状态为 unknown/proposed/assumed/pending/unconfirmed 的 participant 视为质量门禁失败。
+- 涉及 MQ / 事件 / 异步消息时，概要设计必须覆盖核心消息场景：创建 / 新增 / 产生类消息，以及状态变更 / 删除 / 失效类消息；两类消息都存在时必须分别给出核心时序。时序图只使用服务 participant，但允许服务 self-call 表达校验消息、幂等、状态/顺序判断、处理记录、本地读模型写入/移除、重试/死信等内部关键阶段；只有消息收发、没有内部处理步骤的核心链路必须阻断。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 
 
@@ -116,6 +118,8 @@ description: Use when the request is about 从需求契约生成概要设计，�
 - H9 high-level-design.md 必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态
 - H10 high-level-design.md 聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤
 - H11 high-level-design.md 不得包含 Mermaid flowchart；研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言
+- H12 Mermaid sequenceDiagram 的 participant 只能是真实系统/服务/应用边界，必须有 participant-evidence-map.json 证据；抽象能力名或无证据 participant 不得进入正式图
+- H13 MQ / 事件 / 异步消息场景必须覆盖创建/新增/产生类消息和状态变更/删除/失效类消息；时序图必须包含服务 self-call 表达校验、幂等、状态/顺序判断、处理记录、本地读模型写入/移除、重试/死信等内部关键阶段
 5. 确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

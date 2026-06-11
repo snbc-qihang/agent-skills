@@ -69,7 +69,9 @@
     "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
     "high-level-design.md 必须包含原始需求与原型追溯、版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图",
     "high-level-design.md 必须包含 4.1.2 关键协作摘要，且不得包含 flowchart",
-    "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许服务",
+    "high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且参与者只允许有证据的真实系统/服务/应用边界",
+    "sequenceDiagram participant 必须登记 participant-evidence-map.json，状态不得为 unknown/proposed/assumed/pending/unconfirmed；抽象能力名不得进入正式时序图",
+    "MQ / 事件 / 异步消息场景必须覆盖创建/新增/产生类消息和状态变更/删除/失效类消息，且时序图必须包含服务内部关键处理 self-call",
     "high-level-design.md 必须用 source_id 引用原始需求规格或原型，并说明一致性状态",
     "high-level-design.md 不得使用通用证据/Findings/门禁决策模板替代概要设计正文",
     "high-level-design.md 不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤"

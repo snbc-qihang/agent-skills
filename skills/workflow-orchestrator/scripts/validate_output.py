@@ -53,20 +53,34 @@ def read_json_artifact(name):
         errors.append(f"{name} 不是合法 JSON: {exc}")
         return None
 
+validator_summary = read_json_artifact("validator-summary.json")
 if payload.get("status") == "succeeded":
-    validator_summary = read_json_artifact("validator-summary.json")
     if validator_summary is None:
         errors.append("workflow-orchestrator succeeded 必须登记并生成 validator-summary.json，汇总所有专项 validator 结果")
     else:
         validators = validator_summary.get("validators") or validator_summary.get("results") or []
         if not validators:
             errors.append("validator-summary.json 必须包含 validators/results 列表")
+        required_validators = {"high-level-design", "detailed-design", "database-design", "mq-design", "redis-design"}
+        seen = {str(item.get("stage") or item.get("skill_id") or item.get("validator") or item.get("name") or "") for item in validators if isinstance(item, dict)}
+        missing_validators = sorted(required_validators - seen)
+        if missing_validators:
+            errors.append("design-only workflow succeeded 前必须汇总所有相关专项 validator，缺少: " + ", ".join(missing_validators))
         for item in validators:
             status = str(item.get("status") or item.get("result") or "").lower()
             exit_code = item.get("exit_code")
             if status in {"failed", "fail", "error", "blocked"} or (exit_code not in (None, 0, "0")):
                 skill_id = item.get("skill_id") or item.get("validator") or item.get("name") or "unknown"
                 errors.append(f"专项 validator 失败必须向 workflow-orchestrator 冒泡为 blocked，不得 succeeded: {skill_id}")
+if validator_summary is not None:
+    validators = validator_summary.get("validators") or validator_summary.get("results") or []
+    for index, item in enumerate(validators, start=1):
+        status = str(item.get("status") or item.get("result") or "").lower() if isinstance(item, dict) else ""
+        exit_code = item.get("exit_code") if isinstance(item, dict) else None
+        if status in {"failed", "fail", "error", "blocked"} or (exit_code not in (None, 0, "0")):
+            for field in ["stage", "validator", "failed_rule", "error_message", "suggested_repair"]:
+                if not item.get(field):
+                    errors.append(f"validator-summary.json 第 {index} 个失败项缺少字段: {field}")
 
 quality_defect_terms = ["脱离代码实际", "模板裁剪", "validator 失败", "门禁失败", "产物质量问题", "用户指出"]
 quality_text = json.dumps(payload.get("findings", []), ensure_ascii=False) + "\n" + read_text_artifact("workflow-summary.md")

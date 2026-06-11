@@ -14,3 +14,4 @@
 - R11 Spring 接入优先 StringRedisTemplate，复杂结构才使用 RedisTemplate<String,Object>
 - R12 库存扣减、分布式锁、幂等、延迟双删、排行榜、Pipeline 不使用 Spring Cache 注解
 - R13 Redis 部署版本、拓扑、持久化和淘汰策略由项目 profile 或 repo_context 注入
+- R14 Redis 设计术语必须业务可理解，禁止默认使用水位/终态水位；优先使用状态处理记录、消息幂等记录、短期处理记录、乱序保护记录；Redis 不可用时不得绕过记录直接写库或删库，必须进入 MQ 重试/死信、告警并说明人工回放

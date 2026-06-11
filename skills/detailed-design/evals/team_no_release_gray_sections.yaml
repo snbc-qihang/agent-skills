@@ -67,6 +67,7 @@
     "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
     "detailed-design.md 的 flowchart 必须覆盖异常分支、失败终态以及补偿/重试/人工处理路径",
     "detailed-design.md 的异常场景表必须包含场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
+    "MQ + DB + Redis 场景必须体现消息校验、幂等、状态处理记录、外部详情查询、DB 主表/明细、Redis 读写、事务、回滚、重试、死信和人工处理",
     "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
     "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts",
     "存在 DDL、MQ 新队列或 Redis 新 Key 时必须 waiting_for_human_review"

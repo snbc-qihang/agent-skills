@@ -112,6 +112,44 @@ POLICY = {
     "test-strategy.md": "测试策略"
   },
   "source_traceability_header": "| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |",
+  "mq_db_redis_required_terms": {
+    "Redis / 缓存 / 状态处理记录 / 幂等记录": [
+      "Redis",
+      "缓存",
+      "状态处理记录",
+      "幂等记录"
+    ],
+    "幂等": [
+      "幂等"
+    ],
+    "DB / 数据库 / 主表 / 明细": [
+      "DB",
+      "数据库",
+      "主表",
+      "明细"
+    ],
+    "事务": [
+      "事务"
+    ],
+    "回滚": [
+      "回滚"
+    ],
+    "重试": [
+      "重试"
+    ],
+    "死信": [
+      "死信"
+    ],
+    "人工处理": [
+      "人工处理"
+    ],
+    "外部详情查询或事实服务查询": [
+      "外部详情查询",
+      "事实服务查询",
+      "查询当前详情",
+      "查询事实详情"
+    ]
+  },
   "formal_outputs": [
     "detailed-design.md",
     "implementation-plan.md",
@@ -423,6 +461,53 @@ def is_service_label(label, forbidden_terms):
     return "服务" in label or "Service" in label or label.endswith("Svc")
 
 
+def has_abstract_participant_label(label, abstract_terms):
+    label = str(label).strip()
+    return any(term and term in label for term in abstract_terms)
+
+
+def is_event_driven_design(text, event_terms):
+    return any(term in text for term in event_terms)
+
+
+def sequence_has_internal_processing(block, required_terms, outcome_terms):
+    participants = service_sequence_participants(block)
+    has_self_call = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_一-鿿]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_一-鿿]+)\s*:\s*(.*)", line)
+        if not match:
+            continue
+        left, right, message = match.group(1), match.group(2), match.group(3)
+        if left == right:
+            has_self_call = True
+            if all(term in message for term in required_terms) and any(term in message for term in outcome_terms):
+                return True
+    if not has_self_call:
+        return False
+    # Allow split self-calls as long as the block as a whole shows the internal path.
+    return all(term in block for term in required_terms) and any(term in block for term in outcome_terms)
+
+
+def is_mq_db_redis_flow(text):
+    has_mq = any(term in text for term in ["MQ", "消息", "消费", "队列", "死信"])
+    has_db = any(term in text for term in ["DB", "数据库", "主表", "明细", "读模型"])
+    has_redis = any(term in text for term in ["Redis", "缓存", "幂等记录", "状态处理记录", "乱序保护记录"])
+    return has_mq and has_db and has_redis
+
+
+def is_local_read_model_write(text):
+    return "本地读模型" in text and any(term in text for term in ["写入", "保存", "upsert", "重建"])
+
+
+def is_local_read_model_delete(text):
+    return "本地读模型" in text and any(term in text for term in ["删除", "移除", "失效"])
+
+
+def is_query_or_export_flow(text):
+    return any(term in text for term in ["查询流程", "导出流程", "查询 / 导出", "列表查询", "分批导出"])
+
+
 def read_json_artifact(payload_path, payload, name):
     text = read_artifact(payload_path, payload, name)
     if not text:
@@ -536,6 +621,16 @@ def validate_output(payload_path, payload):
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:
         errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
+    if is_mq_db_redis_flow(text):
+        for label, terms in POLICY["mq_db_redis_required_terms"].items():
+            if not any(term in text for term in terms):
+                errors.append("MQ + DB + Redis 详细设计关键执行路径缺少: " + label)
+    if is_local_read_model_write(text) and not all(any(term in text for term in group) for group in [["主表"], ["明细"], ["事务"]]):
+        errors.append("本地读模型写入流程必须明确主表写入或更新、明细表写入/更新/重建和主明细事务关系")
+    if is_local_read_model_delete(text) and not all(any(term in text for term in group) for group in [["状态处理记录"], ["先删明细", "明细删除"], ["再删主表", "主表删除"], ["删除失败", "回滚", "重试", "死信"]]):
+        errors.append("本地读模型删除流程必须明确状态处理记录、明细删除、主表删除、删除顺序和失败处理")
+    if is_query_or_export_flow(text) and not all(any(term in text for term in group) for group in [["登录态", "数据范围"], ["可见范围"], ["参数校验"], ["DB 查询", "数据库查询", "分批导出"], ["导出上限"], ["文件生成失败", "生成失败"]]):
+        errors.append("查询 / 导出流程必须明确登录态或数据范围、可见范围合并、参数校验、DB 查询/分批导出、导出上限和文件生成失败处理")
     artifacts = artifact_map(payload)
     for doc_name in POLICY["specialty_docs"]:
         if doc_name not in artifacts:

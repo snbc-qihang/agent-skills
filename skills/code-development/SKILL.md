@@ -142,6 +142,14 @@ description: Use when the request is about 基于设计文档进行最小必要�
 - 输出可通过 `output.schema.json` 校验。
 - `StageRunResult` 可通过 `validate_stage_run_result.py` 校验。
 
+# Generator-first 插件/技能资产修改补充
+当目标仓库声明 SKILL.md、validator、eval、workflow 或插件发布资产由 generator 生成时：
+1. 先定位并修改 generator source，不要把 generated SKILL.md / scripts 当作最终修复源头。
+2. 在 generator 中沉淀通用规则；具体业务名、表名、消息名、服务名只能放入 regression/eval 示例，不得进入通用规则正文。
+3. 重新运行 generator 刷新源树，再检查 generated diff，确认改动没有被生成器覆盖。
+4. 为每条新增通用规则补 deterministic regression test；测试应直接执行生成后的 validator 或 eval runner，验证失败信息而不是只断言文本存在。
+5. 最终报告必须列出：源头修改、生成文件、regression cases、实际执行命令、真实输出、未完成项/阻断原因。
+
 # 禁止行为
 - 不得在无证据时宣称门禁通过。
 - 不得隐藏缺失输入。

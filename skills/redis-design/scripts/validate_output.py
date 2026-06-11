@@ -58,6 +58,17 @@ POLICY = {
     "key",
     "数据格式"
   ],
+  "forbidden_formal_terms": [
+    "终态水位",
+    "水位"
+  ],
+  "business_terms": [
+    "状态处理记录",
+    "已处理状态记录",
+    "消息幂等记录",
+    "短期处理记录",
+    "乱序保护记录"
+  ],
   "formal_outputs": [
     "redis-design.md",
     "redis-key-registry.yaml",
@@ -366,6 +377,53 @@ def is_service_label(label, forbidden_terms):
     return "服务" in label or "Service" in label or label.endswith("Svc")
 
 
+def has_abstract_participant_label(label, abstract_terms):
+    label = str(label).strip()
+    return any(term and term in label for term in abstract_terms)
+
+
+def is_event_driven_design(text, event_terms):
+    return any(term in text for term in event_terms)
+
+
+def sequence_has_internal_processing(block, required_terms, outcome_terms):
+    participants = service_sequence_participants(block)
+    has_self_call = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_一-鿿]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_一-鿿]+)\s*:\s*(.*)", line)
+        if not match:
+            continue
+        left, right, message = match.group(1), match.group(2), match.group(3)
+        if left == right:
+            has_self_call = True
+            if all(term in message for term in required_terms) and any(term in message for term in outcome_terms):
+                return True
+    if not has_self_call:
+        return False
+    # Allow split self-calls as long as the block as a whole shows the internal path.
+    return all(term in block for term in required_terms) and any(term in block for term in outcome_terms)
+
+
+def is_mq_db_redis_flow(text):
+    has_mq = any(term in text for term in ["MQ", "消息", "消费", "队列", "死信"])
+    has_db = any(term in text for term in ["DB", "数据库", "主表", "明细", "读模型"])
+    has_redis = any(term in text for term in ["Redis", "缓存", "幂等记录", "状态处理记录", "乱序保护记录"])
+    return has_mq and has_db and has_redis
+
+
+def is_local_read_model_write(text):
+    return "本地读模型" in text and any(term in text for term in ["写入", "保存", "upsert", "重建"])
+
+
+def is_local_read_model_delete(text):
+    return "本地读模型" in text and any(term in text for term in ["删除", "移除", "失效"])
+
+
+def is_query_or_export_flow(text):
+    return any(term in text for term in ["查询流程", "导出流程", "查询 / 导出", "列表查询", "分批导出"])
+
+
 def read_json_artifact(payload_path, payload, name):
     text = read_artifact(payload_path, payload, name)
     if not text:
@@ -429,14 +487,26 @@ def validate_output(payload_path, payload):
     for field in POLICY["storage_fields"]:
         if field not in text:
             errors.append("redis-design.md 存储设计缺少字段: " + field)
-    if re.search(r"Redis\s*(作为|做|充当).{0,12}事实库", text):
-        errors.append("Redis 不得作为事实库")
+    for term in POLICY["forbidden_formal_terms"]:
+        if term in text:
+            errors.append("Redis 设计不得使用“" + term + "”作为正式术语，应改为状态处理记录 / 消息幂等记录 / 乱序保护记录等业务可理解术语")
+    if any(term in text for term in ["乱序", "幂等", "状态处理", "过程信息"]):
+        if not any(term in text for term in POLICY["business_terms"]):
+            errors.append("Redis 设计涉及乱序/幂等/状态处理时必须使用状态处理记录、消息幂等记录或乱序保护记录等显式业务术语")
+    if re.search(r"Redis\s*(作为|做|充当).{0,18}(事实库|事实源|共享事实源|长期审计库|审计库)", text):
+        errors.append("Redis 不得作为事实库、跨服务共享事实源或长期审计库")
     if re.search(r"Redis\s*(作为|做|充当).{0,12}消息队列", text):
         errors.append("Redis 不得作为消息队列")
     if not re.search(r"TTL[^\n]*(秒|分钟|小时|天|ms|s|min|hour|day)", text, re.IGNORECASE):
         errors.append("TTL 必须带单位")
-    if "降级" not in text:
+    if "降级" not in text and "不可用" not in text:
         errors.append("Redis 不可用必须有降级策略")
+    if "不可用" in text or "降级" in text:
+        if re.search(r"Redis.{0,10}不可用[\s\S]{0,80}(继续|直接|绕过)[\s\S]{0,40}(写库|写 DB|落库|删除|删 DB)", text):
+            errors.append("Redis 不可用时不得绕过幂等 / 状态处理记录直接写 DB 或删除 DB")
+        for required in ["重试", "死信", "告警", "人工回放"]:
+            if required not in text:
+                errors.append("Redis 不可用策略缺少: " + required)
     if payload.get("status") == "succeeded" and any(term in text for term in ["版本待确认", "拓扑待确认", "持久化待确认", "淘汰策略待确认"]):
         errors.append("Redis 版本、拓扑、持久化或淘汰策略无法确认时不得 succeeded")
     if payload.get("status") == "succeeded" and any(term in text for term in ["Redis 新 Key", "新增 Key", "新 Key"]):

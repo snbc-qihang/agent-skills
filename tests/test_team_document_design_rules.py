@@ -1652,5 +1652,226 @@ flowchart TD
         self.assertIn("database-risk-report.json 缺少表组风险", output)
 
 
+    def test_high_level_design_validator_blocks_abstract_participant_and_oversimplified_event_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 创建类消息和状态变更消息维护本地读模型 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 本地读模型同步
+#### 4.1.1 参与系统与职责设计
+沿用现有登录态和查询条件过滤流程，不新增外部权限服务。
+#### 4.1.2 关键协作摘要
+需求涉及 MQ 创建类消息和状态变更消息。
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant UpstreamService as 上游事实服务
+    participant AuthScopeService as 权限组织服务
+    participant BusinessService as 下游业务系统
+    UpstreamService-->>BusinessService: 发送创建类消息
+    BusinessService->>UpstreamService: 查询详情
+```
+## 5.中间件设计
+涉及 MQ。
+## 6.数据视图
+本地读模型。
+""",
+                encoding="utf-8",
+            )
+            evidence = root / "participant-evidence-map.json"
+            evidence.write_text(
+                json.dumps(
+                    {
+                        "participants": [
+                            {"participant": "UpstreamService", "display_name": "上游事实服务", "status": "confirmed", "code_path": "src/UpstreamService.java"},
+                            {"participant": "AuthScopeService", "display_name": "权限组织服务", "status": "confirmed", "code_path": "src/AuthScopeService.java"},
+                            {"participant": "BusinessService", "display_name": "下游业务系统", "status": "confirmed", "code_path": "src/BusinessService.java"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "participant-evidence-map.json", "path": str(evidence), "artifact_type": "json"},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-event-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("抽象能力名", output)
+        self.assertIn("至少包含两个核心 sequenceDiagram", output)
+        self.assertIn("缺少服务内部关键处理 self-call", output)
+
+    def test_detailed_design_validator_requires_mq_db_redis_key_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "detailed-design.md"
+            design.write_text(
+                """# 详细设计
+## 1. 修订历史
+## 2. 设计背景与目标摘要
+### 2.1 原始需求与原型引用矩阵
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | MQ 消费 Redis 幂等 DB 主明细读模型 | 3.1 | matched |
+## 3. 模块/功能详细设计
+### 3.1. 业务流程图
+```mermaid
+flowchart TD
+    A["收到 MQ 消息"] --> B["处理消息"]
+    B --> C["保存本地读模型到 DB 主表"]
+    C -- 失败 --> F["失败终态，重试，人工处理"]
+```
+流程设计说明：
+- 业务规则：维护本地读模型
+- 校验规则：基础校验
+- 事务边界：单事务
+- 幂等与一致性：Redis 幂等记录
+- 异常场景：见表
+- 日志要求：traceId
+| 场景 | 触发条件 | 异常编码 | 异常信息 | 系统处理动作 | 数据状态 | 日志/告警 | 补偿/重试/人工处理 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 失败 | DB异常 | 3001 | 失败 | 回滚 | 未完成 | 告警 | 重试/人工处理 |
+## 4. 数据库设计
+## 5. 接口定义
+### 5.1. API接口列表
+### 5.2. 中间件设计
+## 6. 单元测试
+## 7. 性能与扩展性设计
+## 8. 人工评审项
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "detailed-design",
+                [
+                    {"name": "detailed-design.md", "path": str(design)},
+                    {"name": "database-design.md", "path": str(root / "database-design.md")},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
+                    {"name": "redis-design.md", "path": str(root / "redis-design.md")},
+                    {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
+                    {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
+                ],
+            )
+            payload_path = root / "detailed-key-path-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("MQ + DB + Redis 详细设计关键执行路径缺少", output)
+        self.assertIn("死信", output)
+        self.assertIn("外部详情查询", output)
+
+    def test_redis_validator_blocks_watermark_and_unsafe_unavailable_strategy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            redis_doc = root / "redis-design.md"
+            redis_doc.write_text(
+                """# Redis 设计
+历史版本信息
+## 1. 前言
+### 1.1. 目的
+### 1.2. 适用范围
+### 1.3. 参考资料
+## 2. 公共配置
+### 2.1. Redis版本
+### 2.2. 集群配置
+### 2.3. 持久化策略
+### 2.4. 过期淘汰策略
+## 3. 设计项
+### 3.1. <设计项名称>
+#### 3.1.1. 特性用途
+#### 3.1.2. 业务说明
+使用终态水位解决消息乱序。
+#### 3.1.3. 存储设计
+| 项/值 | 数值 | 说明 |
+| --- | --- | --- |
+| 库 | 0 |  |
+| 数据结构 | String |  |
+| ttl | 30分钟 | TTL 必须说明单位 |
+| key | service:tenant:string:bizKey |  |
+数据格式
+Redis 不可用时直接写 DB 并删除本地读模型。
+#### 3.1.4. 预估数据
+#### 3.1.5. 多团队协同
+## 4. 安全与运维
+### 4.1. 资源申请
+### 4.2. 运维监控
+""",
+                encoding="utf-8",
+            )
+            redis_payload = root / "redis-stage-run-result.json"
+            redis_payload.write_text(json.dumps(payload("redis-design", [{"name": "redis-design.md", "path": str(redis_doc)}]), ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("redis-design", redis_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("终态水位", output)
+        self.assertIn("不得绕过", output)
+        self.assertIn("人工回放", output)
+
+    def test_workflow_validator_requires_design_only_specialty_validator_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            summary = root / "validator-summary.json"
+            summary.write_text(
+                json.dumps(
+                    {
+                        "validators": [
+                            {"stage": "high-level-design", "validator": "validate_output.py", "status": "passed"},
+                            {"stage": "detailed-design", "validator": "validate_output.py", "status": "failed", "error_message": "missing flow"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "workflow-orchestrator",
+                [{"name": "validator-summary.json", "path": str(summary), "artifact_type": "json"}],
+                status="succeeded",
+            )
+            payload_path = root / "workflow-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("workflow-orchestrator", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("缺少: database-design, mq-design, redis-design", output)
+        self.assertIn("专项 validator 失败必须向 workflow-orchestrator 冒泡", output)
+        self.assertIn("failed_rule", output)
+        self.assertIn("suggested_repair", output)
+
+
 if __name__ == "__main__":
     unittest.main()

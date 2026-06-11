@@ -65,7 +65,9 @@
     "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
     "redis-design.md 必须按 assets/redis-design-template.md 生成",
     "Redis 设计项必须包含特性用途、业务说明、存储设计、预估数据、多团队协同",
-    "存储设计必须包含库、数据结构、ttl、key、数据格式，且 TTL 必须带单位"
+    "存储设计必须包含库、数据结构、ttl、key、数据格式，且 TTL 必须带单位",
+    "Redis 术语必须使用状态处理记录、消息幂等记录、乱序保护记录等业务可理解表达，不得使用水位/终态水位作为正式术语",
+    "Redis 不可用时不得绕过幂等/状态处理记录直接写 DB 或删 DB，必须进入 MQ 重试/死信、告警并说明人工回放策略"
   ],
   "severity_when_failed": "critical",
   "grader": {

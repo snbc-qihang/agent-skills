@@ -391,6 +391,53 @@ def is_service_label(label, forbidden_terms):
     return "服务" in label or "Service" in label or label.endswith("Svc")
 
 
+def has_abstract_participant_label(label, abstract_terms):
+    label = str(label).strip()
+    return any(term and term in label for term in abstract_terms)
+
+
+def is_event_driven_design(text, event_terms):
+    return any(term in text for term in event_terms)
+
+
+def sequence_has_internal_processing(block, required_terms, outcome_terms):
+    participants = service_sequence_participants(block)
+    has_self_call = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        match = re.match(r"([A-Za-z0-9_一-鿿]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_一-鿿]+)\s*:\s*(.*)", line)
+        if not match:
+            continue
+        left, right, message = match.group(1), match.group(2), match.group(3)
+        if left == right:
+            has_self_call = True
+            if all(term in message for term in required_terms) and any(term in message for term in outcome_terms):
+                return True
+    if not has_self_call:
+        return False
+    # Allow split self-calls as long as the block as a whole shows the internal path.
+    return all(term in block for term in required_terms) and any(term in block for term in outcome_terms)
+
+
+def is_mq_db_redis_flow(text):
+    has_mq = any(term in text for term in ["MQ", "消息", "消费", "队列", "死信"])
+    has_db = any(term in text for term in ["DB", "数据库", "主表", "明细", "读模型"])
+    has_redis = any(term in text for term in ["Redis", "缓存", "幂等记录", "状态处理记录", "乱序保护记录"])
+    return has_mq and has_db and has_redis
+
+
+def is_local_read_model_write(text):
+    return "本地读模型" in text and any(term in text for term in ["写入", "保存", "upsert", "重建"])
+
+
+def is_local_read_model_delete(text):
+    return "本地读模型" in text and any(term in text for term in ["删除", "移除", "失效"])
+
+
+def is_query_or_export_flow(text):
+    return any(term in text for term in ["查询流程", "导出流程", "查询 / 导出", "列表查询", "分批导出"])
+
+
 def read_json_artifact(payload_path, payload, name):
     text = read_artifact(payload_path, payload, name)
     if not text:

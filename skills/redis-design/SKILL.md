@@ -82,10 +82,12 @@ description: Use when the request is about 设计 Redis 使用方案，明确 ke
 - Redis 设计必须生成独立 `redis-design.md`，不得在主详细设计中展开。
 - 文档必须按 `assets/redis-design-template.md` 组织，并覆盖历史版本信息、前言、公共配置、Redis版本、集群配置、持久化策略、过期淘汰策略、设计项、资源申请和运维监控。
 - 每个设计项必须包含特性用途、业务说明、存储设计、预估数据、多团队协同；存储设计必须列出库、数据结构、ttl、key 和数据格式。
-- Redis 只做加速层、协调层、短态承载层，不做事实库、不做消息队列；已使用 RabbitMQ 的项目不得设计 Redis 发布订阅或 Redis 延迟队列。
+- Redis 只做加速层、协调层、幂等层、短态承载层，不做事实库、不做消息队列、不做跨服务共享事实源、不做长期审计库；已使用 RabbitMQ 的项目不得设计 Redis 发布订阅或 Redis 延迟队列。
+- Redis 设计术语必须贴近业务语义，优先使用“状态处理记录 / 已处理状态记录 / 消息幂等记录 / 短期处理记录 / 乱序保护记录”等显式术语；不得默认用“水位 / 终态水位”作为正式术语。
 - Key 默认使用 db0，建议格式 `{服务模块}:{租户ID}:{数据结构}:{业务Key}`，长度不超过 100 字节。
-- 所有 Key 必须设置 TTL，最大不超过 30 天；大批量 Key 必须有随机 TTL 抖动；Redis 不可用必须有降级策略。
-- Redis 版本、拓扑、持久化、淘汰策略无法确认时，状态必须为 `waiting_for_input` 或 `waiting_for_human_review`。
+- 所有 Key 必须设置 TTL，最大不超过 30 天；大批量 Key 必须有随机 TTL 抖动。
+- Redis 不可用时不得绕过幂等 / 状态处理记录直接写 DB，也不得绕过状态处理记录直接删 DB；消费者应抛异常进入 MQ 重试 / 死信，必须有告警，并说明人工回放策略。
+- Redis 版本、拓扑、持久化、淘汰策略无法确认时，状态必须为 `waiting_for_input` 或 `waiting_for_human_review`.
 
 
 # 操作流程
@@ -106,6 +108,7 @@ description: Use when the request is about 设计 Redis 使用方案，明确 ke
 - R11 Spring 接入优先 StringRedisTemplate，复杂结构才使用 RedisTemplate<String,Object>
 - R12 库存扣减、分布式锁、幂等、延迟双删、排行榜、Pipeline 不使用 Spring Cache 注解
 - R13 Redis 部署版本、拓扑、持久化和淘汰策略由项目 profile 或 repo_context 注入
+- R14 Redis 设计术语必须业务可理解，禁止默认使用水位/终态水位；优先使用状态处理记录、消息幂等记录、短期处理记录、乱序保护记录；Redis 不可用时不得绕过记录直接写库或删库，必须进入 MQ 重试/死信、告警并说明人工回放
 5. 确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
 6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

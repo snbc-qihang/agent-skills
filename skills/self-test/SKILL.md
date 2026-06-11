@@ -114,6 +114,13 @@ description: Use when the request is about 生成并执行自测方案，输出�
 - 覆盖主干/边界/异常/幂等
 - 覆盖率变化有解释
 
+# Generator-first / 插件资产自测补充
+当代码变更来自 generator 并刷新技能、validator、eval 或插件资产时，自测必须覆盖两层：
+1. 局部 regression：直接运行受影响测试文件或专项 validator，验证新增规则能失败在预期错误信息上。
+2. 全量门禁：运行仓库声明的 unittest discover、skill contract、workflow validator、skill eval、metadata validator、plugin manifest validator 等完整命令；不得用“局部测试通过”替代全量门禁。
+3. 如果 eval runner 生成报告文件，把报告文件作为真实测试输出的一部分登记；不要把该生成文件误判为业务实现改动。
+4. 对返回 `waiting_for_human_review` 但 exit_code=0 的 manifest/validator，报告为非阻断 warning；只有 errors 或非零退出码才算阻断。
+
 # 失败处理
 - `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
 - `INVALID_OUTPUT_SCHEMA`：重新生成不合规产物并再次运行校验。
