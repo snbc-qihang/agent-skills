@@ -58,7 +58,8 @@ description: Use when the request is about 基于设计文档进行最小必要�
 # Preflight 运行门闩
 - 每次运行必须先输出并维护 `preflight_input_state`，取值只能是 `ready, waiting_for_input, waiting_for_human_review, blocked`。
 - 只有 `preflight_input_state == ready` 时才能进入 `formal_generation`，读取模板、填充正文、写入正式 Markdown/Excel/JSON，并登记正式 artifact。
-- `waiting_for_input` 时只允许登记 `required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json`；不得写入或登记正式阶段产物。
+- `waiting_for_input` 时只允许登记信息盘点、缺失信息、目标规划、方向确认、`required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json` 等控制产物；不得写入或登记正式阶段产物。
+- preflight 未 ready 时禁止生成或登记正式设计文档：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
 - 用户补充答案必须写回 `StageRunRequest.context`、artifact index 或 MD/JSON/YAML，并保留来源和时间，之后才能把 `preflight_input_state` 置为 `ready`。
 
 
@@ -141,27 +142,6 @@ description: Use when the request is about 基于设计文档进行最小必要�
 - 每个高风险动作都有人工审批记录。
 - 输出可通过 `output.schema.json` 校验。
 - `StageRunResult` 可通过 `validate_stage_run_result.py` 校验。
-
-# Generator-first 插件/技能资产修改补充
-当目标仓库声明 SKILL.md、validator、eval、workflow 或插件发布资产由 generator 生成时：
-1. 先定位并修改 generator source，不要把 generated SKILL.md / scripts 当作最终修复源头。
-2. 在 generator 中沉淀通用规则；具体业务名、表名、消息名、服务名只能放入 regression/eval 示例，不得进入通用规则正文。
-3. 重新运行 generator 刷新源树，再检查 generated diff，确认改动没有被生成器覆盖。
-4. 为每条新增通用规则补 deterministic regression test；测试应直接执行生成后的 validator 或 eval runner，验证失败信息而不是只断言文本存在。
-5. 面向通用团队插件 / skill library 的变更，提交前必须做污染审计：搜索并清理个人画像、个人工作流、项目专项架构结论、具体系统规划、私人路径等与插件目标无关的内容。若确需保留具体业务名、服务名、表名、消息名，只能放在 eval/regression 示例，不能进入 SKILL.md、validator、workflow、registry 或通用 reference 正文。
-6. 如果用户指出“通用插件混入个人/项目内容”，必须把修复落到 generator source，删除已生成的污染 reference，重新生成，并补一个 deterministic guard test 防止这些词再次进入非 eval/report 产物。
-7. 最终报告必须列出：源头修改、生成文件、regression cases、实际执行命令、真实输出、未完成项/阻断原因。
-
-# Generator-first 插件/技能资产修改补充
-当目标仓库声明 SKILL.md、validator、eval、workflow、manifest 或插件发布资产由 generator 生成时：
-1. 先定位并修改 generator source，不要把 generated SKILL.md / scripts / manifest 当作最终修复源头。
-2. 在 generator 中沉淀通用规则；具体业务名、表名、消息名、服务名只能放入 regression/eval 示例，不得进入通用规则正文。
-3. 重新运行 generator 刷新源树，再检查 generated diff，确认改动没有被生成器覆盖。
-4. 为每条新增通用规则或发布行为补 deterministic regression test；测试应执行生成后的 validator、eval runner 或发布脚本，验证真实产物而不是只断言源码文本存在。
-5. 修改插件版本时，不要只 patch 已生成的 `plugin.json`：应在 generator 中建立单一版本常量，manifest 读取该常量，并通过安装/发布脚本把发布包 manifest 读回校验版本。
-6. 面向通用团队插件 / skill library 的变更，提交前必须做污染审计：搜索并清理个人画像、个人工作流、项目专项架构结论、具体系统规划、私人路径等与插件目标无关的内容。若确需保留具体业务名、服务名、表名、消息名，只能放在 eval/regression 示例，不能进入 SKILL.md、validator、workflow、registry 或通用 reference 正文。
-7. 如果用户指出“通用插件混入个人/项目内容”，必须把修复落到 generator source，删除已生成的污染 reference，重新生成，并补一个 deterministic guard test 防止这些词再次进入非 eval/report 产物。
-8. 最终报告必须列出：源头修改、生成文件、regression cases、实际执行命令、真实输出、未完成项/阻断原因。
 
 # 禁止行为
 - 不得在无证据时宣称门禁通过。

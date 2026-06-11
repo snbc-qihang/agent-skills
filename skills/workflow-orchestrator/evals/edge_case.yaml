@@ -86,6 +86,25 @@
     "workflow-summary.md",
     "approval-requests.json",
     "artifact-index.json",
-    "validator-summary.json"
+    "validator-summary.json",
+    "information-inventory.json",
+    "context-source-map.json",
+    "missing-information-list.json",
+    "design-objective-plan.md",
+    "scope-and-non-goals.yaml",
+    "user-confirmed-facts.json",
+    "design-direction-decision.md",
+    "assumption-and-decision-log.yaml",
+    "self-review-findings.json",
+    "auto-fix-report.json",
+    "unresolved-review-findings.json",
+    "human-review-package.json",
+    "human-review-feedback.json",
+    "feedback-classification.json",
+    "next-iteration-plan.md",
+    "iteration-trace.json",
+    "rule-candidates.json",
+    "prompt-optimization-candidates.md",
+    "tl-review-package.json"
   ]
 }

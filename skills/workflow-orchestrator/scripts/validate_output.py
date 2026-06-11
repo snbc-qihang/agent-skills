@@ -21,6 +21,12 @@ if payload.get("status") == "succeeded" and payload.get("preflight_input_state")
     errors.append("succeeded 必须满足 preflight_input_state == ready")
 if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
     errors.append("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
+formal_design_artifacts = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
+if payload.get("preflight_input_state") != "ready":
+    produced = {item.get("name") for item in payload.get("artifacts", []) if isinstance(item, dict)}
+    leaked = sorted(formal_design_artifacts & produced)
+    if leaked:
+        errors.append("preflight 未 ready 时不得生成或登记正式设计文档: " + ", ".join(leaked))
 
 def artifact_map(payload):
     return {item.get("name"): item for item in payload.get("artifacts", [])}

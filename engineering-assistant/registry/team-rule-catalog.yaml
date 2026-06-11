@@ -251,6 +251,31 @@
       "rule": "正式文档被替代时必须标记 superseded 或 archived，并记录替代关系。"
     },
     {
+      "id": "DG7",
+      "category": "文档治理",
+      "rule": "preflight_input_state 不是 ready 时只能生成信息盘点、缺失信息、方向确认、人工填写入口、workflow trace 和恢复点等控制产物，不得生成或登记正式设计文档。"
+    },
+    {
+      "id": "DG8",
+      "category": "文档治理",
+      "rule": "人工补充信息必须写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源；human-review HTML 只作为填写入口，不得反向作为 agent 事实源。"
+    },
+    {
+      "id": "DG9",
+      "category": "文档治理",
+      "rule": "人工评审意见回来后必须先分类为事实补充、方案方向变化、文档缺陷、规范违背或团队规范候选；默认增量修正受影响产物，只有核心方案变化才允许整套重生并标记旧版 superseded。"
+    },
+    {
+      "id": "DG10",
+      "category": "文档治理",
+      "rule": "正式设计文档进入人工评审前必须完成自我评审、确定性 validator 和自动修复；未关闭 blocker 必须保留在 unresolved-review-findings，不得标记 approved/final。"
+    },
+    {
+      "id": "DG11",
+      "category": "文档治理",
+      "rule": "需求迭代中的用户修改、agent 修改、自审问题和人工评审意见只能抽取为规范候选，进入 TL 审核包；未经 TL 批准不得自动写回团队插件、SKILL.md、模板或规则目录。"
+    },
+    {
       "id": "QIN1",
       "category": "信息补全",
       "rule": "必填信息缺失且无法通过仓库或上游产物可靠推导时，skill 必须主动询问用户，不得继续伪造结论。"
@@ -279,6 +304,16 @@
       "id": "QIN6",
       "category": "信息补全",
       "rule": "涉及高风险动作、审批、生产变更或跨系统边界的信息缺失时，不允许以假设绕过人工确认。"
+    },
+    {
+      "id": "QIN7",
+      "category": "信息补全",
+      "rule": "信息收集完成判定必须覆盖需求目标、范围、非目标、涉及系统、数据对象、关键流程、专项涉及项和缺失信息分类；未完成时不得进入 formal_generation。"
+    },
+    {
+      "id": "QIN8",
+      "category": "信息补全",
+      "rule": "设计目标规划必须输出本次设计目标、阶段范围、需要生成的专项文档、已足够生成的信息、blocking 缺失项、可声明假设和需要人工评审的高风险点。"
     },
     {
       "id": "D6",
@@ -478,7 +513,17 @@
     {
       "id": "YQ4",
       "category": "萤启服务商系统",
-      "rule": "合作加盟服务涉及售货机激活、性质变更、库存盘点同步等 MQ 场景时，必须说明 queue.franchisee、exchange、routingKey、消息体、幂等和租户/服务商路由。"
+      "rule": "服务商系统涉及 MQ 场景时，必须优先从项目 profile、repo_context 或用户确认中读取已有通用队列、exchange、routingKey、消息 key、消息体、幂等和租户/服务商路由；缺失时主动询问，不得在团队插件中硬编码具体业务队列。"
+    },
+    {
+      "id": "KM1",
+      "category": "知识沉淀",
+      "rule": "单次需求暴露的设计纠偏必须先拆分为团队长期规范、项目事实、本次需求事实、运行状态和 eval/regression 样例；具体业务事实不得进入通用 SKILL.md 或 validator 默认规则。"
+    },
+    {
+      "id": "KM2",
+      "category": "知识沉淀",
+      "rule": "自优化提示词只能作为 prompt-optimization-candidates 或 rule-candidates 提交 TL，必须包含来源、原始修改、归纳规则、适用范围、不适用范围、反例、泛化程度、建议落点和审核状态。"
     }
   ],
   "eval_rule_prefixes": {

@@ -23,6 +23,8 @@ policy:
     - "跳过阻断节点"
     - "恢复 blocked workflow"
     - "高风险动作执行"
+    - "设计方案方向确认"
+    - "TL 规范候选入库"
 metadata:
   owner: "workflow owner"
   stage: "workflow_orchestration"

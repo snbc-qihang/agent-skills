@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
-PLUGIN_VERSION = "1.0.0.1"
+PLUGIN_VERSION = "1.0.0.2"
 PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
@@ -560,10 +560,81 @@ WORKFLOW_ENTRY_MODES = ["auto_flow", "from_node", "single_node"]
 PREFLIGHT_INPUT_STATES = ["ready", "waiting_for_input", "waiting_for_human_review", "blocked"]
 FORMAL_GENERATION_ENTRY_CONDITION = "preflight_input_state == ready"
 PREFLIGHT_ONLY_ARTIFACTS = [
+    "information-inventory.json",
+    "context-source-map.json",
+    "missing-information-list.json",
     "required-information-request.json",
+    "design-objective-plan.md",
+    "scope-and-non-goals.yaml",
+    "user-confirmed-facts.json",
+    "design-direction-decision.md",
     "docs/human-review/<run-id>.html",
     "workflow-trace.json",
     "resume-point.json",
+]
+
+FORMAL_DESIGN_ARTIFACTS = [
+    "high-level-design.md",
+    "detailed-design.md",
+    "database-design.md",
+    "redis-design.md",
+    "mq-design.xlsx",
+    "interface-contracts.yaml",
+    "test-strategy.md",
+]
+
+DESIGN_GOVERNANCE_STATES = [
+    "intake_collecting",
+    "intake_gap_analysis",
+    "waiting_for_user_input",
+    "direction_confirming",
+    "design_generating",
+    "self_reviewing",
+    "design_revising",
+    "waiting_for_human_review",
+    "human_review_processing",
+    "design_regenerating",
+    "knowledge_mining",
+    "tl_rule_candidate_pending",
+    "approved_or_done",
+]
+
+DOCUMENT_LIFECYCLE_STATES = [
+    "not_started",
+    "draft",
+    "ready_for_self_review",
+    "self_review_failed",
+    "revised",
+    "waiting_for_human_review",
+    "human_review_rejected",
+    "approved",
+    "final",
+    "superseded",
+    "archived",
+    "blocked",
+    "waiting_for_input",
+]
+
+DESIGN_GOVERNANCE_CONTROL_OUTPUTS = [
+    "information-inventory.json",
+    "context-source-map.json",
+    "missing-information-list.json",
+    "design-objective-plan.md",
+    "scope-and-non-goals.yaml",
+    "user-confirmed-facts.json",
+    "design-direction-decision.md",
+    "assumption-and-decision-log.yaml",
+    "self-review-findings.json",
+    "auto-fix-report.json",
+    "unresolved-review-findings.json",
+    "human-review-package.json",
+    "human-review-feedback.json",
+    "feedback-classification.json",
+    "next-iteration-plan.md",
+    "iteration-trace.json",
+    "rule-candidates.json",
+    "prompt-optimization-candidates.md",
+    "tl-review-package.json",
 ]
 
 TEAM_RULE_PREFIXES = {
@@ -735,12 +806,19 @@ TEAM_RULE_CATALOG = [
     {"id": "DG4", "category": "文档治理", "rule": "只有 approved 或 final 且 retention_policy=persist 的文档可进入正式文档目录。"},
     {"id": "DG5", "category": "文档治理", "rule": "任务过程摘要、缺失输入清单、临时评审意见、workflow 运行状态只作为 run artifact 或 evidence，不得伪装为正式文档。"},
     {"id": "DG6", "category": "文档治理", "rule": "正式文档被替代时必须标记 superseded 或 archived，并记录替代关系。"},
+    {"id": "DG7", "category": "文档治理", "rule": "preflight_input_state 不是 ready 时只能生成信息盘点、缺失信息、方向确认、人工填写入口、workflow trace 和恢复点等控制产物，不得生成或登记正式设计文档。"},
+    {"id": "DG8", "category": "文档治理", "rule": "人工补充信息必须写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源；human-review HTML 只作为填写入口，不得反向作为 agent 事实源。"},
+    {"id": "DG9", "category": "文档治理", "rule": "人工评审意见回来后必须先分类为事实补充、方案方向变化、文档缺陷、规范违背或团队规范候选；默认增量修正受影响产物，只有核心方案变化才允许整套重生并标记旧版 superseded。"},
+    {"id": "DG10", "category": "文档治理", "rule": "正式设计文档进入人工评审前必须完成自我评审、确定性 validator 和自动修复；未关闭 blocker 必须保留在 unresolved-review-findings，不得标记 approved/final。"},
+    {"id": "DG11", "category": "文档治理", "rule": "需求迭代中的用户修改、agent 修改、自审问题和人工评审意见只能抽取为规范候选，进入 TL 审核包；未经 TL 批准不得自动写回团队插件、SKILL.md、模板或规则目录。"},
     {"id": "QIN1", "category": "信息补全", "rule": "必填信息缺失且无法通过仓库或上游产物可靠推导时，skill 必须主动询问用户，不得继续伪造结论。"},
     {"id": "QIN2", "category": "信息补全", "rule": "主动询问必须区分 blocking 与 optional；blocking 问题未回答时状态必须为 waiting_for_input。"},
     {"id": "QIN3", "category": "信息补全", "rule": "每个问题必须说明用途、阻断原因、期望格式、示例和默认处理方式。"},
     {"id": "QIN4", "category": "信息补全", "rule": "一次询问优先返回最小必要问题集，按 critical、major、minor 排序，避免把可从上下文推导的信息重复问用户。"},
     {"id": "QIN5", "category": "信息补全", "rule": "用户补充信息后必须写回 StageRunRequest.context 或 artifact index，并保留来源。"},
     {"id": "QIN6", "category": "信息补全", "rule": "涉及高风险动作、审批、生产变更或跨系统边界的信息缺失时，不允许以假设绕过人工确认。"},
+    {"id": "QIN7", "category": "信息补全", "rule": "信息收集完成判定必须覆盖需求目标、范围、非目标、涉及系统、数据对象、关键流程、专项涉及项和缺失信息分类；未完成时不得进入 formal_generation。"},
+    {"id": "QIN8", "category": "信息补全", "rule": "设计目标规划必须输出本次设计目标、阶段范围、需要生成的专项文档、已足够生成的信息、blocking 缺失项、可声明假设和需要人工评审的高风险点。"},
     {"id": "D6", "category": "详细设计", "rule": "涉及租户、认证、鉴权、角色、权限、多租户隔离时，必须生成 IAM/RBAC 专项规范。"},
     {"id": "D7", "category": "详细设计", "rule": "涉及 Spring AI、LLM provider、RAG、Agent、Tool Calling、Embedding、VectorStore 时，必须生成 Spring AI 专项规范。"},
     {"id": "D8", "category": "详细设计", "rule": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。"},
@@ -780,7 +858,9 @@ TEAM_RULE_CATALOG = [
     {"id": "YQ1", "category": "萤启服务商系统", "rule": "萤启服务商系统异常编码结构为 [系统]-[服务]-[模块]-[错误码]，服务编码必须从 profile 或概要设计读取，例如 FRCH、TMGE、TCER、FRME、FRST。"},
     {"id": "YQ2", "category": "萤启服务商系统", "rule": "萤启服务商系统错误码段必须按类型划分：1000 业务、2000 参数、3000 数据库、4000 第三方、5000 权限、6000 状态、7000 网络、8000 系统、9000 未知。"},
     {"id": "YQ3", "category": "萤启服务商系统", "rule": "系统交互流向遵循客户端到网关到系统应用到领域服务；禁止跨系统直接使用 Feign 调用未开放能力。"},
-    {"id": "YQ4", "category": "萤启服务商系统", "rule": "合作加盟服务涉及售货机激活、性质变更、库存盘点同步等 MQ 场景时，必须说明 queue.franchisee、exchange、routingKey、消息体、幂等和租户/服务商路由。"},
+    {"id": "YQ4", "category": "萤启服务商系统", "rule": "服务商系统涉及 MQ 场景时，必须优先从项目 profile、repo_context 或用户确认中读取已有通用队列、exchange、routingKey、消息 key、消息体、幂等和租户/服务商路由；缺失时主动询问，不得在团队插件中硬编码具体业务队列。"},
+    {"id": "KM1", "category": "知识沉淀", "rule": "单次需求暴露的设计纠偏必须先拆分为团队长期规范、项目事实、本次需求事实、运行状态和 eval/regression 样例；具体业务事实不得进入通用 SKILL.md 或 validator 默认规则。"},
+    {"id": "KM2", "category": "知识沉淀", "rule": "自优化提示词只能作为 prompt-optimization-candidates 或 rule-candidates 提交 TL，必须包含来源、原始修改、归纳规则、适用范围、不适用范围、反例、泛化程度、建议落点和审核状态。"},
 ]
 
 TEAM_EVAL_SCENARIOS = {
@@ -1571,10 +1651,10 @@ SKILLS = [
         "purpose": "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。",
         "non_goals": ["不直接生成阶段文档", "不绕过子 skill contract", "不自动批准高风险动作"],
         "inputs": ["workflow.yaml", "stage node registry", "StageRunRequest", "approval_context"],
-        "outputs": ["workflow-trace.json", "workflow-summary.md", "approval-requests.json", "artifact-index.json", "validator-summary.json"],
-        "gates": ["节点 contract 匹配", "前置条件满足", "产物 schema 合规", "专项 validator 结果全部通过或向上冒泡为 blocked", "高风险动作进入审批"],
-        "approvals": ["人工审批网关", "跳过阻断节点", "恢复 blocked workflow", "高风险动作执行"],
-        "checks": ["阶段选择", "状态流转", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "design-only 完成前运行 high-level/detailed/database/mq/redis 专项 validator", "validator-summary 汇总 stage、validator、failed_rule、error_message、suggested_repair", "任一专项 validator 失败时 workflow 总状态不得 succeeded", "waiting_for_human_review 不得宣称 approved/final/succeeded", "defect-analysis 根因分析", "DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录"],
+        "outputs": ["workflow-trace.json", "workflow-summary.md", "approval-requests.json", "artifact-index.json", "validator-summary.json"] + DESIGN_GOVERNANCE_CONTROL_OUTPUTS,
+        "gates": ["节点 contract 匹配", "信息收集完成或已暂停追问", "方案方向已确认或已暂停确认", "前置条件满足", "产物 schema 合规", "专项 validator 结果全部通过或向上冒泡为 blocked", "自审 blocker 已修复或保留为 unresolved", "高风险动作进入审批", "TL 规范候选未自动入库"],
+        "approvals": ["人工审批网关", "跳过阻断节点", "恢复 blocked workflow", "高风险动作执行", "设计方案方向确认", "TL 规范候选入库"],
+        "checks": ["阶段选择", "状态流转", "信息收集完成判定", "设计目标规划", "缺失信息识别", "主动沟通与方向确认", "preflight 未 ready 时不得生成正式设计文档", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "design-only 完成前运行 high-level/detailed/database/mq/redis 专项 validator", "validator-summary 汇总 stage、validator、failed_rule、error_message、suggested_repair", "任一专项 validator 失败时 workflow 总状态不得 succeeded", "self-review findings 驱动自动修复", "unresolved blocker 阻断 approved/final", "waiting_for_human_review 不得宣称 approved/final/succeeded", "人工评审反馈分类后增量修正，只有核心方案变化才整套重生", "defect-analysis 根因分析", "DG2-DG11 产物路由时区分 run artifact、正式留存文档、控制面、人审入口和 TL 候选，防止中间过程文档或具体需求事实进入团队插件"],
     },
 ]
 
@@ -1609,7 +1689,7 @@ def document_lifecycle_schema() -> dict:
                 "type": "string",
                 "pattern": "^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$",
             },
-            "document_status": {"enum": ["draft", "reviewing", "approved", "final", "superseded", "archived", "blocked", "waiting_for_input"]},
+            "document_status": {"enum": DOCUMENT_LIFECYCLE_STATES},
             "retention_policy": {"enum": ["transient", "keep_until_run_end", "persist"]},
             "title": {"type": "string", "minLength": 1},
             "owner": {"type": "string", "minLength": 1},
@@ -1771,11 +1851,55 @@ def runtime_default_prompt(skill: dict) -> str:
     return f"使用 {skill['id']}，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。"
 
 
+def design_governance_policy() -> dict:
+    return {
+        "states": DESIGN_GOVERNANCE_STATES,
+        "formal_design_artifacts": FORMAL_DESIGN_ARTIFACTS,
+        "preflight_control_artifacts": PREFLIGHT_ONLY_ARTIFACTS,
+        "document_lifecycle_states": DOCUMENT_LIFECYCLE_STATES,
+        "hard_gates": {
+            "information_complete_before_formal_generation": True,
+            "direction_confirmed_before_design_generation": True,
+            "specialty_scope_confirmed_before_specialty_docs": True,
+            "self_review_passed_before_human_review": True,
+            "human_review_approved_before_final": True,
+            "approved_or_final_before_code_control_surface": True,
+        },
+        "waiting_for_input_policy": {
+            "allowed_artifacts": PREFLIGHT_ONLY_ARTIFACTS,
+            "forbidden_artifacts": FORMAL_DESIGN_ARTIFACTS,
+            "must_not_register_formal_artifacts_as_completed": True,
+            "resume_requires_writeback_to_machine_readable_source": True,
+        },
+        "review_feedback_policy": {
+            "classification_required": True,
+            "classes": ["fact_completion", "direction_change", "document_defect", "standard_violation", "team_rule_candidate"],
+            "default_update_strategy": "incremental_patch_affected_artifacts",
+            "full_regeneration_allowed_when": ["architecture_direction_changed", "data_model_changed", "interface_boundary_changed", "message_model_changed"],
+            "full_regeneration_requires": ["impact_analysis", "supersede_previous_version", "workflow_trace_reason"],
+        },
+        "self_review_policy": {
+            "layers": ["deterministic_validators", "reviewer_agent"],
+            "auto_fix_allowed_for": ["format_error", "template_gap", "known_fact_omission", "terminology_inconsistency", "document_routing_error", "confirmed_solution_clarity"],
+            "auto_fix_forbidden_for": ["business_direction_change", "core_interface_add_or_remove", "risk_strategy_change", "system_boundary_change", "human_approval_replacement"],
+            "unresolved_blocker_status": "blocked_or_waiting_for_human_review",
+        },
+        "knowledge_mining_policy": {
+            "candidate_outputs": ["rule-candidates.json", "prompt-optimization-candidates.md", "tl-review-package.json"],
+            "candidate_types": ["team-rule-candidate", "document-template-candidate", "agent-behavior-candidate"],
+            "required_fields": ["candidate_id", "source_run_id", "original_user_change", "agent_original_design", "human_review_feedback", "generalized_rule", "scope", "non_scope", "counter_examples", "contains_specific_business_fact", "generalization_level", "suggested_landing_zone", "tl_review_status"],
+            "auto_apply_to_plugin": False,
+            "tl_review_required": True,
+        },
+    }
+
+
 def workflow_runtime_policy() -> dict:
     return {
         "supported_entry_modes": WORKFLOW_ENTRY_MODES,
         "default_entry_mode": "auto_flow",
-        "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；遇到 waiting_for_input、waiting_for_human_review、blocked、failed 必须暂停。",
+        "design_governance_state_machine": design_governance_policy(),
+        "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；遇到 waiting_for_input、waiting_for_human_review、blocked、failed 必须暂停。" ,
         "auto_transition_policy": {
             "continue_when": ["StageRunResult.status == succeeded", "required_information_requests 为空或全部非 blocking 且已处理", "未声明 HUMAN_APPROVAL_REQUIRED", "next_node 存在"],
             "pause_when": ["StageRunResult.status in waiting_for_input|waiting_for_human_review|blocked|failed", "preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回 StageRunRequest.context 或 artifact index"],
@@ -3122,6 +3246,12 @@ if payload.get("status") == "succeeded" and payload.get("preflight_input_state")
     raise SystemExit("succeeded 必须满足 preflight_input_state == ready")
 if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
     raise SystemExit("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
+formal_design_artifacts = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
+if payload.get("preflight_input_state") != "ready":
+    produced = {item.get("name") for item in payload.get("artifacts", []) if isinstance(item, dict)}
+    leaked = sorted(formal_design_artifacts & produced)
+    if leaked:
+        raise SystemExit("preflight 未 ready 时不得生成或登记正式设计文档: " + ", ".join(leaked))
 print("ok")
 """
 
@@ -3150,6 +3280,12 @@ if payload.get("status") == "succeeded" and payload.get("preflight_input_state")
     errors.append("succeeded 必须满足 preflight_input_state == ready")
 if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
     errors.append("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
+formal_design_artifacts = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
+if payload.get("preflight_input_state") != "ready":
+    produced = {item.get("name") for item in payload.get("artifacts", []) if isinstance(item, dict)}
+    leaked = sorted(formal_design_artifacts & produced)
+    if leaked:
+        errors.append("preflight 未 ready 时不得生成或登记正式设计文档: " + ", ".join(leaked))
 
 def artifact_map(payload):
     return {item.get("name"): item for item in payload.get("artifacts", [])}
@@ -4682,8 +4818,10 @@ def contract(skill: dict) -> dict:
             "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
             "formal_generation_blocked_when": ["preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回机读事实源"],
             "waiting_for_input_allowed_artifacts": PREFLIGHT_ONLY_ARTIFACTS,
+            "waiting_for_input_forbidden_formal_artifacts": FORMAL_DESIGN_ARTIFACTS,
             "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。",
         },
+        "design_governance_policy": design_governance_policy(),
         "language_policy": {
             "supported": ["zh-CN", "en"],
             "when_unspecified": "ask_user",
@@ -4878,7 +5016,8 @@ def preflight_runtime_note(skill: dict) -> str:
 # Preflight 运行门闩
 - 每次运行必须先输出并维护 `preflight_input_state`，取值只能是 `{", ".join(PREFLIGHT_INPUT_STATES)}`。
 - 只有 `{FORMAL_GENERATION_ENTRY_CONDITION}` 时才能进入 `formal_generation`，读取模板、填充正文、写入正式 Markdown/Excel/JSON，并登记正式 artifact。
-- `waiting_for_input` 时只允许登记 `required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json`；不得写入或登记正式阶段产物。
+- `waiting_for_input` 时只允许登记信息盘点、缺失信息、目标规划、方向确认、`required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json` 等控制产物；不得写入或登记正式阶段产物。
+- preflight 未 ready 时禁止生成或登记正式设计文档：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
 - 用户补充答案必须写回 `StageRunRequest.context`、artifact index 或 MD/JSON/YAML，并保留来源和时间，之后才能把 `preflight_input_state` 置为 `ready`。
 """
 
@@ -4898,6 +5037,10 @@ def workflow_runtime_note(skill: dict) -> str:
 - workflow 可以按任务目标裁剪或组合节点，但不得静默跳过质量门禁、人工审批、必填输入检查或产物 schema 校验。
 - 每次运行必须在 `workflow-trace.json` 记录 `entry_mode`、实际执行节点、跳过节点及原因、暂停原因、恢复点和下一个建议节点。
 - 每个节点必须先执行 preflight gate；`preflight_input_state != ready` 时不得进入当前节点 `formal_generation`，也不得触发下游 `next_nodes`。
+- workflow 必须按状态机推进：信息收集完成判定 -> 缺口识别 -> 用户追问/方向确认 -> 正式设计生成 -> 自审 -> 自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 知识候选沉淀。
+- 人工评审反馈必须先分类为 `fact_completion`、`direction_change`、`document_defect`、`standard_violation` 或 `team_rule_candidate`；默认增量修正受影响产物，只有架构方向、数据模型、接口边界或消息模型变化才允许整套重生并标记旧版 `superseded`。
+- 自审由确定性 validator 和 reviewer-agent 两层组成；Agent 只能自动修格式、模板缺口、已知事实遗漏、术语不一致、文档路由错误和已确认方案表达问题，不能替代业务方向、风险策略、系统边界或人工审批。
+- 知识沉淀只生成 `rule-candidates.json`、`prompt-optimization-candidates.md` 和 `tl-review-package.json`；未经 TL 审核不得自动写入团队插件、SKILL.md、模板或规则目录。
 """
 
 
@@ -5293,6 +5436,69 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
     }
 
 
+def extra_reference_files(skill: dict) -> dict[str, str]:
+    if skill["id"] == "workflow-orchestrator":
+        return {
+            "design-governance-loop.md": """# Design governance loop: prevent wasteful draft churn
+
+Use this reference when orchestrating product/engineering design workflows where the agent collects information, generates design docs, self-reviews, incorporates human review, and mines reusable rules.
+
+## Durable workflow
+1. Collect and classify information before formal generation:
+   - team rules / long-lived standards
+   - project facts
+   - current requirement facts
+   - run state / workflow evidence
+   - eval or regression examples
+2. Decide whether information collection is complete. Minimum checks: goal, scope, non-goals, involved systems, data objects, key flows, impacted specialties, missing-info classification.
+3. If blocking facts or direction choices are missing, pause in `waiting_for_input` and produce only control artifacts such as information inventory, missing-information list, required-information request, direction-decision draft, workflow trace, and resume point.
+4. Do not generate formal design documents until `preflight_input_state == ready` and direction/specialty scope are confirmed.
+5. After formal generation, run deterministic validators plus reviewer-agent self-review.
+6. Auto-fix only bounded issues: formatting, template gaps, known fact omissions, terminology inconsistency, document routing, and clarity of already-confirmed decisions.
+7. Do not auto-fix business direction, core interface addition/removal, risk strategy, system boundaries, or human approvals.
+8. Send a human-review package only after self-review. Human review state is not final/approved.
+9. Classify human feedback before revising: fact completion, direction change, document defect, standard violation, team-rule candidate.
+10. Prefer incremental patching of affected artifacts. Full regeneration requires a core architecture/data/interface/message-model change, impact analysis, and marking previous versions superseded.
+11. Mine user corrections, agent corrections, self-review findings, and human-review feedback into rule/prompt candidates for TL review. Never auto-write candidates into team plugins, SKILL.md, templates, or validators.
+
+## Anti-patterns
+- Generating a full set of formal design docs and then asking the user to fill missing information.
+- Treating human-review HTML as a machine fact source.
+- Turning one requirement’s concrete facts into team plugin rules.
+- Letting agent self-review replace human approval.
+- Regenerating every design document after small review comments.
+
+## Candidate package shape for TL
+Each rule/prompt candidate should include: candidate_id, source_run_id, original user change, agent original design, human review feedback, generalized rule, scope, non-scope, counterexamples, whether it contains concrete business facts, generalization level, suggested landing zone, and TL review status.
+"""
+        }
+    if skill["id"] == "code-development":
+        return {
+            "plugin-feedback-to-generic-rules.md": """# Plugin feedback -> generic rules/regression workflow
+
+Use this reference when the user gives concrete business-design corrections for the `agent-skills` / `teamwork-engineering-assistant` plugin and asks to improve the plugin.
+
+## Durable pattern
+1. Do not immediately code when the user explicitly says the plan must be approved before implementation (e.g. “方案没有问题后再落代码”). First produce an optimization plan.
+2. Split the input into two buckets:
+   - Generic team-engineering rules that belong in generator source, SKILL.md, validators, workflow, or rule catalog.
+   - Concrete requirement facts that belong only in eval/regression fixtures or references, not in general-purpose rules.
+3. Call out rule conflicts explicitly instead of silently weakening gates. Example: if the team default requires an MQ dead-letter queue but the concrete case says “无死信队列”, keep the default rule and model the case as an explicit constraint/waiver requiring compensating controls such as retry, backlog alerting, failure logs, manual handling, and review status.
+4. For DB/MQ/Redis/interface/exception feedback, prefer capability-level improvements:
+   - MQ: distinguish exchange, routingKey, queue, and business message key/configType; different message keys usually require separate consumers/handlers even on the same queue/routingKey.
+   - Redis: distinguish idempotency records from short-lived out-of-order protection records; Redis remains a short-state/coordination layer, not a fact source.
+   - DB: derive indexes from query patterns, sort order, permission filters, data volume, and sensitivity; ask only for missing facts that cannot be inferred.
+   - Interfaces: generate only APIs owned by the current service; external-service detail APIs should be listed as dependencies, not local API contracts.
+   - Exceptions: enforce system-service-module-code structure and numeric error ranges from the project profile.
+5. After the plan is accepted, modify the generator first, regenerate assets, then add deterministic regression tests that verify behavior rather than text presence.
+
+## Pitfall
+Do not hard-code a single requirement’s queue names, message keys, Redis keys, service names, software demand numbers, or designer names into reusable rule text. Put those details in eval cases or references only.
+"""
+        }
+    return {}
+
+
 def generate_skills() -> None:
     for skill in SKILLS:
         base = ROOT / SKILLS_ROOT / skill["id"]
@@ -5302,6 +5508,8 @@ def generate_skills() -> None:
         write_json(base / "output.schema.json", output_schema(skill))
         write_text(base / "README.md", f"# {skill['name']}\n\n{skill['purpose']}\n\n本 skill 的产物由 `contract.yaml`、`output.schema.json`、eval cases 和 `workflow/node.yaml` 共同约束。")
         write_text(base / "references" / "stage-guidance.md", f"# {skill['name']} 阶段指引\n\n检查项：\n" + "\n".join(f"- {c}" for c in skill["checks"]))
+        for reference_name, reference_content in extra_reference_files(skill).items():
+            write_text(base / "references" / reference_name, reference_content)
         write_text(base / "assets" / "artifact-template.md", f"""---
 document_number: "<PREFIX>-<DOMAIN>-<YYYYMMDD>-<SEQ>"
 document_status: "draft"
@@ -5367,9 +5575,11 @@ def workflow(name: str, nodes: list[str]) -> dict:
             "formal_generation_entry_condition": FORMAL_GENERATION_ENTRY_CONDITION,
             "pause_when": ["preflight_input_state != ready", "存在 blocking required_information_requests", "human-review HTML 已生成但补充答案未写回机读事实源"],
             "allowed_artifacts_when_waiting_for_input": PREFLIGHT_ONLY_ARTIFACTS,
+            "forbidden_formal_artifacts_when_waiting_for_input": FORMAL_DESIGN_ARTIFACTS,
             "block_current_node_formal_generation": True,
             "block_next_nodes": True,
         },
+        "design_governance_policy": design_governance_policy(),
         "nodes": workflow_nodes,
         "artifact_routing": "每个节点的输出进入 artifact-index.json，并映射到下游 StageRunRequest.artifacts",
         "human_approval_gateway": "遇到 HUMAN_APPROVAL_REQUIRED 时暂停，仅在 ApprovalRequest.decision=approved 后恢复",
@@ -9455,9 +9665,13 @@ def delivery_doc() -> str:
     return f"""# 研发助手 Skills 工程体系落地方案
 
 # 1. 执行摘要
-目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的 Codex Skills 工程资产。本次落地直接创建仓库结构、17 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准和检查清单。
+当前插件版本：`{PLUGIN_VERSION}`。
 
-边界：当前未接入真实组织系统、真实 CI/CD 平台和真实审批工具，默认以文件化 contract、GitHub Actions 样例和人工审批对象作为第一版落地接口。待组织确认项见本文件末尾。
+目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的团队研发助手插件。本版本不再把插件定位为“文档生成器”，而是定位为“可循环的设计治理工作流”：信息收集完成判定 -> 目标规划与缺口识别 -> 用户追问/方向确认 -> ready 后正式生成设计文档 -> 自我评审 -> 有边界的自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 规范候选沉淀 -> TL 统一治理。
+
+当前落地内容包括仓库结构、`{len(SKILLS)}` 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准、检查清单、设计治理状态机、preflight 生成闸门、自审修复边界、人审反馈循环和 TL 规范候选包。
+
+边界：当前未接入真实组织系统、真实 CI/CD 平台和真实审批工具，默认以文件化 contract、GitHub Actions 样例和人工审批对象作为第一版落地接口。插件不得维护单次需求的具体业务事实；具体业务事实只能进入目标项目 artifact 或脱敏 eval/regression case。待组织确认项见本文件末尾。
 
 # 2. 总体架构
 ```mermaid
@@ -9472,27 +9686,37 @@ flowchart TB
 
 模块职责：L1 提供触发入口；L2 负责编排、状态、审批和 artifact mapping；L3 执行阶段能力；L4 提供确定性工程检查；L5 提供规范和经验；L6 管理版本、owner、eval、审计和指标。
 
-关键数据流：输入材料进入 `StageRunRequest`，skill 输出 `StageRunResult`，产物写入 `artifacts/<skill_id>/`，workflow 通过 `artifact-index.json` 路由给下游节点，知识 miner 从全链路产物抽取 rule candidates 和 regression cases。
+关键数据流：输入材料进入 `StageRunRequest`，preflight 先生成信息盘点、缺失信息、目标规划和方向确认等控制产物；只有 `preflight_input_state == ready` 且方向/专项范围已确认时，skill 才输出正式设计文档和 `StageRunResult`。产物写入 `artifacts/<skill_id>/`，workflow 通过 `artifact-index.json` 路由给下游节点，knowledge mining 只从用户修改、Agent 修改、自审 findings 和人工评审意见抽取 rule candidates / prompt candidates，并提交 TL 审核，不自动写回团队插件。
 
-关键控制流：`pending -> running -> succeeded|failed|blocked|waiting_for_input|waiting_for_human_review`。高风险动作进入人工审批网关，审批通过恢复运行，拒绝则 blocked 或 cancelled。
+关键控制流：基础状态为 `pending -> running -> succeeded|failed|blocked|waiting_for_input|waiting_for_human_review`；设计治理状态机进一步细化为 `intake_collecting -> intake_gap_analysis -> waiting_for_user_input -> direction_confirming -> design_generating -> self_reviewing -> design_revising -> waiting_for_human_review -> human_review_processing -> design_regenerating -> knowledge_mining -> tl_rule_candidate_pending -> approved_or_done`。高风险动作进入人工审批网关，审批通过恢复运行，拒绝则 blocked 或 cancelled。
 
-人工审批流：风险识别 -> 生成 `ApprovalRequest` -> 指定角色审批 -> 记录证据、时间、结果 -> 执行后续动作或拒绝策略。
+人工审批流：风险识别 -> 生成 `ApprovalRequest` 或 human-review package -> 指定角色审批 -> 记录证据、时间、结果 -> 按反馈分类决定增量修正、方向重确认为或阻断。人工评审状态不得被标记为 final/approved。
 
 产物流转图：
 ```mermaid
 flowchart LR
-  A[Requirement Contract] --> B[Design Docs]
-  B --> C[Special Designs]
-  C --> D[Design Review Gate]
-  D --> E[Code Changes]
-  E --> F[Self Test]
-  F --> G[Code Quality Governor]
-  G --> H[Code Review]
-  H --> I[Release Readiness]
-  I --> J[Release Verification]
-  J --> K[Retrospective]
-  K --> L[Knowledge Miner]
-  L --> M[Standards / Checklists / Evals / Skill Patches]
+  A[Information Inventory] --> B[Gap Analysis]
+  B --> C{{Preflight ready?}}
+  C -- No --> D[Required Info / Direction Confirmation]
+  D --> B
+  C -- Yes --> E[Formal Design Docs]
+  E --> F[Special Designs]
+  F --> G[Self Review + Validators]
+  G --> H{{Blockers fixed?}}
+  H -- No --> I[Auto Fix / Unresolved Findings]
+  I --> G
+  H -- Yes --> J[Human Review Package]
+  J --> K[Feedback Classification]
+  K --> L{{Core direction changed?}}
+  L -- Yes --> B
+  L -- No --> M[Incremental Patch]
+  M --> G
+  K --> N[Rule / Prompt Candidates]
+  N --> O[TL Review Queue]
+  J --> P[Design Review Gate]
+  P --> Q[Code Changes]
+  Q --> R[Self Test / Quality / Code Review]
+  R --> S[Release / Verification / Retrospective]
 ```
 
 # 3. 仓库结构
@@ -9533,6 +9757,27 @@ flowchart LR
 节点协议：每个 node 包含 `node_id`、`stage`、`skill_id`、`version`、`mode`、`inputs`、`outputs`、`preconditions`、`postconditions`、`quality_gates`、`approval_policy`、`retry_policy`、`failure_policy`、`next_nodes`、`artifact_mapping`。
 
 workflow 样例已创建在 `engineering-assistant/workflows/`。断点恢复依赖 workflow trace、节点状态和 artifact index；人工审批通过 `ApprovalRequest` 暂停和恢复。
+
+# 8.1 设计治理闭环与防废稿门禁
+设计治理状态机：`intake_collecting`、`intake_gap_analysis`、`waiting_for_user_input`、`direction_confirming`、`design_generating`、`self_reviewing`、`design_revising`、`waiting_for_human_review`、`human_review_processing`、`design_regenerating`、`knowledge_mining`、`tl_rule_candidate_pending`、`approved_or_done`。
+
+硬门禁：
+- 信息收集完成前不得进入 `formal_generation`。
+- 方案方向和专项范围未确认前不得生成主设计或专项设计。
+- `preflight_input_state != ready` 时只允许生成控制产物，不得生成或登记正式设计文档。
+- 自审和 deterministic validator 未完成前不得提交人工评审。
+- 人工评审未通过前不得标记 `approved` / `final`。
+- 只有 `approved` 或 `final` 且 `retention_policy=persist` 的文档才能进入代码研发控制面。
+
+waiting_for_input 阶段允许产物：`information-inventory.json`、`context-source-map.json`、`missing-information-list.json`、`required-information-request.json`、`design-objective-plan.md`、`scope-and-non-goals.yaml`、`user-confirmed-facts.json`、`design-direction-decision.md`、`docs/human-review/<run-id>.html`、`workflow-trace.json`、`resume-point.json`。
+
+waiting_for_input 阶段禁止产物：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
+
+自审策略：deterministic validators + reviewer-agent 两层执行。Agent 只能自动修复格式、模板缺口、已知事实遗漏、术语不一致、文档路由错误和已确认方案表达问题；不能自动改变业务方向、核心接口增删、风险策略、系统边界或人工审批结论。
+
+人工评审反馈处理：先分类为 `fact_completion`、`direction_change`、`document_defect`、`standard_violation`、`team_rule_candidate`。默认增量 patch 受影响产物；只有架构方向、数据模型、接口边界或消息模型变化时才允许整套重生，并必须输出影响分析、把旧版标记 `superseded`、在 `workflow-trace.json` 记录原因。
+
+知识沉淀：用户修改、Agent 修改、自审问题和人工评审意见只生成 `rule-candidates.json`、`prompt-optimization-candidates.md`、`tl-review-package.json`。未经 TL 审核，不得自动写回团队插件、SKILL.md、模板、validator 或正式规则目录。
 
 # 9. 代码质量控制体系
 五层门禁：Q0 设计一致性；Q1 build/format/lint/typecheck/unit/integration/coverage/dependency/secret/migration/architecture boundary；Q2 correctness、boundary、exception、idempotency、transaction、concurrency、performance、security、maintainability、testability、observability；Q3 DB/Redis/MQ/权限/认证/支付/订单/配置/发布脚本等风险专项；Q4 发布前回归。

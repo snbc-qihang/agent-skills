@@ -1,9 +1,13 @@
 # 研发助手 Skills 工程体系落地方案
 
 # 1. 执行摘要
-目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的 Codex Skills 工程资产。本次落地直接创建仓库结构、17 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准和检查清单。
+当前插件版本：`1.0.0.2`。
 
-边界：当前未接入真实组织系统、真实 CI/CD 平台和真实审批工具，默认以文件化 contract、GitHub Actions 样例和人工审批对象作为第一版落地接口。待组织确认项见本文件末尾。
+目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的团队研发助手插件。本版本不再把插件定位为“文档生成器”，而是定位为“可循环的设计治理工作流”：信息收集完成判定 -> 目标规划与缺口识别 -> 用户追问/方向确认 -> ready 后正式生成设计文档 -> 自我评审 -> 有边界的自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 规范候选沉淀 -> TL 统一治理。
+
+当前落地内容包括仓库结构、`21` 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准、检查清单、设计治理状态机、preflight 生成闸门、自审修复边界、人审反馈循环和 TL 规范候选包。
+
+边界：当前未接入真实组织系统、真实 CI/CD 平台和真实审批工具，默认以文件化 contract、GitHub Actions 样例和人工审批对象作为第一版落地接口。插件不得维护单次需求的具体业务事实；具体业务事实只能进入目标项目 artifact 或脱敏 eval/regression case。待组织确认项见本文件末尾。
 
 # 2. 总体架构
 ```mermaid
@@ -18,27 +22,37 @@ flowchart TB
 
 模块职责：L1 提供触发入口；L2 负责编排、状态、审批和 artifact mapping；L3 执行阶段能力；L4 提供确定性工程检查；L5 提供规范和经验；L6 管理版本、owner、eval、审计和指标。
 
-关键数据流：输入材料进入 `StageRunRequest`，skill 输出 `StageRunResult`，产物写入 `artifacts/<skill_id>/`，workflow 通过 `artifact-index.json` 路由给下游节点，知识 miner 从全链路产物抽取 rule candidates 和 regression cases。
+关键数据流：输入材料进入 `StageRunRequest`，preflight 先生成信息盘点、缺失信息、目标规划和方向确认等控制产物；只有 `preflight_input_state == ready` 且方向/专项范围已确认时，skill 才输出正式设计文档和 `StageRunResult`。产物写入 `artifacts/<skill_id>/`，workflow 通过 `artifact-index.json` 路由给下游节点，knowledge mining 只从用户修改、Agent 修改、自审 findings 和人工评审意见抽取 rule candidates / prompt candidates，并提交 TL 审核，不自动写回团队插件。
 
-关键控制流：`pending -> running -> succeeded|failed|blocked|waiting_for_input|waiting_for_human_review`。高风险动作进入人工审批网关，审批通过恢复运行，拒绝则 blocked 或 cancelled。
+关键控制流：基础状态为 `pending -> running -> succeeded|failed|blocked|waiting_for_input|waiting_for_human_review`；设计治理状态机进一步细化为 `intake_collecting -> intake_gap_analysis -> waiting_for_user_input -> direction_confirming -> design_generating -> self_reviewing -> design_revising -> waiting_for_human_review -> human_review_processing -> design_regenerating -> knowledge_mining -> tl_rule_candidate_pending -> approved_or_done`。高风险动作进入人工审批网关，审批通过恢复运行，拒绝则 blocked 或 cancelled。
 
-人工审批流：风险识别 -> 生成 `ApprovalRequest` -> 指定角色审批 -> 记录证据、时间、结果 -> 执行后续动作或拒绝策略。
+人工审批流：风险识别 -> 生成 `ApprovalRequest` 或 human-review package -> 指定角色审批 -> 记录证据、时间、结果 -> 按反馈分类决定增量修正、方向重确认为或阻断。人工评审状态不得被标记为 final/approved。
 
 产物流转图：
 ```mermaid
 flowchart LR
-  A[Requirement Contract] --> B[Design Docs]
-  B --> C[Special Designs]
-  C --> D[Design Review Gate]
-  D --> E[Code Changes]
-  E --> F[Self Test]
-  F --> G[Code Quality Governor]
-  G --> H[Code Review]
-  H --> I[Release Readiness]
-  I --> J[Release Verification]
-  J --> K[Retrospective]
-  K --> L[Knowledge Miner]
-  L --> M[Standards / Checklists / Evals / Skill Patches]
+  A[Information Inventory] --> B[Gap Analysis]
+  B --> C{Preflight ready?}
+  C -- No --> D[Required Info / Direction Confirmation]
+  D --> B
+  C -- Yes --> E[Formal Design Docs]
+  E --> F[Special Designs]
+  F --> G[Self Review + Validators]
+  G --> H{Blockers fixed?}
+  H -- No --> I[Auto Fix / Unresolved Findings]
+  I --> G
+  H -- Yes --> J[Human Review Package]
+  J --> K[Feedback Classification]
+  K --> L{Core direction changed?}
+  L -- Yes --> B
+  L -- No --> M[Incremental Patch]
+  M --> G
+  K --> N[Rule / Prompt Candidates]
+  N --> O[TL Review Queue]
+  J --> P[Design Review Gate]
+  P --> Q[Code Changes]
+  Q --> R[Self Test / Quality / Code Review]
+  R --> S[Release / Verification / Retrospective]
 ```
 
 # 3. 仓库结构
@@ -80,7 +94,7 @@ flowchart LR
 | release-retrospective | stage_skill | 发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。 | release-verification-report.md, code-quality-report.json | release-retrospective.md, release-lessons.yaml, follow-up-actions.md | 是 | 是 | 问题有证据; 行动项有 owner | 行动项关闭; 规范候选批准 | 发布负责人 |
 | engineering-knowledge-miner | cross_cutting_skill | 研发经验总结、规范沉淀、评审问题归纳、事故复盘反哺、skill 规范更新建议时使用；不要用于直接执行代码质量检查或未经审批修改强制规范。 | design reports, code quality reports | engineering-lessons.md, rule-candidates.yaml, standard-patch-suggestions.md | 是 | 是 | 每条经验有来源证据; 规则默认 candidate | 修改正式团队规范; rule_candidate 标记为 approved | 规范 owner |
 | skill-quality-auditor | audit_skill | 检查人工编写或 Agent 生成的 Codex Skills 质量、契约完整性、触发描述、eval 覆盖、workflow 兼容性时使用；不要用于执行业务研发阶段。 | skills, engineering-assistant/registry/skills.yaml | skill-quality-report.md, skill-quality-report.json, skill-fix-suggestions.md | 是 | 是 | SKILL.md 存在; description 清楚 | 高风险 skill 入库; 修改高风险质量门禁 | skill owner |
-| workflow-orchestrator | workflow_skill | 研发流程编排、阶段选择、skills 串联执行、状态流转、人工审批和产物路由时使用；不要用于直接生成某个阶段文档。 | workflow.yaml, stage node registry | workflow-trace.json, workflow-summary.md, approval-requests.json | 是 | 是 | 节点 contract 匹配; 前置条件满足 | 人工审批网关; 跳过阻断节点 | workflow owner |
+| workflow-orchestrator | workflow_skill | 研发流程编排、阶段选择、skills 串联执行、状态流转、人工审批和产物路由时使用；不要用于直接生成某个阶段文档。 | workflow.yaml, stage node registry | workflow-trace.json, workflow-summary.md, approval-requests.json | 是 | 是 | 节点 contract 匹配; 信息收集完成或已暂停追问 | 人工审批网关; 跳过阻断节点 | workflow owner |
 
 # 5. SkillContract 标准
 标准模板已落地在每个 `contract.yaml`。必填字段包括：`skill_id`、`skill_name`、`version`、`stage`、`type`、`purpose`、`non_goals`、`trigger_description`、`standalone_mode`、`workflow_mode`、`inputs`、`outputs`、`preconditions`、`postconditions`、`dependencies`、`permissions`、`human_approval_required`、`risk_model`、`quality_gates`、`failure_modes`、`eval_cases`、`workflow_interface`、`owner`、`reviewers`、`change_policy`。
@@ -393,10 +407,10 @@ flowchart LR
 - 设计摘要：支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。
 - description：研发流程编排、阶段选择、skills 串联执行、状态流转、人工审批和产物路由时使用；不要用于直接生成某个阶段文档。
 - 输入：workflow.yaml, stage node registry, StageRunRequest, approval_context
-- 输出：workflow-trace.json, workflow-summary.md, approval-requests.json, artifact-index.json, validator-summary.json
-- 质量门禁：节点 contract 匹配; 前置条件满足; 产物 schema 合规; 专项 validator 结果全部通过或向上冒泡为 blocked; 高风险动作进入审批
+- 输出：workflow-trace.json, workflow-summary.md, approval-requests.json, artifact-index.json, validator-summary.json, information-inventory.json, context-source-map.json, missing-information-list.json, design-objective-plan.md, scope-and-non-goals.yaml, user-confirmed-facts.json, design-direction-decision.md, assumption-and-decision-log.yaml, self-review-findings.json, auto-fix-report.json, unresolved-review-findings.json, human-review-package.json, human-review-feedback.json, feedback-classification.json, next-iteration-plan.md, iteration-trace.json, rule-candidates.json, prompt-optimization-candidates.md, tl-review-package.json
+- 质量门禁：节点 contract 匹配; 信息收集完成或已暂停追问; 方案方向已确认或已暂停确认; 前置条件满足; 产物 schema 合规; 专项 validator 结果全部通过或向上冒泡为 blocked; 自审 blocker 已修复或保留为 unresolved; 高风险动作进入审批; TL 规范候选未自动入库
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
-- 人工审批规则：人工审批网关; 跳过阻断节点; 恢复 blocked workflow; 高风险动作执行
+- 人工审批规则：人工审批网关; 跳过阻断节点; 恢复 blocked workflow; 高风险动作执行; 设计方案方向确认; TL 规范候选入库
 - 目录结构：`skills/workflow-orchestrator/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
 - SKILL.md 样例：见 `skills/workflow-orchestrator/SKILL.md`。
 - contract.yaml 样例：见 `skills/workflow-orchestrator/contract.yaml`。
@@ -412,6 +426,27 @@ flowchart LR
 节点协议：每个 node 包含 `node_id`、`stage`、`skill_id`、`version`、`mode`、`inputs`、`outputs`、`preconditions`、`postconditions`、`quality_gates`、`approval_policy`、`retry_policy`、`failure_policy`、`next_nodes`、`artifact_mapping`。
 
 workflow 样例已创建在 `engineering-assistant/workflows/`。断点恢复依赖 workflow trace、节点状态和 artifact index；人工审批通过 `ApprovalRequest` 暂停和恢复。
+
+# 8.1 设计治理闭环与防废稿门禁
+设计治理状态机：`intake_collecting`、`intake_gap_analysis`、`waiting_for_user_input`、`direction_confirming`、`design_generating`、`self_reviewing`、`design_revising`、`waiting_for_human_review`、`human_review_processing`、`design_regenerating`、`knowledge_mining`、`tl_rule_candidate_pending`、`approved_or_done`。
+
+硬门禁：
+- 信息收集完成前不得进入 `formal_generation`。
+- 方案方向和专项范围未确认前不得生成主设计或专项设计。
+- `preflight_input_state != ready` 时只允许生成控制产物，不得生成或登记正式设计文档。
+- 自审和 deterministic validator 未完成前不得提交人工评审。
+- 人工评审未通过前不得标记 `approved` / `final`。
+- 只有 `approved` 或 `final` 且 `retention_policy=persist` 的文档才能进入代码研发控制面。
+
+waiting_for_input 阶段允许产物：`information-inventory.json`、`context-source-map.json`、`missing-information-list.json`、`required-information-request.json`、`design-objective-plan.md`、`scope-and-non-goals.yaml`、`user-confirmed-facts.json`、`design-direction-decision.md`、`docs/human-review/<run-id>.html`、`workflow-trace.json`、`resume-point.json`。
+
+waiting_for_input 阶段禁止产物：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
+
+自审策略：deterministic validators + reviewer-agent 两层执行。Agent 只能自动修复格式、模板缺口、已知事实遗漏、术语不一致、文档路由错误和已确认方案表达问题；不能自动改变业务方向、核心接口增删、风险策略、系统边界或人工审批结论。
+
+人工评审反馈处理：先分类为 `fact_completion`、`direction_change`、`document_defect`、`standard_violation`、`team_rule_candidate`。默认增量 patch 受影响产物；只有架构方向、数据模型、接口边界或消息模型变化时才允许整套重生，并必须输出影响分析、把旧版标记 `superseded`、在 `workflow-trace.json` 记录原因。
+
+知识沉淀：用户修改、Agent 修改、自审问题和人工评审意见只生成 `rule-candidates.json`、`prompt-optimization-candidates.md`、`tl-review-package.json`。未经 TL 审核，不得自动写回团队插件、SKILL.md、模板、validator 或正式规则目录。
 
 # 9. 代码质量控制体系
 五层门禁：Q0 设计一致性；Q1 build/format/lint/typecheck/unit/integration/coverage/dependency/secret/migration/architecture boundary；Q2 correctness、boundary、exception、idempotency、transaction、concurrency、performance、security、maintainability、testability、observability；Q3 DB/Redis/MQ/权限/认证/支付/订单/配置/发布脚本等风险专项；Q4 发布前回归。

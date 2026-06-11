@@ -58,7 +58,8 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 # Preflight 运行门闩
 - 每次运行必须先输出并维护 `preflight_input_state`，取值只能是 `ready, waiting_for_input, waiting_for_human_review, blocked`。
 - 只有 `preflight_input_state == ready` 时才能进入 `formal_generation`，读取模板、填充正文、写入正式 Markdown/Excel/JSON，并登记正式 artifact。
-- `waiting_for_input` 时只允许登记 `required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json`；不得写入或登记正式阶段产物。
+- `waiting_for_input` 时只允许登记信息盘点、缺失信息、目标规划、方向确认、`required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json` 等控制产物；不得写入或登记正式阶段产物。
+- preflight 未 ready 时禁止生成或登记正式设计文档：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
 - 用户补充答案必须写回 `StageRunRequest.context`、artifact index 或 MD/JSON/YAML，并保留来源和时间，之后才能把 `preflight_input_state` 置为 `ready`。
 
 
@@ -74,6 +75,17 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - 每次运行必须在 `workflow-trace.json` 记录 `entry_mode`、实际执行节点、跳过节点及原因、暂停原因、恢复点和下一个建议节点。
 - 每个节点必须先执行 preflight gate；`preflight_input_state != ready` 时不得进入当前节点 `formal_generation`，也不得触发下游 `next_nodes`。
 
+## 设计治理闭环补充
+- 对设计类 workflow，先判断“信息收集是否完成”：目标、范围、非目标、涉及系统、数据对象、关键流程、专项涉及项和缺失信息分类。未完成时只生成控制产物，不生成正式设计文档。
+- `waiting_for_input` 只允许信息盘点、缺失信息、目标规划、方向确认、人工填写入口、workflow trace、resume point 等控制产物；禁止生成或登记 `high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md` 等正式设计产物。
+- 人工评审意见必须先分类为事实补充、方案方向变化、文档缺陷、规范违背或团队规范候选。默认增量修正受影响产物；只有架构方向、数据模型、接口边界或消息模型变化时才允许整套重生，并必须标记旧版 superseded。
+- 自审不能替代人审。Agent 只能自动修格式、模板缺口、已确认事实遗漏、术语不一致、文档路由错误和已确认方案表达不清；不能自动改变业务方向、核心接口、风险策略、系统边界或审批结论。
+- 从用户修改、Agent 修改、自审问题和人审意见抽取的改进只能进入 rule/prompt 候选和 TL 审核包；未经 TL 审核不得写回团队插件、SKILL.md、模板、validator 或正式规则目录。
+- workflow 必须按状态机推进：信息收集完成判定 -> 缺口识别 -> 用户追问/方向确认 -> 正式设计生成 -> 自审 -> 自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 知识候选沉淀。
+- 人工评审反馈必须先分类为 `fact_completion`、`direction_change`、`document_defect`、`standard_violation` 或 `team_rule_candidate`；默认增量修正受影响产物，只有架构方向、数据模型、接口边界或消息模型变化才允许整套重生并标记旧版 `superseded`。
+- 自审由确定性 validator 和 reviewer-agent 两层组成；Agent 只能自动修格式、模板缺口、已知事实遗漏、术语不一致、文档路由错误和已确认方案表达问题，不能替代业务方向、风险策略、系统边界或人工审批。
+- 知识沉淀只生成 `rule-candidates.json`、`prompt-optimization-candidates.md` 和 `tl-review-package.json`；未经 TL 审核不得自动写入团队插件、SKILL.md、模板或规则目录。
+
 
 
 
@@ -87,6 +99,11 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 4. 仅当 blocking 信息已补齐并写回 `StageRunRequest.context` 或 artifact index 后，基于来源证据执行以下检查。
 - 阶段选择
 - 状态流转
+- 信息收集完成判定
+- 设计目标规划
+- 缺失信息识别
+- 主动沟通与方向确认
+- preflight 未 ready 时不得生成正式设计文档
 - 错误处理
 - 重试
 - 审批暂停
@@ -96,9 +113,12 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - design-only 完成前运行 high-level/detailed/database/mq/redis 专项 validator
 - validator-summary 汇总 stage、validator、failed_rule、error_message、suggested_repair
 - 任一专项 validator 失败时 workflow 总状态不得 succeeded
+- self-review findings 驱动自动修复
+- unresolved blocker 阻断 approved/final
 - waiting_for_human_review 不得宣称 approved/final/succeeded
+- 人工评审反馈分类后增量修正，只有核心方案变化才整套重生
 - defect-analysis 根因分析
-- DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录
+- DG2-DG11 产物路由时区分 run artifact、正式留存文档、控制面、人审入口和 TL 候选，防止中间过程文档或具体需求事实进入团队插件
 5. 确认 `preflight_input_state == ready` 后进入 `formal_generation` 并生成全部声明产物。
 6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
@@ -110,6 +130,25 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - `approval-requests.json`
 - `artifact-index.json`
 - `validator-summary.json`
+- `information-inventory.json`
+- `context-source-map.json`
+- `missing-information-list.json`
+- `design-objective-plan.md`
+- `scope-and-non-goals.yaml`
+- `user-confirmed-facts.json`
+- `design-direction-decision.md`
+- `assumption-and-decision-log.yaml`
+- `self-review-findings.json`
+- `auto-fix-report.json`
+- `unresolved-review-findings.json`
+- `human-review-package.json`
+- `human-review-feedback.json`
+- `feedback-classification.json`
+- `next-iteration-plan.md`
+- `iteration-trace.json`
+- `rule-candidates.json`
+- `prompt-optimization-candidates.md`
+- `tl-review-package.json`
 
 # 文档治理
 - `artifacts/<skill_id>/` 下的输出默认是本次 run artifact，不自动等同正式留存文档。
@@ -120,10 +159,14 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 
 # 质量门禁
 - 节点 contract 匹配
+- 信息收集完成或已暂停追问
+- 方案方向已确认或已暂停确认
 - 前置条件满足
 - 产物 schema 合规
 - 专项 validator 结果全部通过或向上冒泡为 blocked
+- 自审 blocker 已修复或保留为 unresolved
 - 高风险动作进入审批
+- TL 规范候选未自动入库
 
 # 失败处理
 - `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
@@ -136,6 +179,8 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - 跳过阻断节点
 - 恢复 blocked workflow
 - 高风险动作执行
+- 设计方案方向确认
+- TL 规范候选入库
 
 # 独立运行模式
 当用户只要求执行本阶段时，直接运行该 skill。生成完整产物集和门禁决策，不调用无关阶段。
