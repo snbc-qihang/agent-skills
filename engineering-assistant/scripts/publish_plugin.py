@@ -10,6 +10,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
+PLUGIN_VERSION = "1.0.0.1"
 
 
 def load_config(path: Path) -> dict:
@@ -45,22 +46,45 @@ def read_codex_manifest(repo_root: Path) -> dict:
     return json.loads(manifest.read_text(encoding="utf-8"))
 
 
-def marketplace_payload(config: dict) -> dict:
+def load_marketplace(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def plugin_entry(config: dict) -> dict:
     plugin_name = config.get("plugin_name", "engineering-assistant")
     return {
-        "name": config.get("name", "local-engineering"),
-        "interface": config.get("interface", {"displayName": "Local Engineering Plugins"}),
-        "plugins": [
-            {
-                "name": plugin_name,
-                "source": {
-                    "source": "local",
-                    "path": "./" + config.get("plugin_relative_path", f"plugins/{plugin_name}").strip("/"),
-                },
-                "policy": config.get("policy", {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}),
-                "category": config.get("category", "Productivity"),
-            }
-        ],
+        "name": plugin_name,
+        "source": {
+            "source": "local",
+            "path": "./" + config.get("plugin_relative_path", f"plugins/{plugin_name}").strip("/"),
+        },
+        "policy": config.get("policy", {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}),
+        "category": config.get("category", "Productivity"),
+    }
+
+
+def upsert_plugin_entry(existing_plugins: list[dict], new_plugin: dict) -> list[dict]:
+    updated = []
+    replaced = False
+    for plugin in existing_plugins:
+        if plugin.get("name") == new_plugin["name"]:
+            updated.append(new_plugin)
+            replaced = True
+        else:
+            updated.append(plugin)
+    if not replaced:
+        updated.append(new_plugin)
+    return updated
+
+
+def marketplace_payload(config: dict, existing_marketplace: dict | None = None) -> dict:
+    existing_marketplace = existing_marketplace or {}
+    return {
+        "name": existing_marketplace.get("name", config.get("name", "local-engineering")),
+        "interface": existing_marketplace.get("interface", config.get("interface", {"displayName": "Local Engineering Plugins"})),
+        "plugins": upsert_plugin_entry(existing_marketplace.get("plugins", []), plugin_entry(config)),
     }
 
 
@@ -87,7 +111,7 @@ def hermes_plugin_yaml(plugin_name: str, manifest: dict) -> str:
     author_name = author.get("name", "") if isinstance(author, dict) else str(author)
     payload = {
         "name": plugin_name,
-        "version": str(manifest.get("version", "1.0.0")),
+        "version": str(manifest.get("version", PLUGIN_VERSION)),
         "description": manifest.get("description", ""),
         "author": author_name,
         "kind": "standalone",
@@ -227,7 +251,8 @@ def publish_codex(repo_root: Path, config: dict, publish_root=None, marketplace_
     copy_tree(runtime, plugin_root / "engineering-assistant")
 
     marketplace_path.parent.mkdir(parents=True, exist_ok=True)
-    marketplace_path.write_text(json.dumps(marketplace_payload(config), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    existing_marketplace = load_marketplace(marketplace_path)
+    marketplace_path.write_text(json.dumps(marketplace_payload(config, existing_marketplace), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     legacy_marketplace = publish_root / "marketplace.json"
     if legacy_marketplace != marketplace_path and legacy_marketplace.exists():
         legacy_marketplace.unlink()

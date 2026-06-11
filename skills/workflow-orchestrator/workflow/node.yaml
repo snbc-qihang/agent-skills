@@ -2,7 +2,7 @@
   "node_id": "workflow-orchestrator",
   "stage": "workflow_orchestration",
   "skill_id": "workflow-orchestrator",
-  "version": "1.0.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

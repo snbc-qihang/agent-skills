@@ -105,6 +105,42 @@ class PluginDistributionSurfaceTests(unittest.TestCase):
             self.assertTrue((plugin_root / "engineering-assistant" / "runtime" / "codex" / "profiles" / "readonly_review.toml").exists())
             self.assertTrue((plugin_root / "engineering-assistant" / "runtime" / "codex" / "README.md").exists())
 
+    def test_publish_plugin_upserts_marketplace_entry_without_clobbering_others(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            publish_root = Path(temp_dir) / "publish"
+            marketplace = publish_root / ".agents" / "plugins" / "marketplace.json"
+            marketplace.parent.mkdir(parents=True, exist_ok=True)
+            marketplace.write_text(
+                json.dumps(
+                    {
+                        "name": "personal",
+                        "interface": {"displayName": "Personal"},
+                        "plugins": [
+                            {
+                                "name": "other-plugin",
+                                "source": {"source": "local", "path": "./plugins/other-plugin"},
+                                "policy": {"installation": "AVAILABLE", "authentication": "NONE"},
+                                "category": "Utility",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ) + "\n",
+                encoding="utf-8",
+            )
+
+            result = run_script("publish_plugin.py", "--publish-root", str(publish_root), "--marketplace-path", str(marketplace))
+            self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+
+            payload = json.loads(marketplace.read_text(encoding="utf-8"))
+            plugins = {item["name"]: item for item in payload["plugins"]}
+            self.assertEqual("personal", payload["name"])
+            self.assertEqual("Personal", payload["interface"]["displayName"])
+            self.assertIn("other-plugin", plugins)
+            self.assertIn("engineering-assistant", plugins)
+            self.assertEqual("./plugins/engineering-assistant", plugins["engineering-assistant"]["source"]["path"])
+
 
 if __name__ == "__main__":
     unittest.main()

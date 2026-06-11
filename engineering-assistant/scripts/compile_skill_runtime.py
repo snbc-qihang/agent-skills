@@ -5,6 +5,9 @@ import re
 from pathlib import Path
 
 
+PLUGIN_VERSION = "1.0.0.1"
+
+
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -34,7 +37,7 @@ def compile_skill(skill_dir: Path) -> dict:
     }
     return {
         "skill_id": contract["skill_id"],
-        "version": contract.get("version", "1.0.0"),
+        "version": contract.get("version", PLUGIN_VERSION),
         "stage": contract.get("stage"),
         "type": contract.get("type"),
         "prompt_pack": {
@@ -83,7 +86,7 @@ def main():
         target = skills_out / f"{ir['skill_id']}.ir.json"
         target.write_text(json.dumps(ir, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         compiled.append({"skill_id": ir["skill_id"], "path": str(target), "risk_level": ir["risk"]["risk_level"], "allow_implicit_invocation": ir["risk"]["allow_implicit_invocation"]})
-    index = {"version": "1.0.0", "skills": compiled}
+    index = {"version": PLUGIN_VERSION, "skills": compiled}
     (out / "skill-runtime-index.json").write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"status": "pass", "compiled": len(compiled), "out": str(out)}, ensure_ascii=False))
 

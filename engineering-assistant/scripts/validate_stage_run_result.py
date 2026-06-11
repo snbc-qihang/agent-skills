@@ -4,6 +4,8 @@ from pathlib import Path
 
 VALID_LANGUAGE = {"zh-CN", "en"}
 VALID_STATUSES = {"succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"}
+VALID_PREFLIGHT_STATES = {"ready", "waiting_for_input", "waiting_for_human_review", "blocked"}
+FORMAL_DESIGN_ARTIFACTS = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
@@ -77,9 +79,20 @@ for arg in sys.argv[1:]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("status") not in VALID_STATUSES:
         errors.append(f"{path}: status 不合法")
+    if data.get("preflight_input_state") not in VALID_PREFLIGHT_STATES:
+        errors.append(f"{path}: preflight_input_state 不合法")
     if data.get("language") not in VALID_LANGUAGE:
         errors.append(f"{path}: language 不能为空，且必须为 zh-CN 或 en")
     info_requests = data.get("required_information_requests", [])
+    artifact_names = {artifact.get("name") for artifact in data.get("artifacts", []) if artifact.get("name")}
+    if data.get("status") == "waiting_for_input" and data.get("preflight_input_state") != "waiting_for_input":
+        errors.append(f"{path}: waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+    if data.get("status") == "waiting_for_human_review" and data.get("preflight_input_state") != "waiting_for_human_review":
+        errors.append(f"{path}: waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review")
+    if data.get("preflight_input_state") != "ready":
+        leaked = sorted(name for name in artifact_names if name in FORMAL_DESIGN_ARTIFACTS)
+        if leaked:
+            errors.append(f"{path}: preflight_input_state={data.get('preflight_input_state')} 时不得产出正式设计工件: {', '.join(leaked)}")
     if data.get("status") == "waiting_for_input":
         if not info_requests:
             errors.append(f"{path}: waiting_for_input 必须包含 required_information_requests")
@@ -95,6 +108,8 @@ for arg in sys.argv[1:]:
             if html_path is not None:
                 validate_human_html(html_path, path)
     if data.get("status") == "succeeded":
+        if data.get("preflight_input_state") != "ready":
+            errors.append(f"{path}: succeeded 时 preflight_input_state 必须为 ready")
         metadata = data.get("document_metadata") or {}
         for field in DOC_REQUIRED:
             if field not in metadata or metadata.get(field) in ("", [], None):

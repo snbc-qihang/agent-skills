@@ -59,9 +59,11 @@
   "pass_criteria": [
     "StageRunResult status 合法",
     "未指定 language 时必须询问用户选择 zh-CN 或 en",
+    "preflight_input_state 必须存在，且 formal generation 仅允许在 preflight_input_state == ready 时发生",
     "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
-    "missing_required_input 场景必须输出非空 required_information_requests.questions",
-    "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
+    "missing_required_input 场景必须输出非空 required_information_requests.questions，并保持 waiting_for_input / preflight_input_state=waiting_for_input",
+    "missing_required_input 场景必须生成 docs/human-review 可填写 HTML，且不得生成或登记正式阶段文档",
+    "阶段节点不遵守 language、preflight_input_state、document_metadata 或 required_information_requests 契约时必须 blocked",
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
     "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",

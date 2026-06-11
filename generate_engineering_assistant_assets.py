@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
+PLUGIN_VERSION = "1.0.0.1"
 DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
 
 EVAL_CASES = [
@@ -40,6 +41,30 @@ COMMON_STATES = [
 ]
 
 WORKFLOW_ENTRY_MODES = ["auto_flow", "from_node", "single_node"]
+
+FORMAL_DESIGN_ARTIFACTS = [
+    "high-level-design.md",
+    "detailed-design.md",
+    "database-design.md",
+    "redis-design.md",
+    "mq-design.xlsx",
+    "interface-contracts.yaml",
+    "test-strategy.md",
+]
+
+PREFLIGHT_CONTROL_ARTIFACTS = [
+    "information-inventory.json",
+    "context-source-map.json",
+    "missing-information-list.json",
+    "required-information-request.json",
+    "design-objective-plan.md",
+    "scope-and-non-goals.yaml",
+    "user-confirmed-facts.json",
+    "design-direction-decision.md",
+    "docs/human-review/<run-id>.html",
+    "workflow-trace.json",
+    "resume-point.json",
+]
 
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
@@ -1065,11 +1090,114 @@ def skill_by_id(skill_id: str) -> dict:
     return next(s for s in SKILLS if s["id"] == skill_id)
 
 
+def preflight_runtime_gate() -> dict:
+    return {
+        "state_field": "preflight_input_state",
+        "states": ["ready", "waiting_for_input", "waiting_for_human_review", "blocked"],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "formal_generation_blocked_when": [
+            "preflight_input_state != ready",
+            "存在 blocking required_information_requests",
+            "human-review HTML 已生成但补充答案未写回机读事实源",
+        ],
+        "waiting_for_input_allowed_artifacts": PREFLIGHT_CONTROL_ARTIFACTS,
+        "waiting_for_input_forbidden_formal_artifacts": FORMAL_DESIGN_ARTIFACTS,
+        "block_current_node_formal_generation": True,
+        "block_next_nodes": True,
+        "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。",
+    }
+
+
+def design_governance_policy() -> dict:
+    return {
+        "states": [
+            "intake_collecting",
+            "intake_gap_analysis",
+            "waiting_for_user_input",
+            "direction_confirming",
+            "design_generating",
+            "self_reviewing",
+            "design_revising",
+            "waiting_for_human_review",
+            "human_review_processing",
+            "design_regenerating",
+            "knowledge_mining",
+            "tl_rule_candidate_pending",
+            "approved_or_done",
+        ],
+        "formal_design_artifacts": FORMAL_DESIGN_ARTIFACTS,
+        "preflight_control_artifacts": PREFLIGHT_CONTROL_ARTIFACTS,
+        "document_lifecycle_states": [
+            "not_started",
+            "draft",
+            "ready_for_self_review",
+            "self_review_failed",
+            "revised",
+            "waiting_for_human_review",
+            "human_review_rejected",
+            "approved",
+            "final",
+            "superseded",
+            "archived",
+            "blocked",
+            "waiting_for_input",
+        ],
+        "hard_gates": {
+            "information_complete_before_formal_generation": True,
+            "direction_confirmed_before_design_generation": True,
+            "specialty_scope_confirmed_before_specialty_docs": True,
+            "self_review_passed_before_human_review": True,
+            "human_review_approved_before_final": True,
+            "approved_or_final_before_code_control_surface": True,
+        },
+        "waiting_for_input_policy": {
+            "allowed_artifacts": PREFLIGHT_CONTROL_ARTIFACTS,
+            "forbidden_artifacts": FORMAL_DESIGN_ARTIFACTS,
+            "must_not_register_formal_artifacts_as_completed": True,
+            "resume_requires_writeback_to_machine_readable_source": True,
+        },
+        "review_feedback_policy": {
+            "classification_required": True,
+            "classes": ["fact_completion", "direction_change", "document_defect", "standard_violation", "team_rule_candidate"],
+            "default_update_strategy": "incremental_patch_affected_artifacts",
+            "full_regeneration_allowed_when": ["architecture_direction_changed", "data_model_changed", "interface_boundary_changed", "message_model_changed"],
+            "full_regeneration_requires": ["impact_analysis", "supersede_previous_version", "workflow_trace_reason"],
+        },
+        "self_review_policy": {
+            "layers": ["deterministic_validators", "reviewer_agent"],
+            "auto_fix_allowed_for": ["format_error", "template_gap", "known_fact_omission", "terminology_inconsistency", "document_routing_error", "confirmed_solution_clarity"],
+            "auto_fix_forbidden_for": ["business_direction_change", "core_interface_add_or_remove", "risk_strategy_change", "system_boundary_change", "human_approval_replacement"],
+            "unresolved_blocker_status": "blocked_or_waiting_for_human_review",
+        },
+        "knowledge_mining_policy": {
+            "candidate_outputs": ["rule-candidates.json", "prompt-optimization-candidates.md", "tl-review-package.json"],
+            "candidate_types": ["team-rule-candidate", "document-template-candidate", "agent-behavior-candidate"],
+            "required_fields": [
+                "candidate_id",
+                "source_run_id",
+                "original_user_change",
+                "agent_original_design",
+                "human_review_feedback",
+                "generalized_rule",
+                "scope",
+                "non_scope",
+                "counter_examples",
+                "contains_specific_business_fact",
+                "generalization_level",
+                "suggested_landing_zone",
+                "tl_review_status",
+            ],
+            "auto_apply_to_plugin": False,
+            "tl_review_required": True,
+        },
+    }
+
+
 def workflow_runtime_policy() -> dict:
     return {
         "supported_entry_modes": WORKFLOW_ENTRY_MODES,
         "default_entry_mode": "auto_flow",
-        "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；遇到 waiting_for_input、waiting_for_human_review、blocked、failed 必须暂停。",
+        "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
         "auto_transition_policy": {
             "continue_when": ["StageRunResult.status == succeeded", "required_information_requests 为空", "未声明 HUMAN_APPROVAL_REQUIRED", "next_node 存在"],
             "record_required": "workflow-trace.json 必须记录 auto transition decision",
@@ -1086,6 +1214,21 @@ def workflow_runtime_policy() -> dict:
             "只执行单节点时不得宣称全链路完成，只能给出该节点结果和建议的 next_nodes。",
             "自动流转时下游节点只能消费已登记 artifact 或用户补充信息，不能虚构上游产物。",
         ],
+        "preflight_runtime_policy": {
+            "state_field": "preflight_input_state",
+            "states": ["ready", "waiting_for_input", "waiting_for_human_review", "blocked"],
+            "formal_generation_entry_condition": "preflight_input_state == ready",
+            "pause_when": [
+                "preflight_input_state != ready",
+                "存在 blocking required_information_requests",
+                "human-review HTML 已生成但补充答案未写回机读事实源",
+            ],
+            "allowed_artifacts_when_waiting_for_input": PREFLIGHT_CONTROL_ARTIFACTS,
+            "forbidden_formal_artifacts_when_waiting_for_input": FORMAL_DESIGN_ARTIFACTS,
+            "block_current_node_formal_generation": True,
+            "block_next_nodes": True,
+        },
+        "design_governance_policy": design_governance_policy(),
     }
 
 
@@ -1093,7 +1236,7 @@ def runtime_ir(skill: dict) -> dict:
     allow_implicit = skill["id"] not in HIGH_RISK_SKILLS
     return {
         "skill_id": skill["id"],
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "stage": skill["stage"],
         "type": skill["type"],
         "prompt_pack": {
@@ -1231,15 +1374,17 @@ def contract(skill: dict) -> dict:
     payload = {
         "skill_id": skill["id"],
         "skill_name": skill["name"],
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "stage": skill["stage"],
         "type": skill["type"],
         "purpose": skill["purpose"],
         "non_goals": skill["non_goals"],
         "trigger_description": skill_trigger_description(skill),
         "routing": skill_routing_metadata(skill),
-        "standalone_mode": "读取输入、校验前置条件、在指定输出目录生成全部声明产物，并在阻断门禁处停止。",
-        "workflow_mode": "消费 StageRunRequest 中的上游产物，输出 StageRunResult，并把声明产物路由给下游 workflow 节点。",
+        "standalone_mode": "先执行 preflight 信息梳理；blocking 信息缺失时仅输出 required_information_requests、human-review HTML 和恢复点，补齐后再在指定输出目录生成全部声明产物。",
+        "workflow_mode": "消费 StageRunRequest 中的上游产物，先执行 preflight 信息梳理；blocking 信息缺失时暂停并等待补充写回，补齐后输出 StageRunResult 并把声明产物路由给下游 workflow 节点。",
+        "preflight_runtime_gate": preflight_runtime_gate(),
+        "design_governance_policy": design_governance_policy(),
         "language_policy": {
             "supported": ["zh-CN", "en"],
             "when_unspecified": "ask_user",
@@ -1267,6 +1412,9 @@ def contract(skill: dict) -> dict:
         "execution_gates": {
             "language_confirmed": True,
             "preflight_required_information": True,
+            "preflight_before_formal_artifacts": True,
+            "preflight_input_state_required": True,
+            "formal_generation_requires_ready": True,
             "formal_document_metadata_required": True,
             "stage_result_validation_required": True,
             "block_when_agent_violates_contract": True,
@@ -1275,6 +1423,7 @@ def contract(skill: dict) -> dict:
             "must_ask_when": ["必填输入缺失", "系统边界无法确认", "风险等级无法判断", "审批状态缺失", "无法基于仓库或上游产物可靠推导"],
             "question_output": "required_information_requests",
             "blocking_status": "waiting_for_input",
+            "formal_generation_entry_condition": "preflight_input_state == ready",
             "human_review_html_required": True,
             "human_review_html_requirements": ["可填写每个待确认项", "保留问题 id 或稳定序号", "可复制或下载答案 JSON", "登记到 StageRunResult.artifacts", "HTML 路径必须位于目标项目 docs/human-review/", "agent 只消费 MD/JSON/YAML，不把 HTML 作为事实输入源"],
             "minimum_question_fields": ["id", "question", "reason", "required", "priority", "expected_format"],
@@ -1347,11 +1496,12 @@ def output_schema(skill: dict) -> dict:
         "$id": f"https://example.internal/engineering-assistant/{skill['id']}/output.schema.json",
         "title": f"{skill['name']} 输出 Schema",
         "type": "object",
-        "required": ["run_id", "skill_id", "status", "language", "trace_id", "document_metadata", "artifacts", "quality_gates", "findings", "required_human_reviews", "required_information_requests", "repair_summary", "next_action"],
+        "required": ["run_id", "skill_id", "status", "preflight_input_state", "language", "trace_id", "document_metadata", "artifacts", "quality_gates", "findings", "required_human_reviews", "required_information_requests", "repair_summary", "next_action"],
         "properties": {
             "run_id": {"type": "string"},
             "skill_id": {"const": skill["id"]},
             "status": {"enum": ["succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"]},
+            "preflight_input_state": {"enum": ["ready", "waiting_for_input", "waiting_for_human_review", "blocked"]},
             "language": {"enum": ["zh-CN", "en"]},
             "trace_id": {"type": "string"},
             "document_metadata": document_lifecycle_schema(),
@@ -1702,9 +1852,11 @@ def eval_case(skill: dict, case: str) -> dict:
         "pass_criteria": [
             "StageRunResult status 合法",
             "未指定 language 时必须询问用户选择 zh-CN 或 en",
+            "preflight_input_state 必须存在，且 formal generation 仅允许在 preflight_input_state == ready 时发生",
             "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
-            "missing_required_input 场景必须输出非空 required_information_requests.questions",
-            "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
+            "missing_required_input 场景必须输出非空 required_information_requests.questions，并保持 waiting_for_input / preflight_input_state=waiting_for_input",
+            "missing_required_input 场景必须生成 docs/human-review 可填写 HTML，且不得生成或登记正式阶段文档",
+            "阶段节点不遵守 language、preflight_input_state、document_metadata 或 required_information_requests 契约时必须 blocked",
             "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
             "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
             "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",
@@ -1730,7 +1882,7 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
         "node_id": skill["id"],
         "stage": skill["stage"],
         "skill_id": skill["id"],
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "mode": "standalone|workflow",
         "entry_modes": WORKFLOW_ENTRY_MODES,
         "depends_on": depends_on or [],
@@ -1745,6 +1897,68 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
         "next_nodes": next_nodes or [],
         "artifact_mapping": {o: f"artifacts/{skill['id']}/{o}" for o in skill["outputs"]},
     }
+
+
+def build_validate_output_script(skill: dict) -> str:
+    workflow_extra = ""
+    if skill["id"] == "workflow-orchestrator":
+        workflow_extra = """
+validator_summary = next((artifact for artifact in artifacts if artifact.get(\"name\") == \"validator-summary.json\"), None)
+if not validator_summary:
+    errors.append(\"workflow-orchestrator: 缺少 validator-summary.json artifact\")
+else:
+    validator_path = payload_path.parent / validator_summary.get(\"path\", \"\")
+    if not validator_path.exists():
+        errors.append(f\"validator-summary artifact 不存在: {validator_summary.get('path')}\")
+    else:
+        summary = json.loads(validator_path.read_text(encoding=\"utf-8\"))
+        if summary.get(\"status\") not in {\"pass\", \"warning\"}:
+            errors.append(\"validator-summary.json status 必须为 pass 或 warning\")
+
+defect_analysis = next((artifact for artifact in artifacts if artifact.get(\"name\") == \"defect-analysis.json\"), None)
+if not defect_analysis:
+    errors.append(\"workflow-orchestrator: 缺少 defect-analysis.json artifact\")
+"""
+    return f"""#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+FORMAL_DESIGN_ARTIFACTS = {FORMAL_DESIGN_ARTIFACTS!r}
+
+payload_path = Path(sys.argv[1])
+schema = json.loads(Path(__file__).parents[1].joinpath("output.schema.json").read_text(encoding="utf-8"))
+payload = json.loads(payload_path.read_text(encoding="utf-8"))
+missing = [field for field in schema.get("required", []) if field not in payload]
+if missing:
+    raise SystemExit(f"缺少必填字段: {{missing}}")
+if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
+    raise SystemExit("skill_id 不匹配")
+if payload.get("status") not in schema["properties"]["status"]["enum"]:
+    raise SystemExit("status 不合法")
+if payload.get("preflight_input_state") not in schema["properties"]["preflight_input_state"]["enum"]:
+    raise SystemExit("preflight_input_state 不合法")
+
+errors = []
+status = payload.get("status")
+preflight = payload.get("preflight_input_state")
+artifacts = payload.get("artifacts", [])
+artifact_names = {{artifact.get("name") for artifact in artifacts if artifact.get("name")}}
+if status == "succeeded" and preflight != "ready":
+    errors.append("succeeded 时 preflight_input_state 必须为 ready")
+if status == "waiting_for_input" and preflight != "waiting_for_input":
+    errors.append("waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+if status == "waiting_for_human_review" and preflight != "waiting_for_human_review":
+    errors.append("waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review")
+if preflight != "ready":
+    leaked = sorted(name for name in artifact_names if name in FORMAL_DESIGN_ARTIFACTS)
+    if leaked:
+        errors.append(f"preflight_input_state={{preflight}} 时不得产出正式设计工件: {{', '.join(leaked)}}")
+{workflow_extra}
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+"""
 
 
 def generate_skills() -> None:
@@ -1775,22 +1989,7 @@ source_artifacts: []
 
 ## 门禁决策
 """)
-        write_text(base / "scripts" / "validate_output.py", """#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
-
-schema = json.loads(Path(__file__).parents[1].joinpath("output.schema.json").read_text(encoding="utf-8"))
-payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-missing = [field for field in schema.get("required", []) if field not in payload]
-if missing:
-    raise SystemExit(f"缺少必填字段: {missing}")
-if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
-    raise SystemExit("skill_id 不匹配")
-if payload.get("status") not in schema["properties"]["status"]["enum"]:
-    raise SystemExit("status 不合法")
-print("ok")
-""")
+        write_text(base / "scripts" / "validate_output.py", build_validate_output_script(skill))
         for case in EVAL_CASES:
             write_text(base / "evals" / f"{case}.yaml", json.dumps(eval_case(skill, case), ensure_ascii=False, indent=2))
         write_text(base / "workflow" / "node.yaml", json.dumps(workflow_node(skill), ensure_ascii=False, indent=2))
@@ -1808,7 +2007,7 @@ def workflow(name: str, nodes: list[str]) -> dict:
         )
     return {
         "workflow_id": name,
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "states": COMMON_STATES,
         "gate_decisions": ["continue", "pause", "retry", "skip", "block", "stop"],
         "supported_entry_modes": WORKFLOW_ENTRY_MODES,
@@ -1816,11 +2015,13 @@ def workflow(name: str, nodes: list[str]) -> dict:
         "start_node": nodes[0],
         "terminal_nodes": [nodes[-1]],
         "composition_policy": {
-            "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；遇到阻断、等待输入或等待人工审批时暂停。",
+            "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先检查 preflight_input_state，非 ready 时暂停并禁止继续 formal_generation 或进入下游节点。",
             "from_node": "从用户指定 start_node 开始继续流转；必须校验该节点存在，并确认所需上游 artifacts 已提供或可从 artifact_index 获取。",
             "single_node": "只执行用户指定 target_node，不自动进入 next_nodes；输出该节点 StageRunResult 和可继续执行的后续节点建议。",
             "custom": "可按任务目标裁剪节点集合，但必须保留节点输入输出契约、失败策略、审批策略和产物路由。",
         },
+        "preflight_runtime_policy": preflight_runtime_gate(),
+        "design_governance_policy": design_governance_policy(),
         "nodes": workflow_nodes,
         "artifact_routing": "每个节点的输出进入 artifact-index.json，并映射到下游 StageRunRequest.artifacts",
         "human_approval_gateway": "遇到 HUMAN_APPROVAL_REQUIRED 时暂停，仅在 ApprovalRequest.decision=approved 后恢复",
@@ -1925,7 +2126,7 @@ prefix_rule(
 )
 """)
     write_text(base / "runtime" / "codex" / "policies" / "tool-policy.yaml", json.dumps({
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "policies": [
             {"id": "deny-rm-rf", "match": {"regex": r"\brm\s+-rf\b"}, "decision": "deny", "reason": "命中 rm -rf 高风险命令；请改走受控清理流程。"},
             {"id": "deny-git-push", "match": {"regex": r"\bgit\s+push\b"}, "decision": "deny", "reason": "git push 前必须完成自动校验、评审和人工确认。"},
@@ -2568,6 +2769,9 @@ import re
 from pathlib import Path
 
 
+PLUGIN_VERSION = \"1.0.0.1\"
+
+
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -2597,7 +2801,7 @@ def compile_skill(skill_dir: Path) -> dict:
     }
     return {
         "skill_id": contract["skill_id"],
-        "version": contract.get("version", "1.0.0"),
+        "version": contract.get("version", PLUGIN_VERSION),
         "stage": contract.get("stage"),
         "type": contract.get("type"),
         "prompt_pack": {
@@ -2646,7 +2850,7 @@ def main():
         target = skills_out / f"{ir['skill_id']}.ir.json"
         target.write_text(json.dumps(ir, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
         compiled.append({"skill_id": ir["skill_id"], "path": str(target), "risk_level": ir["risk"]["risk_level"], "allow_implicit_invocation": ir["risk"]["allow_implicit_invocation"]})
-    index = {"version": "1.0.0", "skills": compiled}
+    index = {"version": PLUGIN_VERSION, "skills": compiled}
     (out / "skill-runtime-index.json").write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
     print(json.dumps({"status": "pass", "compiled": len(compiled), "out": str(out)}, ensure_ascii=False))
 
@@ -2763,6 +2967,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
+PLUGIN_VERSION = "1.0.0.1"
 
 
 def load_config(path: Path) -> dict:
@@ -2798,22 +3003,45 @@ def read_codex_manifest(repo_root: Path) -> dict:
     return json.loads(manifest.read_text(encoding="utf-8"))
 
 
-def marketplace_payload(config: dict) -> dict:
+def load_marketplace(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def plugin_entry(config: dict) -> dict:
     plugin_name = config.get("plugin_name", "engineering-assistant")
     return {
-        "name": config.get("name", "local-engineering"),
-        "interface": config.get("interface", {"displayName": "Local Engineering Plugins"}),
-        "plugins": [
-            {
-                "name": plugin_name,
-                "source": {
-                    "source": "local",
-                    "path": "./" + config.get("plugin_relative_path", f"plugins/{plugin_name}").strip("/"),
-                },
-                "policy": config.get("policy", {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}),
-                "category": config.get("category", "Productivity"),
-            }
-        ],
+        "name": plugin_name,
+        "source": {
+            "source": "local",
+            "path": "./" + config.get("plugin_relative_path", f"plugins/{plugin_name}").strip("/"),
+        },
+        "policy": config.get("policy", {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}),
+        "category": config.get("category", "Productivity"),
+    }
+
+
+def upsert_plugin_entry(existing_plugins: list[dict], new_plugin: dict) -> list[dict]:
+    updated = []
+    replaced = False
+    for plugin in existing_plugins:
+        if plugin.get("name") == new_plugin["name"]:
+            updated.append(new_plugin)
+            replaced = True
+        else:
+            updated.append(plugin)
+    if not replaced:
+        updated.append(new_plugin)
+    return updated
+
+
+def marketplace_payload(config: dict, existing_marketplace: dict | None = None) -> dict:
+    existing_marketplace = existing_marketplace or {}
+    return {
+        "name": existing_marketplace.get("name", config.get("name", "local-engineering")),
+        "interface": existing_marketplace.get("interface", config.get("interface", {"displayName": "Local Engineering Plugins"})),
+        "plugins": upsert_plugin_entry(existing_marketplace.get("plugins", []), plugin_entry(config)),
     }
 
 
@@ -2840,7 +3068,7 @@ def hermes_plugin_yaml(plugin_name: str, manifest: dict) -> str:
     author_name = author.get("name", "") if isinstance(author, dict) else str(author)
     payload = {
         "name": plugin_name,
-        "version": str(manifest.get("version", "1.0.0")),
+        "version": str(manifest.get("version", PLUGIN_VERSION)),
         "description": manifest.get("description", ""),
         "author": author_name,
         "kind": "standalone",
@@ -2980,7 +3208,8 @@ def publish_codex(repo_root: Path, config: dict, publish_root=None, marketplace_
     copy_tree(runtime, plugin_root / "engineering-assistant")
 
     marketplace_path.parent.mkdir(parents=True, exist_ok=True)
-    marketplace_path.write_text(json.dumps(marketplace_payload(config), ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    existing_marketplace = load_marketplace(marketplace_path)
+    marketplace_path.write_text(json.dumps(marketplace_payload(config, existing_marketplace), ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
     legacy_marketplace = publish_root / "marketplace.json"
     if legacy_marketplace != marketplace_path and legacy_marketplace.exists():
         legacy_marketplace.unlink()
@@ -3572,6 +3801,8 @@ from pathlib import Path
 
 VALID_LANGUAGE = {"zh-CN", "en"}
 VALID_STATUSES = {"succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"}
+VALID_PREFLIGHT_STATES = {"ready", "waiting_for_input", "waiting_for_human_review", "blocked"}
+FORMAL_DESIGN_ARTIFACTS = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
@@ -3645,9 +3876,20 @@ for arg in sys.argv[1:]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("status") not in VALID_STATUSES:
         errors.append(f"{path}: status 不合法")
+    if data.get("preflight_input_state") not in VALID_PREFLIGHT_STATES:
+        errors.append(f"{path}: preflight_input_state 不合法")
     if data.get("language") not in VALID_LANGUAGE:
         errors.append(f"{path}: language 不能为空，且必须为 zh-CN 或 en")
     info_requests = data.get("required_information_requests", [])
+    artifact_names = {artifact.get("name") for artifact in data.get("artifacts", []) if artifact.get("name")}
+    if data.get("status") == "waiting_for_input" and data.get("preflight_input_state") != "waiting_for_input":
+        errors.append(f"{path}: waiting_for_input 时 preflight_input_state 必须为 waiting_for_input")
+    if data.get("status") == "waiting_for_human_review" and data.get("preflight_input_state") != "waiting_for_human_review":
+        errors.append(f"{path}: waiting_for_human_review 时 preflight_input_state 必须为 waiting_for_human_review")
+    if data.get("preflight_input_state") != "ready":
+        leaked = sorted(name for name in artifact_names if name in FORMAL_DESIGN_ARTIFACTS)
+        if leaked:
+            errors.append(f"{path}: preflight_input_state={data.get('preflight_input_state')} 时不得产出正式设计工件: {', '.join(leaked)}")
     if data.get("status") == "waiting_for_input":
         if not info_requests:
             errors.append(f"{path}: waiting_for_input 必须包含 required_information_requests")
@@ -3663,6 +3905,8 @@ for arg in sys.argv[1:]:
             if html_path is not None:
                 validate_human_html(html_path, path)
     if data.get("status") == "succeeded":
+        if data.get("preflight_input_state") != "ready":
+            errors.append(f"{path}: succeeded 时 preflight_input_state 必须为 ready")
         metadata = data.get("document_metadata") or {}
         for field in DOC_REQUIRED:
             if field not in metadata or metadata.get(field) in ("", [], None):
@@ -5502,7 +5746,7 @@ print("CI 产物目录已准备")
     for file_name, data in actions.items():
         write_text(base / "ci" / "github-actions" / file_name, json.dumps(data, ensure_ascii=False, indent=2))
 
-    write_text(base / "registry" / "skills.yaml", json.dumps({"skills": [{"skill_id": s["id"], "version": "1.0.0", "type": s["type"], "owner": s["owner"], "path": f"{SKILLS_ROOT}/{s['id']}", "risk_level": risk_level(s), "allow_implicit_invocation": s["id"] not in HIGH_RISK_SKILLS} for s in SKILLS]}, ensure_ascii=False, indent=2))
+    write_text(base / "registry" / "skills.yaml", json.dumps({"skills": [{"skill_id": s["id"], "version": PLUGIN_VERSION, "type": s["type"], "owner": s["owner"], "path": f"{SKILLS_ROOT}/{s['id']}", "risk_level": risk_level(s), "allow_implicit_invocation": s["id"] not in HIGH_RISK_SKILLS} for s in SKILLS]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "workflows.yaml", json.dumps({"workflows": [{"workflow_id": name, "path": f"engineering-assistant/workflows/{name}.yaml"} for name in workflows]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "standards.yaml", json.dumps({"standards": [{"id": Path(name).stem, "path": f"engineering-assistant/standards/{name}", "status": "published", "owner": "规范 owner"} for name in standards]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "team-rule-catalog.yaml", json.dumps({"rules": TEAM_RULE_CATALOG, "eval_rule_prefixes": TEAM_RULE_PREFIXES}, ensure_ascii=False, indent=2))
@@ -5510,7 +5754,7 @@ print("CI 产物目录已准备")
     for skill in SKILLS:
         write_json(base / "runtime" / "compiled" / "skills" / f"{skill['id']}.ir.json", runtime_ir(skill))
     write_json(base / "runtime" / "compiled" / "skill-runtime-index.json", {
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "skills": [
             {
                 "skill_id": s["id"],
@@ -5545,7 +5789,7 @@ print("CI 产物目录已准备")
 def plugin_manifest() -> dict:
     return {
         "name": PLUGIN_NAME,
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "metadata_status": "waiting_for_human_review",
         "description": "团队研发助手插件，提供需求准入、主动信息补全、技术/框架选型评审、前端设计研发、代码上下文分析、概要/详细设计、DB/Redis/MQ 设计、设计评审、实现控制、文档治理、代码质量治理和经验沉淀能力。",
         "author": {
