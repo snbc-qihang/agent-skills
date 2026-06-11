@@ -152,6 +152,17 @@ description: Use when the request is about 基于设计文档进行最小必要�
 6. 如果用户指出“通用插件混入个人/项目内容”，必须把修复落到 generator source，删除已生成的污染 reference，重新生成，并补一个 deterministic guard test 防止这些词再次进入非 eval/report 产物。
 7. 最终报告必须列出：源头修改、生成文件、regression cases、实际执行命令、真实输出、未完成项/阻断原因。
 
+# Generator-first 插件/技能资产修改补充
+当目标仓库声明 SKILL.md、validator、eval、workflow、manifest 或插件发布资产由 generator 生成时：
+1. 先定位并修改 generator source，不要把 generated SKILL.md / scripts / manifest 当作最终修复源头。
+2. 在 generator 中沉淀通用规则；具体业务名、表名、消息名、服务名只能放入 regression/eval 示例，不得进入通用规则正文。
+3. 重新运行 generator 刷新源树，再检查 generated diff，确认改动没有被生成器覆盖。
+4. 为每条新增通用规则或发布行为补 deterministic regression test；测试应执行生成后的 validator、eval runner 或发布脚本，验证真实产物而不是只断言源码文本存在。
+5. 修改插件版本时，不要只 patch 已生成的 `plugin.json`：应在 generator 中建立单一版本常量，manifest 读取该常量，并通过安装/发布脚本把发布包 manifest 读回校验版本。
+6. 面向通用团队插件 / skill library 的变更，提交前必须做污染审计：搜索并清理个人画像、个人工作流、项目专项架构结论、具体系统规划、私人路径等与插件目标无关的内容。若确需保留具体业务名、服务名、表名、消息名，只能放在 eval/regression 示例，不能进入 SKILL.md、validator、workflow、registry 或通用 reference 正文。
+7. 如果用户指出“通用插件混入个人/项目内容”，必须把修复落到 generator source，删除已生成的污染 reference，重新生成，并补一个 deterministic guard test 防止这些词再次进入非 eval/report 产物。
+8. 最终报告必须列出：源头修改、生成文件、regression cases、实际执行命令、真实输出、未完成项/阻断原因。
+
 # 禁止行为
 - 不得在无证据时宣称门禁通过。
 - 不得隐藏缺失输入。
