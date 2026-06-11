@@ -12,12 +12,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "teamwork-engineering-assistant"
+PLUGIN_VERSION = "1.0.0.1"
 
 
 class TeamworkPluginAdaptationTests(unittest.TestCase):
     def test_manifest_and_publish_config_use_distinct_team_plugin_name(self) -> None:
         manifest = json.loads((ROOT / "engineering-assistant" / "plugin" / "plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(PLUGIN_NAME, manifest["name"])
+        self.assertEqual(PLUGIN_VERSION, manifest["version"])
         self.assertEqual("团队研发助手", manifest["interface"]["displayName"])
         self.assertIn("人人取/萤启", manifest["description"])
         self.assertIn("teamwork", manifest["keywords"])
@@ -82,6 +84,8 @@ class TeamworkPluginAdaptationTests(unittest.TestCase):
             plugin_root = personal_root / "plugins" / PLUGIN_NAME
             marketplace_path = personal_root / ".agents" / "plugins" / "marketplace.json"
             self.assertTrue((plugin_root / ".codex-plugin" / "plugin.json").exists())
+            published_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+            self.assertEqual(PLUGIN_VERSION, published_manifest["version"])
             self.assertTrue((plugin_root / "skills").exists())
             self.assertTrue((plugin_root / "engineering-assistant").exists())
 

@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
+PLUGIN_VERSION = "1.0.0.1"
 PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
@@ -9323,7 +9324,7 @@ print("CI 产物目录已准备")
 def plugin_manifest() -> dict:
     return {
         "name": PLUGIN_NAME,
-        "version": "1.0.0",
+        "version": PLUGIN_VERSION,
         "description": "人人取/萤启团队研发助手插件，内置部门和团队规范，提供需求准入、主动信息补全、技术/框架选型评审、前端设计研发、代码上下文分析、概要/详细设计、DB/Redis/MQ 设计、设计评审、实现控制、文档治理、代码质量治理和经验沉淀能力。",
         "author": {
             "name": "Teamwork Engineering Team",
