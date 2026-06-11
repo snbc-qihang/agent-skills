@@ -168,19 +168,7 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `mq-design` 发送给本 skill，并等待 `StageRunResult`。
 
-# 校验踩坑与修复模式
 
-## MQ Excel 模板写入
-- `mq-design.xlsx` 校验会检查模板样式、合并单元格、工作表顺序和固定文本；不要用 `openpyxl` 直接重存模板后修改单元格，因为它可能改写 `styles.xml`、合并单元格或空白模板单元格，导致“不得修改模板样式/模板单元格不得删除”。
-- 更稳妥的做法：复制 `assets/mq-design-template.xlsx`，用 zip/XML 方式只替换既有 `xl/worksheets/sheet*.xml` 中第 2 行已有单元格的 inlineStr 文本，保留原单元格属性、样式、mergeCells、styles.xml 和其它 zip entry。
-- 消费者 sheet 模板中存在合并/空白列，写值时跳过合并占位列，不新增或删除单元格。
-
-## 必须显式写入策略关键词
-- MQ 校验不仅看 Excel 字段，还会查找“幂等策略 / 重试策略 / 回放策略”。在 `mq-topic-contract.yaml` 或备注中明确写：
-  - `幂等策略：messageId + Redis SETNX + 业务唯一键`
-  - `重试策略：最多 N 次后进入死信队列`
-  - `回放策略：人工审批后按 messageId/业务键回放`
-- 新增核心链路 MQ、生产消息回放、删除或重命名 topic/queue 时，`StageRunResult.status` 应为 `waiting_for_human_review`，并登记可填写的 human-review HTML。
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。

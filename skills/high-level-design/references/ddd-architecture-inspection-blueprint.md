@@ -30,9 +30,9 @@ A code inspection can correctly find MQ, Feign, transaction, long-class, and per
 
 - Transaction Fulfillment domain: order lifecycle, payment request orchestration, fulfillment, refund, state transitions.
 - Device Sale / Open Door domain: vending machine, channel/stock view, open-door session, delivery result.
-- Member Benefit domain: member identity, level, SVIP, benefit eligibility and usage.
-- Marketing Activity / Coupon domain: activity configuration, promotion eligibility, coupon lock/redeem/release.
-- Franchisee / Operator domain: service provider, point/location relationship, operational strategy.
+- Member Benefit domain: member identity, level, premium benefit eligibility and usage.
+- Marketing Activity / Benefit domain: activity configuration, promotion eligibility, benefit lock/redeem/release.
+- Partner / Operator domain: partner entity, point/location relationship, operational strategy.
 - Product / Inventory View domain: product master data, product mapping, inventory view.
 - Settlement / Payment domain: payment channel, prepay, payment result, refund result.
 - Statistics / Analytics domain: read models, dashboards, exports.

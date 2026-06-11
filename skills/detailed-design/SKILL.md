@@ -207,29 +207,7 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `detailed-design` 发送给本 skill，并等待 `StageRunResult`。
 
-# 校验踩坑与修复模式
 
-## StageRunResult 最小完整字段
-执行正式产物校验时，不只运行通用 `validate_stage_run_result.py`，还必须运行本 skill 的 `scripts/validate_output.py`。`stage-run-result.json` 除通用字段外必须包含：
-- `run_id`
-- `trace_id`
-- `required_human_reviews`
-- `repair_summary`
-- `next_action`
-
-`artifacts[]` 每项必须包含：
-- `name`
-- `path`
-- `artifact_type`
-- `producer_skill`
-- 可选 `consumer_skills`
-
-`artifact_type` 使用 schema 枚举值，不要直接写文件后缀：`.md -> markdown`、`.json -> json`、`.yaml/.yml -> yaml`、`.xlsx -> xlsx`、`.html -> html`。
-
-## Mermaid flowchart 校验坑
-- 校验脚本会把正文中的 `{`、`}` 视为未决信息标记；详细设计里的 Mermaid 判断节点不要写 `A{"判断"}` 或 `A{{"判断"}}`，改用普通节点如 `A["判断"]`，再用分支边表达“是/否”。
-- 每个业务流程图必须在图中显式出现补偿、重试、人工处理、回滚或告警相关节点；只在“流程设计说明”或异常表里写这些词，不一定能通过校验。
-- 修复方式：在依赖失败、文件生成失败、事务/一致性失败等路径上增加类似 `记录告警并允许重试`、`清理文件`、`无业务回滚补偿`、`必要时进入人工处理` 的图节点。
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。

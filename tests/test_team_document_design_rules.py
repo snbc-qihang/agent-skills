@@ -1873,5 +1873,36 @@ Redis 不可用时直接写 DB 并删除本地读模型。
         self.assertIn("suggested_repair", output)
 
 
+
+    def test_generic_team_plugin_does_not_embed_personal_or_project_architecture_notes(self) -> None:
+        forbidden_terms = [
+            "个人画像",
+            "个人能力提升",
+            "苏格拉底",
+            "personal-operating-profile",
+            "Socratic personal",
+            "YQ / 萤启-人人取",
+            "萤启-人人取总体架构",
+            "yq-ddd-first-architecture",
+            "yq-architecture-inspection",
+            "/snbc/yq",
+            "平台防腐层",
+            "随单购卡",
+            "SVIP",
+        ]
+        checked_roots = [ROOT / "skills", ROOT / "engineering-assistant"]
+        offenders: list[str] = []
+        for root in checked_roots:
+            for file in root.rglob("*"):
+                if not file.is_file() or file.suffix not in {".md", ".yaml", ".json", ".py"}:
+                    continue
+                if "evals" in file.parts or "reports" in file.parts:
+                    continue
+                text = file.read_text(encoding="utf-8", errors="ignore")
+                for term in forbidden_terms:
+                    if term in text:
+                        offenders.append(f"{file.relative_to(ROOT)}: {term}")
+        self.assertEqual([], offenders)
+
 if __name__ == "__main__":
     unittest.main()

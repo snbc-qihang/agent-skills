@@ -14,12 +14,12 @@
 {
   "participants": [
     {
-      "participant": "FranchiseeService",
-      "display_name": "萤启服务商系统",
+      "participant": "BusinessService",
+      "display_name": "业务系统",
       "status": "confirmed",
-      "repo_context": "operation/si-rrq-franchisemanagement-service 服务存在 FranchiseeListener 统一MQ监听器",
-      "code_path": "operation/si-rrq-franchisemanagement-service/src/main/java/.../FranchiseeListener.java",
-      "pom": "operation/si-rrq-franchisemanagement-service/pom.xml"
+      "repo_context": "repo_context 证明该服务存在消息监听或对外服务入口",
+      "code_path": "services/business-service/src/main/java/.../BusinessListener.java",
+      "pom": "services/business-service/pom.xml"
     }
   ]
 }

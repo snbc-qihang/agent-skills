@@ -184,23 +184,7 @@ description: Use when the request is about 设计数据库表结构、索引、�
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `database-design` 发送给本 skill，并等待 `StageRunResult`。
 
-# 校验踩坑与修复模式
 
-## OLTP 模板必须完整保留
-`database-design.md` 校验严格按 `assets/database-oltp-template.md` 查找章节、固定提示块和表格列头。生成数据库专项时不要用自定义简化版，也不要只写字段表、索引表和 DDL。必须以模板为骨架保留所有章节，无法确认的信息进入 `waiting_for_input` 或 `waiting_for_human_review`，不得用缺失章节绕过。
-
-## 强耦合表组模式要点
-当设计对象包含主表 + 明细表等两个以上事实/读模型对象时，必须进入强耦合表组模式：
-- 文档标题使用 `<业务对象>表组 关系型（OLTP）详细设计`。
-- `设计对象` 写成 `强耦合表组：表1、表2...`。
-- `2. 文档定位` 明确对象类型，例如 `主表 + 明细表`。
-- `2.4 强耦合表组说明`、`3.1 表的业务职责`、`4.2 字段定义（按表展开）`、`4.3 索引设计`、`6.1 CRUD 总览矩阵`、`7.1/7.2 事务一致性` 必须逐表/表组口径一致。
-- `migration-plan.md` 必须写“表组同批创建、同批校验、逐表索引 explain、表组关系校验”。
-- `rollback-plan.md` 必须写明应用发布后不得只删除或回滚表组中的单张事实表。
-- `database-risk-report.json` 覆盖生产 DDL 审批、表组同批创建审批、容量、QPS、枚举口径、幂等键口径。
-
-## 状态选择
-若库名、实例、数据库版本、DBA、安全接口人、QPS/容量等事实未确认，但用户要求先出设计草案，可以生成 `draft` 文档；涉及 DDL 时 StageRunResult 必须 `waiting_for_human_review`，不要标记 `succeeded/final/approved`。
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。
