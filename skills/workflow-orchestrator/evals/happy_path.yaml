@@ -85,6 +85,7 @@
     "workflow-trace.json",
     "workflow-summary.md",
     "approval-requests.json",
-    "artifact-index.json"
+    "artifact-index.json",
+    "validator-summary.json"
   ]
 }

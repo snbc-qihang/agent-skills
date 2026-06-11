@@ -376,6 +376,42 @@ def read_json_artifact(payload_path, payload, name):
         return None
 
 
+def participant_evidence_entries(payload_path, payload):
+    data = read_json_artifact(payload_path, payload, "participant-evidence-map.json")
+    if not isinstance(data, dict):
+        return None
+    raw_entries = data.get("participants") or data.get("services") or data.get("items") or []
+    entries = {}
+    if isinstance(raw_entries, dict):
+        raw_entries = [{"participant": key, **(value if isinstance(value, dict) else {"evidence": value})} for key, value in raw_entries.items()]
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            continue
+        keys = [
+            item.get("participant"), item.get("alias"), item.get("service"), item.get("service_name"),
+            item.get("name"), item.get("label"), item.get("display_name"), item.get("service_label"),
+        ]
+        for key in keys:
+            if key:
+                entries[str(key).strip()] = item
+    return entries
+
+
+def has_confirmed_participant_evidence(item):
+    if not isinstance(item, dict):
+        return False
+    status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
+    if status in ('unknown', 'proposed', 'assumed', 'todo', 'pending', 'pending_confirmation', 'unconfirmed', 'missing'):
+        return False
+    evidence_fields = [
+        "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
+        "evidence", "evidence_refs", "source_artifacts", "owner_module", "pom", "build_file",
+    ]
+    if any(item.get(field) for field in evidence_fields):
+        return True
+    return status in ('confirmed', 'matched', 'verified', 'existing')
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))

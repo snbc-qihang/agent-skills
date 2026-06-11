@@ -393,8 +393,8 @@ flowchart LR
 - 设计摘要：支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。
 - description：研发流程编排、阶段选择、skills 串联执行、状态流转、人工审批和产物路由时使用；不要用于直接生成某个阶段文档。
 - 输入：workflow.yaml, stage node registry, StageRunRequest, approval_context
-- 输出：workflow-trace.json, workflow-summary.md, approval-requests.json, artifact-index.json
-- 质量门禁：节点 contract 匹配; 前置条件满足; 产物 schema 合规; 高风险动作进入审批
+- 输出：workflow-trace.json, workflow-summary.md, approval-requests.json, artifact-index.json, validator-summary.json
+- 质量门禁：节点 contract 匹配; 前置条件满足; 产物 schema 合规; 专项 validator 结果全部通过或向上冒泡为 blocked; 高风险动作进入审批
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
 - 人工审批规则：人工审批网关; 跳过阻断节点; 恢复 blocked workflow; 高风险动作执行
 - 目录结构：`skills/workflow-orchestrator/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。

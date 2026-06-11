@@ -93,6 +93,8 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - 断点恢复
 - 产物路由
 - 执行日志
+- validator-summary 汇总
+- defect-analysis 根因分析
 - DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录
 5. 确认 `preflight_input_state == ready` 后进入 `formal_generation` 并生成全部声明产物。
 6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
@@ -104,6 +106,7 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - `workflow-summary.md`
 - `approval-requests.json`
 - `artifact-index.json`
+- `validator-summary.json`
 
 # 文档治理
 - `artifacts/<skill_id>/` 下的输出默认是本次 run artifact，不自动等同正式留存文档。
@@ -116,16 +119,8 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 - 节点 contract 匹配
 - 前置条件满足
 - 产物 schema 合规
+- 专项 validator 结果全部通过或向上冒泡为 blocked
 - 高风险动作进入审批
-
-# 缺陷分析与专项校验冒泡
-
-- 当用户指出 workflow 生成产物存在质量问题、脱离代码实际、模板裁剪、门禁误报等问题时，必须先进入 defect-analysis 模式，不得直接重写正式文档。
-- defect-analysis 模式必须先输出并落盘根因信息：`symptom`、`evidence`、`violated_rule`、`root_cause`、`required_plugin_control`、`whether_artifact_should_be_invalidated`。根因明确后才能进入 repair_generation。
-- repair_generation 必须生成新的 run 目录，不覆盖错误样本；错误样本保留为回归用例输入。
-- workflow-orchestrator 必须汇总所有正式专项产物的 validator 结果。任一正式专项 validator 失败时，总 workflow 不得为 `succeeded` 或“已完成”，必须置为 `blocked`，并在 `validator-summary.json` 或 StageRunResult findings 中列出失败节点。
-- 不允许“主 stage-run-result 校验通过，但数据库/MQ/Redis/概要等专项 validator 失败”后继续汇报完成。
-- 回归样例参考：`references/dfz-001-plugin-control-regression.md`。
 
 # 失败处理
 - `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
@@ -164,6 +159,8 @@ description: Use when the request is about 支持阶段选择、全链路 workfl
 独立运行："使用 `workflow-orchestrator` 基于当前设计文档生成本阶段产物。"
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `workflow-orchestrator` 发送给本 skill，并等待 `StageRunResult`。
+
+
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。

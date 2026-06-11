@@ -398,6 +398,42 @@ def read_json_artifact(payload_path, payload, name):
         return None
 
 
+def participant_evidence_entries(payload_path, payload):
+    data = read_json_artifact(payload_path, payload, "participant-evidence-map.json")
+    if not isinstance(data, dict):
+        return None
+    raw_entries = data.get("participants") or data.get("services") or data.get("items") or []
+    entries = {}
+    if isinstance(raw_entries, dict):
+        raw_entries = [{"participant": key, **(value if isinstance(value, dict) else {"evidence": value})} for key, value in raw_entries.items()]
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            continue
+        keys = [
+            item.get("participant"), item.get("alias"), item.get("service"), item.get("service_name"),
+            item.get("name"), item.get("label"), item.get("display_name"), item.get("service_label"),
+        ]
+        for key in keys:
+            if key:
+                entries[str(key).strip()] = item
+    return entries
+
+
+def has_confirmed_participant_evidence(item):
+    if not isinstance(item, dict):
+        return False
+    status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
+    if status in ('unknown', 'proposed', 'assumed', 'todo', 'pending', 'pending_confirmation', 'unconfirmed', 'missing'):
+        return False
+    evidence_fields = [
+        "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
+        "evidence", "evidence_refs", "source_artifacts", "owner_module", "pom", "build_file",
+    ]
+    if any(item.get(field) for field in evidence_fields):
+        return True
+    return status in ('confirmed', 'matched', 'verified', 'existing')
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\n".join(errors))
@@ -437,17 +473,32 @@ def validate_output(payload_path, payload):
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
     if not sequence_blocks:
         errors.append("high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图")
+    evidence_entries = participant_evidence_entries(payload_path, payload)
     for block_index, block in enumerate(sequence_blocks, start=1):
         participants = service_sequence_participants(block)
         if not participants:
             errors.append(f"第 {block_index} 个 sequenceDiagram 必须显式声明 participant，且 participant 只能是服务")
+        if participants and evidence_entries is None:
+            errors.append("high-level-design.md sequenceDiagram participant 必须提供 participant-evidence-map.json，追溯到 repo_context/代码/服务注册证据: " + ", ".join(participants.keys()))
         for alias, label in participants.items():
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram participant 不是服务: {label}")
+            if evidence_entries is not None:
+                evidence = evidence_entries.get(alias) or evidence_entries.get(label)
+                if not evidence:
+                    errors.append(f"第 {block_index} 个 sequenceDiagram participant 缺少 participant-evidence-map.json 证据: {alias}/{label}")
+                elif not has_confirmed_participant_evidence(evidence):
+                    errors.append(f"第 {block_index} 个 sequenceDiagram participant 证据状态为 unknown/proposed 或缺少 repo_context 证据: {alias}/{label}")
         for endpoint in service_sequence_endpoints(block):
             label = participants.get(endpoint, endpoint)
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点不是服务: {label}")
+            elif evidence_entries is not None:
+                evidence = evidence_entries.get(endpoint) or evidence_entries.get(label)
+                if not evidence:
+                    errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点缺少 participant-evidence-map.json 证据: {endpoint}/{label}")
+                elif not has_confirmed_participant_evidence(evidence):
+                    errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点证据状态为 unknown/proposed 或缺少 repo_context 证据: {endpoint}/{label}")
     return errors
 
 

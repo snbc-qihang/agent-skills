@@ -448,6 +448,78 @@ class TeamDocumentDesignRulesTest(unittest.TestCase):
             self.assertIn("should_validate_formal_outputs(payload)", scripts[skill_id])
             self.assertIn("errors.extend(validate_output(payload_path, payload))", scripts[skill_id])
 
+    def test_workflow_orchestrator_contract_requires_validator_summary(self) -> None:
+        contract = json.loads((ROOT / "skills" / "workflow-orchestrator" / "contract.yaml").read_text(encoding="utf-8"))
+        outputs = {item["name"] for item in contract["outputs"]}
+        self.assertIn("validator-summary.json", outputs)
+        skill_md = (ROOT / "skills" / "workflow-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("defect-analysis", skill_md)
+        self.assertIn("validator-summary.json", skill_md)
+
+    def test_workflow_orchestrator_validator_blocks_when_specialty_validator_failed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            validator_summary = root / "validator-summary.json"
+            validator_summary.write_text(
+                json.dumps(
+                    {
+                        "validators": [
+                            {"skill_id": "high-level-design", "status": "passed", "exit_code": 0},
+                            {"skill_id": "database-design", "status": "failed", "exit_code": 1, "errors": ["缺少模板章节"]},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "workflow-orchestrator",
+                [
+                    {"name": "workflow-trace.json", "path": str(root / "workflow-trace.json"), "artifact_type": "json"},
+                    {"name": "workflow-summary.md", "path": str(root / "workflow-summary.md")},
+                    {"name": "approval-requests.json", "path": str(root / "approval-requests.json"), "artifact_type": "json"},
+                    {"name": "artifact-index.json", "path": str(root / "artifact-index.json"), "artifact_type": "json"},
+                    {"name": "validator-summary.json", "path": str(validator_summary), "artifact_type": "json"},
+                ],
+                status="succeeded",
+            )
+            payload_path = root / "workflow-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("workflow-orchestrator", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("专项 validator 失败", output)
+        self.assertIn("database-design", output)
+        self.assertIn("blocked", output)
+
+    def test_workflow_orchestrator_validator_requires_defect_analysis_for_quality_defects(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            summary = root / "workflow-summary.md"
+            summary.write_text("用户指出概要设计脱离代码实际，数据库模板裁剪。", encoding="utf-8")
+            result_payload = payload(
+                "workflow-orchestrator",
+                [
+                    {"name": "workflow-summary.md", "path": str(summary)},
+                    {"name": "workflow-trace.json", "path": str(root / "workflow-trace.json"), "artifact_type": "json"},
+                    {"name": "approval-requests.json", "path": str(root / "approval-requests.json"), "artifact_type": "json"},
+                    {"name": "artifact-index.json", "path": str(root / "artifact-index.json"), "artifact_type": "json"},
+                ],
+                status="succeeded",
+            )
+            result_payload["findings"] = [{"summary": "用户指出产物质量问题：脱离代码实际、模板裁剪"}]
+            payload_path = root / "workflow-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("workflow-orchestrator", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("defect-analysis", output)
+        self.assertIn("root_cause", output)
+
     def test_waiting_for_input_skips_formal_output_validation_until_writeback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -729,6 +801,130 @@ sequenceDiagram
         output = result.stdout + result.stderr
         self.assertIn("participant 不是服务", output)
         self.assertIn("消息端点不是服务", output)
+
+    def test_high_level_design_validator_requires_participant_evidence_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 开通
+#### 4.1.1 参与系统与职责设计
+#### 4.1.2 关键协作摘要
+服务间协作摘要。
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant OrderService as 订单服务
+    participant PaymentNotifyService as 支付通知服务
+    OrderService->>PaymentNotifyService: 支付成功通知
+```
+## 5.中间件设计
+## 6.数据视图
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("participant-evidence-map.json", output)
+        self.assertIn("PaymentNotifyService", output)
+
+    def test_high_level_design_validator_blocks_unknown_participant_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "high-level-design.md"
+            design.write_text(
+                """# 概要设计
+
+## 0. 原始需求与原型追溯
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 开通流程 | 4.1 | matched |
+
+## 1. 版本变更记录
+## 2. 平台概述
+## 3. 系统设计
+### 3.1 系统逻辑视图
+### 3.1.1 系统设计原则
+### 3.3 研发视图
+### 3.4 研发结构定义
+## 4. 核心功能
+### 4.1 开通
+#### 4.1.1 参与系统与职责设计
+#### 4.1.2 关键协作摘要
+服务间协作摘要。
+#### 4.1.3 跨服务服务间时序图
+```mermaid
+sequenceDiagram
+    participant OrderService as 订单服务
+    participant PaymentNotifyService as 支付通知服务
+    OrderService->>PaymentNotifyService: 支付成功通知
+```
+## 5.中间件设计
+## 6.数据视图
+""",
+                encoding="utf-8",
+            )
+            evidence = root / "participant-evidence-map.json"
+            evidence.write_text(
+                json.dumps(
+                    {
+                        "participants": [
+                            {"participant": "OrderService", "status": "confirmed", "code_path": "src/OrderService.java"},
+                            {"participant": "PaymentNotifyService", "status": "unknown"},
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "high-level-design",
+                [
+                    {"name": "high-level-design.md", "path": str(design)},
+                    {"name": "participant-evidence-map.json", "path": str(evidence), "artifact_type": "json"},
+                    {"name": "architecture-decision-record.md", "path": str(root / "architecture-decision-record.md")},
+                    {"name": "module-boundary.yaml", "path": str(root / "module-boundary.yaml"), "artifact_type": "yaml"},
+                    {"name": "risk-list.json", "path": str(root / "risk-list.json"), "artifact_type": "json"},
+                ],
+            )
+            payload_path = root / "hld-stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("high-level-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("unknown/proposed", output)
+        self.assertIn("PaymentNotifyService", output)
 
     def test_high_level_design_validator_blocks_detailed_implementation_content(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

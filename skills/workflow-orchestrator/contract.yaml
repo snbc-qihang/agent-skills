@@ -49,6 +49,7 @@
       "节点 contract 匹配",
       "前置条件满足",
       "产物 schema 合规",
+      "专项 validator 结果全部通过或向上冒泡为 blocked",
       "高风险动作进入审批"
     ],
     "allow_implicit_invocation": false
@@ -197,6 +198,13 @@
       "type": "markdown|json|yaml|code|log|report",
       "path": "artifacts/workflow-orchestrator/artifact-index.json",
       "schema": "output.schema.json#artifact-index.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "validator-summary.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/workflow-orchestrator/validator-summary.json",
+      "schema": "output.schema.json#validator-summary.json",
       "consumer": "workflow-orchestrator|downstream-stage|human-review"
     }
   ],
@@ -348,6 +356,13 @@
     },
     {
       "gate_id": "workflow-orchestrator-gate-4",
+      "name": "专项 validator 结果全部通过或向上冒泡为 blocked",
+      "type": "deterministic",
+      "pass_condition": "专项 validator 结果全部通过或向上冒泡为 blocked 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "workflow-orchestrator-gate-5",
       "name": "高风险动作进入审批",
       "type": "hybrid",
       "pass_condition": "高风险动作进入审批 有证据证明已满足",
@@ -416,7 +431,8 @@
       "workflow-trace.json",
       "workflow-summary.md",
       "approval-requests.json",
-      "artifact-index.json"
+      "artifact-index.json",
+      "validator-summary.json"
     ],
     "document_metadata": {
       "schema": "engineering-assistant/schemas/document-lifecycle.schema.json",

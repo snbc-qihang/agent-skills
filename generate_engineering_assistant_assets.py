@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """生成研发助手 Skills 工程体系资产。"""
 
 from __future__ import annotations
@@ -1535,10 +1536,10 @@ SKILLS = [
         "purpose": "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。",
         "non_goals": ["不直接生成阶段文档", "不绕过子 skill contract", "不自动批准高风险动作"],
         "inputs": ["workflow.yaml", "stage node registry", "StageRunRequest", "approval_context"],
-        "outputs": ["workflow-trace.json", "workflow-summary.md", "approval-requests.json", "artifact-index.json"],
-        "gates": ["节点 contract 匹配", "前置条件满足", "产物 schema 合规", "高风险动作进入审批"],
+        "outputs": ["workflow-trace.json", "workflow-summary.md", "approval-requests.json", "artifact-index.json", "validator-summary.json"],
+        "gates": ["节点 contract 匹配", "前置条件满足", "产物 schema 合规", "专项 validator 结果全部通过或向上冒泡为 blocked", "高风险动作进入审批"],
         "approvals": ["人工审批网关", "跳过阻断节点", "恢复 blocked workflow", "高风险动作执行"],
-        "checks": ["阶段选择", "状态流转", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录"],
+        "checks": ["阶段选择", "状态流转", "错误处理", "重试", "审批暂停", "断点恢复", "产物路由", "执行日志", "validator-summary 汇总", "defect-analysis 根因分析", "DG2-DG5 产物路由时区分 run artifact 与正式留存文档，防止中间过程文档进入正式目录"],
     },
 ]
 
@@ -2184,6 +2185,8 @@ def team_document_note(skill: dict) -> str:
 - 概要设计允许引用详细设计或 DB/MQ/Redis 专项文档名，但不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。
 - `3.3 研发视图` 和 `3.4 研发结构定义` 使用接口层、应用层、领域层、基础设施层、事件接入层等边界语言，不使用 `Controller`、`Mapper`、`Repository` 等实现标签。
 - 跨服务核心场景必须在核心功能下补充 Mermaid `sequenceDiagram` 服务间时序图；该时序图参与者只允许服务，禁止出现用户、页面、数据库、Redis、MQ、表等非服务对象。
+- `sequenceDiagram` 的每个 participant 必须能追溯到 repo_context 证据：代码路径、配置路径、已有设计文档或用户明确补充。不得把“支付通知服务”“权限组织服务”等抽象能力名直接当成真实服务写入正式时序图；找不到证据时必须进入 `waiting_for_input` / `waiting_for_human_review`，或在讨论项中标记为 proposed/unknown，不得进入正式图。
+- 概要设计必须补充或消费 `participant-evidence-map.json`，记录 participant、证据类型、证据路径、确认状态。缺少 evidence 或状态为 unknown/proposed 的 participant 视为质量门禁失败。
 - `中间件设计` 必须声明是否涉及 Redis/MQ/定时任务/外部依赖，并引用专项文档；`数据视图` 必须声明事实表、读模型或关联数据库专项。
 """
     if skill["id"] == "detailed-design":
@@ -2207,7 +2210,7 @@ def team_document_note(skill: dict) -> str:
         return template_execution_note(skill) + """
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
-- OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。
+- OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。生成流程不得用摘要式数据库设计替代模板正文；如果文档行数、章节集合或固定表格列头明显少于模板，必须视为裁剪模板并 `blocked`。
 - 当需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入“强耦合表组模式”，不得生成单表或混合字段池。
 - 强耦合表组模式下，文档标题必须使用 `<业务对象>表组 关系型（OLTP）详细设计`；`设计对象` 必须写成 `强耦合表组：表1、表2、表3...`；`文档定位` 必须明确对象类型，例如 `主表 + 明细表 + 规则表 + 领取主表 + 领取明细表`。
 - 强耦合表组模式下必须生成 `### 2.4 强耦合表组说明`，列头固定为 `成员表 | 角色 | 与主表关系 | 同事务要求 | 备注`；`### 3.1 表的业务职责` 必须按表列出业务职责和唯一事实来源。
@@ -3079,7 +3082,95 @@ print("ok")
 """
 
 
+def workflow_orchestrator_validator_script() -> str:
+    return """#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+schema = json.loads(Path(__file__).parents[1].joinpath("output.schema.json").read_text(encoding="utf-8"))
+payload_path = Path(sys.argv[1])
+payload = json.loads(payload_path.read_text(encoding="utf-8"))
+missing = [field for field in schema.get("required", []) if field not in payload]
+if missing:
+    raise SystemExit(f"缺少必填字段: {missing}")
+if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
+    raise SystemExit("skill_id 不匹配")
+if payload.get("status") not in schema["properties"]["status"]["enum"]:
+    raise SystemExit("status 不合法")
+if payload.get("preflight_input_state") not in schema["properties"]["preflight_input_state"]["enum"]:
+    raise SystemExit("preflight_input_state 不合法")
+
+errors = []
+if payload.get("status") == "succeeded" and payload.get("preflight_input_state") != "ready":
+    errors.append("succeeded 必须满足 preflight_input_state == ready")
+if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
+    errors.append("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
+
+def artifact_map(payload):
+    return {item.get("name"): item for item in payload.get("artifacts", [])}
+
+def resolve_artifact(item):
+    raw = (item or {}).get("path") or ""
+    if not raw:
+        return None
+    path = Path(raw)
+    if path.is_absolute():
+        return path
+    cwd_path = Path.cwd() / path
+    if cwd_path.exists():
+        return cwd_path
+    return payload_path.parent / path
+
+def read_text_artifact(name):
+    path = resolve_artifact(artifact_map(payload).get(name))
+    if path and path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+def read_json_artifact(name):
+    text = read_text_artifact(name)
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        errors.append(f"{name} 不是合法 JSON: {exc}")
+        return None
+
+if payload.get("status") == "succeeded":
+    validator_summary = read_json_artifact("validator-summary.json")
+    if validator_summary is None:
+        errors.append("workflow-orchestrator succeeded 必须登记并生成 validator-summary.json，汇总所有专项 validator 结果")
+    else:
+        validators = validator_summary.get("validators") or validator_summary.get("results") or []
+        if not validators:
+            errors.append("validator-summary.json 必须包含 validators/results 列表")
+        for item in validators:
+            status = str(item.get("status") or item.get("result") or "").lower()
+            exit_code = item.get("exit_code")
+            if status in {"failed", "fail", "error", "blocked"} or (exit_code not in (None, 0, "0")):
+                skill_id = item.get("skill_id") or item.get("validator") or item.get("name") or "unknown"
+                errors.append(f"专项 validator 失败必须向 workflow-orchestrator 冒泡为 blocked，不得 succeeded: {skill_id}")
+
+quality_defect_terms = ["脱离代码实际", "模板裁剪", "validator 失败", "门禁失败", "产物质量问题", "用户指出"]
+quality_text = json.dumps(payload.get("findings", []), ensure_ascii=False) + "\\n" + read_text_artifact("workflow-summary.md")
+if payload.get("status") == "succeeded" and any(term in quality_text for term in quality_defect_terms):
+    defect_analysis = read_json_artifact("defect-analysis.json")
+    if defect_analysis is None:
+        errors.append("发现产物质量缺陷或用户指出问题时，workflow-orchestrator 必须生成 defect-analysis.json 并记录 root_cause，不得直接 succeeded")
+    elif not defect_analysis.get("root_cause"):
+        errors.append("defect-analysis.json 缺少 root_cause")
+
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+"""
+
+
 def team_validator_script(skill_id: str) -> str:
+    if skill_id == "workflow-orchestrator":
+        return workflow_orchestrator_validator_script()
     if skill_id not in TEAM_DOC_TARGET_SKILLS:
         return generic_validator_script()
     policies = {
@@ -3164,17 +3255,32 @@ def validate_output(payload_path, payload):
     sequence_blocks = mermaid_blocks(text, "sequenceDiagram")
     if not sequence_blocks:
         errors.append("high-level-design.md 跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图")
+    evidence_entries = participant_evidence_entries(payload_path, payload)
     for block_index, block in enumerate(sequence_blocks, start=1):
         participants = service_sequence_participants(block)
         if not participants:
             errors.append(f"第 {block_index} 个 sequenceDiagram 必须显式声明 participant，且 participant 只能是服务")
+        if participants and evidence_entries is None:
+            errors.append("high-level-design.md sequenceDiagram participant 必须提供 participant-evidence-map.json，追溯到 repo_context/代码/服务注册证据: " + ", ".join(participants.keys()))
         for alias, label in participants.items():
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram participant 不是服务: {label}")
+            if evidence_entries is not None:
+                evidence = evidence_entries.get(alias) or evidence_entries.get(label)
+                if not evidence:
+                    errors.append(f"第 {block_index} 个 sequenceDiagram participant 缺少 participant-evidence-map.json 证据: {alias}/{label}")
+                elif not has_confirmed_participant_evidence(evidence):
+                    errors.append(f"第 {block_index} 个 sequenceDiagram participant 证据状态为 unknown/proposed 或缺少 repo_context 证据: {alias}/{label}")
         for endpoint in service_sequence_endpoints(block):
             label = participants.get(endpoint, endpoint)
             if not is_service_label(label, POLICY["service_sequence_forbidden_participants"]):
                 errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点不是服务: {label}")
+            elif evidence_entries is not None:
+                evidence = evidence_entries.get(endpoint) or evidence_entries.get(label)
+                if not evidence:
+                    errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点缺少 participant-evidence-map.json 证据: {endpoint}/{label}")
+                elif not has_confirmed_participant_evidence(evidence):
+                    errors.append(f"第 {block_index} 个 sequenceDiagram 消息端点证据状态为 unknown/proposed 或缺少 repo_context 证据: {endpoint}/{label}")
     return errors
 ''',
         "detailed-design": r'''
@@ -4002,6 +4108,42 @@ def read_json_artifact(payload_path, payload, name):
         return None
 
 
+def participant_evidence_entries(payload_path, payload):
+    data = read_json_artifact(payload_path, payload, "participant-evidence-map.json")
+    if not isinstance(data, dict):
+        return None
+    raw_entries = data.get("participants") or data.get("services") or data.get("items") or []
+    entries = {{}}
+    if isinstance(raw_entries, dict):
+        raw_entries = [{{"participant": key, **(value if isinstance(value, dict) else {{"evidence": value}})}} for key, value in raw_entries.items()]
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            continue
+        keys = [
+            item.get("participant"), item.get("alias"), item.get("service"), item.get("service_name"),
+            item.get("name"), item.get("label"), item.get("display_name"), item.get("service_label"),
+        ]
+        for key in keys:
+            if key:
+                entries[str(key).strip()] = item
+    return entries
+
+
+def has_confirmed_participant_evidence(item):
+    if not isinstance(item, dict):
+        return False
+    status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
+    if status in {"unknown", "proposed", "assumed", "todo", "pending", "pending_confirmation", "unconfirmed", "missing"}:
+        return False
+    evidence_fields = [
+        "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
+        "evidence", "evidence_refs", "source_artifacts", "owner_module", "pom", "build_file",
+    ]
+    if any(item.get(field) for field in evidence_fields):
+        return True
+    return status in {"confirmed", "matched", "verified", "existing"}
+
+
 def fail(errors):
     if errors:
         raise SystemExit("\\n".join(errors))
@@ -4637,6 +4779,12 @@ def controlled_execution_note(skill: dict) -> str:
 """
 
 
+EXTRA_SKILL_NOTES = {'high-level-design': '# 架构巡检 / 既有系统治理补充规则\n\n当用户要求对既有系统做架构巡检、问题排查、重构方向、核心链路治理或服务边界梳理时，不要直接从局部代码问题进入修复建议。必须先建立业务域蓝图，再把局部问题归位。\n\n## 最终文档与过程文档分离\n\n架构巡检会产生大量中间草稿、机器证据、候选矩阵和 ADR。人工真正需要的是最终领域/架构梳理文档，而不是过程目录的堆叠。\n\n执行要求：\n1. 每个阶段结束时必须收敛一个 `final/` 或等价目录作为人工入口。\n2. 最终人工文档只保留结论、架构图、领域边界、业务能力、数据边界、关键决策和下一阶段入口规则。\n3. 过程分析、证据链、决策矩阵、open questions、扫描结果进入 `machine/`、`learning/`、`references/` 或阶段草稿目录，不作为日常阅读入口。\n4. 如果用户指出“过程文档太多”，立即停止继续扩写过程产物，生成或更新最终入口 README 和最终架构文档。\n5. 最终文档必须能独立阅读，不要求读者回看前面的对话或中间分析文件。\n\n\n## YQ / 萤启-人人取一阶段优先规则\n\n当目标系统是 yq/萤启/人人取相关系统时，第一阶段必须先收束架构基线：领域划分、业务划分、数据划分、萤启-人人取总体架构图、领域架构图。未确认前，不要进入 MQ listener 改造、Feign fallback、表迁移、服务拆分或代码重构等第二阶段治理。\n\n已确认基线：萤启业务系统 + 人人取基础能力平台；平台防腐层承接 API/MQ/DTO 转换/状态映射/副本同步。会员和优惠券属于萤启；人人取维护标准订单、标准商品、价格策略计算与下发、支付、设备/开门基础能力等；萤启在其上扩展 SVIP/随单购卡、定制化商品/价格/场景价、经营关系和履约扩展。\n\nYQ/既有系统架构巡检的人工阅读入口必须收敛：最终项目知识库放在 `artifacts/project-inspection/final/`，过程学习和个人能力收获放在 `artifacts/project-inspection/learning/`，机器证据放在 `artifacts/project-inspection/machine/`。不要让候选草案、决策矩阵和扫描过程淹没最终文档；最终文档只放已确认架构结论、架构图、领域边界、业务能力、数据边界和下一阶段入口规则。\n\n所有无代码证据、文档证据或用户确认的内容必须作为 discussion/open question/ADR 沉淀，不能进入最终结论。人工材料只给结果和决策项；机器材料保留证据链。\n\n### YQ 最终文档收敛规则\n\n用户不希望过程文档淹没最终文档。做 YQ 架构巡检/优化时必须把产物分层：\n\n- `final/`：最终项目知识库，只放可传递的领域与架构梳理文档；人工日常入口应尽量收敛为一个主文档。\n- `learning/`：过程收获、个人能力提升、苏格拉底式画像记录；不作为项目最终结论。\n- `machine/`：证据链、索引、扫描结果、可追溯数据。\n- 其它 `human/`、阶段目录、ADR/草稿：只做追溯材料，不推荐作为人工日常入口。\n\n当用户要求“最终领域/架构梳理文档”时，不要继续堆过程分析；生成一个最终文档，包含总体架构关系、D1-D7 决策、架构图、领域架构图、业务能力地图、数据边界、平台防腐层边界和下一阶段入口规则。\n\nYQ/萤启项目必须额外遵守 `references/yq-ddd-first-architecture.md`：先完成萤启-人人取总体架构、领域架构、业务能力地图、数据边界和 open questions；这些未形成基线前，不得进入 MQ/Feign/表拆分/代码治理等第二阶段。\n\n当巡检过程文档膨胀时，遵守 `references/yq-architecture-inspection-artifact-governance.md`：final/ 只放最终人工知识库，learning/ 放过程学习和个人画像，machine/ 放证据链；不要让过程材料淹没最终架构文档。\n\n执行顺序：\n1. 先抽取业务域和限界上下文，而不是按现有服务名或代码目录作为架构边界。\n2. 按 DDD 视角标注 `核心域 / 支撑域 / 通用域 / 外部能力`。\n3. 绘制上下文关系：Customer/Supplier、Partnership、Shared Kernel、Conformist、Anti-Corruption Layer、Event Subscriber 等。\n4. 明确每个上下文的目标边界、开放能力、事件方向、一致性策略和防腐层。\n5. 再把已发现的 MQ、Feign、事务、长类、重复 DTO、动态 SQL、测试缺口等问题归属到对应业务域。\n6. 输出建议时使用“领域治理路线图”，不要只输出“局部代码重构清单”。\n\n关键坑：\n- `mp-mall`、`franchisemanagement`、`coupon-activity` 这类服务通常只是历史代码容器，不等同于业务边界。\n- “修 MQ”“拆长类”“收敛 Feign”“加 fallback”如果没有所属业务域和目标边界，容易变成工程洁癖。\n- 对交易类链路，优先识别交易履约域、支付域、会员权益域、营销活动与券域、设备售卖与开门域，再讨论状态机、幂等、事件和补偿。\n- 对 YQ 架构设计，必须区分萤启业务域和人人取平台能力域；会员业务/会员数据属于萤启，不属于人人取平台。\n- Feign target 只能证明当前调用方向，不能直接证明目标业务边界；无代码证据、文档证据或已确认 ADR 的内容，只能作为待讨论问题沉淀，不能写入最终架构结论。\n- 人工设计评审材料只展示结论、影响、风险、待决策问题和下一步动作；代码证据、推导链、扫描明细进入机器可读 JSON/YAML/CSV 或 references，不要让人工阅读分析过程。\n\n参考：`references/ddd-architecture-inspection-blueprint.md` 提供既有多服务系统架构巡检的 DDD-first 产出顺序、上下文候选和局部问题归位示例。\n\n# 校验踩坑与修复模式\n\n## StageRunResult 最小完整字段\n执行正式产物校验时，不只运行通用 `validate_stage_run_result.py`，还必须运行本 skill 的 `scripts/validate_output.py`。`stage-run-result.json` 除通用字段外必须包含：\n- `run_id`\n- `trace_id`\n- `required_human_reviews`\n- `repair_summary`\n- `next_action`\n\n`artifacts[]` 每项必须包含：\n- `name`\n- `path`\n- `artifact_type`\n- `producer_skill`\n- 可选 `consumer_skills`\n\n`artifact_type` 使用 schema 枚举值，不要直接写文件后缀：`.md -> markdown`、`.json -> json`、`.yaml/.yml -> yaml`、`.html -> html`。概要设计 schema 不接受 `xlsx` artifact；不要把详细设计的 MQ Excel 登记到 high-level-design 的 StageRunResult。\n\n## 校验执行顺序\n生成概要设计后至少执行：\n1. `engineering-assistant/scripts/validate_stage_run_result.py <stage-run-result.json>`\n2. `skills/high-level-design/scripts/validate_output.py <stage-run-result.json>`\n\n两者都通过后，才声明概要设计完成。', 'detailed-design': '# 校验踩坑与修复模式\n\n## StageRunResult 最小完整字段\n执行正式产物校验时，不只运行通用 `validate_stage_run_result.py`，还必须运行本 skill 的 `scripts/validate_output.py`。`stage-run-result.json` 除通用字段外必须包含：\n- `run_id`\n- `trace_id`\n- `required_human_reviews`\n- `repair_summary`\n- `next_action`\n\n`artifacts[]` 每项必须包含：\n- `name`\n- `path`\n- `artifact_type`\n- `producer_skill`\n- 可选 `consumer_skills`\n\n`artifact_type` 使用 schema 枚举值，不要直接写文件后缀：`.md -> markdown`、`.json -> json`、`.yaml/.yml -> yaml`、`.xlsx -> xlsx`、`.html -> html`。\n\n## Mermaid flowchart 校验坑\n- 校验脚本会把正文中的 `{`、`}` 视为未决信息标记；详细设计里的 Mermaid 判断节点不要写 `A{"判断"}` 或 `A{{"判断"}}`，改用普通节点如 `A["判断"]`，再用分支边表达“是/否”。\n- 每个业务流程图必须在图中显式出现补偿、重试、人工处理、回滚或告警相关节点；只在“流程设计说明”或异常表里写这些词，不一定能通过校验。\n- 修复方式：在依赖失败、文件生成失败、事务/一致性失败等路径上增加类似 `记录告警并允许重试`、`清理文件`、`无业务回滚补偿`、`必要时进入人工处理` 的图节点。', 'database-design': '# 校验踩坑与修复模式\n\n## OLTP 模板必须完整保留\n`database-design.md` 校验严格按 `assets/database-oltp-template.md` 查找章节、固定提示块和表格列头。生成数据库专项时不要用自定义简化版，也不要只写字段表、索引表和 DDL。必须以模板为骨架保留所有章节，无法确认的信息进入 `waiting_for_input` 或 `waiting_for_human_review`，不得用缺失章节绕过。\n\n## 强耦合表组模式要点\n当设计对象包含主表 + 明细表等两个以上事实/读模型对象时，必须进入强耦合表组模式：\n- 文档标题使用 `<业务对象>表组 关系型（OLTP）详细设计`。\n- `设计对象` 写成 `强耦合表组：表1、表2...`。\n- `2. 文档定位` 明确对象类型，例如 `主表 + 明细表`。\n- `2.4 强耦合表组说明`、`3.1 表的业务职责`、`4.2 字段定义（按表展开）`、`4.3 索引设计`、`6.1 CRUD 总览矩阵`、`7.1/7.2 事务一致性` 必须逐表/表组口径一致。\n- `migration-plan.md` 必须写“表组同批创建、同批校验、逐表索引 explain、表组关系校验”。\n- `rollback-plan.md` 必须写明应用发布后不得只删除或回滚表组中的单张事实表。\n- `database-risk-report.json` 覆盖生产 DDL 审批、表组同批创建审批、容量、QPS、枚举口径、幂等键口径。\n\n## 状态选择\n若库名、实例、数据库版本、DBA、安全接口人、QPS/容量等事实未确认，但用户要求先出设计草案，可以生成 `draft` 文档；涉及 DDL 时 StageRunResult 必须 `waiting_for_human_review`，不要标记 `succeeded/final/approved`。', 'redis-design': '# 校验踩坑与修复模式\n\n## 必须保留 Redis 模板原始章节标题\n`redis-design.md` 的校验会按 `assets/redis-design-template.md` 查找精确章节名。不要把模板章节改成通用标题。至少保留：\n- `## 历史版本信息`\n- `## 1. 前言`\n- `### 1.1. 目的`\n- `### 1.2. 适用范围`\n- `### 1.3. 参考资料`\n- `## 2. 公共配置`\n- `### 2.1. Redis版本`\n- `### 2.2. 集群配置`\n- `### 2.3. 持久化策略`\n- `### 2.4. 过期淘汰策略`\n- `## 3. 设计项`\n- `### 3.1. <设计项名称>`\n- `#### 3.1.1. 特性用途`\n- `#### 3.1.2. 业务说明`\n- `#### 3.1.3. 存储设计`\n- `#### 3.1.4. 预估数据`\n- `#### 3.1.5. 多团队协同`\n- `## 4. 安全与运维`\n- `### 4.1. 资源申请`\n- `### 4.2. 运维监控`\n\n## 存储设计和降级策略必须显式出现\n- 每个设计项的存储设计表必须包含小写 `ttl`、`key`，并在后面保留 `**数据格式**` 表。\n- 仅写“Redis 不可用时不确认 MQ 消息”不一定通过校验；必须显式写出“降级策略：Redis 不可用时……”。\n- Redis 只做协调层/短态承载层；如果用于 MQ 乱序水位，说明 Redis 不可用时暂停业务确认并依赖 MQ 重试，不要绕过水位直接写库或删库。', 'mq-design': '# 校验踩坑与修复模式\n\n## MQ Excel 模板写入\n- `mq-design.xlsx` 校验会检查模板样式、合并单元格、工作表顺序和固定文本；不要用 `openpyxl` 直接重存模板后修改单元格，因为它可能改写 `styles.xml`、合并单元格或空白模板单元格，导致“不得修改模板样式/模板单元格不得删除”。\n- 更稳妥的做法：复制 `assets/mq-design-template.xlsx`，用 zip/XML 方式只替换既有 `xl/worksheets/sheet*.xml` 中第 2 行已有单元格的 inlineStr 文本，保留原单元格属性、样式、mergeCells、styles.xml 和其它 zip entry。\n- 消费者 sheet 模板中存在合并/空白列，写值时跳过合并占位列，不新增或删除单元格。\n\n## 必须显式写入策略关键词\n- MQ 校验不仅看 Excel 字段，还会查找“幂等策略 / 重试策略 / 回放策略”。在 `mq-topic-contract.yaml` 或备注中明确写：\n  - `幂等策略：messageId + Redis SETNX + 业务唯一键`\n  - `重试策略：最多 N 次后进入死信队列`\n  - `回放策略：人工审批后按 messageId/业务键回放`\n- 新增核心链路 MQ、生产消息回放、删除或重命名 topic/queue 时，`StageRunResult.status` 应为 `waiting_for_human_review`，并登记可填写的 human-review HTML。', 'repo-context-miner': '# 既有系统架构巡检补充规则\n\n当用户要求对整个项目/系统做巡检、问题排查、架构问题梳理、服务详细巡查报告时，不要只按代码目录、服务名、Controller/Service/Mapper 数量输出局部问题清单。必须先补一层业务域上下文。\n\n推荐产物顺序：\n1. 先生成系统级模块地图和服务调用矩阵。\n2. 基于代码证据和 Feign/事件/MQ/DB 使用关系，抽取候选业务域与限界上下文。\n3. 标注核心域、支撑域、通用域、外部能力，以及每个上下文当前承载服务。\n4. 再把架构问题、性能问题、代码异味归属到业务域，并说明它违反了哪个目标边界或上下文关系。\n5. 对后续治理建议，优先输出领域蓝图、上下文地图、统一语言、领域治理 backlog；局部重构建议必须服从这些蓝图。\n\n常见坑：\n- 把现有服务名当成领域边界。\n- 一发现 MQ/Feign/事务问题就进入修复方案，缺少核心域和目标架构方向。\n- 把“服务详细巡检报告”写成静态指标报表，而没有说明服务承载了哪些业务域能力。\n\n## CodeGraph \u9879\u76ee\u5de1\u68c0\u6a21\u5f0f\n\u5f53\u7528\u6237\u8981\u6c42\u201c\u501f\u52a9 codegraph\u201d\u5bf9\u591a\u670d\u52a1\u4ed3\u5e93\u505a\u603b\u4f53\u5de1\u68c0\u3001\u67b6\u6784/\u6027\u80fd/\u4ee3\u7801\u5f02\u5473\u6392\u67e5\u3001\u6838\u5fc3\u94fe\u8def\u6a21\u5757\u5730\u56fe\u6216 Feign \u8c03\u7528\u68b3\u7406\u65f6\uff0c\u4f18\u5148\u4f7f\u7528\u672c\u6a21\u5f0f\u3002\u8be6\u7ec6\u65b9\u6cd5\u89c1 `references/codegraph-project-inspection.md`\u3002\n\n### YQ / \u8424\u542f-\u4eba\u4eba\u53d6\u67b6\u6784\u5de1\u68c0\u89c4\u5219\n\n\u5f53\u76ee\u6807\u662f yq/\u8424\u542f/\u4eba\u4eba\u53d6\u76f8\u5173\u9879\u76ee\u65f6\uff0c\u5fc5\u987b\u540c\u65f6\u8bfb\u53d6\u5e76\u9075\u5b88 `references/yq-architecture-governance.md`\u3002\n\n\u5173\u952e\u8981\u6c42\uff1a\n- \u7b2c\u4e00\u9636\u6bb5\u5148\u5b9a\u9886\u57df\u5212\u5206\u3001\u4e1a\u52a1\u5212\u5206\u3001\u6570\u636e\u5212\u5206\u3001\u8424\u542f-\u4eba\u4eba\u53d6\u603b\u4f53\u67b6\u6784\u56fe\u548c\u9886\u57df\u67b6\u6784\u56fe\uff1b\u672a\u786e\u8ba4\u524d\u4e0d\u8981\u8fdb\u5165 MQ/Feign/\u8868\u8fc1\u79fb/\u4ee3\u7801\u91cd\u6784\u7b49\u7b2c\u4e8c\u9636\u6bb5\u5177\u4f53\u6cbb\u7406\u3002\n- \u4f7f\u7528\u5df2\u786e\u8ba4\u57fa\u7ebf\uff1a\u8424\u542f\u4e1a\u52a1\u7cfb\u7edf + \u4eba\u4eba\u53d6\u57fa\u7840\u80fd\u529b\u5e73\u53f0\uff1b\u5e73\u53f0\u9632\u8150\u5c42\u627f\u63a5 API/MQ/DTO \u8f6c\u6362/\u72b6\u6001\u6620\u5c04/\u526f\u672c\u540c\u6b65\u3002\n- \u4f1a\u5458\u548c\u4f18\u60e0\u5238\u5c5e\u4e8e\u8424\u542f\uff1b\u4eba\u4eba\u53d6\u7ef4\u62a4\u6807\u51c6\u8ba2\u5355\u3001\u6807\u51c6\u5546\u54c1\u3001\u4ef7\u683c\u7b56\u7565\u8ba1\u7b97\u4e0e\u4e0b\u53d1\u3001\u652f\u4ed8\u3001\u8bbe\u5907/\u5f00\u95e8\u57fa\u7840\u80fd\u529b\u7b49\uff1b\u8424\u542f\u5728\u5176\u4e0a\u6269\u5c55 SVIP/\u968f\u5355\u8d2d\u5361\u3001\u5b9a\u5236\u5316\u5546\u54c1/\u4ef7\u683c/\u573a\u666f\u4ef7\u3001\u7ecf\u8425\u5173\u7cfb\u548c\u5c65\u7ea6\u6269\u5c55\u3002\n- \u65e0\u4ee3\u7801\u8bc1\u636e\u6216\u6587\u6863\u8bc1\u636e\u7684\u5185\u5bb9\u5fc5\u987b\u8fdb\u5165\u8ba8\u8bba\u9879\u6216 ADR\uff0c\u4e0d\u80fd\u5199\u6210\u6700\u7ec8\u7ed3\u8bba\u3002\n- \u4eba\u5de5\u4ea7\u7269\u53ea\u5c55\u793a\u7ed3\u8bba/\u98ce\u9669/\u5f85\u51b3\u7b56\u9879\uff1b\u673a\u5668\u4ea7\u7269\u4fdd\u7559\u8bc1\u636e\u94fe\u548c\u626b\u63cf\u8fc7\u7a0b\u3002\n\nYQ/\u8424\u542f\u9879\u76ee\u5fc5\u987b\u540c\u65f6\u9075\u5b88 `references/yq-architecture-inspection-governance.md`\uff1a\u5148\u5b8c\u6210\u8424\u542f-\u4eba\u4eba\u53d6\u603b\u4f53\u67b6\u6784\u3001\u9886\u57df\u5212\u5206\u3001\u4e1a\u52a1\u5212\u5206\u3001\u6570\u636e\u5212\u5206\u548c\u67b6\u6784\u56fe\uff1b\u672a\u5b9a\u8bba\u524d\u4e0d\u5f97\u8fdb\u5165 MQ/Feign/\u8868\u62c6\u5206/\u5c40\u90e8\u91cd\u6784\u7b49\u7b2c\u4e8c\u9636\u6bb5\u6cbb\u7406\u3002\n\n\u5fc5\u987b\u6267\u884c\uff1a\n- \u5148\u7528 CodeGraph \u786e\u8ba4\u7d22\u5f15\u72b6\u6001\u3001\u670d\u52a1\u76ee\u5f55\u548c\u4ee3\u8868\u6027\u6e90\u7801\u8bc1\u636e\uff0c\u518d\u7528\u811a\u672c\u505a\u5168\u91cf\u9759\u6001\u626b\u63cf\uff1b\u4e0d\u5f97\u53ea\u9760\u62bd\u6837\u4e0b\u7ed3\u8bba\u3002\n- \u8f93\u51fa run artifacts\uff0c\u4e0d\u4fee\u6539\u4e1a\u52a1\u6e90\u7801\u3002\u63a8\u8350\u76ee\u5f55\uff1a`artifacts/project-inspection/`\u3002\n- \u603b\u4f53\u62a5\u544a\u5fc5\u987b\u5305\u542b\uff1a\u7cfb\u7edf\u6027\u7ed3\u8bba\u3001\u670d\u52a1\u98ce\u9669\u8868\u3001\u67b6\u6784\u95ee\u9898\u3001\u6027\u80fd\u9759\u6001\u8ff9\u8c61\u3001\u4ee3\u7801\u5f02\u5473\u3001\u6cbb\u7406\u8def\u7ebf\u56fe\u3002\n- \u5404\u670d\u52a1\u8be6\u7ec6\u62a5\u544a\u5fc5\u987b\u5305\u542b\uff1a\u670d\u52a1\u6982\u89c8\u3001\u4e3b\u8981\u95ee\u9898\u3001\u67b6\u6784\u5de1\u67e5\u3001\u6027\u80fd\u5de1\u67e5\u3001\u4ee3\u7801\u5f02\u5473\u548c\u5efa\u8bae\u52a8\u4f5c\u3002\n- \u82e5\u5b58\u5728 Feign \u8c03\u7528\uff0c\u5fc5\u987b\u5355\u72ec\u751f\u6210 Feign \u8c03\u7528\u77e9\u9635\uff0c\u81f3\u5c11\u5305\u542b\u8c03\u7528\u65b9\u3001Feign Client\u3001\u76ee\u6807\u670d\u52a1\u3001url\u3001fallback/fallbackFactory\u3001\u65b9\u6cd5\u6570\u3001HTTP \u65b9\u6cd5\u3001\u8def\u5f84\u3001\u6e90\u7801\u6587\u4ef6\u3002\n- \u6838\u5fc3\u94fe\u8def\u6cbb\u7406\u4e0d\u8981\u53ea\u6309\u670d\u52a1\u540d\u5207\uff1b\u4f18\u5148\u6309\u4e1a\u52a1\u94fe\u8def\u5207\uff1a\u4e0b\u5355/\u652f\u4ed8/\u9000\u6b3e/\u5f00\u95e8\u3001\u4f1a\u5458\u6743\u76ca\u3001\u5238\u6d3b\u52a8/\u4fc3\u9500\u3001\u52a0\u76df\u5546/\u552e\u8d27\u673a\u3001\u7edf\u8ba1/\u5bfc\u51fa\u3002\n- \u5bf9\u654f\u611f\u914d\u7f6e\u53ea\u5217\u6587\u4ef6\u3001\u884c\u53f7\u3001\u952e\u540d\uff0c\u4e0d\u5c55\u793a\u503c\u3002\n\nYQ \u4e13\u9879\u6cbb\u7406\u8865\u5145\uff1a\u5f53\u5de1\u68c0 `/Users/sunliming/work/project/snbc/yq` \u65f6\uff0c\u5fc5\u987b\u5148\u8bfb\u53d6 `references/yq-architecture-inspection-governance.md`\u3002\u5173\u952e\u8981\u6c42\uff1a\u5148\u505a\u8424\u542f\u4e1a\u52a1\u57df vs \u4eba\u4eba\u53d6\u5e73\u53f0\u80fd\u529b\u8fb9\u754c\uff1b\u4f1a\u5458\u4e1a\u52a1\u5f52\u5c5e\u8424\u542f\uff1b\u6ca1\u6709\u4ee3\u7801/\u6587\u6863\u8bc1\u636e\u7684\u5185\u5bb9\u53ea\u80fd\u8fdb\u5165\u8ba8\u8bba\u9879/\u5f00\u653e\u95ee\u9898/ADR\uff0c\u4e0d\u80fd\u5199\u6210\u6700\u7ec8\u7ed3\u8bba\uff1b\u8f93\u51fa\u5fc5\u987b\u62c6\u5206\u4eba\u5de5\u7ed3\u679c\u89c6\u56fe\u548c\u673a\u5668\u8bc1\u636e\u89c6\u56fe\u3002\n\n\u98ce\u9669\u8868\u8ff0\u8981\u6c42\uff1a\n- \u6027\u80fd\u95ee\u9898\u5e94\u6807\u6ce8\u4e3a\u201c\u9759\u6001\u8ff9\u8c61\u201d\uff0c\u540e\u7eed\u9700\u8981\u6162\u67e5\u8be2\u3001\u8c03\u7528\u8017\u65f6\u3001MQ \u79ef\u538b\u3001\u7ebf\u7a0b\u6c60\u3001\u7f13\u5b58\u547d\u4e2d\u7387\u9a8c\u8bc1\u3002\n- Feign Client \u672a\u58f0\u660e fallback \u65f6\uff0c\u8868\u8ff0\u4e3a\u201c\u672a\u5728 Feign Client \u4e0a\u663e\u5f0f\u58f0\u660e\uff0c\u9700\u8981\u786e\u8ba4\u662f\u5426\u5b58\u5728\u5168\u5c40\u7194\u65ad/\u964d\u7ea7\u7b56\u7565\u201d\uff0c\u4e0d\u8981\u6b66\u65ad\u65ad\u8a00\u7cfb\u7edf\u5b8c\u5168\u6ca1\u6709\u964d\u7ea7\u3002\n- \u5bf9\u5927\u670d\u52a1\u5148\u5efa\u8bae\u5efa\u7acb\u6a21\u5757\u5730\u56fe\u548c characterization tests\uff0c\u518d\u5efa\u8bae\u62c6\u670d\u52a1\u6216\u5927\u91cd\u6784\u3002\n- \u5bf9 YQ \u67b6\u6784\u5de1\u68c0\uff0c\u4efb\u4f55\u6ca1\u6709\u4ee3\u7801\u8bc1\u636e\u3001\u5df2\u6709\u6587\u6863\u6216\u7528\u6237/\u8d1f\u8d23\u4eba\u51b3\u7b56\u652f\u6491\u7684\u5185\u5bb9\uff0c\u53ea\u80fd\u8fdb\u5165\u8ba8\u8bba\u8bb0\u5f55/open questions\uff0c\u4e0d\u5f97\u4f5c\u4e3a\u6700\u7ec8\u7ed3\u8bba\u3002\n- \u4eba\u5de5\u4ea7\u7269\u53ea\u7ed9\u7ed3\u8bba\u3001\u98ce\u9669\u3001\u51b3\u7b56\u9879\u548c\u67b6\u6784\u56fe\uff1b\u539f\u59cb\u626b\u63cf\u3001\u4ee3\u7801\u8def\u5f84\u3001\u63a8\u5bfc\u94fe\u548c\u8bc1\u636e\u660e\u7ec6\u653e\u5165\u673a\u5668\u53ef\u8bfb JSON/YAML/CSV\u3002'}
+
+def extra_skill_notes(skill: dict) -> str:
+    return EXTRA_SKILL_NOTES.get(skill["id"], "")
+
+
 def skill_md(skill: dict) -> str:
     outputs = "\n".join(f"- `{o}`" for o in skill["outputs"])
     inputs = "\n".join(f"- `{i}`" for i in skill["inputs"])
@@ -4757,6 +4905,8 @@ description: {skill_trigger_description(skill)}
 独立运行："使用 `{skill['id']}` 基于当前设计文档生成本阶段产物。"
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `{skill['id']}` 发送给本 skill，并等待 `StageRunResult`。
+
+{extra_skill_notes(skill)}
 
 # Eval 指引
 运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。
