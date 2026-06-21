@@ -94,6 +94,34 @@
     "block_next_nodes": true,
     "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
   },
+  "lean_runtime_router_policy": {
+    "schema": "engineering-assistant/schemas/runtime-route-decision.schema.json",
+    "task_kinds": [
+      "context",
+      "audit",
+      "change",
+      "release",
+      "self_healing"
+    ],
+    "evidence_levels": [
+      "inline",
+      "lite",
+      "standard",
+      "formal"
+    ],
+    "persistence_modes": [
+      "inline",
+      "ephemeral",
+      "target_repo",
+      "blocked"
+    ],
+    "default_persistence_mode": "ephemeral",
+    "capability_decision_required": true,
+    "assistant_feedback_required": true,
+    "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+    "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
+    "full_policy_required_for": false
+  },
   "design_governance_policy": {
     "states": [
       "intake_collecting",
@@ -471,8 +499,22 @@
     "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
+    "runtime_route_decision_required": true,
+    "assistant_feedback_consumed": true,
+    "implementation_strategy_evaluation_required": true,
     "block_when_agent_violates_contract": true
   },
+  "runtime_rule_markers": [
+    "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+    "ASSISTANT_FEEDBACK_NOT_GENERATED",
+    "CAPABILITY_HEALTH_NOT_CHECKED",
+    "COMMENT_GATE_DEFERRED_TO_COMMIT",
+    "DUPLICATE_CAPABILITY_RISK",
+    "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+    "NO_EFFECTIVE_CODE_CHANGE",
+    "PROCESS_DOCUMENTATION_POLLUTION",
+    "TARGET_REPO_ARTIFACT_POLLUTION"
+  ],
   "required_information_policy": {
     "must_ask_when": [
       "必填输入缺失",
@@ -766,5 +808,30 @@
         "repair exhausted"
       ]
     }
+  },
+  "implementation_strategy_policy": {
+    "required": true,
+    "must_evaluate_before_code_change": [
+      "minimal_change_sufficient",
+      "reuse_existing_chain",
+      "field_or_contract_patch_only",
+      "refactor_required",
+      "new_api_or_table_required",
+      "compatibility_required",
+      "over_design_risk",
+      "business_logic_dump_risk"
+    ],
+    "existing_capability_first": [
+      "existing_pages",
+      "api_wrappers",
+      "controllers",
+      "services",
+      "mappers_or_repositories",
+      "database_tables",
+      "tests",
+      "docs_and_memory"
+    ],
+    "block_marker_when_missing": "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+    "duplicate_capability_marker": "DUPLICATE_CAPABILITY_RISK"
   }
 }

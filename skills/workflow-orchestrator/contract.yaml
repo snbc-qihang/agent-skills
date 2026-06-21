@@ -95,6 +95,34 @@
     "block_next_nodes": true,
     "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
   },
+  "lean_runtime_router_policy": {
+    "schema": "engineering-assistant/schemas/runtime-route-decision.schema.json",
+    "task_kinds": [
+      "context",
+      "audit",
+      "change",
+      "release",
+      "self_healing"
+    ],
+    "evidence_levels": [
+      "inline",
+      "lite",
+      "standard",
+      "formal"
+    ],
+    "persistence_modes": [
+      "inline",
+      "ephemeral",
+      "target_repo",
+      "blocked"
+    ],
+    "default_persistence_mode": "ephemeral",
+    "capability_decision_required": true,
+    "assistant_feedback_required": true,
+    "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+    "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
+    "full_policy_required_for": true
+  },
   "design_governance_policy": {
     "states": [
       "intake_collecting",
@@ -409,8 +437,19 @@
     "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
+    "runtime_route_decision_required": true,
+    "assistant_feedback_consumed": true,
+    "implementation_strategy_evaluation_required": false,
     "block_when_agent_violates_contract": true
   },
+  "runtime_rule_markers": [
+    "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+    "ASSISTANT_FEEDBACK_NOT_GENERATED",
+    "ATEAM_GATE_NOT_EVALUATED",
+    "CAPABILITY_HEALTH_NOT_CHECKED",
+    "PROCESS_DOCUMENTATION_POLLUTION",
+    "TARGET_REPO_ARTIFACT_POLLUTION"
+  ],
   "required_information_policy": {
     "must_ask_when": [
       "必填输入缺失",
@@ -637,6 +676,197 @@
       "single_node"
     ],
     "default_entry_mode": "auto_flow",
+    "lean_runtime_router_policy": {
+      "task_kinds": [
+        "context",
+        "audit",
+        "change",
+        "release",
+        "self_healing"
+      ],
+      "evidence_levels": [
+        "inline",
+        "lite",
+        "standard",
+        "formal"
+      ],
+      "persistence_modes": [
+        "inline",
+        "ephemeral",
+        "target_repo",
+        "blocked"
+      ],
+      "default_task_kind": "context",
+      "default_evidence_level": "lite",
+      "default_persistence_mode": "ephemeral",
+      "routing_rule": "先判断任务类型、证据等级和持久化模式，再决定是否进入轻量上下文、标准开发、正式审计或发布链路；进入研发助手不等于进入固定重流程。",
+      "artifact_persistence_policy": {
+        "default_persistence_mode": "ephemeral",
+        "ephemeral_root_template": "~/.codex/run-artifacts/engineering-assistant/<repo>/<run_id>/",
+        "target_repo_allowed_when": [
+          "用户明确要求正式留档、交接或 CI 证据",
+          "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范",
+          "目标项目已有约定要求该证据进入仓库且不违反 document_retention_policy"
+        ],
+        "target_repo_forbidden_for": [
+          "runtime-route-decision.json",
+          "artifact-persistence-policy.json",
+          "capability-invocation-ledger.json",
+          "capability-health.json",
+          "capability-output-consumption.json",
+          "assistant-run-feedback.json",
+          "临时规划文档",
+          "开发过程文档",
+          "阶段总结",
+          "临时审计报告",
+          "workflow summary",
+          "post run review"
+        ],
+        "pollution_markers": [
+          "TARGET_REPO_ARTIFACT_POLLUTION",
+          "PROCESS_DOCUMENTATION_POLLUTION"
+        ]
+      },
+      "capability_families": {
+        "code_context": {
+          "candidates": [
+            "CodeGraph",
+            "Understand-Anything"
+          ],
+          "call_when": [
+            "复杂仓库",
+            "调用链或影响范围不清",
+            "需要识别已有能力"
+          ]
+        },
+        "parallelization": {
+          "candidates": [
+            "ATeam"
+          ],
+          "call_when": [
+            "多仓",
+            "多端",
+            "跨两个以上独立技术面",
+            "可并行分析且风险高"
+          ]
+        },
+        "simplification": {
+          "candidates": [
+            "ponytail"
+          ],
+          "call_when": [
+            "过度设计风险",
+            "业务堆代码风险",
+            "实现方案复杂度失控"
+          ]
+        },
+        "security": {
+          "candidates": [
+            "codex-security"
+          ],
+          "call_when": [
+            "鉴权",
+            "权限",
+            "支付",
+            "敏感数据",
+            "注入",
+            "越权"
+          ]
+        },
+        "frontend_runtime": {
+          "candidates": [
+            "build-web-apps",
+            "ui-frontend-craft",
+            "browser/chrome"
+          ],
+          "call_when": [
+            "页面",
+            "交互",
+            "组件",
+            "浏览器运行态验证"
+          ]
+        },
+        "vcs_ci_prod": {
+          "candidates": [
+            "github",
+            "circleci",
+            "sentry",
+            "coderabbit"
+          ],
+          "call_when": [
+            "Git",
+            "PR",
+            "CI",
+            "发布",
+            "生产问题"
+          ]
+        },
+        "self_healing": {
+          "candidates": [
+            "darwin-skill",
+            "skill-quality-auditor"
+          ],
+          "call_when": [
+            "用户纠偏",
+            "重复问题",
+            "规则失效",
+            "插件自愈"
+          ]
+        }
+      },
+      "capability_decisions": [
+        "call",
+        "skip",
+        "unavailable",
+        "blocked"
+      ],
+      "capability_health_required_for": [
+        "code_context",
+        "parallelization",
+        "frontend_runtime",
+        "vcs_ci_prod",
+        "security"
+      ],
+      "existing_capability_first": [
+        "existing_pages",
+        "api_wrappers",
+        "controllers",
+        "services",
+        "mappers_or_repositories",
+        "database_tables",
+        "tests",
+        "docs_and_memory"
+      ],
+      "required_feedback_artifacts": [
+        "assistant-run-feedback.json"
+      ],
+      "assistant_feedback_policy": {
+        "required_before_final_response": true,
+        "default_persistence_mode": "ephemeral",
+        "feedback_artifacts": [
+          "assistant-run-feedback.json"
+        ],
+        "summary_artifact_allowed_when": [
+          "evidence_level=formal",
+          "用户明确要求交接或审计留档"
+        ],
+        "must_be_consumed_by_agent": true,
+        "darwin_trigger_markers": [
+          "DUPLICATE_CAPABILITY_RISK",
+          "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+          "ATEAM_GATE_NOT_EVALUATED",
+          "CAPABILITY_HEALTH_NOT_CHECKED",
+          "ASSISTANT_FEEDBACK_NOT_GENERATED",
+          "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+          "TARGET_REPO_ARTIFACT_POLLUTION",
+          "PROCESS_DOCUMENTATION_POLLUTION"
+        ]
+      },
+      "pollution_markers": [
+        "TARGET_REPO_ARTIFACT_POLLUTION",
+        "PROCESS_DOCUMENTATION_POLLUTION"
+      ]
+    },
     "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
     "auto_transition_policy": {
       "continue_when": [

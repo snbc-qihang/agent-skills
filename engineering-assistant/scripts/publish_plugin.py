@@ -79,7 +79,7 @@ def upsert_plugin_entry(existing_plugins: list[dict], new_plugin: dict) -> list[
     return updated
 
 
-def marketplace_payload(config: dict, existing_marketplace: dict | None = None) -> dict:
+def marketplace_payload(config: dict, existing_marketplace=None) -> dict:
     existing_marketplace = existing_marketplace or {}
     return {
         "name": existing_marketplace.get("name", config.get("name", "local-engineering")),

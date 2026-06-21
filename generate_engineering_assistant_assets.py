@@ -83,6 +83,85 @@ DOCUMENT_RETENTION_POLICY = {
     "completion_rule": "研发完成后只保留 approved/final + persist + formal_* 的确定性设计/决策/索引文档；run evidence、agent workspace、trace、缺失信息、临时评审和 HTML 审阅包不得进入正式留存集合。",
 }
 
+TASK_KINDS = ["context", "audit", "change", "release", "self_healing"]
+EVIDENCE_LEVELS = ["inline", "lite", "standard", "formal"]
+PERSISTENCE_MODES = ["inline", "ephemeral", "target_repo", "blocked"]
+CAPABILITY_DECISIONS = ["call", "skip", "unavailable", "blocked"]
+POLLUTION_MARKERS = ["TARGET_REPO_ARTIFACT_POLLUTION", "PROCESS_DOCUMENTATION_POLLUTION"]
+
+ARTIFACT_PERSISTENCE_POLICY = {
+    "default_persistence_mode": "ephemeral",
+    "ephemeral_root_template": "~/.codex/run-artifacts/engineering-assistant/<repo>/<run_id>/",
+    "target_repo_allowed_when": [
+        "用户明确要求正式留档、交接或 CI 证据",
+        "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范",
+        "目标项目已有约定要求该证据进入仓库且不违反 document_retention_policy",
+    ],
+    "target_repo_forbidden_for": [
+        "runtime-route-decision.json",
+        "artifact-persistence-policy.json",
+        "capability-invocation-ledger.json",
+        "capability-health.json",
+        "capability-output-consumption.json",
+        "assistant-run-feedback.json",
+        "临时规划文档",
+        "开发过程文档",
+        "阶段总结",
+        "临时审计报告",
+        "workflow summary",
+        "post run review",
+    ],
+    "pollution_markers": POLLUTION_MARKERS,
+}
+
+CAPABILITY_FAMILIES = {
+    "code_context": {
+        "candidates": ["CodeGraph", "Understand-Anything"],
+        "call_when": ["复杂仓库", "调用链或影响范围不清", "需要识别已有能力"],
+    },
+    "parallelization": {
+        "candidates": ["ATeam"],
+        "call_when": ["多仓", "多端", "跨两个以上独立技术面", "可并行分析且风险高"],
+    },
+    "simplification": {
+        "candidates": ["ponytail"],
+        "call_when": ["过度设计风险", "业务堆代码风险", "实现方案复杂度失控"],
+    },
+    "security": {
+        "candidates": ["codex-security"],
+        "call_when": ["鉴权", "权限", "支付", "敏感数据", "注入", "越权"],
+    },
+    "frontend_runtime": {
+        "candidates": ["build-web-apps", "ui-frontend-craft", "browser/chrome"],
+        "call_when": ["页面", "交互", "组件", "浏览器运行态验证"],
+    },
+    "vcs_ci_prod": {
+        "candidates": ["github", "circleci", "sentry", "coderabbit"],
+        "call_when": ["Git", "PR", "CI", "发布", "生产问题"],
+    },
+    "self_healing": {
+        "candidates": ["darwin-skill", "skill-quality-auditor"],
+        "call_when": ["用户纠偏", "重复问题", "规则失效", "插件自愈"],
+    },
+}
+
+ASSISTANT_FEEDBACK_POLICY = {
+    "required_before_final_response": True,
+    "default_persistence_mode": "ephemeral",
+    "feedback_artifacts": ["assistant-run-feedback.json"],
+    "summary_artifact_allowed_when": ["evidence_level=formal", "用户明确要求交接或审计留档"],
+    "must_be_consumed_by_agent": True,
+    "darwin_trigger_markers": [
+        "DUPLICATE_CAPABILITY_RISK",
+        "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+        "ATEAM_GATE_NOT_EVALUATED",
+        "CAPABILITY_HEALTH_NOT_CHECKED",
+        "ASSISTANT_FEEDBACK_NOT_GENERATED",
+        "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+        *POLLUTION_MARKERS,
+    ],
+}
+
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
     "repo-context-miner": ["A", "H", "D", "I", "E", "P", "R", "M", "DB", "FW", "FE", "QIN"],
@@ -1052,6 +1131,122 @@ def required_information_request_schema() -> dict:
     }
 
 
+def runtime_route_decision_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", "task_kind", "evidence_level", "persistence_mode", "route_reason", "capability_decisions"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "task_kind": {"enum": TASK_KINDS},
+            "evidence_level": {"enum": EVIDENCE_LEVELS},
+            "persistence_mode": {"enum": PERSISTENCE_MODES},
+            "route_reason": {"type": "string", "minLength": 1},
+            "explicit_user_request": {"type": "boolean"},
+            "formal_evidence_reason": {"type": "string"},
+            "capability_decisions": {"type": "array", "items": capability_decision_schema()},
+        },
+        "additionalProperties": True,
+    }
+
+
+def artifact_persistence_policy_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", "default_persistence_mode", "effective_persistence_mode", "ephemeral_root", "target_repo_writes"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "default_persistence_mode": {"const": "ephemeral"},
+            "effective_persistence_mode": {"enum": PERSISTENCE_MODES},
+            "ephemeral_root": {"type": "string", "minLength": 1},
+            "target_repo_writes": {"type": "array", "items": {"type": "object"}},
+            "pollution_markers": {"type": "array", "items": {"enum": POLLUTION_MARKERS}},
+        },
+        "additionalProperties": True,
+    }
+
+
+def capability_decision_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["family", "decision", "reason"],
+        "properties": {
+            "family": {"enum": sorted(CAPABILITY_FAMILIES)},
+            "candidate": {"type": "string"},
+            "decision": {"enum": CAPABILITY_DECISIONS},
+            "reason": {"type": "string", "minLength": 1},
+            "fallback": {"type": "string"},
+        },
+        "additionalProperties": True,
+    }
+
+
+def capability_invocation_ledger_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", "capability_decisions"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "capability_decisions": {"type": "array", "items": capability_decision_schema()},
+            "output_consumption": {"type": "array", "items": {"type": "object"}},
+        },
+        "additionalProperties": True,
+    }
+
+
+def capability_health_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", "health_checks"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "health_checks": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["family", "status", "confidence", "fallback"],
+                    "properties": {
+                        "family": {"enum": sorted(CAPABILITY_FAMILIES)},
+                        "status": {"enum": ["available", "unavailable", "stale", "not_checked", "blocked"]},
+                        "confidence": {"enum": ["high", "medium", "low", "unknown"]},
+                        "fallback": {"type": "string"},
+                    },
+                    "additionalProperties": True,
+                },
+            },
+        },
+        "additionalProperties": True,
+    }
+
+
+def assistant_run_feedback_schema() -> dict:
+    return {
+        "type": "object",
+        "required": [
+            "run_id",
+            "status",
+            "route_decision",
+            "capability_decisions",
+            "capability_health_checked",
+            "target_repo_pollution_findings",
+            "rule_violations",
+            "darwin_required",
+            "consumed_by_agent",
+        ],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "status": {"enum": ["succeeded", "failed", "blocked", "waiting_for_input", "waiting_for_human_review", "skipped"]},
+            "route_decision": runtime_route_decision_schema(),
+            "capability_decisions": {"type": "array", "items": capability_decision_schema()},
+            "capability_health_checked": {"type": "boolean"},
+            "target_repo_pollution_findings": {"type": "array", "items": {"type": "object"}},
+            "rule_violations": {"type": "array", "items": {"type": "string"}},
+            "darwin_required": {"type": "boolean"},
+            "consumed_by_agent": {"type": "boolean"},
+        },
+        "additionalProperties": True,
+    }
+
+
 def skill_trigger_description(skill: dict) -> str:
     if skill["description"].startswith("Use when"):
         return skill["description"]
@@ -1137,6 +1332,50 @@ def preflight_runtime_gate() -> dict:
         "block_current_node_formal_generation": True,
         "block_next_nodes": True,
         "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。",
+    }
+
+
+def lean_runtime_router_policy() -> dict:
+    return {
+        "task_kinds": TASK_KINDS,
+        "evidence_levels": EVIDENCE_LEVELS,
+        "persistence_modes": PERSISTENCE_MODES,
+        "default_task_kind": "context",
+        "default_evidence_level": "lite",
+        "default_persistence_mode": "ephemeral",
+        "routing_rule": "先判断任务类型、证据等级和持久化模式，再决定是否进入轻量上下文、标准开发、正式审计或发布链路；进入研发助手不等于进入固定重流程。",
+        "artifact_persistence_policy": ARTIFACT_PERSISTENCE_POLICY,
+        "capability_families": CAPABILITY_FAMILIES,
+        "capability_decisions": CAPABILITY_DECISIONS,
+        "capability_health_required_for": ["code_context", "parallelization", "frontend_runtime", "vcs_ci_prod", "security"],
+        "existing_capability_first": [
+            "existing_pages",
+            "api_wrappers",
+            "controllers",
+            "services",
+            "mappers_or_repositories",
+            "database_tables",
+            "tests",
+            "docs_and_memory",
+        ],
+        "required_feedback_artifacts": ASSISTANT_FEEDBACK_POLICY["feedback_artifacts"],
+        "assistant_feedback_policy": ASSISTANT_FEEDBACK_POLICY,
+        "pollution_markers": POLLUTION_MARKERS,
+    }
+
+
+def lean_runtime_contract_policy(skill: dict) -> dict:
+    return {
+        "schema": "engineering-assistant/schemas/runtime-route-decision.schema.json",
+        "task_kinds": TASK_KINDS,
+        "evidence_levels": EVIDENCE_LEVELS,
+        "persistence_modes": PERSISTENCE_MODES,
+        "default_persistence_mode": "ephemeral",
+        "capability_decision_required": True,
+        "assistant_feedback_required": True,
+        "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+        "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
+        "full_policy_required_for": skill["id"] == "workflow-orchestrator",
     }
 
 
@@ -1230,6 +1469,7 @@ def workflow_runtime_policy() -> dict:
     return {
         "supported_entry_modes": WORKFLOW_ENTRY_MODES,
         "default_entry_mode": "auto_flow",
+        "lean_runtime_router_policy": lean_runtime_router_policy(),
         "auto_flow": "按 workflow.nodes 顺序与 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
         "auto_transition_policy": {
             "continue_when": ["StageRunResult.status == succeeded", "required_information_requests 为空", "未声明 HUMAN_APPROVAL_REQUIRED", "next_node 存在"],
@@ -1282,6 +1522,8 @@ def runtime_ir(skill: dict) -> dict:
         "inputs": skill["inputs"],
         "outputs": skill["outputs"],
         "routing": skill_routing_metadata(skill),
+        "lean_runtime_router_policy": lean_runtime_contract_policy(skill),
+        "runtime_rule_markers": runtime_rule_markers(skill),
         "risk": {
             "risk_level": risk_level(skill),
             "allow_implicit_invocation": allow_implicit,
@@ -1403,6 +1645,69 @@ def control_surface_policy(skill: dict) -> dict:
     }
 
 
+def implementation_strategy_policy(skill: dict) -> dict:
+    if skill["id"] not in {"code-development", "frontend-development", "implementation-controller"}:
+        return {"required": False}
+    return {
+        "required": True,
+        "must_evaluate_before_code_change": [
+            "minimal_change_sufficient",
+            "reuse_existing_chain",
+            "field_or_contract_patch_only",
+            "refactor_required",
+            "new_api_or_table_required",
+            "compatibility_required",
+            "over_design_risk",
+            "business_logic_dump_risk",
+        ],
+        "existing_capability_first": lean_runtime_router_policy()["existing_capability_first"],
+        "block_marker_when_missing": "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+        "duplicate_capability_marker": "DUPLICATE_CAPABILITY_RISK",
+    }
+
+
+def quality_audit_policy(skill: dict) -> dict:
+    if skill["id"] not in {"code-quality-governor", "code-review"}:
+        return {"required": False}
+    return {
+        "required": True,
+        "required_dimensions": [
+            "correctness",
+            "simplification",
+            "duplicate_capability",
+            "business_boundary",
+            "exception_handling",
+            "comment_quality",
+            "naming",
+            "project_style",
+            "unrelated_files",
+            "test_evidence",
+            "security",
+        ],
+        "must_record_skipped_reason": True,
+        "block_when": [
+            "NO_EFFECTIVE_CODE_CHANGE",
+            "DUPLICATE_CAPABILITY_RISK",
+            "COMMENT_GATE_DEFERRED_TO_COMMIT",
+            "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+        ],
+    }
+
+
+def runtime_rule_markers(skill: dict) -> list[str]:
+    markers = [
+        "CAPABILITY_HEALTH_NOT_CHECKED",
+        "ASSISTANT_FEEDBACK_NOT_GENERATED",
+        "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+        *POLLUTION_MARKERS,
+    ]
+    if skill["id"] in {"code-development", "frontend-development", "implementation-controller"}:
+        markers.extend(["DUPLICATE_CAPABILITY_RISK", "IMPLEMENTATION_STRATEGY_NOT_EVALUATED", "NO_EFFECTIVE_CODE_CHANGE", "COMMENT_GATE_DEFERRED_TO_COMMIT"])
+    if skill["id"] in {"workflow-orchestrator", "code-review", "code-quality-governor"}:
+        markers.append("ATEAM_GATE_NOT_EVALUATED")
+    return sorted(set(markers))
+
+
 def contract(skill: dict) -> dict:
     payload = {
         "skill_id": skill["id"],
@@ -1417,6 +1722,7 @@ def contract(skill: dict) -> dict:
         "standalone_mode": "先执行 preflight 信息梳理；blocking 信息缺失时仅输出 required_information_requests、human-review HTML 和恢复点，补齐后再在指定输出目录生成全部声明产物。",
         "workflow_mode": "消费 StageRunRequest 中的上游产物，先执行 preflight 信息梳理；blocking 信息缺失时暂停并等待补充写回，补齐后输出 StageRunResult 并把声明产物路由给下游 workflow 节点。",
         "preflight_runtime_gate": preflight_runtime_gate(),
+        "lean_runtime_router_policy": lean_runtime_contract_policy(skill),
         "design_governance_policy": design_governance_policy(),
         "language_policy": {
             "supported": ["zh-CN", "en"],
@@ -1450,8 +1756,12 @@ def contract(skill: dict) -> dict:
             "formal_generation_requires_ready": True,
             "formal_document_metadata_required": True,
             "stage_result_validation_required": True,
+            "runtime_route_decision_required": True,
+            "assistant_feedback_consumed": True,
+            "implementation_strategy_evaluation_required": skill["id"] in {"code-development", "frontend-development", "implementation-controller"},
             "block_when_agent_violates_contract": True,
         },
+        "runtime_rule_markers": runtime_rule_markers(skill),
         "required_information_policy": {
             "must_ask_when": ["必填输入缺失", "系统边界无法确认", "风险等级无法判断", "审批状态缺失", "无法基于仓库或上游产物可靠推导"],
             "question_output": "required_information_requests",
@@ -1519,6 +1829,12 @@ def contract(skill: dict) -> dict:
     control_policy = control_surface_policy(skill)
     if control_policy.get("required"):
         payload["control_surface_policy"] = control_policy
+    implementation_policy = implementation_strategy_policy(skill)
+    if implementation_policy.get("required"):
+        payload["implementation_strategy_policy"] = implementation_policy
+    audit_policy = quality_audit_policy(skill)
+    if audit_policy.get("required"):
+        payload["quality_audit_policy"] = audit_policy
     return payload
 
 
@@ -2054,6 +2370,7 @@ def workflow(name: str, nodes: list[str]) -> dict:
             "custom": "可按任务目标裁剪节点集合，但必须保留节点输入输出契约、失败策略、审批策略和产物路由。",
         },
         "preflight_runtime_policy": preflight_runtime_gate(),
+        "lean_runtime_router_policy": lean_runtime_router_policy(),
         "design_governance_policy": design_governance_policy(),
         "nodes": workflow_nodes,
         "artifact_routing": "每个节点的输出进入 artifact-index.json，并映射到下游 StageRunRequest.artifacts",
@@ -2590,6 +2907,11 @@ def generate_engineering_assistant() -> None:
         "rule-candidate.schema.json": {"type": "object", "required": ["rules"], "properties": {"rules": {"type": "array", "items": {"type": "object", "required": ["id", "title", "status", "severity", "confidence", "source_evidence", "recommended_rule", "owner", "review_required"]}}}},
         "document-lifecycle.schema.json": document_lifecycle_schema(),
         "required-information-request.schema.json": required_information_request_schema(),
+        "runtime-route-decision.schema.json": runtime_route_decision_schema(),
+        "artifact-persistence-policy.schema.json": artifact_persistence_policy_schema(),
+        "capability-invocation-ledger.schema.json": capability_invocation_ledger_schema(),
+        "capability-health.schema.json": capability_health_schema(),
+        "assistant-run-feedback.schema.json": assistant_run_feedback_schema(),
         "framework-selection.schema.json": {"type": "object", "required": ["technology_categories", "review_status", "source", "exceptions"], "properties": {"technology_categories": {"type": "object", "additionalProperties": {"type": "string"}}, "persistence_framework": {"type": "string"}, "review_status": {"enum": ["confirmed", "waiting_for_input", "approved_exception", "blocked"]}, "source": {"type": "string"}, "exceptions": {"type": "array", "items": {"type": "string"}}}},
         "task-control.schema.json": {"type": "object", "required": ["task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"], "properties": {"task_id": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1}, "language": {"enum": ["zh-CN", "en"]}, "workflow_id": {"type": "string", "minLength": 1}, "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]}, "control_dir": {"type": "string", "minLength": 1}, "created_at": {"type": "string", "minLength": 1}, "updated_at": {"type": "string"}, "project_profile": {"type": "object"}, "current_contracts": {"type": "object"}}, "additionalProperties": True},
         "design-contract.schema.json": {"type": "object", "required": ["task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"], "properties": {"task_id": {"type": "string"}, "source_design": {"type": "string"}, "source_checksum": {"type": "string"}, "goals": {"type": "array", "items": {"type": "string"}}, "acceptance_criteria": {"type": "array", "items": {"type": "string"}}, "module_boundaries": {"type": "object"}, "risks": {"type": "array", "items": {"type": "string"}}, "assumptions": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": True},
@@ -2705,6 +3027,71 @@ for arg in sys.argv[1:]:
         for previous_node in node.get("depends_on", []):
             if previous_node not in node_id_set:
                 raise SystemExit(f"{arg}: {node.get('node_id')} depends_on 指向未知节点 {previous_node}")
+print("ok")
+""",
+        "validate_runtime_route_decision.py": """#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+
+TASK_KINDS = {"context", "audit", "change", "release", "self_healing"}
+EVIDENCE_LEVELS = {"inline", "lite", "standard", "formal"}
+PERSISTENCE_MODES = {"inline", "ephemeral", "target_repo", "blocked"}
+DECISIONS = {"call", "skip", "unavailable", "blocked"}
+
+errors = []
+for arg in sys.argv[1:]:
+    path = Path(arg)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for field in ["run_id", "task_kind", "evidence_level", "persistence_mode", "route_reason", "capability_decisions"]:
+        if field not in data:
+            errors.append(f"{path}: 缺少字段 {field}")
+    if data.get("task_kind") not in TASK_KINDS:
+        errors.append(f"{path}: task_kind 不合法")
+    if data.get("evidence_level") not in EVIDENCE_LEVELS:
+        errors.append(f"{path}: evidence_level 不合法")
+    if data.get("persistence_mode") not in PERSISTENCE_MODES:
+        errors.append(f"{path}: persistence_mode 不合法")
+    if data.get("persistence_mode") == "target_repo" and not (data.get("explicit_user_request") or data.get("formal_evidence_reason")):
+        errors.append(f"{path}: target_repo 持久化必须有明确用户要求或 formal evidence 理由")
+    if data.get("persistence_mode") == "target_repo" and data.get("evidence_level") != "formal" and not data.get("explicit_user_request"):
+        errors.append(f"{path}: 非 formal 证据写入 target_repo 必须有明确用户要求")
+    for index, decision in enumerate(data.get("capability_decisions") or []):
+        if decision.get("decision") not in DECISIONS:
+            errors.append(f"{path}: capability_decisions[{index}].decision 不合法")
+        if not decision.get("reason"):
+            errors.append(f"{path}: capability_decisions[{index}].reason 不能为空")
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+""",
+        "validate_assistant_run_feedback.py": """#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+
+POLLUTION_MARKERS = {"TARGET_REPO_ARTIFACT_POLLUTION", "PROCESS_DOCUMENTATION_POLLUTION"}
+
+errors = []
+for arg in sys.argv[1:]:
+    path = Path(arg)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for field in ["run_id", "status", "route_decision", "capability_decisions", "capability_health_checked", "target_repo_pollution_findings", "rule_violations", "darwin_required", "consumed_by_agent"]:
+        if field not in data:
+            errors.append(f"{path}: 缺少字段 {field}")
+    if data.get("consumed_by_agent") is not True:
+        errors.append(f"{path}: assistant-run-feedback 必须由 agent 消费")
+    if data.get("capability_health_checked") is not True:
+        errors.append(f"{path}: CAPABILITY_HEALTH_NOT_CHECKED")
+    route = data.get("route_decision") or {}
+    if not route.get("task_kind") or not route.get("evidence_level") or not route.get("persistence_mode"):
+        errors.append(f"{path}: route_decision 必须包含 task_kind/evidence_level/persistence_mode")
+    if not data.get("capability_decisions"):
+        errors.append(f"{path}: capability_decisions 不能为空，必须记录 call/skip/unavailable/blocked 裁决")
+    pollution = data.get("target_repo_pollution_findings") or []
+    violations = set(data.get("rule_violations") or [])
+    if pollution and not (violations & POLLUTION_MARKERS):
+        errors.append(f"{path}: 发现目标仓库过程产物污染时必须标记 TARGET_REPO_ARTIFACT_POLLUTION 或 PROCESS_DOCUMENTATION_POLLUTION")
+if errors:
+    raise SystemExit("\\n".join(errors))
 print("ok")
 """,
         "validate_skill_metadata.py": """#!/usr/bin/env python3
@@ -3079,7 +3466,7 @@ def upsert_plugin_entry(existing_plugins: list[dict], new_plugin: dict) -> list[
     return updated
 
 
-def marketplace_payload(config: dict, existing_marketplace: dict | None = None) -> dict:
+def marketplace_payload(config: dict, existing_marketplace=None) -> dict:
     existing_marketplace = existing_marketplace or {}
     return {
         "name": existing_marketplace.get("name", config.get("name", "local-engineering")),

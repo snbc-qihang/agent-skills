@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "run_id",
+    "status",
+    "route_decision",
+    "capability_decisions",
+    "capability_health_checked",
+    "target_repo_pollution_findings",
+    "rule_violations",
+    "darwin_required",
+    "consumed_by_agent"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "blocked",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "skipped"
+      ]
+    },
+    "route_decision": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "task_kind",
+        "evidence_level",
+        "persistence_mode",
+        "route_reason",
+        "capability_decisions"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_kind": {
+          "enum": [
+            "context",
+            "audit",
+            "change",
+            "release",
+            "self_healing"
+          ]
+        },
+        "evidence_level": {
+          "enum": [
+            "inline",
+            "lite",
+            "standard",
+            "formal"
+          ]
+        },
+        "persistence_mode": {
+          "enum": [
+            "inline",
+            "ephemeral",
+            "target_repo",
+            "blocked"
+          ]
+        },
+        "route_reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "explicit_user_request": {
+          "type": "boolean"
+        },
+        "formal_evidence_reason": {
+          "type": "string"
+        },
+        "capability_decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "family",
+              "decision",
+              "reason"
+            ],
+            "properties": {
+              "family": {
+                "enum": [
+                  "code_context",
+                  "frontend_runtime",
+                  "parallelization",
+                  "security",
+                  "self_healing",
+                  "simplification",
+                  "vcs_ci_prod"
+                ]
+              },
+              "candidate": {
+                "type": "string"
+              },
+              "decision": {
+                "enum": [
+                  "call",
+                  "skip",
+                  "unavailable",
+                  "blocked"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fallback": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "capability_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "family",
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "family": {
+            "enum": [
+              "code_context",
+              "frontend_runtime",
+              "parallelization",
+              "security",
+              "self_healing",
+              "simplification",
+              "vcs_ci_prod"
+            ]
+          },
+          "candidate": {
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "call",
+              "skip",
+              "unavailable",
+              "blocked"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fallback": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "capability_health_checked": {
+      "type": "boolean"
+    },
+    "target_repo_pollution_findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "rule_violations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "darwin_required": {
+      "type": "boolean"
+    },
+    "consumed_by_agent": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}
