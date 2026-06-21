@@ -1,7 +1,7 @@
 {
   "skill_id": "self-test",
   "skill_name": "Self Test",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "self_test",
   "type": "stage_skill",
   "purpose": "生成并执行自测方案，输出失败原因、影响范围和阻断判断。",
@@ -179,6 +179,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

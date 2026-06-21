@@ -1,6 +1,6 @@
 {
   "workflow_id": "design-only",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "states": [
     "pending",
     "running",
@@ -102,12 +102,34 @@
     "routing_rule": "先判断任务类型、证据等级和持久化模式，再决定是否进入轻量上下文、标准开发、正式审计或发布链路；进入研发助手不等于进入固定重流程。",
     "artifact_persistence_policy": {
       "default_persistence_mode": "ephemeral",
-      "ephemeral_root_template": "~/.codex/run-artifacts/engineering-assistant/<repo>/<run_id>/",
+      "ephemeral_root_scope": "target_project",
+      "run_artifact_root": ".run-artifacts/",
+      "ephemeral_root_template": ".run-artifacts/engineering-assistant/<run_id>/",
       "target_repo_allowed_when": [
-        "用户明确要求正式留档、交接或 CI 证据",
-        "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范",
+        "用户明确要求正式留档、交接或 CI 证据，且目标路径位于 docs/ 正式文档目录",
+        "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范，并带有 docs_promotion_target",
+        "过程资料已被确认应作为交付资料，自动从 .run-artifacts 提升到 docs/，并记录 source_run_artifact",
         "目标项目已有约定要求该证据进入仓库且不违反 document_retention_policy"
       ],
+      "docs_promotion_policy": {
+        "source_root": ".run-artifacts/",
+        "target_root": "docs/",
+        "auto_promote_when": [
+          "delivery_material_confirmed",
+          "formal_evidence_approved",
+          "handoff_or_ci_record_required"
+        ],
+        "requires": [
+          "source_run_artifact",
+          "docs_promotion_target",
+          "document_metadata",
+          "version_bump_reason"
+        ],
+        "forbidden_targets": [
+          "docs/human-review/",
+          "docs/human-readable/"
+        ]
+      },
       "target_repo_forbidden_for": [
         "runtime-route-decision.json",
         "artifact-persistence-policy.json",
@@ -115,8 +137,8 @@
         "capability-health.json",
         "capability-output-consumption.json",
         "assistant-run-feedback.json",
-        "临时规划文档",
-        "开发过程文档",
+        "未确认交付属性的临时规划文档",
+        "未确认交付属性的开发过程文档",
         "阶段总结",
         "临时审计报告",
         "workflow summary",
@@ -327,6 +349,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],
@@ -466,7 +489,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -545,7 +568,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -627,7 +650,7 @@
       "node_id": "high-level-design",
       "stage": "high_level_design",
       "skill_id": "high-level-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -707,7 +730,7 @@
       "node_id": "detailed-design",
       "stage": "detailed_design",
       "skill_id": "detailed-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -787,7 +810,7 @@
       "node_id": "redis-design",
       "stage": "redis_design",
       "skill_id": "redis-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -867,7 +890,7 @@
       "node_id": "mq-design",
       "stage": "mq_design",
       "skill_id": "mq-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -947,7 +970,7 @@
       "node_id": "database-design",
       "stage": "database_design",
       "skill_id": "database-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1032,7 +1055,7 @@
       "node_id": "frontend-design",
       "stage": "frontend_design",
       "skill_id": "frontend-design",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1112,7 +1135,7 @@
       "node_id": "design-review",
       "stage": "design_review",
       "skill_id": "design-review",
-      "version": "1.0.0.2",
+      "version": "1.0.0.3",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

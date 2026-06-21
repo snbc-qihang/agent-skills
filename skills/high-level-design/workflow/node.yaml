@@ -2,7 +2,7 @@
   "node_id": "high-level-design",
   "stage": "high_level_design",
   "skill_id": "high-level-design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

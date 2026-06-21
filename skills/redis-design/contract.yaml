@@ -1,7 +1,7 @@
 {
   "skill_id": "redis-design",
   "skill_name": "Redis Design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "redis_design",
   "type": "stage_skill",
   "purpose": "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。",
@@ -183,6 +183,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

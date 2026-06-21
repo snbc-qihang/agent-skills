@@ -1,7 +1,7 @@
 {
   "skill_id": "release-readiness",
   "skill_name": "Release Readiness",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "release_readiness",
   "type": "stage_skill",
   "purpose": "判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。",
@@ -182,6 +182,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

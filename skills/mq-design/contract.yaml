@@ -1,7 +1,7 @@
 {
   "skill_id": "mq-design",
   "skill_name": "MQ Design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "mq_design",
   "type": "stage_skill",
   "purpose": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
@@ -183,6 +183,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

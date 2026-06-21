@@ -1,6 +1,6 @@
 {
   "skill_id": "implementation-controller",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "implementation_control",
   "type": "control_skill",
   "prompt_pack": {

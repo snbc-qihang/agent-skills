@@ -1,6 +1,6 @@
 {
   "skill_id": "mq-design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "mq_design",
   "type": "stage_skill",
   "prompt_pack": {

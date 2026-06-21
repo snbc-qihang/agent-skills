@@ -1,6 +1,6 @@
 {
   "skill_id": "code-review",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "code_review",
   "type": "stage_skill",
   "prompt_pack": {

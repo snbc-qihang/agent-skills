@@ -26,9 +26,12 @@ class LeanRuntimeRouterTests(unittest.TestCase):
         self.assertEqual(["inline", "lite", "standard", "formal"], route_schema["properties"]["evidence_level"]["enum"])
         self.assertEqual(["inline", "ephemeral", "target_repo", "blocked"], route_schema["properties"]["persistence_mode"]["enum"])
         self.assertEqual("ephemeral", persistence_schema["properties"]["default_persistence_mode"]["const"])
+        self.assertEqual(".run-artifacts/", persistence_schema["properties"]["project_run_artifacts_root"]["const"])
+        self.assertIn("docs_promotions", persistence_schema["properties"])
         self.assertIn("capability_decisions", ledger_schema["required"])
         self.assertIn("health_checks", health_schema["required"])
         self.assertIn("consumed_by_agent", feedback_schema["required"])
+        self.assertIn("docs_promotions", feedback_schema["required"])
         self.assertIn("target_repo_pollution_findings", feedback_schema["properties"])
 
     def test_workflows_publish_lean_runtime_router_policy(self) -> None:
@@ -36,6 +39,11 @@ class LeanRuntimeRouterTests(unittest.TestCase):
         policy = workflow["lean_runtime_router_policy"]
 
         self.assertEqual("ephemeral", policy["artifact_persistence_policy"]["default_persistence_mode"])
+        self.assertEqual("target_project", policy["artifact_persistence_policy"]["ephemeral_root_scope"])
+        self.assertEqual(".run-artifacts/", policy["artifact_persistence_policy"]["run_artifact_root"])
+        self.assertEqual(".run-artifacts/engineering-assistant/<run_id>/", policy["artifact_persistence_policy"]["ephemeral_root_template"])
+        self.assertNotIn(".codex/run-artifacts", json.dumps(policy, ensure_ascii=False))
+        self.assertEqual("docs/", policy["artifact_persistence_policy"]["docs_promotion_policy"]["target_root"])
         self.assertEqual(["inline", "lite", "standard", "formal"], policy["evidence_levels"])
         self.assertIn("target_repo", policy["persistence_modes"])
         self.assertIn("assistant-run-feedback.json", policy["required_feedback_artifacts"])
@@ -71,7 +79,9 @@ class LeanRuntimeRouterTests(unittest.TestCase):
             **invalid,
             "evidence_level": "formal",
             "explicit_user_request": True,
-            "formal_evidence_reason": "用户要求正式交接留档",
+            "delivery_material_confirmed": True,
+            "source_run_artifact": ".run-artifacts/engineering-assistant/run-001/summary.md",
+            "docs_promotion_target": "docs/release/summary.md",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -83,7 +93,7 @@ class LeanRuntimeRouterTests(unittest.TestCase):
             ok = subprocess.run(["python3", str(validator), str(valid_path)], cwd=ROOT, text=True, capture_output=True, check=False)
 
         self.assertNotEqual(0, blocked.returncode)
-        self.assertIn("target_repo 持久化必须有明确用户要求或 formal evidence 理由", blocked.stderr + blocked.stdout)
+        self.assertIn("target_repo 持久化必须有明确用户要求、formal evidence 理由或交付资料确认", blocked.stderr + blocked.stdout)
         self.assertEqual(0, ok.returncode, ok.stderr + ok.stdout)
 
     def test_assistant_feedback_validator_requires_agent_consumption_and_pollution_markers(self) -> None:
@@ -99,6 +109,7 @@ class LeanRuntimeRouterTests(unittest.TestCase):
             "capability_decisions": [{"family": "code_context", "decision": "skip", "reason": "single-file change"}],
             "capability_health_checked": True,
             "target_repo_pollution_findings": [],
+            "docs_promotions": [],
             "rule_violations": [],
             "darwin_required": False,
             "consumed_by_agent": True,
@@ -112,22 +123,35 @@ class LeanRuntimeRouterTests(unittest.TestCase):
             **polluted_without_marker,
             "rule_violations": ["PROCESS_DOCUMENTATION_POLLUTION"],
         }
+        bad_promotion = {
+            **base_feedback,
+            "docs_promotions": [{"source_run_artifact": ".run-artifacts/engineering-assistant/run-001/summary.md", "docs_promotion_target": "artifacts/summary.md", "confirmed_as_delivery_material": True}],
+        }
+        promoted = {
+            **base_feedback,
+            "docs_promotions": [{"source_run_artifact": ".run-artifacts/engineering-assistant/run-001/summary.md", "docs_promotion_target": "docs/release/summary.md", "confirmed_as_delivery_material": True}],
+        }
 
         with tempfile.TemporaryDirectory() as temp_dir:
             paths = []
-            for name, payload in [("unconsumed", unconsumed), ("bad", polluted_without_marker), ("ok", polluted_with_marker)]:
+            for name, payload in [("unconsumed", unconsumed), ("bad", polluted_without_marker), ("ok", polluted_with_marker), ("bad-promotion", bad_promotion), ("promoted", promoted)]:
                 path = Path(temp_dir) / f"{name}.json"
                 path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
                 paths.append(path)
             unconsumed_result = subprocess.run(["python3", str(validator), str(paths[0])], cwd=ROOT, text=True, capture_output=True, check=False)
             bad_result = subprocess.run(["python3", str(validator), str(paths[1])], cwd=ROOT, text=True, capture_output=True, check=False)
             ok_result = subprocess.run(["python3", str(validator), str(paths[2])], cwd=ROOT, text=True, capture_output=True, check=False)
+            bad_promotion_result = subprocess.run(["python3", str(validator), str(paths[3])], cwd=ROOT, text=True, capture_output=True, check=False)
+            promoted_result = subprocess.run(["python3", str(validator), str(paths[4])], cwd=ROOT, text=True, capture_output=True, check=False)
 
         self.assertNotEqual(0, unconsumed_result.returncode)
         self.assertIn("assistant-run-feedback 必须由 agent 消费", unconsumed_result.stderr + unconsumed_result.stdout)
         self.assertNotEqual(0, bad_result.returncode)
         self.assertIn("发现目标仓库过程产物污染时必须标记", bad_result.stderr + bad_result.stdout)
         self.assertEqual(0, ok_result.returncode, ok_result.stderr + ok_result.stdout)
+        self.assertNotEqual(0, bad_promotion_result.returncode)
+        self.assertIn("docs_promotion_target 必须位于 docs/", bad_promotion_result.stderr + bad_promotion_result.stdout)
+        self.assertEqual(0, promoted_result.returncode, promoted_result.stderr + promoted_result.stdout)
 
 
 if __name__ == "__main__":

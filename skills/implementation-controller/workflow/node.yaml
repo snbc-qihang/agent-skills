@@ -2,7 +2,7 @@
   "node_id": "implementation-controller",
   "stage": "implementation_control",
   "skill_id": "implementation-controller",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

@@ -8,6 +8,7 @@
     "capability_decisions",
     "capability_health_checked",
     "target_repo_pollution_findings",
+    "docs_promotions",
     "rule_violations",
     "darwin_required",
     "consumed_by_agent"
@@ -75,6 +76,15 @@
           "type": "boolean"
         },
         "formal_evidence_reason": {
+          "type": "string"
+        },
+        "delivery_material_confirmed": {
+          "type": "boolean"
+        },
+        "source_run_artifact": {
+          "type": "string"
+        },
+        "docs_promotion_target": {
           "type": "string"
         },
         "capability_decisions": {
@@ -170,6 +180,12 @@
       "type": "boolean"
     },
     "target_repo_pollution_findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "docs_promotions": {
       "type": "array",
       "items": {
         "type": "object"

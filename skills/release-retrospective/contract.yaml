@@ -1,7 +1,7 @@
 {
   "skill_id": "release-retrospective",
   "skill_name": "Release Retrospective",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "release_retrospective",
   "type": "stage_skill",
   "purpose": "复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。",
@@ -183,6 +183,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

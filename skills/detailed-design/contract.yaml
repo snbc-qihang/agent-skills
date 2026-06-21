@@ -1,7 +1,7 @@
 {
   "skill_id": "detailed-design",
   "skill_name": "Detailed Design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "detailed_design",
   "type": "stage_skill",
   "purpose": "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。",
@@ -179,6 +179,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

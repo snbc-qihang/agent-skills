@@ -2,7 +2,7 @@
   "node_id": "engineering-knowledge-miner",
   "stage": "knowledge_mining",
   "skill_id": "engineering-knowledge-miner",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

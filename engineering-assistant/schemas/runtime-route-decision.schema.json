@@ -49,6 +49,15 @@
     "formal_evidence_reason": {
       "type": "string"
     },
+    "delivery_material_confirmed": {
+      "type": "boolean"
+    },
+    "source_run_artifact": {
+      "type": "string"
+    },
+    "docs_promotion_target": {
+      "type": "string"
+    },
     "capability_decisions": {
       "type": "array",
       "items": {

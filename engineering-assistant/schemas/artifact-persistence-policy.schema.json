@@ -5,6 +5,7 @@
     "run_id",
     "default_persistence_mode",
     "effective_persistence_mode",
+    "project_run_artifacts_root",
     "ephemeral_root",
     "target_repo_writes"
   ],
@@ -24,11 +25,20 @@
         "blocked"
       ]
     },
+    "project_run_artifacts_root": {
+      "const": ".run-artifacts/"
+    },
     "ephemeral_root": {
       "type": "string",
       "minLength": 1
     },
     "target_repo_writes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "docs_promotions": {
       "type": "array",
       "items": {
         "type": "object"

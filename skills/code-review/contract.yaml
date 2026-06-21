@@ -1,7 +1,7 @@
 {
   "skill_id": "code-review",
   "skill_name": "Code Review",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "code_review",
   "type": "stage_skill",
   "purpose": "对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。",
@@ -184,6 +184,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

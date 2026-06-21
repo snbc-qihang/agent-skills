@@ -1,7 +1,7 @@
 {
   "skill_id": "skill-quality-auditor",
   "skill_name": "Skill Quality Auditor",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "skill_quality",
   "type": "audit_skill",
   "purpose": "审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。",
@@ -184,6 +184,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

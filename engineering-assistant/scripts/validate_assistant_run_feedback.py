@@ -8,7 +8,7 @@ errors = []
 for arg in sys.argv[1:]:
     path = Path(arg)
     data = json.loads(path.read_text(encoding="utf-8"))
-    for field in ["run_id", "status", "route_decision", "capability_decisions", "capability_health_checked", "target_repo_pollution_findings", "rule_violations", "darwin_required", "consumed_by_agent"]:
+    for field in ["run_id", "status", "route_decision", "capability_decisions", "capability_health_checked", "target_repo_pollution_findings", "docs_promotions", "rule_violations", "darwin_required", "consumed_by_agent"]:
         if field not in data:
             errors.append(f"{path}: 缺少字段 {field}")
     if data.get("consumed_by_agent") is not True:
@@ -24,6 +24,15 @@ for arg in sys.argv[1:]:
     violations = set(data.get("rule_violations") or [])
     if pollution and not (violations & POLLUTION_MARKERS):
         errors.append(f"{path}: 发现目标仓库过程产物污染时必须标记 TARGET_REPO_ARTIFACT_POLLUTION 或 PROCESS_DOCUMENTATION_POLLUTION")
+    for index, promotion in enumerate(data.get("docs_promotions") or []):
+        source = str(promotion.get("source_run_artifact") or "")
+        target = str(promotion.get("docs_promotion_target") or "")
+        if not promotion.get("confirmed_as_delivery_material"):
+            errors.append(f"{path}: docs_promotions[{index}] 必须声明 confirmed_as_delivery_material=true")
+        if not source.startswith(".run-artifacts/"):
+            errors.append(f"{path}: docs_promotions[{index}].source_run_artifact 必须来自 .run-artifacts/")
+        if not target.startswith("docs/"):
+            errors.append(f"{path}: docs_promotions[{index}].docs_promotion_target 必须位于 docs/")
 if errors:
     raise SystemExit("\n".join(errors))
 print("ok")

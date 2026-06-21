@@ -1,7 +1,7 @@
 {
   "skill_id": "frontend-design",
   "skill_name": "Frontend Design",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "frontend_design",
   "type": "stage_skill",
   "purpose": "将需求和接口契约转化为可实现的前端设计，明确页面、组件、状态、交互、接口联调和验证策略。",
@@ -182,6 +182,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

@@ -1,7 +1,7 @@
 {
   "skill_id": "frontend-development",
   "skill_name": "Frontend Development",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "frontend_development",
   "type": "stage_skill",
   "purpose": "基于前端设计和接口契约实施页面、组件、状态和接口联调变更。",
@@ -179,6 +179,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

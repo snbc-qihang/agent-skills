@@ -2,7 +2,7 @@
   "node_id": "repo-context-miner",
   "stage": "repo_context",
   "skill_id": "repo-context-miner",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

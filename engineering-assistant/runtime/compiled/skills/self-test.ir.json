@@ -1,6 +1,6 @@
 {
   "skill_id": "self-test",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "self_test",
   "type": "stage_skill",
   "prompt_pack": {

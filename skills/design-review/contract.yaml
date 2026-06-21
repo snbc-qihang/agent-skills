@@ -1,7 +1,7 @@
 {
   "skill_id": "design-review",
   "skill_name": "Design Review",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "design_review",
   "type": "stage_skill",
   "purpose": "评审设计产物，判断是否可以进入代码研发。",
@@ -179,6 +179,7 @@
         "docs/release/"
       ],
       "agent_workspace_roots": [
+        ".run-artifacts/",
         "artifacts/",
         "artifacts/_control/"
       ],

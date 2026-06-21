@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
-PLUGIN_VERSION = "1.0.0.2"
+PLUGIN_VERSION = "1.0.0.3"
 DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
 
 EVAL_CASES = [
@@ -77,7 +77,7 @@ DOCUMENT_RETENTION_POLICY = {
         "rule_governance",
     ],
     "final_project_document_roots": ["docs/00-index/", "docs/architecture/", "docs/design/", "docs/decisions/", "docs/release/"],
-    "agent_workspace_roots": ["artifacts/", "artifacts/_control/"],
+    "agent_workspace_roots": [".run-artifacts/", "artifacts/", "artifacts/_control/"],
     "human_review_roots": ["docs/human-review/"],
     "human_readable_render_roots": ["docs/human-readable/"],
     "completion_rule": "研发完成后只保留 approved/final + persist + formal_* 的确定性设计/决策/索引文档；run evidence、agent workspace、trace、缺失信息、临时评审和 HTML 审阅包不得进入正式留存集合。",
@@ -91,12 +91,22 @@ POLLUTION_MARKERS = ["TARGET_REPO_ARTIFACT_POLLUTION", "PROCESS_DOCUMENTATION_PO
 
 ARTIFACT_PERSISTENCE_POLICY = {
     "default_persistence_mode": "ephemeral",
-    "ephemeral_root_template": "~/.codex/run-artifacts/engineering-assistant/<repo>/<run_id>/",
+    "ephemeral_root_scope": "target_project",
+    "run_artifact_root": ".run-artifacts/",
+    "ephemeral_root_template": ".run-artifacts/engineering-assistant/<run_id>/",
     "target_repo_allowed_when": [
-        "用户明确要求正式留档、交接或 CI 证据",
-        "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范",
+        "用户明确要求正式留档、交接或 CI 证据，且目标路径位于 docs/ 正式文档目录",
+        "evidence_level=formal 且产物属于正式设计、决策、发布或项目规范，并带有 docs_promotion_target",
+        "过程资料已被确认应作为交付资料，自动从 .run-artifacts 提升到 docs/，并记录 source_run_artifact",
         "目标项目已有约定要求该证据进入仓库且不违反 document_retention_policy",
     ],
+    "docs_promotion_policy": {
+        "source_root": ".run-artifacts/",
+        "target_root": "docs/",
+        "auto_promote_when": ["delivery_material_confirmed", "formal_evidence_approved", "handoff_or_ci_record_required"],
+        "requires": ["source_run_artifact", "docs_promotion_target", "document_metadata", "version_bump_reason"],
+        "forbidden_targets": ["docs/human-review/", "docs/human-readable/"],
+    },
     "target_repo_forbidden_for": [
         "runtime-route-decision.json",
         "artifact-persistence-policy.json",
@@ -104,8 +114,8 @@ ARTIFACT_PERSISTENCE_POLICY = {
         "capability-health.json",
         "capability-output-consumption.json",
         "assistant-run-feedback.json",
-        "临时规划文档",
-        "开发过程文档",
+        "未确认交付属性的临时规划文档",
+        "未确认交付属性的开发过程文档",
         "阶段总结",
         "临时审计报告",
         "workflow summary",
@@ -1143,6 +1153,9 @@ def runtime_route_decision_schema() -> dict:
             "route_reason": {"type": "string", "minLength": 1},
             "explicit_user_request": {"type": "boolean"},
             "formal_evidence_reason": {"type": "string"},
+            "delivery_material_confirmed": {"type": "boolean"},
+            "source_run_artifact": {"type": "string"},
+            "docs_promotion_target": {"type": "string"},
             "capability_decisions": {"type": "array", "items": capability_decision_schema()},
         },
         "additionalProperties": True,
@@ -1152,13 +1165,15 @@ def runtime_route_decision_schema() -> dict:
 def artifact_persistence_policy_schema() -> dict:
     return {
         "type": "object",
-        "required": ["run_id", "default_persistence_mode", "effective_persistence_mode", "ephemeral_root", "target_repo_writes"],
+        "required": ["run_id", "default_persistence_mode", "effective_persistence_mode", "project_run_artifacts_root", "ephemeral_root", "target_repo_writes"],
         "properties": {
             "run_id": {"type": "string", "minLength": 1},
             "default_persistence_mode": {"const": "ephemeral"},
             "effective_persistence_mode": {"enum": PERSISTENCE_MODES},
+            "project_run_artifacts_root": {"const": ".run-artifacts/"},
             "ephemeral_root": {"type": "string", "minLength": 1},
             "target_repo_writes": {"type": "array", "items": {"type": "object"}},
+            "docs_promotions": {"type": "array", "items": {"type": "object"}},
             "pollution_markers": {"type": "array", "items": {"enum": POLLUTION_MARKERS}},
         },
         "additionalProperties": True,
@@ -1228,6 +1243,7 @@ def assistant_run_feedback_schema() -> dict:
             "capability_decisions",
             "capability_health_checked",
             "target_repo_pollution_findings",
+            "docs_promotions",
             "rule_violations",
             "darwin_required",
             "consumed_by_agent",
@@ -1239,6 +1255,7 @@ def assistant_run_feedback_schema() -> dict:
             "capability_decisions": {"type": "array", "items": capability_decision_schema()},
             "capability_health_checked": {"type": "boolean"},
             "target_repo_pollution_findings": {"type": "array", "items": {"type": "object"}},
+            "docs_promotions": {"type": "array", "items": {"type": "object"}},
             "rule_violations": {"type": "array", "items": {"type": "string"}},
             "darwin_required": {"type": "boolean"},
             "consumed_by_agent": {"type": "boolean"},
@@ -2420,7 +2437,7 @@ def generate_runtime_policy_pack(base: Path) -> None:
 ## 使用方式
 1. 将本目录内容复制到目标项目 `.codex/`。
 2. 按项目真实构建、测试、发布流程调整规则。
-3. 将任务运行产物写入目标项目 `artifacts/_control/`。
+3. 将 agent 研发过程产物写入目标项目 `.run-artifacts/`；确认应交付的资料再提升到 `docs/`。
 4. 不要把插件目录作为 `--root` 传给控制面脚本。
 """)
     write_text(base / "runtime" / "codex" / "config.toml", """model = "gpt-5.3-codex"
@@ -3051,10 +3068,19 @@ for arg in sys.argv[1:]:
         errors.append(f"{path}: evidence_level 不合法")
     if data.get("persistence_mode") not in PERSISTENCE_MODES:
         errors.append(f"{path}: persistence_mode 不合法")
-    if data.get("persistence_mode") == "target_repo" and not (data.get("explicit_user_request") or data.get("formal_evidence_reason")):
-        errors.append(f"{path}: target_repo 持久化必须有明确用户要求或 formal evidence 理由")
-    if data.get("persistence_mode") == "target_repo" and data.get("evidence_level") != "formal" and not data.get("explicit_user_request"):
-        errors.append(f"{path}: 非 formal 证据写入 target_repo 必须有明确用户要求")
+    if data.get("persistence_mode") == "target_repo":
+        has_allowed_reason = data.get("explicit_user_request") or data.get("formal_evidence_reason") or data.get("delivery_material_confirmed")
+        if not has_allowed_reason:
+            errors.append(f"{path}: target_repo 持久化必须有明确用户要求、formal evidence 理由或交付资料确认")
+        if data.get("delivery_material_confirmed"):
+            source = str(data.get("source_run_artifact") or "")
+            target = str(data.get("docs_promotion_target") or "")
+            if not source.startswith(".run-artifacts/"):
+                errors.append(f"{path}: 已确认交付资料必须记录 .run-artifacts/ 下的 source_run_artifact")
+            if not target.startswith("docs/"):
+                errors.append(f"{path}: 已确认交付资料必须自动提升到 docs/ 下的 docs_promotion_target")
+        if data.get("evidence_level") != "formal" and not (data.get("explicit_user_request") or data.get("delivery_material_confirmed")):
+            errors.append(f"{path}: 非 formal 证据写入 target_repo 必须有明确用户要求或交付资料确认")
     for index, decision in enumerate(data.get("capability_decisions") or []):
         if decision.get("decision") not in DECISIONS:
             errors.append(f"{path}: capability_decisions[{index}].decision 不合法")
@@ -3074,7 +3100,7 @@ errors = []
 for arg in sys.argv[1:]:
     path = Path(arg)
     data = json.loads(path.read_text(encoding="utf-8"))
-    for field in ["run_id", "status", "route_decision", "capability_decisions", "capability_health_checked", "target_repo_pollution_findings", "rule_violations", "darwin_required", "consumed_by_agent"]:
+    for field in ["run_id", "status", "route_decision", "capability_decisions", "capability_health_checked", "target_repo_pollution_findings", "docs_promotions", "rule_violations", "darwin_required", "consumed_by_agent"]:
         if field not in data:
             errors.append(f"{path}: 缺少字段 {field}")
     if data.get("consumed_by_agent") is not True:
@@ -3090,6 +3116,15 @@ for arg in sys.argv[1:]:
     violations = set(data.get("rule_violations") or [])
     if pollution and not (violations & POLLUTION_MARKERS):
         errors.append(f"{path}: 发现目标仓库过程产物污染时必须标记 TARGET_REPO_ARTIFACT_POLLUTION 或 PROCESS_DOCUMENTATION_POLLUTION")
+    for index, promotion in enumerate(data.get("docs_promotions") or []):
+        source = str(promotion.get("source_run_artifact") or "")
+        target = str(promotion.get("docs_promotion_target") or "")
+        if not promotion.get("confirmed_as_delivery_material"):
+            errors.append(f"{path}: docs_promotions[{index}] 必须声明 confirmed_as_delivery_material=true")
+        if not source.startswith(".run-artifacts/"):
+            errors.append(f"{path}: docs_promotions[{index}].source_run_artifact 必须来自 .run-artifacts/")
+        if not target.startswith("docs/"):
+            errors.append(f"{path}: docs_promotions[{index}].docs_promotion_target 必须位于 docs/")
 if errors:
     raise SystemExit("\\n".join(errors))
 print("ok")
@@ -3199,7 +3234,7 @@ import re
 from pathlib import Path
 
 
-PLUGIN_VERSION = \"1.0.0.2\"
+PLUGIN_VERSION = \"1.0.0.3\"
 
 
 def load_json(path: Path) -> dict:
@@ -3397,7 +3432,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
-PLUGIN_VERSION = "1.0.0.2"
+PLUGIN_VERSION = "1.0.0.3"
 
 
 def load_config(path: Path) -> dict:

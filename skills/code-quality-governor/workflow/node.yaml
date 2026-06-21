@@ -2,7 +2,7 @@
   "node_id": "code-quality-governor",
   "stage": "code_quality",
   "skill_id": "code-quality-governor",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

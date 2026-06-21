@@ -1,6 +1,6 @@
 {
   "skill_id": "code-quality-governor",
-  "version": "1.0.0.2",
+  "version": "1.0.0.3",
   "stage": "code_quality",
   "type": "cross_cutting_skill",
   "prompt_pack": {
