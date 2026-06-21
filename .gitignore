@@ -37,3 +37,4 @@ engineering-assistant/artifacts/*
 .env
 .env.*
 !.env.example
+/.hermes/
