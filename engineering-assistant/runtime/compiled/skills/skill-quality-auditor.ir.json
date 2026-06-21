@@ -1,6 +1,6 @@
 {
   "skill_id": "skill-quality-auditor",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "stage": "skill_quality",
   "type": "audit_skill",
   "prompt_pack": {

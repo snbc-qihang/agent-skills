@@ -2,7 +2,7 @@
   "node_id": "design-review",
   "stage": "design_review",
   "skill_id": "design-review",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

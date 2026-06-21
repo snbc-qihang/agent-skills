@@ -1,6 +1,6 @@
 {
   "workflow_id": "release-only",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "states": [
     "pending",
     "running",
@@ -114,6 +114,39 @@
       "workflow-trace.json",
       "resume-point.json"
     ],
+    "document_retention_policy": {
+      "persist_allowed_document_classes": [
+        "formal_design",
+        "formal_decision",
+        "formal_index"
+      ],
+      "transient_only_document_classes": [
+        "run_evidence",
+        "agent_workspace",
+        "process_trace",
+        "human_review_packet",
+        "human_readable_render",
+        "rule_governance"
+      ],
+      "final_project_document_roots": [
+        "docs/00-index/",
+        "docs/architecture/",
+        "docs/design/",
+        "docs/decisions/",
+        "docs/release/"
+      ],
+      "agent_workspace_roots": [
+        "artifacts/",
+        "artifacts/_control/"
+      ],
+      "human_review_roots": [
+        "docs/human-review/"
+      ],
+      "human_readable_render_roots": [
+        "docs/human-readable/"
+      ],
+      "completion_rule": "研发完成后只保留 approved/final + persist + formal_* 的确定性设计/决策/索引文档；run evidence、agent workspace、trace、缺失信息、临时评审和 HTML 审阅包不得进入正式留存集合。"
+    },
     "document_lifecycle_states": [
       "not_started",
       "draft",
@@ -242,7 +275,7 @@
       "node_id": "release-readiness",
       "stage": "release_readiness",
       "skill_id": "release-readiness",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -323,7 +356,7 @@
       "node_id": "release-verification",
       "stage": "release_verification",
       "skill_id": "release-verification",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -401,7 +434,7 @@
       "node_id": "release-retrospective",
       "stage": "release_retrospective",
       "skill_id": "release-retrospective",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

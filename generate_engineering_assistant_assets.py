@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
-PLUGIN_VERSION = "1.0.0.1"
+PLUGIN_VERSION = "1.0.0.2"
 DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
 
 EVAL_CASES = [
@@ -65,6 +65,23 @@ PREFLIGHT_CONTROL_ARTIFACTS = [
     "workflow-trace.json",
     "resume-point.json",
 ]
+
+DOCUMENT_RETENTION_POLICY = {
+    "persist_allowed_document_classes": ["formal_design", "formal_decision", "formal_index"],
+    "transient_only_document_classes": [
+        "run_evidence",
+        "agent_workspace",
+        "process_trace",
+        "human_review_packet",
+        "human_readable_render",
+        "rule_governance",
+    ],
+    "final_project_document_roots": ["docs/00-index/", "docs/architecture/", "docs/design/", "docs/decisions/", "docs/release/"],
+    "agent_workspace_roots": ["artifacts/", "artifacts/_control/"],
+    "human_review_roots": ["docs/human-review/"],
+    "human_readable_render_roots": ["docs/human-readable/"],
+    "completion_rule": "研发完成后只保留 approved/final + persist + formal_* 的确定性设计/决策/索引文档；run evidence、agent workspace、trace、缺失信息、临时评审和 HTML 审阅包不得进入正式留存集合。",
+}
 
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
@@ -981,6 +998,21 @@ def document_lifecycle_schema() -> dict:
             "owner": {"type": "string", "minLength": 1},
             "source_artifacts": {"type": "array", "items": {"type": "string"}},
             "supersedes": {"type": "array", "items": {"type": "string"}},
+            "document_class": {
+                "enum": [
+                    "formal_design",
+                    "formal_decision",
+                    "formal_index",
+                    "run_evidence",
+                    "agent_workspace",
+                    "process_trace",
+                    "human_review_packet",
+                    "human_readable_render",
+                    "rule_governance",
+                ]
+            },
+            "retention_scope": {"enum": ["final_project_record", "run_scoped", "agent_only"]},
+            "canonical_path": {"type": "string"},
         },
         "additionalProperties": True,
     }
@@ -1127,6 +1159,7 @@ def design_governance_policy() -> dict:
         ],
         "formal_design_artifacts": FORMAL_DESIGN_ARTIFACTS,
         "preflight_control_artifacts": PREFLIGHT_CONTROL_ARTIFACTS,
+        "document_retention_policy": DOCUMENT_RETENTION_POLICY,
         "document_lifecycle_states": [
             "not_started",
             "draft",
@@ -2429,6 +2462,11 @@ def generate_engineering_assistant() -> None:
 - DG20 规则包必须保留 `rule_id`、强度、标签、规则文本、来源路径和行号，方便任务精确回源，而不是全量检索文档。
 - DG21 规范重复不直接凭主观删除，必须先生成 `rule-duplicate-report.json`，再由文档治理任务合并、归档或标记替代关系。
 - DG22 审核 finding 必须引用适用的 `rule_id`；没有读取任务规则包的审核结论无效。
+- DG23 文档必须声明或可推导 `document_class`：正式设计/决策/索引使用 `formal_design|formal_decision|formal_index`，研发过程证据、agent 工作区、trace、人工审阅包和渲染 HTML 使用 transient 类别。
+- DG24 研发完成后的最终项目留存集合只允许 `document_status=approved|final`、`retention_policy=persist`、`retention_scope=final_project_record` 且 `document_class` 为 formal_* 的确定性文档。
+- DG25 `artifacts/`、`artifacts/_control/`、`docs/human-review/`、`docs/human-readable/` 下的内容不得作为最终项目正式留存源；只能作为运行证据、agent 工作材料、人工确认入口或只读渲染。
+- DG26 正式留存 Markdown 的 `canonical_path` 必须位于 `docs/00-index/`、`docs/architecture/`、`docs/design/`、`docs/decisions/` 或 `docs/release/`，不得指向 agent 运行目录。
+- DG27 release/交付收尾必须生成 retained-vs-transient 清单：列出保留文档、运行期证据、清理策略、归档策略和人工审批状态。
 """,
         "required-information-standard.md": """## 主动询问边界
 - QIN1 必填信息缺失且无法通过仓库、上游产物、profile 或已确认上下文可靠推导时，skill 必须主动询问用户，不得继续伪造结论。
@@ -2510,6 +2548,11 @@ def generate_engineering_assistant() -> None:
             "DG8 run artifact 与正式文档目录边界清晰",
             "DG9 正式文档包含 owner、来源、门禁、风险、审批和生命周期",
             "DG10 章节编号由模板统一生成",
+            "DG23 document_class 区分 formal_*、run_evidence、agent_workspace、process_trace 和 HTML 类产物",
+            "DG24 最终项目留存集合只包含 approved/final + persist + final_project_record 的 formal_* 文档",
+            "DG25 artifacts、artifacts/_control、docs/human-review、docs/human-readable 不进入正式留存源集合",
+            "DG26 canonical_path 指向 docs/00-index、docs/architecture、docs/design、docs/decisions 或 docs/release",
+            "DG27 release/交付收尾生成 retained-vs-transient 清单",
         ],
         "required-information-checklist.md": [
             "QIN1 缺失信息已先尝试从仓库、上游产物、profile 和上下文获取",
@@ -2769,7 +2812,7 @@ import re
 from pathlib import Path
 
 
-PLUGIN_VERSION = \"1.0.0.1\"
+PLUGIN_VERSION = \"1.0.0.2\"
 
 
 def load_json(path: Path) -> dict:
@@ -2967,7 +3010,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
-PLUGIN_VERSION = "1.0.0.1"
+PLUGIN_VERSION = "1.0.0.2"
 
 
 def load_config(path: Path) -> dict:
@@ -3775,6 +3818,31 @@ DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|
 REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
 FORMAL_STATUSES = {"approved", "final"}
 INTERMEDIATE_STATUSES = {"draft", "reviewing", "blocked", "waiting_for_input"}
+PERSIST_ALLOWED_CLASSES = {"formal_design", "formal_decision", "formal_index"}
+TRANSIENT_ONLY_CLASSES = {"run_evidence", "agent_workspace", "process_trace", "human_review_packet", "human_readable_render", "rule_governance"}
+FINAL_PROJECT_ROOTS = ("docs/00-index/", "docs/architecture/", "docs/design/", "docs/decisions/", "docs/release/")
+NON_FINAL_ROOTS = ("artifacts/", "artifacts/_control/", "docs/human-review/", "docs/human-readable/")
+
+
+def normalized_path(value: str) -> str:
+    return str(value or "").replace("\\\\", "/").lstrip("/")
+
+
+def validate_persisted_document(path: Path, data: dict) -> None:
+    if data.get("retention_policy") != "persist":
+        return
+    document_class = data.get("document_class")
+    canonical_path = normalized_path(data.get("canonical_path") or (data.get("source_artifacts") or [""])[0])
+    if document_class not in PERSIST_ALLOWED_CLASSES:
+        errors.append(f"{path}: persist 文档必须声明 document_class=formal_design|formal_decision|formal_index")
+    if document_class in TRANSIENT_ONLY_CLASSES:
+        errors.append(f"{path}: {document_class} 只能作为运行期或 agent 工作产物，不得 persist")
+    if data.get("retention_scope") != "final_project_record":
+        errors.append(f"{path}: persist 文档必须声明 retention_scope=final_project_record")
+    if not canonical_path.startswith(FINAL_PROJECT_ROOTS):
+        errors.append(f"{path}: persist 文档 canonical_path 必须位于正式 docs 目录")
+    if canonical_path.startswith(NON_FINAL_ROOTS):
+        errors.append(f"{path}: artifacts/_control 或 HTML 目录不得作为正式留存源")
 
 errors = []
 for arg in sys.argv[1:]:
@@ -3791,6 +3859,7 @@ for arg in sys.argv[1:]:
         errors.append(f"{path}: 中间过程文档不得 persist")
     if data["retention_policy"] == "persist" and data["document_status"] not in FORMAL_STATUSES:
         errors.append(f"{path}: 只有 approved/final 文档可以 persist")
+    validate_persisted_document(path, data)
 if errors:
     raise SystemExit("\\n".join(errors))
 print("ok")
@@ -3805,6 +3874,10 @@ VALID_PREFLIGHT_STATES = {"ready", "waiting_for_input", "waiting_for_human_revie
 FORMAL_DESIGN_ARTIFACTS = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
+PERSIST_ALLOWED_CLASSES = {"formal_design", "formal_decision", "formal_index"}
+TRANSIENT_ONLY_CLASSES = {"run_evidence", "agent_workspace", "process_trace", "human_review_packet", "human_readable_render", "rule_governance"}
+FINAL_PROJECT_ROOTS = ("docs/00-index/", "docs/architecture/", "docs/design/", "docs/decisions/", "docs/release/")
+NON_FINAL_ROOTS = ("artifacts/", "artifacts/_control/", "docs/human-review/", "docs/human-readable/")
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
 BLOCKING_FINDING_SEVERITIES = {"blocker", "major"}
 BLOCKING_GATE_RESULTS = {"block", "blocked", "block_for_completion", "blocked_for_product_completion", "fail", "failed", "error"}
@@ -3812,6 +3885,27 @@ BLOCKING_GATE_RESULTS = {"block", "blocked", "block_for_completion", "blocked_fo
 
 def artifact_path(artifact):
     return artifact.get("path") or artifact.get("file") or artifact.get("uri") or ""
+
+
+def normalized_path(value: str) -> str:
+    return str(value or "").replace("\\\\", "/").lstrip("/")
+
+
+def validate_persisted_metadata(result_path: Path, metadata: dict) -> None:
+    if metadata.get("retention_policy") != "persist":
+        return
+    document_class = metadata.get("document_class")
+    canonical_path = normalized_path(metadata.get("canonical_path") or (metadata.get("source_artifacts") or [""])[0])
+    if document_class not in PERSIST_ALLOWED_CLASSES:
+        errors.append(f"{result_path}: persist 文档必须声明 document_class=formal_design|formal_decision|formal_index")
+    if document_class in TRANSIENT_ONLY_CLASSES:
+        errors.append(f"{result_path}: {document_class} 只能作为运行期或 agent 工作产物，不得 persist")
+    if metadata.get("retention_scope") != "final_project_record":
+        errors.append(f"{result_path}: persist 文档必须声明 retention_scope=final_project_record")
+    if not canonical_path.startswith(FINAL_PROJECT_ROOTS):
+        errors.append(f"{result_path}: persist 文档 canonical_path 必须位于正式 docs 目录")
+    if canonical_path.startswith(NON_FINAL_ROOTS):
+        errors.append(f"{result_path}: artifacts/_control 或 HTML 目录不得作为正式留存源")
 
 
 def artifact_kind(artifact):
@@ -3914,6 +4008,7 @@ for arg in sys.argv[1:]:
         number = str(metadata.get("document_number", ""))
         if number and not DOC_NUMBER.match(number):
             errors.append(f"{path}: document_metadata.document_number 不符合编号规范")
+        validate_persisted_metadata(path, metadata)
         for finding in data.get("findings", []):
             if str(finding.get("severity", "")).lower() in BLOCKING_FINDING_SEVERITIES:
                 errors.append(f"{path}: succeeded 不允许包含 blocker/major finding: {finding.get('id') or finding.get('summary')}")
@@ -5997,6 +6092,33 @@ Knowledge mining workflow：每周、迭代结束或事故关闭时执行 knowle
 阶段 5 workflow orchestrator：负责人 workflow owner；交付五类 workflow、断点恢复、人工审批暂停/恢复、产物流转；验收为 full-feature-development 可按节点状态运行。
 
 阶段 6 治理与规模化：负责人研发负责人；交付版本治理、持续回归、CI/CD 常态化、团队培训、指标看板和周例行知识治理；验收为 registry、eval pass rate、knowledge feedback rate 可追踪。
+
+# 12.1 main 分支优化整改计划
+目标：先在 main 分支修复通用能力骨架，避免插件继续把所有研发过程资料无差别写入目标项目的 `artifacts/` 和 `docs/`；同时为 `teamwork` 分支提供可安全吸收的通用增量，不把团队定制输入、模板和案例反向污染 main。
+
+问题判断：研究报告指出当前仓库已具备完整插件平台雏形，但生成器中心化、owner/metadata 重复、发布回滚和跨平台边界不足。当前最急的问题不是继续增加文档类别，而是给文档生命周期建立硬边界：`artifacts/` 保存运行证据和 agent 工作材料，`docs/` 只承载正式留存、人工审阅入口和只读渲染；研发完成后的项目留存集合只允许确定性、设计性质、已审批或 final 的 Markdown 源文档及索引。
+
+阶段 A：文档留存边界收敛。
+- 增加 `document_class`、`retention_scope`、`canonical_path` 语义，区分 `formal_design|formal_decision|formal_index` 与 `run_evidence|agent_workspace|process_trace|human_review_packet|human_readable_render|rule_governance`。
+- `validate_document_lifecycle.py` 和 `validate_stage_run_result.py` 阻断 `artifacts/`、`artifacts/_control/`、`docs/human-review/`、`docs/human-readable/` 被声明为正式 persist 源。
+- release/交付收尾增加 retained-vs-transient 清单，明确保留、归档和清理策略。
+
+阶段 B：生成器事实源瘦身。
+- 把 `FORMAL_DESIGN_ARTIFACTS`、文档留存策略、risk policy、owner registry 从单体生成器中抽为声明式源或小型模型模块。
+- 修复 `owners.yaml` 重复映射，增加唯一键校验，防止 main/teamwork 双分支继续漂移。
+- 建立 `write_if_changed()` 和 compiled manifest，减少无意义重写和 diff 噪音。
+
+阶段 C：发布与运行时可靠性。
+- 发布脚本增加 staging、manifest、checksum 和 rollback 信息，保持 personal、local-root、Hermes 三种布局同步。
+- compiled runtime index 只保留 discovery 必需字段，完整 skill 内容按需激活。
+- 给路径规范化、发布越界、占位 metadata 和外部分发门禁增加回归测试。
+
+阶段 D：teamwork 分支同步策略。
+- 通用规则从 main 输出：文档生命周期、validator、runtime index、发布器、metadata/schema、CI 门禁。
+- teamwork 只保留团队定制：`PLUGIN_NAME`、display name、团队标准输入、团队专属 eval、模板和 profile。
+- 每次 main 通用能力稳定后，在 teamwork 上按“先 cherry-pick 通用提交，再运行生成器和全量验证，再处理团队差异”的顺序同步；不得把 teamwork 的 `inputs/`、团队 profile、团队特定 HTML/图片资产合回 main。
+
+验收命令：`python3 generate_engineering_assistant_assets.py` 后工作树只出现预期生成差异；随后运行 README 中的 unit、contract、workflow、eval、metadata、manifest 和发布同步校验。
 
 # 13. RACI
 | 事项 | R | A | C | I |

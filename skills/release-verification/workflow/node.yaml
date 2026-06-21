@@ -2,7 +2,7 @@
   "node_id": "release-verification",
   "stage": "release_verification",
   "skill_id": "release-verification",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

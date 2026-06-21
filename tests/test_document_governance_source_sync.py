@@ -54,6 +54,23 @@ class DocumentGovernanceSourceSyncTest(unittest.TestCase):
         self.assertIn("document_number", schema["required"])
         self.assertIn("document_status", schema["required"])
         self.assertIn("retention_policy", schema["required"])
+        self.assertIn("document_class", schema["properties"])
+        self.assertIn("retention_scope", schema["properties"])
+        self.assertIn("canonical_path", schema["properties"])
+        self.assertIn("DG23", standard)
+        self.assertIn("formal_design", standard)
+        self.assertIn("artifacts/_control", standard)
+        self.assertIn("最终项目留存集合", standard)
+
+    def test_document_retention_policy_separates_final_docs_from_agent_workspace(self) -> None:
+        workflow = json.loads((ROOT / "engineering-assistant" / "workflows" / "full-feature-development.yaml").read_text(encoding="utf-8"))
+        policy = workflow["design_governance_policy"]["document_retention_policy"]
+
+        self.assertIn("formal_design", policy["persist_allowed_document_classes"])
+        self.assertIn("agent_workspace", policy["transient_only_document_classes"])
+        self.assertIn("docs/design/", policy["final_project_document_roots"])
+        self.assertIn("artifacts/_control/", policy["agent_workspace_roots"])
+        self.assertIn("研发完成后只保留", policy["completion_rule"])
 
     def test_source_contains_required_information_contract(self) -> None:
         standard_path = ROOT / "engineering-assistant" / "standards" / "required-information-standard.md"
@@ -73,6 +90,85 @@ class DocumentGovernanceSourceSyncTest(unittest.TestCase):
         self.assertIn("request_id", schema["required"])
         self.assertIn("questions", schema["required"])
         self.assertIn("blocking", schema["required"])
+
+    def test_lifecycle_validator_allows_only_formal_docs_to_persist(self) -> None:
+        validator = ROOT / "engineering-assistant" / "scripts" / "validate_document_lifecycle.py"
+        formal_document = {
+            "document_number": "HLD-ORDER-20260621-001",
+            "document_status": "final",
+            "retention_policy": "persist",
+            "retention_scope": "final_project_record",
+            "document_class": "formal_design",
+            "canonical_path": "docs/design/high-level-design.md",
+            "title": "订单概要设计",
+            "owner": "架构师",
+            "source_artifacts": ["artifacts/high-level-design/high-level-design.md"],
+        }
+        agent_trace = {
+            "document_number": "RPT-ORDER-20260621-001",
+            "document_status": "final",
+            "retention_policy": "persist",
+            "retention_scope": "run_scoped",
+            "document_class": "agent_workspace",
+            "canonical_path": "artifacts/_control/workflow-trace.json",
+            "title": "agent 工作痕迹",
+            "owner": "workflow owner",
+            "source_artifacts": ["artifacts/_control/workflow-trace.json"],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            formal_path = Path(temp_dir) / "formal.json"
+            trace_path = Path(temp_dir) / "trace.json"
+            formal_path.write_text(json.dumps(formal_document, ensure_ascii=False), encoding="utf-8")
+            trace_path.write_text(json.dumps(agent_trace, ensure_ascii=False), encoding="utf-8")
+
+            ok = subprocess.run(["python3", str(validator), str(formal_path)], cwd=ROOT, text=True, capture_output=True, check=False)
+            blocked = subprocess.run(["python3", str(validator), str(trace_path)], cwd=ROOT, text=True, capture_output=True, check=False)
+
+        self.assertEqual(0, ok.returncode, ok.stderr + ok.stdout)
+        self.assertNotEqual(0, blocked.returncode)
+        output = blocked.stderr + blocked.stdout
+        self.assertIn("persist 文档必须声明 document_class", output)
+        self.assertIn("artifacts/_control 或 HTML 目录不得作为正式留存源", output)
+
+    def test_stage_result_validator_blocks_persisted_agent_artifacts(self) -> None:
+        validator = ROOT / "engineering-assistant" / "scripts" / "validate_stage_run_result.py"
+        stage_result = {
+            "run_id": "run-001",
+            "skill_id": "high-level-design",
+            "status": "succeeded",
+            "preflight_input_state": "ready",
+            "language": "zh-CN",
+            "document_metadata": {
+                "document_number": "RPT-ORDER-20260621-002",
+                "document_status": "final",
+                "retention_policy": "persist",
+                "retention_scope": "run_scoped",
+                "document_class": "process_trace",
+                "canonical_path": "artifacts/_control/traceability-matrix.json",
+                "title": "追踪矩阵运行证据",
+                "owner": "workflow owner",
+                "source_artifacts": ["artifacts/_control/traceability-matrix.json"],
+            },
+            "artifacts": [],
+            "quality_gates": [],
+            "findings": [],
+            "required_human_reviews": [],
+            "required_information_requests": [],
+        }
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as tmp:
+            json.dump(stage_result, tmp, ensure_ascii=False)
+            tmp_path = Path(tmp.name)
+        try:
+            result = subprocess.run(["python3", str(validator), str(tmp_path)], cwd=ROOT, text=True, capture_output=True, check=False)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stderr + result.stdout
+        self.assertIn("process_trace 只能作为运行期或 agent 工作产物", output)
+        self.assertIn("canonical_path 必须位于正式 docs 目录", output)
 
     def test_generated_contracts_require_proactive_information_requests(self) -> None:
         contract_path = ROOT / "skills" / "detailed-design" / "contract.yaml"

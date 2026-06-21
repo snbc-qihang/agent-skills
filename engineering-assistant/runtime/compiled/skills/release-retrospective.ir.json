@@ -1,6 +1,6 @@
 {
   "skill_id": "release-retrospective",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "stage": "release_retrospective",
   "type": "stage_skill",
   "prompt_pack": {

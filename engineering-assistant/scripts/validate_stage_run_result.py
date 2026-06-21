@@ -8,6 +8,10 @@ VALID_PREFLIGHT_STATES = {"ready", "waiting_for_input", "waiting_for_human_revie
 FORMAL_DESIGN_ARTIFACTS = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
 DOC_NUMBER = re.compile(r"^(REQ|CTX|HLD|DDD|DBD|RDS|MQD|DRR|CQR|CRR|RLP|RVF|RTR|KNO|RPT)-[A-Z0-9][A-Z0-9-]{1,40}-[0-9]{8}-[0-9]{3}$")
 DOC_REQUIRED = ["document_number", "document_status", "retention_policy", "title", "owner", "source_artifacts"]
+PERSIST_ALLOWED_CLASSES = {"formal_design", "formal_decision", "formal_index"}
+TRANSIENT_ONLY_CLASSES = {"run_evidence", "agent_workspace", "process_trace", "human_review_packet", "human_readable_render", "rule_governance"}
+FINAL_PROJECT_ROOTS = ("docs/00-index/", "docs/architecture/", "docs/design/", "docs/decisions/", "docs/release/")
+NON_FINAL_ROOTS = ("artifacts/", "artifacts/_control/", "docs/human-review/", "docs/human-readable/")
 WAITING_STATUSES = {"waiting_for_input", "waiting_for_human_review"}
 BLOCKING_FINDING_SEVERITIES = {"blocker", "major"}
 BLOCKING_GATE_RESULTS = {"block", "blocked", "block_for_completion", "blocked_for_product_completion", "fail", "failed", "error"}
@@ -15,6 +19,27 @@ BLOCKING_GATE_RESULTS = {"block", "blocked", "block_for_completion", "blocked_fo
 
 def artifact_path(artifact):
     return artifact.get("path") or artifact.get("file") or artifact.get("uri") or ""
+
+
+def normalized_path(value: str) -> str:
+    return str(value or "").replace("\\", "/").lstrip("/")
+
+
+def validate_persisted_metadata(result_path: Path, metadata: dict) -> None:
+    if metadata.get("retention_policy") != "persist":
+        return
+    document_class = metadata.get("document_class")
+    canonical_path = normalized_path(metadata.get("canonical_path") or (metadata.get("source_artifacts") or [""])[0])
+    if document_class not in PERSIST_ALLOWED_CLASSES:
+        errors.append(f"{result_path}: persist 文档必须声明 document_class=formal_design|formal_decision|formal_index")
+    if document_class in TRANSIENT_ONLY_CLASSES:
+        errors.append(f"{result_path}: {document_class} 只能作为运行期或 agent 工作产物，不得 persist")
+    if metadata.get("retention_scope") != "final_project_record":
+        errors.append(f"{result_path}: persist 文档必须声明 retention_scope=final_project_record")
+    if not canonical_path.startswith(FINAL_PROJECT_ROOTS):
+        errors.append(f"{result_path}: persist 文档 canonical_path 必须位于正式 docs 目录")
+    if canonical_path.startswith(NON_FINAL_ROOTS):
+        errors.append(f"{result_path}: artifacts/_control 或 HTML 目录不得作为正式留存源")
 
 
 def artifact_kind(artifact):
@@ -117,6 +142,7 @@ for arg in sys.argv[1:]:
         number = str(metadata.get("document_number", ""))
         if number and not DOC_NUMBER.match(number):
             errors.append(f"{path}: document_metadata.document_number 不符合编号规范")
+        validate_persisted_metadata(path, metadata)
         for finding in data.get("findings", []):
             if str(finding.get("severity", "")).lower() in BLOCKING_FINDING_SEVERITIES:
                 errors.append(f"{path}: succeeded 不允许包含 blocker/major finding: {finding.get('id') or finding.get('summary')}")

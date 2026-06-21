@@ -10,3 +10,8 @@
 - [ ] DG8 run artifact 与正式文档目录边界清晰
 - [ ] DG9 正式文档包含 owner、来源、门禁、风险、审批和生命周期
 - [ ] DG10 章节编号由模板统一生成
+- [ ] DG23 document_class 区分 formal_*、run_evidence、agent_workspace、process_trace 和 HTML 类产物
+- [ ] DG24 最终项目留存集合只包含 approved/final + persist + final_project_record 的 formal_* 文档
+- [ ] DG25 artifacts、artifacts/_control、docs/human-review、docs/human-readable 不进入正式留存源集合
+- [ ] DG26 canonical_path 指向 docs/00-index、docs/architecture、docs/design、docs/decisions 或 docs/release
+- [ ] DG27 release/交付收尾生成 retained-vs-transient 清单

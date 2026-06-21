@@ -2,7 +2,7 @@
   "skills": [
     {
       "skill_id": "requirement-intake",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "产品/需求负责人",
       "path": "skills/requirement-intake",
@@ -11,7 +11,7 @@
     },
     {
       "skill_id": "repo-context-miner",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "架构师/资深开发",
       "path": "skills/repo-context-miner",
@@ -20,7 +20,7 @@
     },
     {
       "skill_id": "high-level-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "架构师",
       "path": "skills/high-level-design",
@@ -29,7 +29,7 @@
     },
     {
       "skill_id": "detailed-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "后端开发",
       "path": "skills/detailed-design",
@@ -38,7 +38,7 @@
     },
     {
       "skill_id": "redis-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "架构师",
       "path": "skills/redis-design",
@@ -47,7 +47,7 @@
     },
     {
       "skill_id": "mq-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "架构师",
       "path": "skills/mq-design",
@@ -56,7 +56,7 @@
     },
     {
       "skill_id": "database-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "DBA",
       "path": "skills/database-design",
@@ -65,7 +65,7 @@
     },
     {
       "skill_id": "design-review",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "架构师",
       "path": "skills/design-review",
@@ -74,7 +74,7 @@
     },
     {
       "skill_id": "frontend-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "前端开发",
       "path": "skills/frontend-design",
@@ -83,7 +83,7 @@
     },
     {
       "skill_id": "code-development",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "后端开发",
       "path": "skills/code-development",
@@ -92,7 +92,7 @@
     },
     {
       "skill_id": "frontend-development",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "前端开发",
       "path": "skills/frontend-development",
@@ -101,7 +101,7 @@
     },
     {
       "skill_id": "implementation-controller",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "control_skill",
       "owner": "研发负责人",
       "path": "skills/implementation-controller",
@@ -110,7 +110,7 @@
     },
     {
       "skill_id": "self-test",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "测试负责人",
       "path": "skills/self-test",
@@ -119,7 +119,7 @@
     },
     {
       "skill_id": "code-quality-governor",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "cross_cutting_skill",
       "owner": "研发负责人",
       "path": "skills/code-quality-governor",
@@ -128,7 +128,7 @@
     },
     {
       "skill_id": "code-review",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "研发负责人",
       "path": "skills/code-review",
@@ -137,7 +137,7 @@
     },
     {
       "skill_id": "release-readiness",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "发布负责人",
       "path": "skills/release-readiness",
@@ -146,7 +146,7 @@
     },
     {
       "skill_id": "release-verification",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "SRE",
       "path": "skills/release-verification",
@@ -155,7 +155,7 @@
     },
     {
       "skill_id": "release-retrospective",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "stage_skill",
       "owner": "发布负责人",
       "path": "skills/release-retrospective",
@@ -164,7 +164,7 @@
     },
     {
       "skill_id": "engineering-knowledge-miner",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "cross_cutting_skill",
       "owner": "规范 owner",
       "path": "skills/engineering-knowledge-miner",
@@ -173,7 +173,7 @@
     },
     {
       "skill_id": "skill-quality-auditor",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "audit_skill",
       "owner": "skill owner",
       "path": "skills/skill-quality-auditor",
@@ -182,7 +182,7 @@
     },
     {
       "skill_id": "workflow-orchestrator",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "type": "workflow_skill",
       "owner": "workflow owner",
       "path": "skills/workflow-orchestrator",

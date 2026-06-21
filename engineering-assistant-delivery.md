@@ -449,6 +449,33 @@ Knowledge mining workflow：每周、迭代结束或事故关闭时执行 knowle
 
 阶段 6 治理与规模化：负责人研发负责人；交付版本治理、持续回归、CI/CD 常态化、团队培训、指标看板和周例行知识治理；验收为 registry、eval pass rate、knowledge feedback rate 可追踪。
 
+# 12.1 main 分支优化整改计划
+目标：先在 main 分支修复通用能力骨架，避免插件继续把所有研发过程资料无差别写入目标项目的 `artifacts/` 和 `docs/`；同时为 `teamwork` 分支提供可安全吸收的通用增量，不把团队定制输入、模板和案例反向污染 main。
+
+问题判断：研究报告指出当前仓库已具备完整插件平台雏形，但生成器中心化、owner/metadata 重复、发布回滚和跨平台边界不足。当前最急的问题不是继续增加文档类别，而是给文档生命周期建立硬边界：`artifacts/` 保存运行证据和 agent 工作材料，`docs/` 只承载正式留存、人工审阅入口和只读渲染；研发完成后的项目留存集合只允许确定性、设计性质、已审批或 final 的 Markdown 源文档及索引。
+
+阶段 A：文档留存边界收敛。
+- 增加 `document_class`、`retention_scope`、`canonical_path` 语义，区分 `formal_design|formal_decision|formal_index` 与 `run_evidence|agent_workspace|process_trace|human_review_packet|human_readable_render|rule_governance`。
+- `validate_document_lifecycle.py` 和 `validate_stage_run_result.py` 阻断 `artifacts/`、`artifacts/_control/`、`docs/human-review/`、`docs/human-readable/` 被声明为正式 persist 源。
+- release/交付收尾增加 retained-vs-transient 清单，明确保留、归档和清理策略。
+
+阶段 B：生成器事实源瘦身。
+- 把 `FORMAL_DESIGN_ARTIFACTS`、文档留存策略、risk policy、owner registry 从单体生成器中抽为声明式源或小型模型模块。
+- 修复 `owners.yaml` 重复映射，增加唯一键校验，防止 main/teamwork 双分支继续漂移。
+- 建立 `write_if_changed()` 和 compiled manifest，减少无意义重写和 diff 噪音。
+
+阶段 C：发布与运行时可靠性。
+- 发布脚本增加 staging、manifest、checksum 和 rollback 信息，保持 personal、local-root、Hermes 三种布局同步。
+- compiled runtime index 只保留 discovery 必需字段，完整 skill 内容按需激活。
+- 给路径规范化、发布越界、占位 metadata 和外部分发门禁增加回归测试。
+
+阶段 D：teamwork 分支同步策略。
+- 通用规则从 main 输出：文档生命周期、validator、runtime index、发布器、metadata/schema、CI 门禁。
+- teamwork 只保留团队定制：`PLUGIN_NAME`、display name、团队标准输入、团队专属 eval、模板和 profile。
+- 每次 main 通用能力稳定后，在 teamwork 上按“先 cherry-pick 通用提交，再运行生成器和全量验证，再处理团队差异”的顺序同步；不得把 teamwork 的 `inputs/`、团队 profile、团队特定 HTML/图片资产合回 main。
+
+验收命令：`python3 generate_engineering_assistant_assets.py` 后工作树只出现预期生成差异；随后运行 README 中的 unit、contract、workflow、eval、metadata、manifest 和发布同步校验。
+
 # 13. RACI
 | 事项 | R | A | C | I |
 |---|---|---|---|---|

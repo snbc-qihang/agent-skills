@@ -27,3 +27,8 @@
 - DG20 规则包必须保留 `rule_id`、强度、标签、规则文本、来源路径和行号，方便任务精确回源，而不是全量检索文档。
 - DG21 规范重复不直接凭主观删除，必须先生成 `rule-duplicate-report.json`，再由文档治理任务合并、归档或标记替代关系。
 - DG22 审核 finding 必须引用适用的 `rule_id`；没有读取任务规则包的审核结论无效。
+- DG23 文档必须声明或可推导 `document_class`：正式设计/决策/索引使用 `formal_design|formal_decision|formal_index`，研发过程证据、agent 工作区、trace、人工审阅包和渲染 HTML 使用 transient 类别。
+- DG24 研发完成后的最终项目留存集合只允许 `document_status=approved|final`、`retention_policy=persist`、`retention_scope=final_project_record` 且 `document_class` 为 formal_* 的确定性文档。
+- DG25 `artifacts/`、`artifacts/_control/`、`docs/human-review/`、`docs/human-readable/` 下的内容不得作为最终项目正式留存源；只能作为运行证据、agent 工作材料、人工确认入口或只读渲染。
+- DG26 正式留存 Markdown 的 `canonical_path` 必须位于 `docs/00-index/`、`docs/architecture/`、`docs/design/`、`docs/decisions/` 或 `docs/release/`，不得指向 agent 运行目录。
+- DG27 release/交付收尾必须生成 retained-vs-transient 清单：列出保留文档、运行期证据、清理策略、归档策略和人工审批状态。

@@ -2,7 +2,7 @@
   "node_id": "code-development",
   "stage": "code_development",
   "skill_id": "code-development",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

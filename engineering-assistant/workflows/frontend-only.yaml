@@ -1,6 +1,6 @@
 {
   "workflow_id": "frontend-only",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "states": [
     "pending",
     "running",
@@ -114,6 +114,39 @@
       "workflow-trace.json",
       "resume-point.json"
     ],
+    "document_retention_policy": {
+      "persist_allowed_document_classes": [
+        "formal_design",
+        "formal_decision",
+        "formal_index"
+      ],
+      "transient_only_document_classes": [
+        "run_evidence",
+        "agent_workspace",
+        "process_trace",
+        "human_review_packet",
+        "human_readable_render",
+        "rule_governance"
+      ],
+      "final_project_document_roots": [
+        "docs/00-index/",
+        "docs/architecture/",
+        "docs/design/",
+        "docs/decisions/",
+        "docs/release/"
+      ],
+      "agent_workspace_roots": [
+        "artifacts/",
+        "artifacts/_control/"
+      ],
+      "human_review_roots": [
+        "docs/human-review/"
+      ],
+      "human_readable_render_roots": [
+        "docs/human-readable/"
+      ],
+      "completion_rule": "研发完成后只保留 approved/final + persist + formal_* 的确定性设计/决策/索引文档；run evidence、agent workspace、trace、缺失信息、临时评审和 HTML 审阅包不得进入正式留存集合。"
+    },
     "document_lifecycle_states": [
       "not_started",
       "draft",
@@ -242,7 +275,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -321,7 +354,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -403,7 +436,7 @@
       "node_id": "frontend-design",
       "stage": "frontend_design",
       "skill_id": "frontend-design",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -483,7 +516,7 @@
       "node_id": "frontend-development",
       "stage": "frontend_development",
       "skill_id": "frontend-development",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -563,7 +596,7 @@
       "node_id": "self-test",
       "stage": "self_test",
       "skill_id": "self-test",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -645,7 +678,7 @@
       "node_id": "code-quality-governor",
       "stage": "code_quality",
       "skill_id": "code-quality-governor",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -738,7 +771,7 @@
       "node_id": "code-review",
       "stage": "code_review",
       "skill_id": "code-review",
-      "version": "1.0.0.1",
+      "version": "1.0.0.2",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

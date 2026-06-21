@@ -52,6 +52,29 @@
       "items": {
         "type": "string"
       }
+    },
+    "document_class": {
+      "enum": [
+        "formal_design",
+        "formal_decision",
+        "formal_index",
+        "run_evidence",
+        "agent_workspace",
+        "process_trace",
+        "human_review_packet",
+        "human_readable_render",
+        "rule_governance"
+      ]
+    },
+    "retention_scope": {
+      "enum": [
+        "final_project_record",
+        "run_scoped",
+        "agent_only"
+      ]
+    },
+    "canonical_path": {
+      "type": "string"
     }
   },
   "additionalProperties": true
