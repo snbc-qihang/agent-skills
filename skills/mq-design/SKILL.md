@@ -82,10 +82,13 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 # 团队 MQ 设计规则
 - MQ 设计必须生成独立 `mq-design.xlsx`，不得在主详细设计中展开，也不得用 `mq-design.md` 作为正式正文。
 - 文档必须按 `assets/mq-design-template.xlsx` 组织，至少包含 `生产者` sheet 和 `消费者` sheet。
+- `message-schema.json` 是消息体事实源，必须定义统一 envelope：顶层包含 `issueId`、`configType` 以及与 `configType` 同名的业务对象；不得只在 Excel 自由文本写“消息体内容”。
+- `mq-topic-contract.yaml` 必须与 `message-schema.json`、`mq-design.xlsx` 一致，至少对齐业务消息 key / configType / 生产消费链路。
 - MQ 只用于削峰填谷、异步执行和服务解耦；进程内异步不默认使用 MQ。
 - 一个服务一个队列，一个队列可绑定多个 Exchange/routingKey；队列默认建议仲裁队列，非仲裁队列需要评审。
 - 必须设计死信队列、幂等策略、重试策略、死信策略和回放策略。
 - 消息体默认不超过 10KB，不得承载大查询条件、文件内容或敏感明文；超过 10KB 必须评审。
+- `pendingOrderExportTask` 必须定义 `taskId`、`taskType`、`businessType`、`eventTime` 四个必填字段，并保持 `configType == pendingOrderExportTask`。
 - 回放生产消息、删除或重命名 topic/queue 必须人工审批。
 
 
@@ -108,6 +111,8 @@ description: Use when the request is about 设计 MQ 主题、消息体、生产
 - M12 mq-design.xlsx 必须至少包含生产者 sheet 和消费者 sheet；主详细设计只引用该专项，不展开 MQ 字段
 - M13 消息体不得承载大查询条件、文件内容或敏感明文
 - M14 回放生产消息、删除或重命名 topic/queue 必须人工审批
+- M15 message-schema.json 必须定义统一 envelope：顶层包含 issueId、configType 以及与 configType 同名的业务对象；不得只在 Excel 自由文本描述消息体
+- M16 mq-topic-contract.yaml、message-schema.json 与 mq-design.xlsx 的业务消息 key / configType / 消费链路必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段
 5. 确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.xlsx`，复制 Excel 工作簿文件副本，只在模板已有空白数据单元格内填充输入事实，再生成全部声明产物。
 6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
 7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。

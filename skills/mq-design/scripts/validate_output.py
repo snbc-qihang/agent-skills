@@ -83,6 +83,24 @@ POLICY = {
     "消息key",
     "运维监控"
   ],
+  "message_schema_root_fields": [
+    "issueId",
+    "configType"
+  ],
+  "message_schema_entry_collection_keys": [
+    "messages",
+    "schemas",
+    "items",
+    "entries"
+  ],
+  "message_schema_required_config_fields": {
+    "pendingOrderExportTask": [
+      "taskId",
+      "taskType",
+      "businessType",
+      "eventTime"
+    ]
+  },
   "formal_outputs": [
     "mq-design.xlsx",
     "mq-topic-contract.yaml",
@@ -187,7 +205,15 @@ def artifact_texts(payload_path, payload):
 
 
 def unresolved_markers(text):
-    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+    markers = []
+    for marker in POLICY.get("unresolved_markers", []):
+        if marker in ('{', '}'):
+            if re.search(r"\{[^{}\n]{1,80}\}", text):
+                markers.append(marker)
+            continue
+        if marker in text:
+            markers.append(marker)
+    return markers
 
 
 def candidate_project_roots(payload_path):
@@ -362,6 +388,75 @@ def mermaid_blocks(text, diagram_type):
     return [match.group(1) for match in re.finditer(pattern, text)]
 
 
+def requires_database_er_diagram(text, trigger_terms):
+    if any(term in text for term in ["CREATE TABLE", "ALTER TABLE", "DROP TABLE", "本地读模型", "表结构"]):
+        return True
+    if re.search(r"\bt_[a-zA-Z0-9_]+\b", text):
+        return True
+    if "主表" in text and any(term in text for term in ["明细", "关联表", "从表"]):
+        return True
+    has_database_noun = any(term in text for term in ["数据库", "DB"])
+    has_database_action = any(term in text for term in ["查询", "写入", "更新", "删除", "upsert", "事务", "回滚", "提交"])
+    if has_database_noun and has_database_action:
+        return True
+    return any(term in text for term in trigger_terms)
+
+
+def er_diagram_entities(block):
+    names = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("%%"):
+            continue
+        relation = re.match(r"^`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s+[|}{oO-]+\s+`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s*:", line)
+        if relation:
+            names.extend([normalize_table_name(relation.group(1)), normalize_table_name(relation.group(2))])
+            continue
+        entity = re.match(r"^`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s*\{$", line)
+        if entity:
+            names.append(normalize_table_name(entity.group(1)))
+    deduped = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
+def er_diagram_has_relationship(block):
+    return bool(re.search(r"(?m)^[^\n]+[|}{oO-]+[^\n]+:", block))
+
+
+def confirmed_database_tables(text):
+    names = []
+    names.extend(table_group_members(text))
+    for match in re.finditer(r"(?m)^####\s+4\.2\.\d+\s+(.+)$", text):
+        names.extend(extract_table_names(match.group(1)))
+    for match in re.finditer(r"(?m)^\|\s*设计对象\s*\|\s*(.+?)\|", text):
+        names.extend(extract_table_names(match.group(1)))
+    names.extend(create_table_names(text))
+    deduped = []
+    for name in names:
+        normalized = normalize_table_name(name)
+        if normalized and normalized not in deduped:
+            deduped.append(normalized)
+    return deduped
+
+
+def normalized_nonempty_lines(text):
+    return {re.sub(r"\s+", " ", line.strip()) for line in text.splitlines() if line.strip()}
+
+
+def protected_template_lines(text):
+    protected = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or "{" in line or "YYYY-MM-DD" in line:
+            continue
+        if line.startswith((">", "##", "###", "####", "**", "- ")) or line in {"强耦合表组模式标题规则：", "文档结束"}:
+            protected.append(re.sub(r"\s+", " ", line))
+    return protected
+
+
 def service_sequence_participants(block):
     participants = {}
     for raw in block.splitlines():
@@ -473,7 +568,7 @@ def has_confirmed_participant_evidence(item):
     if not isinstance(item, dict):
         return False
     status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
-    if status in ('unknown', 'proposed', 'assumed', 'todo', 'pending', 'pending_confirmation', 'unconfirmed', 'missing'):
+    if status in {"unknown", "proposed", "assumed", "todo", "pending", "pending_confirmation", "unconfirmed", "missing"}:
         return False
     evidence_fields = [
         "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
@@ -481,7 +576,58 @@ def has_confirmed_participant_evidence(item):
     ]
     if any(item.get(field) for field in evidence_fields):
         return True
-    return status in ('confirmed', 'matched', 'verified', 'existing')
+    return status in {"confirmed", "matched", "verified", "existing"}
+
+
+def message_schema_entries(data):
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    if any(field in data for field in ["issueId", "configType", "properties"]):
+        return [data]
+    for key in POLICY.get("message_schema_entry_collection_keys", []):
+        raw = data.get(key)
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)]
+        if isinstance(raw, dict):
+            entries = []
+            for config_type, value in raw.items():
+                if isinstance(value, dict):
+                    entry = dict(value)
+                    entry.setdefault("configType", config_type)
+                    entries.append(entry)
+            if entries:
+                return entries
+    return []
+
+
+def schema_properties(entry):
+    if isinstance(entry, dict) and isinstance(entry.get("properties"), dict):
+        return entry.get("properties") or {}
+    return {}
+
+
+def schema_required_fields(node):
+    if isinstance(node, dict) and isinstance(node.get("required"), list):
+        return {str(item) for item in node.get("required", []) if isinstance(item, str)}
+    return set()
+
+
+def schema_config_type(entry, root_properties):
+    config_value = entry.get("configType") if isinstance(entry, dict) else None
+    if isinstance(config_value, str) and config_value.strip():
+        return config_value.strip()
+    config_node = root_properties.get("configType") if isinstance(root_properties, dict) else None
+    if isinstance(config_node, dict):
+        for key in ["const", "default", "example"]:
+            value = config_node.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        enum_value = config_node.get("enum")
+        if isinstance(enum_value, list) and len(enum_value) == 1 and isinstance(enum_value[0], str) and enum_value[0].strip():
+            return enum_value[0].strip()
+    return ""
 
 
 def fail(errors):
@@ -695,6 +841,97 @@ def _validate_required_sheet_values(errors, rows, header, required_fields, sheet
             errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 第 {row_number} 行缺少必填业务值: " + "、".join(missing_values))
 
 
+def _sheet_row_dicts(rows, header):
+    header_map = _header_index_map(header)
+    row_dicts = []
+    for row_number, values in _non_empty_rows(rows):
+        item = {"_row_number": row_number}
+        for key, index in header_map.items():
+            item[key] = values[index].strip() if index < len(values) and isinstance(values[index], str) else (str(values[index]).strip() if index < len(values) else "")
+        row_dicts.append(item)
+    return row_dicts
+
+
+def _validate_message_schema(errors, payload_path, payload, producer_rows, consumer_rows):
+    schema = read_json_artifact(payload_path, payload, "message-schema.json")
+    if schema is None:
+        errors.append("mq-design 必须登记 message-schema.json，且文件必须是合法 JSON")
+        return []
+    entries = message_schema_entries(schema)
+    if not entries:
+        errors.append("message-schema.json 必须至少包含一个消息 envelope 定义")
+        return []
+    config_types = []
+    for index, entry in enumerate(entries, start=1):
+        root_properties = schema_properties(entry)
+        root_required = schema_required_fields(entry)
+        if root_properties:
+            for field in POLICY["message_schema_root_fields"]:
+                if field not in root_properties:
+                    errors.append(f"message-schema.json 第 {index} 个消息缺少根字段定义: {field}")
+                elif root_required and field not in root_required:
+                    errors.append(f"message-schema.json 第 {index} 个消息未将根字段声明为必填: {field}")
+        else:
+            for field in POLICY["message_schema_root_fields"]:
+                if field not in entry:
+                    errors.append(f"message-schema.json 第 {index} 个消息缺少根字段: {field}")
+        config_type = schema_config_type(entry, root_properties)
+        if not config_type:
+            errors.append(f"message-schema.json 第 {index} 个消息缺少可识别的 configType")
+            continue
+        config_types.append(config_type)
+        body_node = root_properties.get(config_type) if root_properties else entry.get(config_type)
+        if body_node is None:
+            errors.append(f"message-schema.json 第 {index} 个消息缺少与 configType 同名的业务对象: {config_type}")
+            continue
+        required_fields = POLICY["message_schema_required_config_fields"].get(config_type, [])
+        if isinstance(body_node, dict) and "properties" in body_node:
+            body_properties = body_node.get("properties") if isinstance(body_node.get("properties"), dict) else {}
+            body_required = schema_required_fields(body_node)
+            for field in required_fields:
+                if field not in body_properties:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 缺少业务字段定义: {field}")
+                elif body_required and field not in body_required:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 未将字段声明为必填: {field}")
+        elif isinstance(body_node, dict):
+            for field in required_fields:
+                if field not in body_node:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 缺少业务字段: {field}")
+        else:
+            errors.append(f"message-schema.json 第 {index} 个 {config_type} 业务对象必须是 object")
+    if producer_rows:
+        for row in producer_rows:
+            body_text = row.get("消息体内容", "")
+            if "issueId" not in body_text or "configType" not in body_text:
+                errors.append(f"mq-design.xlsx 的生产者 sheet 第 {row['_row_number']} 行消息体内容必须明确统一 envelope（issueId/configType）")
+            if config_types and not any(config_type in body_text for config_type in config_types):
+                errors.append(f"mq-design.xlsx 的生产者 sheet 第 {row['_row_number']} 行消息体内容必须与 message-schema.json 的 configType 一致")
+    if consumer_rows and config_types:
+        for row in consumer_rows:
+            monitoring = row.get("运维监控", "")
+            if not monitoring:
+                continue
+    return sorted(set(config_types))
+
+
+def _validate_topic_contract(errors, payload_path, payload, config_types, producer_rows, consumer_rows):
+    topic_contract = read_artifact(payload_path, payload, "mq-topic-contract.yaml")
+    if not topic_contract:
+        errors.append("mq-design 必须登记 mq-topic-contract.yaml，且文件必须可读")
+        return
+    for config_type in config_types:
+        if config_type not in topic_contract:
+            errors.append("mq-topic-contract.yaml 缺少与 message-schema.json 一致的 configType: " + config_type)
+    for row in producer_rows:
+        message_key = row.get("业务消息key", "")
+        if message_key and message_key not in topic_contract:
+            errors.append(f"mq-topic-contract.yaml 缺少生产者业务消息 key: {message_key}")
+    for row in consumer_rows:
+        message_key = row.get("消息key", "")
+        if message_key and message_key not in topic_contract:
+            errors.append(f"mq-topic-contract.yaml 缺少消费者消息 key: {message_key}")
+
+
 def validate_output(payload_path, payload):
     errors = []
     workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
@@ -719,6 +956,10 @@ def validate_output(payload_path, payload):
             errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
     _validate_required_sheet_values(errors, sheets.get("生产者", {}), producer_header, POLICY.get("producer_required_value_fields", []), "生产者")
     _validate_required_sheet_values(errors, sheets.get("消费者", {}), consumer_header, POLICY.get("consumer_required_value_fields", []), "消费者")
+    producer_rows = _sheet_row_dicts(sheets.get("生产者", {}), producer_header)
+    consumer_rows = _sheet_row_dicts(sheets.get("消费者", {}), consumer_header)
+    config_types = _validate_message_schema(errors, payload_path, payload, producer_rows, consumer_rows)
+    _validate_topic_contract(errors, payload_path, payload, config_types, producer_rows, consumer_rows)
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:

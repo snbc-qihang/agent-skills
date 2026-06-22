@@ -93,6 +93,8 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - 查询 / 导出流程必须明确登录态或数据范围获取、强制合并可见范围、参数校验、DB 查询 / 汇总 / 分批导出、导出上限、文件生成失败处理。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
 - 每个 `3.1.x` 流程后都必须紧跟异常场景表；异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
+- 只要流程涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用，就必须补充 Mermaid `erDiagram`；`erDiagram` 只能使用 `database-design.md` 已确认的真实表名，禁止写“订单表/明细表/临时表”等抽象命名。
+- 多表场景下 `erDiagram` 必须体现主表/明细表或关联表之间的关系；单表场景也必须体现真实表名，不能只在文字里提表名。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 
@@ -116,6 +118,7 @@ description: Use when the request is about 将概要设计拆解为可实现的�
 - D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异
 - D13 业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态
 - D14 流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理
+- D15 详细设计只要涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用，就必须补充 Mermaid erDiagram，且图中只能出现 database-design.md 已确认的真实表名
 - I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi
 - I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD
 - I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口

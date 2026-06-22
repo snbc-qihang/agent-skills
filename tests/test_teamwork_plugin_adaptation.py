@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "teamwork-engineering-assistant"
-PLUGIN_VERSION = "1.0.0.2"
+PLUGIN_VERSION = "1.0.0.3"
 
 
 class TeamworkPluginAdaptationTests(unittest.TestCase):

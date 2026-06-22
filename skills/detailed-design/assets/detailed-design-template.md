@@ -79,6 +79,31 @@ classDiagram
 
 类图说明：
 
+### 3.3. 数据库图（涉库场景必填）
+
+```mermaid
+erDiagram
+    t_order ||--o{ t_order_item : contains
+    t_order {
+        BIGINT id
+        VARCHAR order_no
+        BIGINT tenant_id
+        SMALLINT status
+    }
+    t_order_item {
+        BIGINT id
+        BIGINT order_id
+        VARCHAR sku_code
+        DECIMAL amount
+    }
+```
+
+数据库图说明：
+
+- 涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用时，必须补充 `erDiagram`。
+- `erDiagram` 只能出现 `database-design.md` 已确认的真实表名，不得写“订单表/明细表/临时表”等抽象命名。
+- 多表场景必须体现主表/明细表或关联表之间的关系；单表场景也必须体现真实表名。
+
 ## 4. 数据库设计
 
 | 设计项 | 关联文档 | 说明 |

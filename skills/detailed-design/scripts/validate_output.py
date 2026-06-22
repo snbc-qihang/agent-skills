@@ -104,6 +104,32 @@ POLICY = {
     "port",
     "adapter"
   ],
+  "database_trigger_terms": [
+    "数据库查询",
+    "DB 查询",
+    "DB写入",
+    "DB 写入",
+    "本地读模型",
+    "主表",
+    "明细表",
+    "关联表",
+    "DDL",
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE",
+    "表结构"
+  ],
+  "abstract_database_terms": [
+    "订单表",
+    "明细表",
+    "临时表",
+    "日志表",
+    "记录表",
+    "配置表",
+    "规则表",
+    "主表",
+    "从表"
+  ],
   "specialty_docs": {
     "database-design.md": "数据库设计",
     "mq-design.xlsx": "MQ 设计",
@@ -257,7 +283,15 @@ def artifact_texts(payload_path, payload):
 
 
 def unresolved_markers(text):
-    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+    markers = []
+    for marker in POLICY.get("unresolved_markers", []):
+        if marker in ('{', '}'):
+            if re.search(r"\{[^{}\n]{1,80}\}", text):
+                markers.append(marker)
+            continue
+        if marker in text:
+            markers.append(marker)
+    return markers
 
 
 def candidate_project_roots(payload_path):
@@ -432,6 +466,75 @@ def mermaid_blocks(text, diagram_type):
     return [match.group(1) for match in re.finditer(pattern, text)]
 
 
+def requires_database_er_diagram(text, trigger_terms):
+    if any(term in text for term in ["CREATE TABLE", "ALTER TABLE", "DROP TABLE", "本地读模型", "表结构"]):
+        return True
+    if re.search(r"\bt_[a-zA-Z0-9_]+\b", text):
+        return True
+    if "主表" in text and any(term in text for term in ["明细", "关联表", "从表"]):
+        return True
+    has_database_noun = any(term in text for term in ["数据库", "DB"])
+    has_database_action = any(term in text for term in ["查询", "写入", "更新", "删除", "upsert", "事务", "回滚", "提交"])
+    if has_database_noun and has_database_action:
+        return True
+    return any(term in text for term in trigger_terms)
+
+
+def er_diagram_entities(block):
+    names = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("%%"):
+            continue
+        relation = re.match(r"^`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s+[|}{oO-]+\s+`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s*:", line)
+        if relation:
+            names.extend([normalize_table_name(relation.group(1)), normalize_table_name(relation.group(2))])
+            continue
+        entity = re.match(r"^`?([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff\.]*)`?\s*\{$", line)
+        if entity:
+            names.append(normalize_table_name(entity.group(1)))
+    deduped = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
+def er_diagram_has_relationship(block):
+    return bool(re.search(r"(?m)^[^\n]+[|}{oO-]+[^\n]+:", block))
+
+
+def confirmed_database_tables(text):
+    names = []
+    names.extend(table_group_members(text))
+    for match in re.finditer(r"(?m)^####\s+4\.2\.\d+\s+(.+)$", text):
+        names.extend(extract_table_names(match.group(1)))
+    for match in re.finditer(r"(?m)^\|\s*设计对象\s*\|\s*(.+?)\|", text):
+        names.extend(extract_table_names(match.group(1)))
+    names.extend(create_table_names(text))
+    deduped = []
+    for name in names:
+        normalized = normalize_table_name(name)
+        if normalized and normalized not in deduped:
+            deduped.append(normalized)
+    return deduped
+
+
+def normalized_nonempty_lines(text):
+    return {re.sub(r"\s+", " ", line.strip()) for line in text.splitlines() if line.strip()}
+
+
+def protected_template_lines(text):
+    protected = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or "{" in line or "YYYY-MM-DD" in line:
+            continue
+        if line.startswith((">", "##", "###", "####", "**", "- ")) or line in {"强耦合表组模式标题规则：", "文档结束"}:
+            protected.append(re.sub(r"\s+", " ", line))
+    return protected
+
+
 def service_sequence_participants(block):
     participants = {}
     for raw in block.splitlines():
@@ -543,7 +646,7 @@ def has_confirmed_participant_evidence(item):
     if not isinstance(item, dict):
         return False
     status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
-    if status in ('unknown', 'proposed', 'assumed', 'todo', 'pending', 'pending_confirmation', 'unconfirmed', 'missing'):
+    if status in {"unknown", "proposed", "assumed", "todo", "pending", "pending_confirmation", "unconfirmed", "missing"}:
         return False
     evidence_fields = [
         "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
@@ -551,7 +654,58 @@ def has_confirmed_participant_evidence(item):
     ]
     if any(item.get(field) for field in evidence_fields):
         return True
-    return status in ('confirmed', 'matched', 'verified', 'existing')
+    return status in {"confirmed", "matched", "verified", "existing"}
+
+
+def message_schema_entries(data):
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    if any(field in data for field in ["issueId", "configType", "properties"]):
+        return [data]
+    for key in POLICY.get("message_schema_entry_collection_keys", []):
+        raw = data.get(key)
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)]
+        if isinstance(raw, dict):
+            entries = []
+            for config_type, value in raw.items():
+                if isinstance(value, dict):
+                    entry = dict(value)
+                    entry.setdefault("configType", config_type)
+                    entries.append(entry)
+            if entries:
+                return entries
+    return []
+
+
+def schema_properties(entry):
+    if isinstance(entry, dict) and isinstance(entry.get("properties"), dict):
+        return entry.get("properties") or {}
+    return {}
+
+
+def schema_required_fields(node):
+    if isinstance(node, dict) and isinstance(node.get("required"), list):
+        return {str(item) for item in node.get("required", []) if isinstance(item, str)}
+    return set()
+
+
+def schema_config_type(entry, root_properties):
+    config_value = entry.get("configType") if isinstance(entry, dict) else None
+    if isinstance(config_value, str) and config_value.strip():
+        return config_value.strip()
+    config_node = root_properties.get("configType") if isinstance(root_properties, dict) else None
+    if isinstance(config_node, dict):
+        for key in ["const", "default", "example"]:
+            value = config_node.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        enum_value = config_node.get("enum")
+        if isinstance(enum_value, list) and len(enum_value) == 1 and isinstance(enum_value[0], str) and enum_value[0].strip():
+            return enum_value[0].strip()
+    return ""
 
 
 def fail(errors):
@@ -621,6 +775,34 @@ def validate_output(payload_path, payload):
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:
         errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
+    if requires_database_er_diagram(text, POLICY["database_trigger_terms"]):
+        er_blocks = mermaid_blocks(text, "erDiagram")
+        if not er_blocks:
+            errors.append("涉及数据库读写/事务/本地读模型/表结构时，detailed-design.md 必须包含 erDiagram")
+        database_design = read_artifact(payload_path, payload, "database-design.md")
+        confirmed_tables = confirmed_database_tables(database_design) if database_design else []
+        if not confirmed_tables:
+            errors.append("涉及数据库图校验时，database-design.md 必须确认真实表名")
+        diagram_tables = []
+        for index, block in enumerate(er_blocks, start=1):
+            block_tables = er_diagram_entities(block)
+            if not block_tables:
+                errors.append(f"第 {index} 个 erDiagram 必须体现真实表名")
+                continue
+            diagram_tables.extend(block_tables)
+            for table_name in block_tables:
+                if any(term in table_name for term in POLICY["abstract_database_terms"]):
+                    errors.append(f"第 {index} 个 erDiagram 使用了抽象表名，必须替换为真实表名: {table_name}")
+                elif confirmed_tables and normalize_table_name(table_name) not in confirmed_tables:
+                    errors.append(f"第 {index} 个 erDiagram 表名未在 database-design.md 确认: {table_name}")
+        matched_tables = sorted({normalize_table_name(name) for name in diagram_tables if normalize_table_name(name) in confirmed_tables})
+        if confirmed_tables and not matched_tables:
+            errors.append("erDiagram 未体现 database-design.md 中已确认的真实表名")
+        if len(confirmed_tables) >= 2:
+            if len(matched_tables) < 2:
+                errors.append("多表场景下 erDiagram 必须至少体现两张真实表")
+            if er_blocks and not any(er_diagram_has_relationship(block) for block in er_blocks):
+                errors.append("多表场景下 erDiagram 必须体现主表/明细表或关联表之间的关系")
     if is_mq_db_redis_flow(text):
         for label, terms in POLICY["mq_db_redis_required_terms"].items():
             if not any(term in text for term in terms):

@@ -15,3 +15,5 @@
 - M12 mq-design.xlsx 必须至少包含生产者 sheet 和消费者 sheet；主详细设计只引用该专项，不展开 MQ 字段
 - M13 消息体不得承载大查询条件、文件内容或敏感明文
 - M14 回放生产消息、删除或重命名 topic/queue 必须人工审批
+- M15 message-schema.json 必须定义统一 envelope：顶层包含 issueId、configType 以及与 configType 同名的业务对象；不得只在 Excel 自由文本描述消息体
+- M16 mq-topic-contract.yaml、message-schema.json 与 mq-design.xlsx 的业务消息 key / configType / 消费链路必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段

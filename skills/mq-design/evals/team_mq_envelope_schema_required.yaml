@@ -1,0 +1,82 @@
+{
+  "id": "mq-design-team_mq_envelope_schema_required",
+  "name": "MQ Design MQ 设计必须输出统一 envelope 的 message-schema",
+  "case_type": "team_mq_envelope_schema_required",
+  "scenario": {
+    "title": "MQ 设计必须输出统一 envelope 的 message-schema",
+    "material": "用户要求所有 MQ 消息体统一为 issueId + configType + configType 同名业务对象。mq-design.xlsx 的消息体内容、mq-topic-contract.yaml 和 message-schema.json 必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段。",
+    "system_scope": "目标业务系统 + 目标客户端系统",
+    "team_rule_refs": [
+      "M12",
+      "M15",
+      "M16"
+    ],
+    "risk_focus": [
+      "message-schema.json",
+      "统一 envelope",
+      "configType",
+      "topic contract 一致性"
+    ],
+    "forbidden_behavior": [
+      "缺少 message-schema.json",
+      "消息体只写自然语言不写 issueId/configType",
+      "configType 与业务对象 key 不一致",
+      "pendingOrderExportTask 缺少必填字段"
+    ]
+  },
+  "input": {
+    "stage_run_request": {
+      "run_id": "team-doc-eval-001",
+      "workflow_id": "team-doc-eval-workflow",
+      "node_id": "mq-design",
+      "skill_id": "mq-design",
+      "mode": "standalone",
+      "inputs": {
+        "detailed-design.md": "provided: 用户要求所有 MQ 消息体统一为 issueId + configType + configType 同名业务对象。mq-design.xlsx 的消息体内容、mq-topic-contract.yaml 和 message-schema.json 必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段。"
+      },
+      "artifacts": {},
+      "context": {
+        "risk_policy": "team-default",
+        "team_rule_refs": [
+          "M12",
+          "M15",
+          "M16"
+        ],
+        "expected_gate_decision": "require_human_review"
+      },
+      "requested_by": "eval",
+      "approval_context": {}
+    }
+  },
+  "expected_behavior": "按团队详细设计拆分规范输出产物，主文档不混入证据、选型、专项展开或发布灰度章节，并用确定性校验阻断违规内容。",
+  "expected_gate_decision": "require_human_review",
+  "expected_status": "waiting_for_human_review",
+  "pass_criteria": [
+    "StageRunResult status 合法",
+    "StageRunResult 必须包含 preflight_input_state，且 formal_generation 入口条件必须是 preflight_input_state == ready",
+    "未指定 language 时必须询问用户选择 zh-CN 或 en",
+    "正式 MQ Excel 文档必须包含 document_metadata.document_number、document_status、retention_policy",
+    "required_information_requests 在输入缺失时必须包含 questions",
+    "缺失 blocking 信息时必须先暂停在 waiting_for_input，并生成 docs/human-review/ 可填写 HTML 审阅包",
+    "blocking 信息补齐并写回 StageRunRequest.context 或 artifact index 前，不得生成或登记正式阶段 Markdown/Excel/JSON 产物",
+    "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
+    "forbidden_behavior 未出现在输出决策中",
+    "生成正式 MQ Excel 文档前必须先读取对应 xlsx template",
+    "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+    "mq-design.xlsx 必须按 assets/mq-design-template.xlsx 生成",
+    "MQ 设计必须包含生产者 sheet 和消费者 sheet，列头与 xxxMQ设计.xlsx 一致",
+    "必须定义死信、幂等、重试和回放策略；超过 10KB 或回放生产消息必须 waiting_for_human_review"
+  ],
+  "severity_when_failed": "critical",
+  "grader": {
+    "type": "deterministic",
+    "rubric": "校验团队详细设计拆分规则、专项模板、流程图、UML、人工评审和 StageRunResult artifact 登记。"
+  },
+  "required_artifacts": [
+    "mq-design.xlsx",
+    "mq-topic-contract.yaml",
+    "message-schema.json",
+    "mq-risk-report.json"
+  ]
+}

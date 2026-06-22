@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
-PLUGIN_VERSION = "1.0.0.2"
+PLUGIN_VERSION = "1.0.0.3"
 PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
@@ -265,6 +265,34 @@ DETAILED_DESIGN_DDD_TERMS = [
     "Template",
     "port",
     "adapter",
+]
+
+DETAILED_DESIGN_DATABASE_TRIGGER_TERMS = [
+    "数据库查询",
+    "DB 查询",
+    "DB写入",
+    "DB 写入",
+    "本地读模型",
+    "主表",
+    "明细表",
+    "关联表",
+    "DDL",
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE",
+    "表结构",
+]
+
+DETAILED_DESIGN_ABSTRACT_DATABASE_TERMS = [
+    "订单表",
+    "明细表",
+    "临时表",
+    "日志表",
+    "记录表",
+    "配置表",
+    "规则表",
+    "主表",
+    "从表",
 ]
 
 DETAILED_DESIGN_SPECIALTY_DOCS = {
@@ -543,6 +571,12 @@ MQ_CONSUMER_REQUIRED_VALUE_FIELDS = [
     "消息key",
     "运维监控",
 ]
+
+MQ_MESSAGE_SCHEMA_ROOT_FIELDS = ["issueId", "configType"]
+MQ_MESSAGE_SCHEMA_ENTRY_COLLECTION_KEYS = ["messages", "schemas", "items", "entries"]
+MQ_MESSAGE_SCHEMA_REQUIRED_CONFIG_FIELDS = {
+    "pendingOrderExportTask": ["taskId", "taskType", "businessType", "eventTime"],
+}
 
 COMMON_STATES = [
     "pending",
@@ -1273,6 +1307,7 @@ SKILLS = [
             "D12 详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异",
             "D13 业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态",
             "D14 流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理",
+            "D15 详细设计只要涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用，就必须补充 Mermaid erDiagram，且图中只能出现 database-design.md 已确认的真实表名",
             "I1 路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi",
             "I2 接口必须有充分业务理由，禁止 API 简单封装 DB CRUD",
             "I3 一个接口只负责一个业务功能，禁止随意加参数或合并职责不同接口",
@@ -1357,6 +1392,8 @@ SKILLS = [
             "M12 mq-design.xlsx 必须至少包含生产者 sheet 和消费者 sheet；主详细设计只引用该专项，不展开 MQ 字段",
             "M13 消息体不得承载大查询条件、文件内容或敏感明文",
             "M14 回放生产消息、删除或重命名 topic/queue 必须人工审批",
+            "M15 message-schema.json 必须定义统一 envelope：顶层包含 issueId、configType 以及与 configType 同名的业务对象；不得只在 Excel 自由文本描述消息体",
+            "M16 mq-topic-contract.yaml、message-schema.json 与 mq-design.xlsx 的业务消息 key / configType / 消费链路必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段",
         ],
     },
     {
@@ -2369,6 +2406,8 @@ def team_document_note(skill: dict) -> str:
 - 查询 / 导出流程必须明确登录态或数据范围获取、强制合并可见范围、参数校验、DB 查询 / 汇总 / 分批导出、导出上限、文件生成失败处理。
 - 流程设计说明必须把业务规则、校验规则、事务边界、幂等与一致性、异常场景、日志要求以及取消、重试、补偿、文件清理等合并到对应流程下。
 - 每个 `3.1.x` 流程后都必须紧跟异常场景表；异常场景必须用表格列出场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。
+- 只要流程涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用，就必须补充 Mermaid `erDiagram`；`erDiagram` 只能使用 `database-design.md` 已确认的真实表名，禁止写“订单表/明细表/临时表”等抽象命名。
+- 多表场景下 `erDiagram` 必须体现主表/明细表或关联表之间的关系；单表场景也必须体现真实表名，不能只在文字里提表名。
 - 出现 DDD、聚合根、领域服务、application/domain/infrastructure 分层、port/adapter、SDK 模板方法、Handler、Strategy、Template 等设计取向时，主文档必须补充 Mermaid `classDiagram`。
 - 存在 DDL、MQ 新队列或 topic、Redis 新 Key 时，`StageRunResult.status` 必须为 `waiting_for_human_review`，不得直接 `succeeded`。
 """
@@ -2377,6 +2416,7 @@ def team_document_note(skill: dict) -> str:
 # 团队数据库设计规则
 - 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
 - OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。生成流程不得用摘要式数据库设计替代模板正文；如果文档行数、章节集合或固定表格列头明显少于模板，必须视为裁剪模板并 `blocked`。
+- 模板中的固定说明文字、禁止说明、编写要点、示例标题、方言差异提示、编写要求、契约含义、原则说明和“文档结束”等固定文本不得同义改写或删除；只允许填充模板预留的业务内容。
 - 当需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入“强耦合表组模式”，不得生成单表或混合字段池。
 - 强耦合表组模式下，文档标题必须使用 `<业务对象>表组 关系型（OLTP）详细设计`；`设计对象` 必须写成 `强耦合表组：表1、表2、表3...`；`文档定位` 必须明确对象类型，例如 `主表 + 明细表 + 规则表 + 领取主表 + 领取明细表`。
 - 强耦合表组模式下必须生成 `### 2.4 强耦合表组说明`，列头固定为 `成员表 | 角色 | 与主表关系 | 同事务要求 | 备注`；`### 3.1 表的业务职责` 必须按表列出业务职责和唯一事实来源。
@@ -2409,10 +2449,13 @@ def team_document_note(skill: dict) -> str:
 # 团队 MQ 设计规则
 - MQ 设计必须生成独立 `mq-design.xlsx`，不得在主详细设计中展开，也不得用 `mq-design.md` 作为正式正文。
 - 文档必须按 `assets/mq-design-template.xlsx` 组织，至少包含 `生产者` sheet 和 `消费者` sheet。
+- `message-schema.json` 是消息体事实源，必须定义统一 envelope：顶层包含 `issueId`、`configType` 以及与 `configType` 同名的业务对象；不得只在 Excel 自由文本写“消息体内容”。
+- `mq-topic-contract.yaml` 必须与 `message-schema.json`、`mq-design.xlsx` 一致，至少对齐业务消息 key / configType / 生产消费链路。
 - MQ 只用于削峰填谷、异步执行和服务解耦；进程内异步不默认使用 MQ。
 - 一个服务一个队列，一个队列可绑定多个 Exchange/routingKey；队列默认建议仲裁队列，非仲裁队列需要评审。
 - 必须设计死信队列、幂等策略、重试策略、死信策略和回放策略。
 - 消息体默认不超过 10KB，不得承载大查询条件、文件内容或敏感明文；超过 10KB 必须评审。
+- `pendingOrderExportTask` 必须定义 `taskId`、`taskType`、`businessType`、`eventTime` 四个必填字段，并保持 `configType == pendingOrderExportTask`。
 - 回放生产消息、删除或重命名 topic/queue 必须人工审批。
 """
     return ""
@@ -3123,6 +3166,31 @@ classDiagram
 
 类图说明：
 
+### 3.3. 数据库图（涉库场景必填）
+
+```mermaid
+erDiagram
+    t_order ||--o{ t_order_item : contains
+    t_order {
+        BIGINT id
+        VARCHAR order_no
+        BIGINT tenant_id
+        SMALLINT status
+    }
+    t_order_item {
+        BIGINT id
+        BIGINT order_id
+        VARCHAR sku_code
+        DECIMAL amount
+    }
+```
+
+数据库图说明：
+
+- 涉及数据库读写、事务、本地读模型、主明细表、DDL 或表结构引用时，必须补充 `erDiagram`。
+- `erDiagram` 只能出现 `database-design.md` 已确认的真实表名，不得写“订单表/明细表/临时表”等抽象命名。
+- 多表场景必须体现主表/明细表或关联表之间的关系；单表场景也必须体现真实表名。
+
 ## 4. 数据库设计
 
 | 设计项 | 关联文档 | 说明 |
@@ -3391,6 +3459,8 @@ def team_validator_script(skill_id: str) -> str:
             "flow_required_branch_terms": DETAILED_DESIGN_FLOW_REQUIRED_BRANCH_TERMS,
             "exception_table_required_fields": DETAILED_DESIGN_EXCEPTION_TABLE_FIELDS,
             "ddd_terms": DETAILED_DESIGN_DDD_TERMS,
+            "database_trigger_terms": DETAILED_DESIGN_DATABASE_TRIGGER_TERMS,
+            "abstract_database_terms": DETAILED_DESIGN_ABSTRACT_DATABASE_TERMS,
             "specialty_docs": DETAILED_DESIGN_SPECIALTY_DOCS,
             "source_traceability_header": SOURCE_TRACEABILITY_TABLE_HEADER,
             "mq_db_redis_required_terms": DETAILED_MQ_DB_REDIS_REQUIRED_TERMS,
@@ -3421,6 +3491,9 @@ def team_validator_script(skill_id: str) -> str:
             "consumer_fields": MQ_CONSUMER_FIELDS,
             "producer_required_value_fields": MQ_PRODUCER_REQUIRED_VALUE_FIELDS,
             "consumer_required_value_fields": MQ_CONSUMER_REQUIRED_VALUE_FIELDS,
+            "message_schema_root_fields": MQ_MESSAGE_SCHEMA_ROOT_FIELDS,
+            "message_schema_entry_collection_keys": MQ_MESSAGE_SCHEMA_ENTRY_COLLECTION_KEYS,
+            "message_schema_required_config_fields": MQ_MESSAGE_SCHEMA_REQUIRED_CONFIG_FIELDS,
         },
     }
     validator_bodies = {
@@ -3560,6 +3633,34 @@ def validate_output(payload_path, payload):
         errors.append("出现 DDD/分层/扩展点关键词时必须包含 classDiagram")
     if POLICY["source_traceability_header"] not in text:
         errors.append("detailed-design.md 缺少原始需求与原型引用矩阵列头: " + POLICY["source_traceability_header"])
+    if requires_database_er_diagram(text, POLICY["database_trigger_terms"]):
+        er_blocks = mermaid_blocks(text, "erDiagram")
+        if not er_blocks:
+            errors.append("涉及数据库读写/事务/本地读模型/表结构时，detailed-design.md 必须包含 erDiagram")
+        database_design = read_artifact(payload_path, payload, "database-design.md")
+        confirmed_tables = confirmed_database_tables(database_design) if database_design else []
+        if not confirmed_tables:
+            errors.append("涉及数据库图校验时，database-design.md 必须确认真实表名")
+        diagram_tables = []
+        for index, block in enumerate(er_blocks, start=1):
+            block_tables = er_diagram_entities(block)
+            if not block_tables:
+                errors.append(f"第 {index} 个 erDiagram 必须体现真实表名")
+                continue
+            diagram_tables.extend(block_tables)
+            for table_name in block_tables:
+                if any(term in table_name for term in POLICY["abstract_database_terms"]):
+                    errors.append(f"第 {index} 个 erDiagram 使用了抽象表名，必须替换为真实表名: {table_name}")
+                elif confirmed_tables and normalize_table_name(table_name) not in confirmed_tables:
+                    errors.append(f"第 {index} 个 erDiagram 表名未在 database-design.md 确认: {table_name}")
+        matched_tables = sorted({normalize_table_name(name) for name in diagram_tables if normalize_table_name(name) in confirmed_tables})
+        if confirmed_tables and not matched_tables:
+            errors.append("erDiagram 未体现 database-design.md 中已确认的真实表名")
+        if len(confirmed_tables) >= 2:
+            if len(matched_tables) < 2:
+                errors.append("多表场景下 erDiagram 必须至少体现两张真实表")
+            if er_blocks and not any(er_diagram_has_relationship(block) for block in er_blocks):
+                errors.append("多表场景下 erDiagram 必须体现主表/明细表或关联表之间的关系")
     if is_mq_db_redis_flow(text):
         for label, terms in POLICY["mq_db_redis_required_terms"].items():
             if not any(term in text for term in terms):
@@ -3615,10 +3716,16 @@ def validate_output(payload_path, payload):
     if not text:
         return ["缺少 database-design.md artifact 或文件不可读"]
     sections = POLICY["olap_sections"] if any(term in text for term in ["ClickHouse", "MergeTree", "物化视图", "分析宽表"]) else POLICY["oltp_sections"]
+    template_path = Path(__file__).parents[1] / "assets" / ("database-olap-template.md" if sections == POLICY["olap_sections"] else "database-oltp-template.md")
+    template_text = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
     for section in sections:
         if section not in text:
             errors.append("database-design.md 缺少模板章节或字段: " + section)
     if sections == POLICY.get("oltp_sections"):
+        normalized_lines = normalized_nonempty_lines(text)
+        for protected in protected_template_lines(template_text):
+            if protected not in normalized_lines:
+                errors.append("database-design.md 不得改写模板固定说明: " + protected)
         section_positions = []
         for section in POLICY["oltp_sections"]:
             index = text.find(section)
@@ -3983,6 +4090,97 @@ def _validate_required_sheet_values(errors, rows, header, required_fields, sheet
             errors.append(f"mq-design.xlsx 的 {sheet_name} sheet 第 {row_number} 行缺少必填业务值: " + "、".join(missing_values))
 
 
+def _sheet_row_dicts(rows, header):
+    header_map = _header_index_map(header)
+    row_dicts = []
+    for row_number, values in _non_empty_rows(rows):
+        item = {"_row_number": row_number}
+        for key, index in header_map.items():
+            item[key] = values[index].strip() if index < len(values) and isinstance(values[index], str) else (str(values[index]).strip() if index < len(values) else "")
+        row_dicts.append(item)
+    return row_dicts
+
+
+def _validate_message_schema(errors, payload_path, payload, producer_rows, consumer_rows):
+    schema = read_json_artifact(payload_path, payload, "message-schema.json")
+    if schema is None:
+        errors.append("mq-design 必须登记 message-schema.json，且文件必须是合法 JSON")
+        return []
+    entries = message_schema_entries(schema)
+    if not entries:
+        errors.append("message-schema.json 必须至少包含一个消息 envelope 定义")
+        return []
+    config_types = []
+    for index, entry in enumerate(entries, start=1):
+        root_properties = schema_properties(entry)
+        root_required = schema_required_fields(entry)
+        if root_properties:
+            for field in POLICY["message_schema_root_fields"]:
+                if field not in root_properties:
+                    errors.append(f"message-schema.json 第 {index} 个消息缺少根字段定义: {field}")
+                elif root_required and field not in root_required:
+                    errors.append(f"message-schema.json 第 {index} 个消息未将根字段声明为必填: {field}")
+        else:
+            for field in POLICY["message_schema_root_fields"]:
+                if field not in entry:
+                    errors.append(f"message-schema.json 第 {index} 个消息缺少根字段: {field}")
+        config_type = schema_config_type(entry, root_properties)
+        if not config_type:
+            errors.append(f"message-schema.json 第 {index} 个消息缺少可识别的 configType")
+            continue
+        config_types.append(config_type)
+        body_node = root_properties.get(config_type) if root_properties else entry.get(config_type)
+        if body_node is None:
+            errors.append(f"message-schema.json 第 {index} 个消息缺少与 configType 同名的业务对象: {config_type}")
+            continue
+        required_fields = POLICY["message_schema_required_config_fields"].get(config_type, [])
+        if isinstance(body_node, dict) and "properties" in body_node:
+            body_properties = body_node.get("properties") if isinstance(body_node.get("properties"), dict) else {}
+            body_required = schema_required_fields(body_node)
+            for field in required_fields:
+                if field not in body_properties:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 缺少业务字段定义: {field}")
+                elif body_required and field not in body_required:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 未将字段声明为必填: {field}")
+        elif isinstance(body_node, dict):
+            for field in required_fields:
+                if field not in body_node:
+                    errors.append(f"message-schema.json 第 {index} 个 {config_type} 缺少业务字段: {field}")
+        else:
+            errors.append(f"message-schema.json 第 {index} 个 {config_type} 业务对象必须是 object")
+    if producer_rows:
+        for row in producer_rows:
+            body_text = row.get("消息体内容", "")
+            if "issueId" not in body_text or "configType" not in body_text:
+                errors.append(f"mq-design.xlsx 的生产者 sheet 第 {row['_row_number']} 行消息体内容必须明确统一 envelope（issueId/configType）")
+            if config_types and not any(config_type in body_text for config_type in config_types):
+                errors.append(f"mq-design.xlsx 的生产者 sheet 第 {row['_row_number']} 行消息体内容必须与 message-schema.json 的 configType 一致")
+    if consumer_rows and config_types:
+        for row in consumer_rows:
+            monitoring = row.get("运维监控", "")
+            if not monitoring:
+                continue
+    return sorted(set(config_types))
+
+
+def _validate_topic_contract(errors, payload_path, payload, config_types, producer_rows, consumer_rows):
+    topic_contract = read_artifact(payload_path, payload, "mq-topic-contract.yaml")
+    if not topic_contract:
+        errors.append("mq-design 必须登记 mq-topic-contract.yaml，且文件必须可读")
+        return
+    for config_type in config_types:
+        if config_type not in topic_contract:
+            errors.append("mq-topic-contract.yaml 缺少与 message-schema.json 一致的 configType: " + config_type)
+    for row in producer_rows:
+        message_key = row.get("业务消息key", "")
+        if message_key and message_key not in topic_contract:
+            errors.append(f"mq-topic-contract.yaml 缺少生产者业务消息 key: {message_key}")
+    for row in consumer_rows:
+        message_key = row.get("消息key", "")
+        if message_key and message_key not in topic_contract:
+            errors.append(f"mq-topic-contract.yaml 缺少消费者消息 key: {message_key}")
+
+
 def validate_output(payload_path, payload):
     errors = []
     workbook, error = read_xlsx_artifact(payload_path, payload, "mq-design.xlsx")
@@ -4007,6 +4205,10 @@ def validate_output(payload_path, payload):
             errors.append("mq-design.xlsx 消费者表缺少字段: " + field)
     _validate_required_sheet_values(errors, sheets.get("生产者", {}), producer_header, POLICY.get("producer_required_value_fields", []), "生产者")
     _validate_required_sheet_values(errors, sheets.get("消费者", {}), consumer_header, POLICY.get("consumer_required_value_fields", []), "消费者")
+    producer_rows = _sheet_row_dicts(sheets.get("生产者", {}), producer_header)
+    consumer_rows = _sheet_row_dicts(sheets.get("消费者", {}), consumer_header)
+    config_types = _validate_message_schema(errors, payload_path, payload, producer_rows, consumer_rows)
+    _validate_topic_contract(errors, payload_path, payload, config_types, producer_rows, consumer_rows)
     if "死信" not in text:
         errors.append("MQ 必须设计死信队列")
     if "幂等" not in text:
@@ -4131,7 +4333,15 @@ def artifact_texts(payload_path, payload):
 
 
 def unresolved_markers(text):
-    return [marker for marker in POLICY.get("unresolved_markers", []) if marker in text]
+    markers = []
+    for marker in POLICY.get("unresolved_markers", []):
+        if marker in {"{", "}"}:
+            if re.search(r"\\{{[^{{}}\\n]{{1,80}}\\}}", text):
+                markers.append(marker)
+            continue
+        if marker in text:
+            markers.append(marker)
+    return markers
 
 
 def candidate_project_roots(payload_path):
@@ -4306,6 +4516,75 @@ def mermaid_blocks(text, diagram_type):
     return [match.group(1) for match in re.finditer(pattern, text)]
 
 
+def requires_database_er_diagram(text, trigger_terms):
+    if any(term in text for term in ["CREATE TABLE", "ALTER TABLE", "DROP TABLE", "本地读模型", "表结构"]):
+        return True
+    if re.search(r"\\bt_[a-zA-Z0-9_]+\\b", text):
+        return True
+    if "主表" in text and any(term in text for term in ["明细", "关联表", "从表"]):
+        return True
+    has_database_noun = any(term in text for term in ["数据库", "DB"])
+    has_database_action = any(term in text for term in ["查询", "写入", "更新", "删除", "upsert", "事务", "回滚", "提交"])
+    if has_database_noun and has_database_action:
+        return True
+    return any(term in text for term in trigger_terms)
+
+
+def er_diagram_entities(block):
+    names = []
+    for raw in block.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("%%"):
+            continue
+        relation = re.match(r"^`?([A-Za-z\\u4e00-\\u9fff][A-Za-z0-9_\\u4e00-\\u9fff\\.]*)`?\\s+[|}}{{oO-]+\\s+`?([A-Za-z\\u4e00-\\u9fff][A-Za-z0-9_\\u4e00-\\u9fff\\.]*)`?\\s*:", line)
+        if relation:
+            names.extend([normalize_table_name(relation.group(1)), normalize_table_name(relation.group(2))])
+            continue
+        entity = re.match(r"^`?([A-Za-z\\u4e00-\\u9fff][A-Za-z0-9_\\u4e00-\\u9fff\\.]*)`?\\s*\\{{$", line)
+        if entity:
+            names.append(normalize_table_name(entity.group(1)))
+    deduped = []
+    for name in names:
+        if name and name not in deduped:
+            deduped.append(name)
+    return deduped
+
+
+def er_diagram_has_relationship(block):
+    return bool(re.search(r"(?m)^[^\\n]+[|}}{{oO-]+[^\\n]+:", block))
+
+
+def confirmed_database_tables(text):
+    names = []
+    names.extend(table_group_members(text))
+    for match in re.finditer(r"(?m)^####\\s+4\\.2\\.\\d+\\s+(.+)$", text):
+        names.extend(extract_table_names(match.group(1)))
+    for match in re.finditer(r"(?m)^\\|\\s*设计对象\\s*\\|\\s*(.+?)\\|", text):
+        names.extend(extract_table_names(match.group(1)))
+    names.extend(create_table_names(text))
+    deduped = []
+    for name in names:
+        normalized = normalize_table_name(name)
+        if normalized and normalized not in deduped:
+            deduped.append(normalized)
+    return deduped
+
+
+def normalized_nonempty_lines(text):
+    return {{re.sub(r"\\s+", " ", line.strip()) for line in text.splitlines() if line.strip()}}
+
+
+def protected_template_lines(text):
+    protected = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or "{{" in line or "YYYY-MM-DD" in line:
+            continue
+        if line.startswith((">", "##", "###", "####", "**", "- ")) or line in {{"强耦合表组模式标题规则：", "文档结束"}}:
+            protected.append(re.sub(r"\\s+", " ", line))
+    return protected
+
+
 def service_sequence_participants(block):
     participants = {{}}
     for raw in block.splitlines():
@@ -4417,7 +4696,7 @@ def has_confirmed_participant_evidence(item):
     if not isinstance(item, dict):
         return False
     status = str(item.get("status") or item.get("evidence_status") or "").strip().lower()
-    if status in {"unknown", "proposed", "assumed", "todo", "pending", "pending_confirmation", "unconfirmed", "missing"}:
+    if status in {{"unknown", "proposed", "assumed", "todo", "pending", "pending_confirmation", "unconfirmed", "missing"}}:
         return False
     evidence_fields = [
         "repo_context", "repo_context_ref", "code_path", "source_path", "module_path", "service_registry_ref",
@@ -4425,7 +4704,58 @@ def has_confirmed_participant_evidence(item):
     ]
     if any(item.get(field) for field in evidence_fields):
         return True
-    return status in {"confirmed", "matched", "verified", "existing"}
+    return status in {{"confirmed", "matched", "verified", "existing"}}
+
+
+def message_schema_entries(data):
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if not isinstance(data, dict):
+        return []
+    if any(field in data for field in ["issueId", "configType", "properties"]):
+        return [data]
+    for key in POLICY.get("message_schema_entry_collection_keys", []):
+        raw = data.get(key)
+        if isinstance(raw, list):
+            return [item for item in raw if isinstance(item, dict)]
+        if isinstance(raw, dict):
+            entries = []
+            for config_type, value in raw.items():
+                if isinstance(value, dict):
+                    entry = dict(value)
+                    entry.setdefault("configType", config_type)
+                    entries.append(entry)
+            if entries:
+                return entries
+    return []
+
+
+def schema_properties(entry):
+    if isinstance(entry, dict) and isinstance(entry.get("properties"), dict):
+        return entry.get("properties") or {{}}
+    return {{}}
+
+
+def schema_required_fields(node):
+    if isinstance(node, dict) and isinstance(node.get("required"), list):
+        return {{str(item) for item in node.get("required", []) if isinstance(item, str)}}
+    return set()
+
+
+def schema_config_type(entry, root_properties):
+    config_value = entry.get("configType") if isinstance(entry, dict) else None
+    if isinstance(config_value, str) and config_value.strip():
+        return config_value.strip()
+    config_node = root_properties.get("configType") if isinstance(root_properties, dict) else None
+    if isinstance(config_node, dict):
+        for key in ["const", "default", "example"]:
+            value = config_node.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        enum_value = config_node.get("enum")
+        if isinstance(enum_value, list) and len(enum_value) == 1 and isinstance(enum_value[0], str) and enum_value[0].strip():
+            return enum_value[0].strip()
+    return ""
 
 
 def fail(errors):
@@ -4566,6 +4896,15 @@ EXTRA_EVAL_SCENARIOS = {
             "forbidden_behavior": ["生成业务规则与校验章节", "生成幂等与一致性章节", "生成异常与日志章节"],
         },
         {
+            "case": "team_database_er_diagram_required",
+            "title": "涉库详细设计必须补充真实表名数据库图",
+            "material": "需求涉及数据库查询、事务提交、主表+明细表写入和本地读模型维护。详细设计必须在主文档补充 Mermaid erDiagram，并且图中只允许出现 database-design.md 已确认的真实表名，不允许使用订单表、明细表、临时表等抽象命名。",
+            "expected_gate_decision": "pass",
+            "rule_refs": ["D13", "D14", "D15"],
+            "risk_focus": ["erDiagram", "真实表名", "主明细关系", "database-design 对齐"],
+            "forbidden_behavior": ["涉库流程没有 erDiagram", "erDiagram 使用订单表/明细表等抽象命名", "数据库图中的表名与 database-design.md 不一致"],
+        },
+        {
             "case": "team_ddd_requires_uml",
             "title": "DDD 模式补充 UML 类图",
             "material": "用户要求设计 DDD 模式并包含聚合根、ApplicationService、Repository、Handler 模板扩展点。",
@@ -4593,6 +4932,15 @@ EXTRA_EVAL_SCENARIOS = {
             "rule_refs": ["M7", "M8", "M12", "M14"],
             "risk_focus": ["生产者表", "消费者表", "回放审批"],
             "forbidden_behavior": ["只写文字说明不出表", "缺少死信或幂等策略"],
+        },
+        {
+            "case": "team_mq_envelope_schema_required",
+            "title": "MQ 设计必须输出统一 envelope 的 message-schema",
+            "material": "用户要求所有 MQ 消息体统一为 issueId + configType + configType 同名业务对象。mq-design.xlsx 的消息体内容、mq-topic-contract.yaml 和 message-schema.json 必须一致；pendingOrderExportTask 必须定义 taskId、taskType、businessType、eventTime 四个必填字段。",
+            "expected_gate_decision": "require_human_review",
+            "rule_refs": ["M12", "M15", "M16"],
+            "risk_focus": ["message-schema.json", "统一 envelope", "configType", "topic contract 一致性"],
+            "forbidden_behavior": ["缺少 message-schema.json", "消息体只写自然语言不写 issueId/configType", "configType 与业务对象 key 不一致", "pendingOrderExportTask 缺少必填字段"],
         }
     ],
     "redis-design": [

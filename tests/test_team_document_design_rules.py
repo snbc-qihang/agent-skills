@@ -218,6 +218,51 @@ def payload(skill_id: str, artifacts: list[dict[str, str]], status: str = "succe
     }
 
 
+def write_mq_contract_artifacts(
+    root: Path,
+    *,
+    config_type: str = "pendingOrderExportTask",
+    body_fields: dict[str, str] | None = None,
+    include_required: bool = True,
+) -> list[dict[str, str]]:
+    schema_path = root / "message-schema.json"
+    topic_contract_path = root / "mq-topic-contract.yaml"
+    required_fields = list((body_fields or {}).keys()) if body_fields else ["taskId", "taskType", "businessType", "eventTime"]
+    properties = {field: {"type": "string"} for field in required_fields}
+    body_node: dict[str, object] = {"type": "object", "properties": properties}
+    if include_required:
+        body_node["required"] = required_fields
+    schema = {
+        "type": "object",
+        "required": ["issueId", "configType", config_type],
+        "properties": {
+            "issueId": {"type": "string"},
+            "configType": {"type": "string", "const": config_type},
+            config_type: body_node,
+        },
+    }
+    schema_path.write_text(json.dumps(schema, ensure_ascii=False, indent=2), encoding="utf-8")
+    topic_contract_path.write_text(
+        "\n".join(
+            [
+                "producer:",
+                "  messageKey: pending.pay.order.created",
+                f"  configType: {config_type}",
+                "consumer:",
+                "  queue: pending.pay.order.created.queue",
+                "  messageKey: pending.pay.order.created",
+                f"  configType: {config_type}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return [
+        {"name": "message-schema.json", "path": str(schema_path), "artifact_type": "json"},
+        {"name": "mq-topic-contract.yaml", "path": str(topic_contract_path), "artifact_type": "yaml"},
+    ]
+
+
 class TeamDocumentDesignRulesTest(unittest.TestCase):
     def test_high_level_design_contract_exposes_team_template_policy(self) -> None:
         contract = json.loads((ROOT / "skills" / "high-level-design" / "contract.yaml").read_text(encoding="utf-8"))
@@ -1132,6 +1177,194 @@ flowchart TD
         self.assertIn("异常场景表缺少字段", output)
         self.assertIn("补偿/重试/人工处理", output)
 
+    def test_detailed_design_validator_requires_er_diagram_for_database_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "detailed-design.md"
+            design.write_text(
+                """# 详细设计
+
+## 1. 修订历史
+## 2. 设计背景与目标摘要
+### 2.1 原始需求与原型引用矩阵
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 导出任务落库 | 3.1 | matched |
+## 3. 模块/功能详细设计
+### 3.1. 业务流程图
+
+```mermaid
+flowchart TD
+    A["触发"] --> B{"参数/权限/状态校验通过?"}
+    B -- 否 --> E1["返回校验失败"]
+    B -- 是 --> C["数据库查询导出任务"]
+    C --> D["写入数据库并提交事务"]
+    D --> T{"事务处理成功?"}
+    T -- 是 --> S["成功终态"]
+    T -- 否 --> R{"可重试或可补偿?"}
+    R -- 可重试 --> RT["记录日志告警并重试"]
+    R -- 可补偿 --> CP["执行补偿/回滚"]
+    R -- 不可自动处理 --> H["进入人工处理"]
+    E1 --> F["失败结束"]
+    RT --> D
+    CP --> F
+    H --> F
+```
+
+流程设计说明：
+
+- 业务规则：导出任务进入处理中后，写入任务表并更新状态。
+- 校验规则：参数、权限、状态不合法直接失败。
+- 事务边界：数据库写入与状态变更在同一事务提交，失败时回滚。
+- 幂等与一致性：按 taskId 幂等，重复请求不重复创建任务。
+- 异常场景：见下表。
+- 日志要求：记录 traceId、taskId、异常编码和告警维度。
+
+| 场景 | 触发条件 | 异常编码 | 异常信息 | 系统处理动作 | 数据状态 | 日志/告警 | 补偿/重试/人工处理 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 参数/权限/状态校验失败 | 参数为空或状态非法 | EXPORT-001 | 参数非法 | 返回失败 | 不落库 | 记录 traceId 和 taskId | 无需补偿 |
+| 外部依赖失败 | 数据库查询超时 | EXPORT-002 | 查询失败 | 记录失败并重试 | 保持处理中 | 告警数据库耗时 | 自动重试 |
+| 事务/一致性失败 | 提交失败 | EXPORT-003 | 提交失败 | 回滚事务 | 回滚到提交前状态 | 告警事务失败 | 补偿或人工处理 |
+
+## 4. 数据库设计
+| 设计项 | 关联文档 | 说明 |
+| --- | --- | --- |
+| 数据库专项设计 | `database-design.md` | 使用真实表名 |
+## 5. 接口定义
+### 5.1. API接口列表
+### 5.2. 中间件设计
+## 6. 单元测试
+## 7. 性能与扩展性设计
+## 8. 人工评审项
+""",
+                encoding="utf-8",
+            )
+            db_doc = root / "database-design.md"
+            db_doc.write_text(
+                """## 4. 物理结构设计
+### 4.2 字段定义（按表展开）
+#### 4.2.1 t_export_task
+#### 4.2.2 t_export_task_item
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "detailed-design",
+                [
+                    {"name": "detailed-design.md", "path": str(design)},
+                    {"name": "database-design.md", "path": str(db_doc)},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
+                    {"name": "redis-design.md", "path": str(root / "redis-design.md")},
+                    {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
+                    {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
+                ],
+            )
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("必须包含 erDiagram", result.stdout + result.stderr)
+
+    def test_detailed_design_validator_blocks_abstract_er_diagram_table_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            design = root / "detailed-design.md"
+            design.write_text(
+                """# 详细设计
+
+## 1. 修订历史
+## 2. 设计背景与目标摘要
+### 2.1 原始需求与原型引用矩阵
+| source_id | source_type | source_path_or_url | prototype_page_or_section | requirement_item | design_section | consistency_status |
+| --- | --- | --- | --- | --- | --- | --- |
+| SPEC-001 | requirement_spec | specs/req.md |  | 导出任务落库 | 3.1 | matched |
+## 3. 模块/功能详细设计
+### 3.1. 业务流程图
+
+```mermaid
+flowchart TD
+    A["触发"] --> B{"参数/权限/状态校验通过?"}
+    B -- 否 --> E1["返回校验失败"]
+    B -- 是 --> C["数据库查询导出任务"]
+    C --> D["写入数据库并提交事务"]
+    D --> T{"事务处理成功?"}
+    T -- 是 --> S["成功终态"]
+    T -- 否 --> R{"可重试或可补偿?"}
+    R -- 可重试 --> RT["记录日志告警并重试"]
+    R -- 可补偿 --> CP["执行补偿/回滚"]
+    R -- 不可自动处理 --> H["进入人工处理"]
+    E1 --> F["失败结束"]
+    RT --> D
+    CP --> F
+    H --> F
+```
+
+流程设计说明：
+
+- 业务规则：导出任务进入处理中后，写入任务表并更新状态。
+- 校验规则：参数、权限、状态不合法直接失败。
+- 事务边界：数据库写入与状态变更在同一事务提交，失败时回滚。
+- 幂等与一致性：按 taskId 幂等，重复请求不重复创建任务。
+- 异常场景：见下表。
+- 日志要求：记录 traceId、taskId、异常编码和告警维度。
+
+| 场景 | 触发条件 | 异常编码 | 异常信息 | 系统处理动作 | 数据状态 | 日志/告警 | 补偿/重试/人工处理 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 参数/权限/状态校验失败 | 参数为空或状态非法 | EXPORT-001 | 参数非法 | 返回失败 | 不落库 | 记录 traceId 和 taskId | 无需补偿 |
+| 外部依赖失败 | 数据库查询超时 | EXPORT-002 | 查询失败 | 记录失败并重试 | 保持处理中 | 告警数据库耗时 | 自动重试 |
+| 事务/一致性失败 | 提交失败 | EXPORT-003 | 提交失败 | 回滚事务 | 回滚到提交前状态 | 告警事务失败 | 补偿或人工处理 |
+
+### 3.2. 数据库图
+```mermaid
+erDiagram
+    订单表 ||--o{ 明细表 : contains
+```
+
+## 4. 数据库设计
+| 设计项 | 关联文档 | 说明 |
+| --- | --- | --- |
+| 数据库专项设计 | `database-design.md` | 使用真实表名 |
+## 5. 接口定义
+### 5.1. API接口列表
+### 5.2. 中间件设计
+## 6. 单元测试
+## 7. 性能与扩展性设计
+## 8. 人工评审项
+""",
+                encoding="utf-8",
+            )
+            db_doc = root / "database-design.md"
+            db_doc.write_text(
+                """## 4. 物理结构设计
+### 4.2 字段定义（按表展开）
+#### 4.2.1 t_export_task
+#### 4.2.2 t_export_task_item
+""",
+                encoding="utf-8",
+            )
+            result_payload = payload(
+                "detailed-design",
+                [
+                    {"name": "detailed-design.md", "path": str(design)},
+                    {"name": "database-design.md", "path": str(db_doc)},
+                    {"name": "mq-design.xlsx", "path": str(root / "mq-design.xlsx"), "artifact_type": "xlsx"},
+                    {"name": "redis-design.md", "path": str(root / "redis-design.md")},
+                    {"name": "interface-contracts.yaml", "path": str(root / "interface-contracts.yaml"), "artifact_type": "yaml"},
+                    {"name": "test-strategy.md", "path": str(root / "test-strategy.md")},
+                ],
+            )
+            payload_path = root / "stage-run-result.json"
+            payload_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding="utf-8")
+
+            result = run_validator("detailed-design", payload_path)
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("抽象表名", output)
+        self.assertIn("未体现 database-design.md 中已确认的真实表名", output)
+
     def test_specialty_validators_block_template_and_policy_violations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1161,7 +1394,13 @@ flowchart TD
                 consumer_values={"M2": "死信队列exchange/routeKey"},
             )
             mq_payload = root / "mq-stage-run-result.json"
-            mq_payload.write_text(json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}]), ensure_ascii=False), encoding="utf-8")
+            mq_payload.write_text(
+                json.dumps(
+                    payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}, *write_mq_contract_artifacts(root)]),
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
             mq_result = run_validator("mq-design", mq_payload)
             self.assertNotEqual(0, mq_result.returncode)
             mq_output = mq_result.stdout + mq_result.stderr
@@ -1178,7 +1417,10 @@ flowchart TD
             )
             mq_payload = root / "mq-stage-run-result.json"
             mq_payload.write_text(
-                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}]), ensure_ascii=False),
+                json.dumps(
+                    payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}, *write_mq_contract_artifacts(root)]),
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
 
@@ -1203,7 +1445,7 @@ flowchart TD
                     "场景应用": "待支付订单列表",
                     "业务消息key": "pending.pay.order.created",
                     "消息类型": "订单创建事件",
-                    "消息体内容": "包含 orderId、tenantId、facilitatorId、snapshot，定义幂等、重试、回放策略",
+                    "消息体内容": "统一 envelope：issueId、configType=pendingOrderExportTask、pendingOrderExportTask{taskId,taskType,businessType,eventTime}，定义幂等、重试、回放策略",
                     "目的交换机": "pending.pay.exchange",
                     "路由key": "pending.pay.created",
                     "生产服务/模块名称": "facilitator-statistic-service",
@@ -1227,7 +1469,14 @@ flowchart TD
             rewrite_workbook_targets_absolute(mq_doc)
             mq_payload = root / "mq-stage-run-result.json"
             mq_payload.write_text(
-                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}], status="waiting_for_human_review"), ensure_ascii=False),
+                json.dumps(
+                    payload(
+                        "mq-design",
+                        [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}, *write_mq_contract_artifacts(root)],
+                        status="waiting_for_human_review",
+                    ),
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
 
@@ -1252,7 +1501,14 @@ flowchart TD
                             dst.write(file, file.relative_to(temp).as_posix())
             mq_payload = root / "mq-stage-run-result.json"
             mq_payload.write_text(
-                json.dumps(payload("mq-design", [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}], status="waiting_for_human_review"), ensure_ascii=False),
+                json.dumps(
+                    payload(
+                        "mq-design",
+                        [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}, *write_mq_contract_artifacts(root)],
+                        status="waiting_for_human_review",
+                    ),
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
 
@@ -1262,6 +1518,125 @@ flowchart TD
         output = result.stdout + result.stderr
         self.assertIn("生产者 sheet 第 2 行缺少必填业务值", output)
         self.assertIn("业务消息key", output)
+
+    def test_mq_validator_requires_message_schema_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(mq_doc)
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "生产者",
+                2,
+                {
+                    "业务用途": "待支付订单创建快照",
+                    "场景应用": "待支付订单列表",
+                    "业务消息key": "pending.pay.order.created",
+                    "消息类型": "订单创建事件",
+                    "消息体内容": "统一 envelope：issueId、configType=pendingOrderExportTask、pendingOrderExportTask{taskId,taskType,businessType,eventTime}，定义幂等、重试、回放策略",
+                    "目的交换机": "pending.pay.exchange",
+                    "路由key": "pending.pay.created",
+                    "生产服务/模块名称": "facilitator-statistic-service",
+                },
+            )
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "消费者",
+                2,
+                {
+                    "队列名称": "pending.pay.order.created.queue",
+                    "业务用途": "落待支付快照",
+                    "场景应用": "待支付订单列表",
+                    "绑定的Exchange/routingKey(多个）": "pending.pay.exchange/pending.pay.created",
+                    "死信队列exchange/routeKey": "pending.pay.dlx/pending.pay.created.dlq",
+                    "消费服务": "facilitator-statistic-service",
+                    "消息key": "pending.pay.order.created",
+                    "运维监控": "幂等、死信、重试、回放告警",
+                },
+            )
+            topic_contract = root / "mq-topic-contract.yaml"
+            topic_contract.write_text(
+                "producer:\n  messageKey: pending.pay.order.created\n  configType: pendingOrderExportTask\n",
+                encoding="utf-8",
+            )
+            mq_payload = root / "mq-stage-run-result.json"
+            mq_payload.write_text(
+                json.dumps(
+                    payload(
+                        "mq-design",
+                        [
+                            {"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"},
+                            {"name": "mq-topic-contract.yaml", "path": str(topic_contract), "artifact_type": "yaml"},
+                        ],
+                        status="waiting_for_human_review",
+                    ),
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_validator("mq-design", mq_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("message-schema.json", result.stdout + result.stderr)
+
+    def test_mq_validator_blocks_pending_order_export_task_schema_without_required_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            mq_doc = root / "mq-design.xlsx"
+            make_mq_xlsx(mq_doc)
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "生产者",
+                2,
+                {
+                    "业务用途": "待支付订单创建快照",
+                    "场景应用": "待支付订单列表",
+                    "业务消息key": "pending.pay.order.created",
+                    "消息类型": "订单创建事件",
+                    "消息体内容": "统一 envelope：issueId、configType=pendingOrderExportTask、pendingOrderExportTask{taskId,taskType,businessType}，定义幂等、重试、回放策略",
+                    "目的交换机": "pending.pay.exchange",
+                    "路由key": "pending.pay.created",
+                    "生产服务/模块名称": "facilitator-statistic-service",
+                },
+            )
+            _write_xlsx_row_by_headers(
+                mq_doc,
+                "消费者",
+                2,
+                {
+                    "队列名称": "pending.pay.order.created.queue",
+                    "业务用途": "落待支付快照",
+                    "场景应用": "待支付订单列表",
+                    "绑定的Exchange/routingKey(多个）": "pending.pay.exchange/pending.pay.created",
+                    "死信队列exchange/routeKey": "pending.pay.dlx/pending.pay.created.dlq",
+                    "消费服务": "facilitator-statistic-service",
+                    "消息key": "pending.pay.order.created",
+                    "运维监控": "幂等、死信、重试、回放告警",
+                },
+            )
+            artifacts = write_mq_contract_artifacts(
+                root,
+                body_fields={"taskId": "string", "taskType": "string", "businessType": "string"},
+                include_required=True,
+            )
+            mq_payload = root / "mq-stage-run-result.json"
+            mq_payload.write_text(
+                json.dumps(
+                    payload(
+                        "mq-design",
+                        [{"name": "mq-design.xlsx", "path": str(mq_doc), "artifact_type": "xlsx"}, *artifacts],
+                        status="waiting_for_human_review",
+                    ),
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_validator("mq-design", mq_payload)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("eventTime", result.stdout + result.stderr)
 
     def test_database_validator_blocks_unresolved_info_and_requires_questions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
