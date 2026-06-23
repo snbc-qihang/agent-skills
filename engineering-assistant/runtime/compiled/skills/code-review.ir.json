@@ -1,6 +1,6 @@
 {
   "skill_id": "code-review",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stage": "code_review",
   "type": "stage_skill",
   "prompt_pack": {
@@ -27,6 +27,7 @@
   },
   "inputs": [
     "code-quality-report.json",
+    "static-analysis-report.json",
     "changed-files-report.json",
     "implementation-summary.md",
     "repo_context"
@@ -63,6 +64,7 @@
     ],
     "requires": [
       "code-quality-report.json",
+      "static-analysis-report.json",
       "changed-files-report.json",
       "implementation-summary.md",
       "repo_context"

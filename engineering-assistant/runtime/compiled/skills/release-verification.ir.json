@@ -1,6 +1,6 @@
 {
   "skill_id": "release-verification",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stage": "release_verification",
   "type": "stage_skill",
   "prompt_pack": {

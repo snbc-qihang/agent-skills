@@ -1,6 +1,6 @@
 {
   "workflow_id": "frontend-only",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "states": [
     "pending",
     "running",
@@ -241,7 +241,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -333,7 +333,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -428,7 +428,7 @@
       "node_id": "frontend-design",
       "stage": "frontend_design",
       "skill_id": "frontend-design",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -521,7 +521,7 @@
       "node_id": "frontend-development",
       "stage": "frontend_development",
       "skill_id": "frontend-development",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -614,7 +614,7 @@
       "node_id": "self-test",
       "stage": "self_test",
       "skill_id": "self-test",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -709,7 +709,7 @@
       "node_id": "code-quality-governor",
       "stage": "code_quality",
       "skill_id": "code-quality-governor",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -815,7 +815,7 @@
       "node_id": "code-review",
       "stage": "code_review",
       "skill_id": "code-review",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -827,6 +827,7 @@
       ],
       "inputs": [
         "code-quality-report.json",
+        "static-analysis-report.json",
         "changed-files-report.json",
         "implementation-summary.md",
         "repo_context"

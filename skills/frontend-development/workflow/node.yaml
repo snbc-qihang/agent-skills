@@ -2,7 +2,7 @@
   "node_id": "frontend-development",
   "stage": "frontend_development",
   "skill_id": "frontend-development",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

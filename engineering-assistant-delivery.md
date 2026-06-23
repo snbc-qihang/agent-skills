@@ -1,7 +1,7 @@
 # 研发助手 Skills 工程体系落地方案
 
 # 1. 执行摘要
-当前插件版本：`1.0.0.3`。
+当前插件版本：`1.0.0.4`。
 
 目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的团队研发助手插件。本版本不再把插件定位为“文档生成器”，而是定位为“可循环的设计治理工作流”：信息收集完成判定 -> 目标规划与缺口识别 -> 用户追问/方向确认 -> ready 后正式生成设计文档 -> 自我评审 -> 有边界的自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 规范候选沉淀 -> TL 统一治理。
 
@@ -88,7 +88,7 @@ flowchart LR
 | implementation-controller | control_skill | 已审批设计需要编译成实现合同、控制代码执行范围、驱动质量命令和修复闭环时使用；不要用于未审批设计或单纯设计文档生成。 | approved design artifact, target project root | current-task.json, design-contract.json, implementation-contract.json | 是 | 是 | 设计合同已编译; 实现范围明确 | 修改已审批设计范围; 高风险实现豁免 | 研发负责人 |
 | self-test | stage_skill | 自测、测试命令执行、覆盖率汇总、失败测试分析和发布前测试风险判断时使用；不要用于在测试失败时声明通过。 | implementation-summary.md, changed-files-report.json | self-test-report.md, test-commands.log, coverage-summary.md | 是 | 是 | 测试命令实际执行; 失败测试明确阻断 | 高风险测试豁免; 无法执行关键测试 | 测试负责人 |
 | code-quality-governor | cross_cutting_skill | 代码质量门禁、PR 质量审计、代码变更风险评估、发布前质量检查时使用；不要用于单纯生成设计文档或没有代码变更的咨询。 | changed-files-report.json, design-to-code-mapping.yaml | code-quality-report.md, code-quality-report.html, code-quality-report.json | 是 | 是 | Q0 设计一致性; Q1 确定性工程检查 | 高风险未审批变更; 发布脚本变更 | 研发负责人 |
-| code-review | stage_skill | 代码走查、人工评审辅助、语义缺陷定位和 blocker 清单整理时使用；不要用于替代确定性 CI 检查。 | code-quality-report.json, changed-files-report.json | code-review-report.md, code-review-report.html, review-comments.json | 是 | 是 | blocker 清单为空; 所有问题有证据 | blocker 关闭; 高风险人工豁免 | 研发负责人 |
+| code-review | stage_skill | 代码走查、人工评审辅助、语义缺陷定位和 blocker 清单整理时使用；不要用于替代确定性 CI 检查。 | code-quality-report.json, static-analysis-report.json | code-review-report.md, code-review-report.html, review-comments.json | 是 | 是 | blocker 清单为空; 所有问题有证据 | blocker 关闭; 高风险人工豁免 | 研发负责人 |
 | release-readiness | stage_skill | 发布准备、发布条件判断、回滚方案、灰度策略、监控和值班审批检查时使用；不要用于发布后验证。 | code-quality-report.json, code-review-report.md | release-plan.md, release-checklist.md, rollback-plan.md | 是 | 是 | 发布窗口明确; 回滚方案存在 | 生产发布; 生产配置变更 | 发布负责人 |
 | release-verification | stage_skill | 发布后验证、生产检查、监控指标、异常列表和回滚条件判断时使用；不要用于发布前准备。 | release-plan.md, release-checklist.md | release-verification-report.md, production-checks.json, anomaly-list.md | 是 | 是 | 核心功能验证通过; 错误率/延迟未触发阈值 | 回滚操作; 生产验证豁免 | SRE |
 | release-retrospective | stage_skill | 发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。 | release-verification-report.md, code-quality-report.json | release-retrospective.md, release-lessons.yaml, follow-up-actions.md | 是 | 是 | 问题有证据; 行动项有 owner | 行动项关闭; 规范候选批准 | 发布负责人 |
@@ -316,7 +316,7 @@ flowchart LR
 ## code-review
 - 设计摘要：对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。
 - description：代码走查、人工评审辅助、语义缺陷定位和 blocker 清单整理时使用；不要用于替代确定性 CI 检查。
-- 输入：code-quality-report.json, changed-files-report.json, implementation-summary.md, repo_context
+- 输入：code-quality-report.json, static-analysis-report.json, changed-files-report.json, implementation-summary.md, repo_context
 - 输出：code-review-report.md, code-review-report.html, review-comments.json, blocker-list.md
 - 质量门禁：blocker 清单为空; 所有问题有证据; 严重级别一致; 静态分析指标已纳入评审; 富 HTML 人工走查报告已生成; 修复建议可执行
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。

@@ -40,10 +40,25 @@ def pick(item, *keys, default=""):
     return default
 
 
-def count_by(findings, *keys):
+def evidence_file(item):
+    evidence = item.get("code_evidence") if isinstance(item, dict) else {}
+    if isinstance(evidence, dict) and evidence.get("file"):
+        return evidence.get("file")
+    return pick(item, "file", "path", "location", default="")
+
+
+def evidence_line(item):
+    evidence = item.get("code_evidence") if isinstance(item, dict) else {}
+    if isinstance(evidence, dict) and evidence.get("line_start"):
+        return evidence.get("line_start")
+    return pick(item, "line", "start_line", "start", default="")
+
+
+def count_by(findings, getter, default="unknown"):
     result = {}
     for item in findings:
-        value = str(pick(item, *keys, default="unknown")).lower()
+        value = getter(item) if callable(getter) else pick(item, getter, default=default)
+        value = str(value or default).lower()
         result[value] = result.get(value, 0) + 1
     return result
 
@@ -60,13 +75,22 @@ def render_table(findings):
         fid = pick(item, "id", "rule", "rule_id", default=f"finding-{index}")
         severity = pick(item, "severity", "level", "priority", default="unknown")
         dimension = pick(item, "dimension", "category", "type", default="unknown")
-        file_name = pick(item, "file", "path", "location", default="")
-        line = pick(item, "line", "start_line", "start", default="")
-        title = pick(item, "title", "message", "problem", "summary", default="")
+        file_name = evidence_file(item)
+        line = evidence_line(item)
+        title = pick(item, "problem", "title", "message", "summary", default="")
         impact = pick(item, "impact", "risk", default="")
-        suggestion = pick(item, "suggestion", "recommendation", "fix", default="")
-        rows.append(f"<tr><td>{esc(fid)}</td><td>{esc(severity)}</td><td>{esc(dimension)}</td><td>{esc(file_name)}:{esc(line)}</td><td>{esc(title)}</td><td>{esc(impact)}</td><td>{esc(suggestion)}</td></tr>")
-    return "\n".join(rows) or '<tr><td colspan="7" class="muted">未登记 finding</td></tr>'
+        suggestion = pick(item, "recommendation", "suggestion", "fix", default="")
+        source_ids = ", ".join(str(x) for x in item.get("source_ids", []) if x) if isinstance(item, dict) else ""
+        rows.append(f"<tr><td>{esc(fid)}</td><td>{esc(severity)}</td><td>{esc(dimension)}</td><td>{esc(file_name)}:{esc(line)}</td><td>{esc(title)}</td><td>{esc(impact)}</td><td>{esc(suggestion)}</td><td>{esc(source_ids)}</td></tr>")
+    return "\n".join(rows) or '<tr><td colspan="8" class="muted">未登记 finding</td></tr>'
+
+
+def render_coverage(coverage):
+    rows = []
+    for item in coverage or []:
+        evidence = ", ".join(str(x) for x in item.get("evidence", []) if x) or item.get("reason", "")
+        rows.append(f"<tr><td>{esc(item.get('dimension'))}</td><td>{esc(item.get('status'))}</td><td>{esc(evidence)}</td></tr>")
+    return "\n".join(rows) or '<tr><td colspan="3" class="muted">未提供 checklist coverage</td></tr>'
 
 
 def main():
@@ -84,9 +108,10 @@ def main():
     static = load_json(Path(args.static_json)) if args.static_json else {}
     markdown = Path(args.markdown).read_text(encoding="utf-8") if args.markdown and Path(args.markdown).exists() else ""
     findings = findings_from(review, quality, static)
-    gate = quality.get("gate_decision") or review.get("gate_decision") or review.get("status") or "unknown"
+    coverage = review.get("checklist_coverage") or []
+    gate = review.get("gate_decision") or quality.get("gate_decision") or review.get("status") or "unknown"
     tool_rows = []
-    for tool in static.get("tools", []):
+    for tool in static.get("tools", []) or review.get("tool_status", []):
         tool_rows.append(f"<tr><td>{esc(tool.get('name'))}</td><td>{esc(tool.get('status'))}</td><td>{esc(tool.get('reason', ''))}</td></tr>")
     html_text = f'''<!doctype html>
 <html lang="zh-CN">
@@ -116,16 +141,21 @@ def main():
   <main>
     <section class="summary">
       <div class="metric">Findings<strong>{len(findings)}</strong></div>
-      <div class="metric">Severity<div>{render_badges(count_by(findings, "severity", "level", "priority"))}</div></div>
-      <div class="metric">Quality Dimension<div>{render_badges(count_by(findings, "dimension", "category", "type"))}</div></div>
+      <div class="metric">Severity<div>{render_badges(count_by(findings, "severity"))}</div></div>
+      <div class="metric">Quality Dimension<div>{render_badges(count_by(findings, "dimension"))}</div></div>
+      <div class="metric">Files / Modules<div>{render_badges(count_by(findings, evidence_file, default="unknown"))}</div></div>
     </section>
     <section>
       <h2>静态分析工具状态</h2>
       <table><thead><tr><th>工具</th><th>状态</th><th>原因/说明</th></tr></thead><tbody>{''.join(tool_rows) or '<tr><td colspan="3" class="muted">未提供工具执行报告</td></tr>'}</tbody></table>
     </section>
     <section>
+      <h2>Checklist Coverage</h2>
+      <table><thead><tr><th>维度</th><th>状态</th><th>证据/原因</th></tr></thead><tbody>{render_coverage(coverage)}</tbody></table>
+    </section>
+    <section>
       <h2>问题清单</h2>
-      <table><thead><tr><th>ID</th><th>级别</th><th>维度</th><th>位置</th><th>问题</th><th>影响</th><th>建议</th></tr></thead><tbody>{render_table(findings)}</tbody></table>
+      <table><thead><tr><th>ID</th><th>级别</th><th>维度</th><th>位置</th><th>问题</th><th>影响</th><th>建议</th><th>来源</th></tr></thead><tbody>{render_table(findings)}</tbody></table>
     </section>
     <section>
       <h2>人工确认区</h2>

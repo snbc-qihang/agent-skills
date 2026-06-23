@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
-PLUGIN_VERSION = "1.0.0.3"
+PLUGIN_VERSION = "1.0.0.4"
+SKILL_VERSION = "1.0.1"
 PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
@@ -35,6 +36,24 @@ EVAL_CASES = [
 ]
 
 TEAM_DOC_TARGET_SKILLS = {"high-level-design", "detailed-design", "database-design", "redis-design", "mq-design", "code-development"}
+
+CODE_REVIEW_QUALITY_DIMENSIONS = [
+    "bug",
+    "vulnerability",
+    "security_hotspot",
+    "code_smell",
+    "complexity",
+    "duplication",
+    "coverage",
+    "maintainability",
+    "reliability",
+    "security",
+    "performance",
+    "testability",
+    "observability",
+]
+
+CODE_REVIEW_CHECKLIST_STATUSES = ["checked", "not_applicable", "missing", "blocked"]
 
 UPSTREAM_MAIN_INCREMENT_CAPABILITIES = [
     {
@@ -1611,7 +1630,7 @@ SKILLS = [
         "description": "代码走查、人工评审辅助、语义缺陷定位和 blocker 清单整理时使用；不要用于替代确定性 CI 检查。",
         "purpose": "对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。",
         "non_goals": ["不替代 code-quality-governor", "不输出无证据建议", "不忽略测试缺口"],
-        "inputs": ["code-quality-report.json", "changed-files-report.json", "implementation-summary.md", "repo_context"],
+        "inputs": ["code-quality-report.json", "static-analysis-report.json", "changed-files-report.json", "implementation-summary.md", "repo_context"],
         "outputs": ["code-review-report.md", "code-review-report.html", "review-comments.json", "blocker-list.md"],
         "gates": ["blocker 清单为空", "所有问题有证据", "严重级别一致", "静态分析指标已纳入评审", "富 HTML 人工走查报告已生成", "修复建议可执行"],
         "approvals": ["blocker 关闭", "高风险人工豁免", "核心链路评审通过"],
@@ -1980,7 +1999,7 @@ def runtime_ir(skill: dict) -> dict:
     allow_implicit = skill["id"] not in HIGH_RISK_SKILLS
     return {
         "skill_id": skill["id"],
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "stage": skill["stage"],
         "type": skill["type"],
         "prompt_pack": {
@@ -2023,18 +2042,7 @@ def static_analysis_policy(skill: dict) -> dict:
         "script": "engineering-assistant/scripts/run_static_analysis_tools.py",
         "download_requires_explicit_allow_download": True,
         "secret_redaction_required": True,
-        "quality_dimensions": [
-            "bug",
-            "vulnerability",
-            "security_hotspot",
-            "code_smell",
-            "complexity",
-            "duplication",
-            "coverage",
-            "maintainability",
-            "reliability",
-            "security",
-        ],
+        "quality_dimensions": CODE_REVIEW_QUALITY_DIMENSIONS,
         "block_when": [
             "required tool configured but execution failed",
             "all static analysis tools unavailable without accepted waiver",
@@ -2078,6 +2086,8 @@ def rich_html_report_policy(skill: dict) -> dict:
             "finding severity distribution",
             "quality dimension distribution",
             "tool execution status",
+            "file/module distribution",
+            "checklist coverage",
             "evidence table",
             "required actions",
             "human review checklist",
@@ -3338,6 +3348,141 @@ print("ok")
 """
 
 
+def code_review_validator_script() -> str:
+    return """#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+REQUIRED_REVIEW_ARTIFACTS = ["code-review-report.md", "code-review-report.html", "review-comments.json", "blocker-list.md"]
+HIGH_SEVERITIES = {"blocker", "critical", "major"}
+QUALITY_DIMENSIONS = {
+    "bug", "vulnerability", "security_hotspot", "code_smell", "complexity", "duplication", "coverage",
+    "maintainability", "reliability", "security", "performance", "testability", "observability"
+}
+CHECKLIST_STATUSES = {"checked", "not_applicable", "missing", "blocked"}
+BLOCKING_STATIC_STATUSES = {"tool_unavailable", "missing_input", "missing_config", "download_failed", "failed"}
+
+schema = json.loads(Path(__file__).parents[1].joinpath("output.schema.json").read_text(encoding="utf-8"))
+payload_path = Path(sys.argv[1])
+payload = json.loads(payload_path.read_text(encoding="utf-8"))
+errors = []
+missing = [field for field in schema.get("required", []) if field not in payload]
+if missing:
+    errors.append(f"缺少必填字段: {missing}")
+if payload.get("skill_id") != schema["properties"]["skill_id"]["const"]:
+    errors.append("skill_id 不匹配")
+if payload.get("status") not in schema["properties"]["status"]["enum"]:
+    errors.append("status 不合法")
+if payload.get("preflight_input_state") not in schema["properties"]["preflight_input_state"]["enum"]:
+    errors.append("preflight_input_state 不合法")
+if payload.get("status") == "succeeded" and payload.get("preflight_input_state") != "ready":
+    errors.append("succeeded 必须满足 preflight_input_state == ready")
+if payload.get("status") == "waiting_for_input" and payload.get("preflight_input_state") != "waiting_for_input":
+    errors.append("waiting_for_input 必须满足 preflight_input_state == waiting_for_input")
+formal_design_artifacts = {"high-level-design.md", "detailed-design.md", "database-design.md", "redis-design.md", "mq-design.xlsx", "interface-contracts.yaml", "test-strategy.md"}
+if payload.get("preflight_input_state") != "ready":
+    produced = {item.get("name") for item in payload.get("artifacts", []) if isinstance(item, dict)}
+    leaked = sorted(formal_design_artifacts & produced)
+    if leaked:
+        errors.append("preflight 未 ready 时不得生成或登记正式设计文档: " + ", ".join(leaked))
+
+def artifact_map(data):
+    return {item.get("name"): item for item in data.get("artifacts", []) if isinstance(item, dict)}
+
+def resolve_artifact(item):
+    raw = (item or {}).get("path") or ""
+    if not raw:
+        return None
+    path = Path(raw)
+    candidates = [path] if path.is_absolute() else [Path.cwd() / path, payload_path.parent / path]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[-1]
+
+def read_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        errors.append(f"{path}: JSON 解析失败: {exc}")
+        return None
+
+artifacts = artifact_map(payload)
+if payload.get("status") == "succeeded":
+    for name in REQUIRED_REVIEW_ARTIFACTS:
+        item = artifacts.get(name)
+        if not item:
+            errors.append("code-review succeeded 必须登记产物: " + name)
+            continue
+        path = resolve_artifact(item)
+        if not path or not path.exists():
+            errors.append("code-review succeeded 必须真实生成产物: " + name)
+    review_path = resolve_artifact(artifacts.get("review-comments.json")) if artifacts.get("review-comments.json") else None
+    review = read_json(review_path) if review_path and review_path.exists() else None
+    if review is not None:
+        findings = review.get("findings") or review.get("comments") or payload.get("findings") or []
+        for index, finding in enumerate(findings, start=1):
+            if not isinstance(finding, dict):
+                errors.append(f"review-comments.json 第 {index} 个 finding 不是对象")
+                continue
+            severity = str(finding.get("severity") or "").lower()
+            if severity in HIGH_SEVERITIES:
+                for field in ["id", "dimension", "category", "problem", "impact", "recommendation", "blocking"]:
+                    if finding.get(field) in (None, "", []):
+                        errors.append(f"高优先级 finding 第 {index} 缺少字段: {field}")
+                if finding.get("dimension") not in QUALITY_DIMENSIONS:
+                    errors.append(f"高优先级 finding 第 {index} 的 dimension 不合法或缺失")
+                code_evidence = finding.get("code_evidence") or {}
+                source_ids = finding.get("source_ids") or []
+                if not code_evidence.get("file") and not source_ids:
+                    errors.append(f"高优先级 finding 第 {index} 必须有 code_evidence.file 或 source_ids")
+        coverage = review.get("checklist_coverage") or []
+        if not coverage:
+            errors.append("review-comments.json 必须包含 checklist_coverage，显式说明质量维度覆盖情况")
+        seen_dimensions = set()
+        for index, item in enumerate(coverage, start=1):
+            dimension = item.get("dimension") if isinstance(item, dict) else None
+            status = item.get("status") if isinstance(item, dict) else None
+            if dimension not in QUALITY_DIMENSIONS:
+                errors.append(f"checklist_coverage 第 {index} 的 dimension 不合法: {dimension}")
+            else:
+                seen_dimensions.add(dimension)
+            if status not in CHECKLIST_STATUSES:
+                errors.append(f"checklist_coverage 第 {index} 的 status 不合法: {status}")
+        missing_dimensions = sorted(QUALITY_DIMENSIONS - seen_dimensions)
+        if missing_dimensions:
+            errors.append("checklist_coverage 缺少质量维度: " + ", ".join(missing_dimensions))
+        blocking_dimensions = sorted(item.get("dimension") for item in coverage if isinstance(item, dict) and item.get("status") in {"missing", "blocked"})
+        if blocking_dimensions:
+            errors.append("code-review succeeded 不得存在未覆盖或阻断的质量维度: " + ", ".join(blocking_dimensions))
+        html_path = resolve_artifact(artifacts.get("code-review-report.html")) if artifacts.get("code-review-report.html") else None
+        if html_path and html_path.exists():
+            html = html_path.read_text(encoding="utf-8")
+            for token in ["Quality Dimension", "Checklist Coverage", "问题清单", "人工确认区"]:
+                if token not in html:
+                    errors.append("code-review-report.html 缺少报告区块: " + token)
+    static_item = artifacts.get("static-analysis-report.json")
+    static_path = resolve_artifact(static_item) if static_item else None
+    if not static_path or not static_path.exists():
+        errors.append("code-review succeeded 必须登记并消费 static-analysis-report.json；缺失时不得通过")
+    else:
+        static = read_json(static_path)
+        if static is not None:
+            tools = static.get("tools") or []
+            if not tools:
+                errors.append("static-analysis-report.json 必须包含 tools 执行状态")
+            blocking_tools = [tool.get("name", "unknown") for tool in tools if str(tool.get("status") or "").lower() in BLOCKING_STATIC_STATUSES]
+            waiver = static.get("waiver", {}) if isinstance(static.get("waiver"), dict) else {}
+            if blocking_tools and waiver.get("status") != "accepted":
+                errors.append("静态分析工具缺失/失败且没有已接受豁免，不得 succeeded: " + ", ".join(blocking_tools))
+
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+"""
+
+
 def workflow_orchestrator_validator_script() -> str:
     return """#!/usr/bin/env python3
 import json
@@ -3447,6 +3592,8 @@ print("ok")
 def team_validator_script(skill_id: str) -> str:
     if skill_id == "workflow-orchestrator":
         return workflow_orchestrator_validator_script()
+    if skill_id == "code-review":
+        return code_review_validator_script()
     if skill_id not in TEAM_DOC_TARGET_SKILLS:
         return generic_validator_script()
     policies = {
@@ -5165,7 +5312,7 @@ def contract(skill: dict) -> dict:
     payload = {
         "skill_id": skill["id"],
         "skill_name": skill["name"],
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "stage": skill["stage"],
         "type": skill["type"],
         "purpose": skill["purpose"],
@@ -5307,9 +5454,41 @@ def contract(skill: dict) -> dict:
     return payload
 
 
+
+def code_review_finding_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["id", "severity", "dimension", "category", "problem", "impact", "recommendation", "blocking"],
+        "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "severity": {"enum": ["blocker", "critical", "major", "minor", "info"]},
+            "dimension": {"enum": CODE_REVIEW_QUALITY_DIMENSIONS},
+            "category": {"enum": ["correctness", "quality", "security", "performance", "maintainability", "test", "observability", "tooling"]},
+            "code_evidence": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string"},
+                    "line_start": {"type": "integer", "minimum": 1},
+                    "line_end": {"type": "integer", "minimum": 1},
+                    "snippet": {"type": "string"},
+                    "source": {"enum": ["diff", "static_analysis", "code_quality", "manual_review", "tooling"]},
+                },
+                "additionalProperties": True,
+            },
+            "source_ids": {"type": "array", "items": {"type": "string"}},
+            "rule_refs": {"type": "array", "items": {"type": "string"}},
+            "problem": {"type": "string", "minLength": 1},
+            "impact": {"type": "string", "minLength": 1},
+            "recommendation": {"type": "string", "minLength": 1},
+            "blocking": {"type": "boolean"},
+        },
+        "additionalProperties": True,
+    }
+
 def output_schema(skill: dict) -> dict:
     required = [o for o in skill["outputs"] if not o == "code changes"]
     artifact_types = schema_artifact_types(skill)
+    finding_items = code_review_finding_schema() if skill["id"] == "code-review" else {"type": "object"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"https://example.internal/engineering-assistant/{skill['id']}/output.schema.json",
@@ -5340,7 +5519,7 @@ def output_schema(skill: dict) -> dict:
                 },
             },
             "quality_gates": {"type": "array", "items": {"type": "object"}},
-            "findings": {"type": "array", "items": {"type": "object"}},
+            "findings": {"type": "array", "items": finding_items},
             "required_human_reviews": {"type": "array", "items": {"type": "string"}},
             "required_information_requests": {
                 "type": "array",
@@ -5421,10 +5600,12 @@ def static_analysis_runtime_note(skill: dict) -> str:
     if skill["id"] == "code-review":
         return """
 # 深度代码走查门禁
-- 代码走查必须消费 `code-quality-report.json` 与 `static-analysis-report.json`；若缺失，必须主动运行或要求先运行 `code-quality-governor`，不得只做表层 diff 摘要。
-- 每个高优先级问题必须映射到至少一个质量维度：`bug`、`vulnerability`、`security_hotspot`、`code_smell`、`complexity`、`duplication`、`coverage`、`maintainability`、`reliability` 或 `security`。
+- 代码走查必须消费 `code-quality-report.json` 与 `static-analysis-report.json`；若缺失，必须主动运行 `engineering-assistant/scripts/run_code_review.py` 或先运行 `code-quality-governor`，不得只做表层 diff 摘要。
+- 每次正式走查必须自动生成 `review-comments.json`、`code-review-report.md`、`blocker-list.md` 和 `code-review-report.html`；不得等用户二次提示才生成报告。
+- 每个高优先级问题必须映射到至少一个质量维度：`bug`、`vulnerability`、`security_hotspot`、`code_smell`、`complexity`、`duplication`、`coverage`、`maintainability`、`reliability`、`security`、`performance`、`testability` 或 `observability`。
+- `review-comments.json` 必须包含 `checklist_coverage`，逐项说明每个质量维度是 `checked`、`not_applicable`、`missing` 还是 `blocked`；不得把“未检查”当作“没问题”。
 - 必须对复杂度、鉴权/越权、空指针、资源泄漏、事务边界、并发/幂等、异常吞噬、敏感信息、SQL/反序列化/反射、输入校验、测试断言质量进行显式检查；未覆盖项要写入假设或 required action。
-- 走查报告必须生成 `code-review-report.html`，用于人工直观看问题分布、阻断项、证据片段、工具运行状态和修复优先级。
+- 走查报告必须生成 `code-review-report.html`，用于人工直观看问题分布、阻断项、证据片段、工具运行状态、检查覆盖和修复优先级。
 """
     return ""
 
@@ -5483,6 +5664,10 @@ def controlled_execution_note(skill: dict) -> str:
 
 
 EXTRA_SKILL_NOTES = {
+    "code-review": """# 能力维护提示
+- 如果团队反馈“需要人工提示才生成走查报告”或“只看功能 bug、不看质量/异味”，不要只加提示词；优先补执行入口、输出 schema、validator 和 eval。参考 `references/auto-report-and-quality-depth-plan.md`。
+- `code-review` 的声明要求必须落到可执行链路：读取质量/静态分析输入、生成 `review-comments.json`、渲染 `code-review-report.html`、输出 `blocker-list.md`，并由 `validate_output.py` 阻断缺失产物或缺失质量维度的结果。
+""",
     "high-level-design": """# 架构巡检 / 既有系统治理补充规则
 
 当用户要求对既有系统做架构巡检、问题排查、重构方向、核心链路治理或服务边界梳理时，不要直接从局部代码问题进入修复建议。必须先建立业务域蓝图，再把局部问题归位。
@@ -5774,7 +5959,7 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
         "node_id": skill["id"],
         "stage": skill["stage"],
         "skill_id": skill["id"],
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "mode": "standalone|workflow",
         "entry_modes": WORKFLOW_ENTRY_MODES,
         "depends_on": depends_on or [],
@@ -5799,6 +5984,36 @@ def workflow_node(skill: dict, *, next_nodes: list[str] | None = None, depends_o
 
 
 def extra_reference_files(skill: dict) -> dict[str, str]:
+    if skill["id"] == "code-review":
+        return {
+            "auto-report-and-quality-depth-plan.md": """# Code Review 自动报告与质量深度检查改进记录
+
+## 触发信号
+团队实际使用 `code-review` 时暴露两个问题：
+
+1. 代码走查不会自动生成完整走查报告，需要用户二次提示。
+2. 走查容易只聚焦功能逻辑 bug，缺少代码质量、异味、复杂度、可维护性、安全热点等系统性检查。
+
+## 诊断结论
+`code-review` 的 SKILL/contract 已经声明了深度走查、静态分析消费和 HTML 报告要求，但执行层缺少硬动作与硬校验：
+
+- 缺少统一执行入口，例如 `engineering-assistant/scripts/run_code_review.py`，把输入读取、review-comments 生成、Markdown/HTML/blocker-list 输出串起来。
+- `skills/code-review/scripts/validate_output.py` 必须强制四个声明产物真实存在。
+- `output.schema.json` 必须约束高优先级 finding 的质量维度、代码证据、影响和建议。
+- `render_code_review_html.py` 必须由 code-review 阶段自动调用。
+- eval 和单元测试必须防止“报告没生成但评审通过”。
+
+## 执行链路
+1. 运行 `engineering-assistant/scripts/run_code_review.py`。
+2. 读取或发现 `code-quality-report.json`、`static-analysis-report.json`、`changed-files-report.json`、`implementation-summary.md`。
+3. 生成 `review-comments.json`、`code-review-report.md`、`blocker-list.md`。
+4. 调用 `render_code_review_html.py` 生成 `code-review-report.html`。
+5. 运行 `skills/code-review/scripts/validate_output.py` 阻断缺失产物、缺失质量维度、缺失静态分析且仍 succeeded 的结果。
+
+## 验收标准
+用户只说“执行代码走查”时，插件必须自动生成四个产物，并在静态分析/质量输入缺失时明确 `block` 或 `require_human_review`，不得输出通过性结论。
+"""
+        }
     if skill["id"] == "workflow-orchestrator":
         return {
             "design-governance-loop.md": """# Design governance loop: prevent wasteful draft churn
@@ -5918,7 +6133,7 @@ def workflow(name: str, nodes: list[str]) -> dict:
         )
     return {
         "workflow_id": name,
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "states": COMMON_STATES,
         "gate_decisions": ["continue", "pause", "retry", "skip", "block", "stop"],
         "supported_entry_modes": WORKFLOW_ENTRY_MODES,
@@ -6052,7 +6267,7 @@ prefix_rule(
 )
 """)
     write_text(base / "runtime" / "codex" / "policies" / "tool-policy.yaml", json.dumps({
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "policies": [
             {"id": "deny-rm-rf", "match": {"regex": r"\brm\s+-rf\b"}, "decision": "deny", "reason": "命中 rm -rf 高风险命令；请改走受控清理流程。"},
             {"id": "deny-git-push", "match": {"regex": r"\bgit\s+push\b"}, "decision": "deny", "reason": "git push 前必须完成自动校验、评审和人工确认。"},
@@ -6769,7 +6984,7 @@ def compile_skill(skill_dir: Path) -> dict:
     }
     return {
         "skill_id": contract["skill_id"],
-        "version": contract.get("version", "1.0.0"),
+        "version": contract.get("version", "1.0.1"),
         "stage": contract.get("stage"),
         "type": contract.get("type"),
         "prompt_pack": {
@@ -6818,7 +7033,7 @@ def main():
         target = skills_out / f"{ir['skill_id']}.ir.json"
         target.write_text(json.dumps(ir, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
         compiled.append({"skill_id": ir["skill_id"], "path": str(target), "risk_level": ir["risk"]["risk_level"], "allow_implicit_invocation": ir["risk"]["allow_implicit_invocation"]})
-    index = {"version": "1.0.0", "skills": compiled}
+    index = {"version": "1.0.1", "skills": compiled}
     (out / "skill-runtime-index.json").write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
     print(json.dumps({"status": "pass", "compiled": len(compiled), "out": str(out)}, ensure_ascii=False))
 
@@ -7589,157 +7804,8 @@ def main():
 if __name__ == "__main__":
     main()
 """,
-        "render_code_review_html.py": """#!/usr/bin/env python3
-import argparse
-import html
-import json
-import re
-from pathlib import Path
-
-SECRET = re.compile(r"(?i)(token|password|passwd|secret|key|credential|authorization)(\\s*[=:]\\s*)([^\\s<>&]+)")
-
-
-def load_json(path: Path):
-    if not path or not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def redact(value):
-    text = "" if value is None else str(value)
-    return SECRET.sub(lambda m: f"{m.group(1)}{m.group(2)}***", text)
-
-
-def esc(value):
-    return html.escape(redact(value))
-
-
-def findings_from(*payloads):
-    items = []
-    for payload in payloads:
-        if isinstance(payload, dict):
-            for key in ["findings", "issues", "comments"]:
-                if isinstance(payload.get(key), list):
-                    items.extend(payload[key])
-    return items
-
-
-def pick(item, *keys, default=""):
-    for key in keys:
-        if isinstance(item, dict) and item.get(key) not in (None, ""):
-            return item.get(key)
-    return default
-
-
-def count_by(findings, *keys):
-    result = {}
-    for item in findings:
-        value = str(pick(item, *keys, default="unknown")).lower()
-        result[value] = result.get(value, 0) + 1
-    return result
-
-
-def render_badges(counts):
-    if not counts:
-        return '<span class="muted">无数据</span>'
-    return "".join(f'<span class="badge">{esc(k)} <strong>{v}</strong></span>' for k, v in sorted(counts.items()))
-
-
-def render_table(findings):
-    rows = []
-    for index, item in enumerate(findings, start=1):
-        fid = pick(item, "id", "rule", "rule_id", default=f"finding-{index}")
-        severity = pick(item, "severity", "level", "priority", default="unknown")
-        dimension = pick(item, "dimension", "category", "type", default="unknown")
-        file_name = pick(item, "file", "path", "location", default="")
-        line = pick(item, "line", "start_line", "start", default="")
-        title = pick(item, "title", "message", "problem", "summary", default="")
-        impact = pick(item, "impact", "risk", default="")
-        suggestion = pick(item, "suggestion", "recommendation", "fix", default="")
-        rows.append(f"<tr><td>{esc(fid)}</td><td>{esc(severity)}</td><td>{esc(dimension)}</td><td>{esc(file_name)}:{esc(line)}</td><td>{esc(title)}</td><td>{esc(impact)}</td><td>{esc(suggestion)}</td></tr>")
-    return "\\n".join(rows) or '<tr><td colspan="7" class="muted">未登记 finding</td></tr>'
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Render a rich HTML report for manual code review.")
-    parser.add_argument("--review-json", default="")
-    parser.add_argument("--quality-json", default="")
-    parser.add_argument("--static-json", default="")
-    parser.add_argument("--markdown", default="")
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--title", default="代码走查报告")
-    args = parser.parse_args()
-
-    review = load_json(Path(args.review_json)) if args.review_json else {}
-    quality = load_json(Path(args.quality_json)) if args.quality_json else {}
-    static = load_json(Path(args.static_json)) if args.static_json else {}
-    markdown = Path(args.markdown).read_text(encoding="utf-8") if args.markdown and Path(args.markdown).exists() else ""
-    findings = findings_from(review, quality, static)
-    gate = quality.get("gate_decision") or review.get("gate_decision") or review.get("status") or "unknown"
-    tool_rows = []
-    for tool in static.get("tools", []):
-        tool_rows.append(f"<tr><td>{esc(tool.get('name'))}</td><td>{esc(tool.get('status'))}</td><td>{esc(tool.get('reason', ''))}</td></tr>")
-    html_text = f'''<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{esc(args.title)}</title>
-  <style>
-    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1f2933; background: #f6f8fb; }}
-    header {{ background: #0f172a; color: white; padding: 24px 32px; }}
-    main {{ padding: 24px 32px; }}
-    section {{ background: white; border: 1px solid #d9e2ec; border-radius: 8px; padding: 18px; margin: 0 0 18px; }}
-    h1, h2 {{ margin: 0 0 12px; }}
-    .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-    .metric {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }}
-    .metric strong {{ display: block; font-size: 22px; margin-top: 6px; }}
-    .badge {{ display: inline-block; margin: 4px 6px 4px 0; padding: 5px 8px; border-radius: 999px; background: #e8f1ff; color: #163b73; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th, td {{ border-bottom: 1px solid #e5eaf0; padding: 8px; text-align: left; vertical-align: top; }}
-    th {{ background: #f1f5f9; }}
-    pre {{ white-space: pre-wrap; background: #0b1020; color: #dbeafe; padding: 12px; border-radius: 6px; max-height: 360px; overflow: auto; }}
-    .muted {{ color: #697586; }}
-  </style>
-</head>
-<body>
-  <header><h1>{esc(args.title)}</h1><div>gate decision: <strong>{esc(gate)}</strong></div></header>
-  <main>
-    <section class="summary">
-      <div class="metric">Findings<strong>{len(findings)}</strong></div>
-      <div class="metric">Severity<div>{render_badges(count_by(findings, "severity", "level", "priority"))}</div></div>
-      <div class="metric">Quality Dimension<div>{render_badges(count_by(findings, "dimension", "category", "type"))}</div></div>
-    </section>
-    <section>
-      <h2>静态分析工具状态</h2>
-      <table><thead><tr><th>工具</th><th>状态</th><th>原因/说明</th></tr></thead><tbody>{''.join(tool_rows) or '<tr><td colspan="3" class="muted">未提供工具执行报告</td></tr>'}</tbody></table>
-    </section>
-    <section>
-      <h2>问题清单</h2>
-      <table><thead><tr><th>ID</th><th>级别</th><th>维度</th><th>位置</th><th>问题</th><th>影响</th><th>建议</th></tr></thead><tbody>{render_table(findings)}</tbody></table>
-    </section>
-    <section>
-      <h2>人工确认区</h2>
-      <label><input type="checkbox"> blocker 已逐项确认</label><br>
-      <label><input type="checkbox"> 静态分析缺失项已有审批或修复计划</label><br>
-      <label><input type="checkbox"> 高风险问题已有 owner 和完成时间</label>
-    </section>
-    <section>
-      <h2>Markdown 摘要</h2>
-      <pre>{esc(markdown[-20000:])}</pre>
-    </section>
-  </main>
-</body>
-</html>
-'''
-    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.output).write_text(html_text, encoding="utf-8")
-    print(args.output)
-
-
-if __name__ == "__main__":
-    main()
-""",
+        "run_code_review.py": "#!/usr/bin/env python3\nimport argparse\nimport json\nimport subprocess\nimport sys\nimport time\nfrom pathlib import Path\n\nQUALITY_DIMENSIONS = [\n    \"bug\", \"vulnerability\", \"security_hotspot\", \"code_smell\", \"complexity\", \"duplication\", \"coverage\",\n    \"maintainability\", \"reliability\", \"security\", \"performance\", \"testability\", \"observability\"\n]\nBLOCKING_TOOL_STATUSES = {\"tool_unavailable\", \"missing_input\", \"missing_config\", \"download_failed\", \"failed\"}\n\n\ndef load_json(path: Path):\n    if not path or not path.exists():\n        return {}\n    return json.loads(path.read_text(encoding=\"utf-8\"))\n\n\ndef first_existing(paths):\n    for path in paths:\n        if path and path.exists():\n            return path\n    return None\n\n\ndef rel_or_abs(root: Path, value: str):\n    if not value:\n        return None\n    path = Path(value)\n    return path if path.is_absolute() else root / path\n\n\ndef normalize_severity(value) -> str:\n    raw = str(value or \"\").lower()\n    if raw in {\"blocker\", \"critical\", \"major\", \"minor\", \"info\"}:\n        return raw\n    if raw in {\"error\", \"high\"}:\n        return \"major\"\n    if raw in {\"warn\", \"warning\", \"medium\"}:\n        return \"minor\"\n    return \"info\"\n\n\ndef normalize_dimension(value) -> str:\n    raw = str(value or \"\").lower().replace(\" \", \"_\")\n    aliases = {\n        \"bugs\": \"bug\",\n        \"vulnerabilities\": \"vulnerability\",\n        \"security-hotspot\": \"security_hotspot\",\n        \"smell\": \"code_smell\",\n        \"code-smell\": \"code_smell\",\n        \"maintainability_issue\": \"maintainability\",\n        \"reliability_issue\": \"reliability\",\n        \"performance_issue\": \"performance\",\n        \"test\": \"testability\",\n    }\n    raw = aliases.get(raw, raw)\n    return raw if raw in QUALITY_DIMENSIONS else \"maintainability\"\n\n\ndef category_for_dimension(dimension: str) -> str:\n    if dimension in {\"bug\", \"reliability\"}:\n        return \"correctness\"\n    if dimension in {\"vulnerability\", \"security_hotspot\", \"security\"}:\n        return \"security\"\n    if dimension == \"performance\":\n        return \"performance\"\n    if dimension in {\"coverage\", \"testability\"}:\n        return \"test\"\n    if dimension == \"observability\":\n        return \"observability\"\n    return \"quality\"\n\n\ndef collect_items(payload: dict):\n    for key in [\"findings\", \"issues\", \"comments\", \"violations\"]:\n        value = payload.get(key)\n        if isinstance(value, list):\n            yield from value\n\n\ndef normalize_finding(item: dict, source: str, index: int) -> dict:\n    dimension = normalize_dimension(item.get(\"dimension\") or item.get(\"category\") or item.get(\"type\") or item.get(\"rule_category\"))\n    file_name = item.get(\"file\") or item.get(\"path\") or item.get(\"location\") or item.get(\"component\") or \"\"\n    line = item.get(\"line\") or item.get(\"start_line\") or item.get(\"start\")\n    finding_id = item.get(\"id\") or item.get(\"rule_id\") or item.get(\"rule\") or f\"CRR-{source}-{index:03d}\"\n    message = item.get(\"problem\") or item.get(\"message\") or item.get(\"title\") or item.get(\"summary\") or \"代码走查发现问题\"\n    return {\n        \"id\": str(finding_id),\n        \"severity\": normalize_severity(item.get(\"severity\") or item.get(\"level\") or item.get(\"priority\")),\n        \"dimension\": dimension,\n        \"category\": category_for_dimension(dimension),\n        \"code_evidence\": {\n            \"file\": str(file_name),\n            \"line_start\": int(line) if str(line or \"\").isdigit() else 1,\n            \"line_end\": int(line) if str(line or \"\").isdigit() else 1,\n            \"snippet\": str(item.get(\"snippet\") or item.get(\"evidence\") or \"\")[:2000],\n            \"source\": source,\n        },\n        \"problem\": str(message),\n        \"impact\": str(item.get(\"impact\") or item.get(\"risk\") or \"影响代码质量、可维护性或发布风险，需要人工确认或修复。\"),\n        \"recommendation\": str(item.get(\"recommendation\") or item.get(\"suggestion\") or item.get(\"fix\") or \"定位证据后修复，并重跑代码质量与走查门禁。\"),\n        \"rule_refs\": item.get(\"rule_refs\") or ([] if not item.get(\"rule_id\") else [str(item.get(\"rule_id\"))]),\n        \"source_ids\": item.get(\"source_ids\") or [f\"{source}:{finding_id}\"],\n        \"blocking\": normalize_severity(item.get(\"severity\") or item.get(\"level\") or item.get(\"priority\")) in {\"blocker\", \"critical\", \"major\"},\n    }\n\n\ndef tool_findings(static_report: dict) -> list[dict]:\n    findings = []\n    for index, tool in enumerate(static_report.get(\"tools\", []) or [], start=1):\n        status = str(tool.get(\"status\") or \"\").lower()\n        if status in BLOCKING_TOOL_STATUSES:\n            findings.append({\n                \"id\": f\"CRR-STATIC-{index:03d}\",\n                \"severity\": \"major\",\n                \"dimension\": \"maintainability\",\n                \"category\": \"tooling\",\n                \"code_evidence\": {\"file\": \"<static-analysis>\", \"line_start\": 1, \"line_end\": 1, \"snippet\": tool.get(\"reason\", \"\"), \"source\": \"static_analysis\"},\n                \"problem\": f\"静态分析工具 {tool.get('name', 'unknown')} 状态为 {status}\",\n                \"impact\": \"静态分析未完整执行，代码异味、复杂度、安全热点或可靠性问题可能漏检。\",\n                \"recommendation\": \"补齐工具配置/凭证/执行环境后重跑；如确需跳过，必须登记已接受的人工豁免。\",\n                \"rule_refs\": [],\n                \"source_ids\": [f\"static-analysis-report:{tool.get('name', 'unknown')}\"],\n                \"blocking\": True,\n            })\n    return findings\n\n\ndef checklist_coverage(findings: list[dict], static_report: dict) -> list[dict]:\n    dimensions_with_findings = {item.get(\"dimension\") for item in findings if item.get(\"dimension\")}\n    tools = static_report.get(\"tools\", []) if isinstance(static_report, dict) else []\n    blocking_tools = [tool for tool in tools if str(tool.get(\"status\") or \"\").lower() in BLOCKING_TOOL_STATUSES]\n    any_tool_passed = any(str(tool.get(\"status\") or \"\").lower() == \"passed\" for tool in tools)\n    coverage = []\n    for dimension in QUALITY_DIMENSIONS:\n        if dimension in dimensions_with_findings:\n            status = \"checked\"\n            evidence = [item[\"id\"] for item in findings if item.get(\"dimension\") == dimension]\n            reason = \"该维度存在 finding 或工具证据。\"\n        elif blocking_tools and not static_report.get(\"waiver\", {}).get(\"status\") == \"accepted\":\n            status = \"blocked\"\n            evidence = [f\"static-analysis-report:{tool.get('name', 'unknown')}\" for tool in blocking_tools]\n            reason = \"静态分析工具缺失或失败，不能确认该维度已覆盖。\"\n        elif any_tool_passed:\n            status = \"checked\"\n            evidence = [f\"static-analysis-report:{tool.get('name', 'unknown')}\" for tool in tools if str(tool.get(\"status\") or \"\").lower() == \"passed\"]\n            reason = \"静态分析工具已执行，未发现该维度问题。\"\n        else:\n            status = \"missing\"\n            evidence = []\n            reason = \"缺少可审计静态分析或代码质量输入。\"\n        coverage.append({\"dimension\": dimension, \"status\": status, \"evidence\": evidence, \"reason\": reason})\n    return coverage\n\n\ndef gate_decision(findings: list[dict], coverage: list[dict], static_report: dict) -> str:\n    if any(item.get(\"blocking\") for item in findings):\n        return \"block\"\n    if any(item.get(\"status\") in {\"missing\", \"blocked\"} for item in coverage):\n        return \"block\"\n    tools = static_report.get(\"tools\", []) if isinstance(static_report, dict) else []\n    if not tools and static_report.get(\"waiver\", {}).get(\"status\") != \"accepted\":\n        return \"block\"\n    return \"pass\"\n\n\ndef write_markdown(path: Path, findings: list[dict], coverage: list[dict], decision: str):\n    lines = [\"# 代码走查报告\", \"\", f\"- gate_decision: `{decision}`\", f\"- findings: `{len(findings)}`\", \"\", \"## Findings\", \"\", \"| 严重级别 | 代码证据 | 问题描述 | 建议 |\", \"|---|---|---|---|\"]\n    for item in findings:\n        ev = item.get(\"code_evidence\") or {}\n        evidence = f\"{ev.get('file', '')}:{ev.get('line_start', '')} ({item.get('dimension')})\"\n        lines.append(f\"| {item.get('severity')} | `{evidence}` | {item.get('problem')} | {item.get('recommendation')} |\")\n    if not findings:\n        lines.append(\"| info | `-` | 未登记 finding | 继续保留静态分析和人工复核证据 |\")\n    lines.extend([\"\", \"## Checklist Coverage\", \"\", \"| 维度 | 状态 | 证据/原因 |\", \"|---|---|---|\"])\n    for item in coverage:\n        evidence = \", \".join(item.get(\"evidence\") or []) or item.get(\"reason\", \"\")\n        lines.append(f\"| {item.get('dimension')} | {item.get('status')} | {evidence} |\")\n    path.write_text(\"\\n\".join(lines) + \"\\n\", encoding=\"utf-8\")\n\n\ndef write_blockers(path: Path, findings: list[dict], coverage: list[dict]):\n    lines = [\"# Blocker List\", \"\"]\n    blockers = [item for item in findings if item.get(\"blocking\")]\n    for item in blockers:\n        lines.append(f\"- [{item.get('severity')}] {item.get('id')}: {item.get('problem')}\")\n    for item in coverage:\n        if item.get(\"status\") in {\"missing\", \"blocked\"}:\n            lines.append(f\"- [coverage:{item.get('status')}] {item.get('dimension')}: {item.get('reason')}\")\n    if len(lines) == 2:\n        lines.append(\"- 无 blocker\")\n    path.write_text(\"\\n\".join(lines) + \"\\n\", encoding=\"utf-8\")\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=\"Generate machine-readable and rich HTML code review artifacts.\")\n    parser.add_argument(\"--root\", default=\".\")\n    parser.add_argument(\"--output\", default=\"artifacts/code-review\")\n    parser.add_argument(\"--code-quality-report\", default=\"\")\n    parser.add_argument(\"--static-analysis-report\", default=\"\")\n    parser.add_argument(\"--changed-files-report\", default=\"\")\n    parser.add_argument(\"--implementation-summary\", default=\"\")\n    parser.add_argument(\"--allow-download\", action=\"store_true\")\n    parser.add_argument(\"--skip-static-analysis-autogen\", action=\"store_true\")\n    args = parser.parse_args()\n\n    root = Path(args.root).resolve()\n    output = rel_or_abs(root, args.output).resolve()\n    output.mkdir(parents=True, exist_ok=True)\n    plugin_root = Path(__file__).resolve().parents[2]\n    quality_report = first_existing([\n        rel_or_abs(root, args.code_quality_report),\n        root / \"artifacts/code-quality-governor/code-quality-report.json\",\n        root / \"artifacts/code-quality/code-quality-report.json\",\n    ])\n    static_report_path = first_existing([\n        rel_or_abs(root, args.static_analysis_report),\n        root / \"artifacts/code-quality-governor/static-analysis-report.json\",\n        root / \"artifacts/code-quality/static-analysis-report.json\",\n    ])\n    if not static_report_path and not args.skip_static_analysis_autogen:\n        cmd = [sys.executable, str(plugin_root / \"engineering-assistant/scripts/run_static_analysis_tools.py\"), \"--root\", str(root), \"--output\", str(root / \"artifacts/code-quality-governor\")]\n        if args.allow_download:\n            cmd.append(\"--allow-download\")\n        subprocess.run(cmd, text=True, check=False)\n        static_report_path = root / \"artifacts/code-quality-governor/static-analysis-report.json\"\n\n    quality = load_json(quality_report) if quality_report else {}\n    static = load_json(static_report_path) if static_report_path else {\"tools\": [], \"summary\": {}, \"missing\": \"static-analysis-report.json not found\"}\n    findings = []\n    for index, item in enumerate(collect_items(quality), start=1):\n        if isinstance(item, dict):\n            findings.append(normalize_finding(item, \"code_quality\", index))\n    for index, item in enumerate(collect_items(static), start=1):\n        if isinstance(item, dict):\n            findings.append(normalize_finding(item, \"static_analysis\", index))\n    findings.extend(tool_findings(static))\n    coverage = checklist_coverage(findings, static)\n    decision = gate_decision(findings, coverage, static)\n    review = {\n        \"gate_decision\": decision,\n        \"generated_at\": time.strftime(\"%Y-%m-%dT%H:%M:%SZ\", time.gmtime()),\n        \"source_artifacts\": {\n            \"code_quality_report\": str(quality_report) if quality_report else \"\",\n            \"static_analysis_report\": str(static_report_path) if static_report_path else \"\",\n        },\n        \"findings\": findings,\n        \"checklist_coverage\": coverage,\n        \"tool_status\": static.get(\"tools\", []),\n    }\n    review_path = output / \"review-comments.json\"\n    markdown_path = output / \"code-review-report.md\"\n    blocker_path = output / \"blocker-list.md\"\n    html_path = output / \"code-review-report.html\"\n    review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2) + \"\\n\", encoding=\"utf-8\")\n    write_markdown(markdown_path, findings, coverage, decision)\n    write_blockers(blocker_path, findings, coverage)\n    render_cmd = [\n        sys.executable,\n        str(plugin_root / \"engineering-assistant/scripts/render_code_review_html.py\"),\n        \"--review-json\", str(review_path),\n        \"--quality-json\", str(quality_report or \"\"),\n        \"--static-json\", str(static_report_path or \"\"),\n        \"--markdown\", str(markdown_path),\n        \"--output\", str(html_path),\n    ]\n    subprocess.run(render_cmd, text=True, check=True)\n    print(json.dumps({\"status\": decision, \"output\": str(output), \"artifacts\": [str(markdown_path), str(html_path), str(review_path), str(blocker_path)]}, ensure_ascii=False))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+        "render_code_review_html.py": "#!/usr/bin/env python3\nimport argparse\nimport html\nimport json\nimport re\nfrom pathlib import Path\n\nSECRET = re.compile(r\"(?i)(token|password|passwd|secret|key|credential|authorization)(\\s*[=:]\\s*)([^\\s<>&]+)\")\n\n\ndef load_json(path: Path):\n    if not path or not path.exists():\n        return {}\n    return json.loads(path.read_text(encoding=\"utf-8\"))\n\n\ndef redact(value):\n    text = \"\" if value is None else str(value)\n    return SECRET.sub(lambda m: f\"{m.group(1)}{m.group(2)}***\", text)\n\n\ndef esc(value):\n    return html.escape(redact(value))\n\n\ndef findings_from(*payloads):\n    items = []\n    for payload in payloads:\n        if isinstance(payload, dict):\n            for key in [\"findings\", \"issues\", \"comments\"]:\n                if isinstance(payload.get(key), list):\n                    items.extend(payload[key])\n    return items\n\n\ndef pick(item, *keys, default=\"\"):\n    for key in keys:\n        if isinstance(item, dict) and item.get(key) not in (None, \"\"):\n            return item.get(key)\n    return default\n\n\ndef evidence_file(item):\n    evidence = item.get(\"code_evidence\") if isinstance(item, dict) else {}\n    if isinstance(evidence, dict) and evidence.get(\"file\"):\n        return evidence.get(\"file\")\n    return pick(item, \"file\", \"path\", \"location\", default=\"\")\n\n\ndef evidence_line(item):\n    evidence = item.get(\"code_evidence\") if isinstance(item, dict) else {}\n    if isinstance(evidence, dict) and evidence.get(\"line_start\"):\n        return evidence.get(\"line_start\")\n    return pick(item, \"line\", \"start_line\", \"start\", default=\"\")\n\n\ndef count_by(findings, getter, default=\"unknown\"):\n    result = {}\n    for item in findings:\n        value = getter(item) if callable(getter) else pick(item, getter, default=default)\n        value = str(value or default).lower()\n        result[value] = result.get(value, 0) + 1\n    return result\n\n\ndef render_badges(counts):\n    if not counts:\n        return '<span class=\"muted\">无数据</span>'\n    return \"\".join(f'<span class=\"badge\">{esc(k)} <strong>{v}</strong></span>' for k, v in sorted(counts.items()))\n\n\ndef render_table(findings):\n    rows = []\n    for index, item in enumerate(findings, start=1):\n        fid = pick(item, \"id\", \"rule\", \"rule_id\", default=f\"finding-{index}\")\n        severity = pick(item, \"severity\", \"level\", \"priority\", default=\"unknown\")\n        dimension = pick(item, \"dimension\", \"category\", \"type\", default=\"unknown\")\n        file_name = evidence_file(item)\n        line = evidence_line(item)\n        title = pick(item, \"problem\", \"title\", \"message\", \"summary\", default=\"\")\n        impact = pick(item, \"impact\", \"risk\", default=\"\")\n        suggestion = pick(item, \"recommendation\", \"suggestion\", \"fix\", default=\"\")\n        source_ids = \", \".join(str(x) for x in item.get(\"source_ids\", []) if x) if isinstance(item, dict) else \"\"\n        rows.append(f\"<tr><td>{esc(fid)}</td><td>{esc(severity)}</td><td>{esc(dimension)}</td><td>{esc(file_name)}:{esc(line)}</td><td>{esc(title)}</td><td>{esc(impact)}</td><td>{esc(suggestion)}</td><td>{esc(source_ids)}</td></tr>\")\n    return \"\\n\".join(rows) or '<tr><td colspan=\"8\" class=\"muted\">未登记 finding</td></tr>'\n\n\ndef render_coverage(coverage):\n    rows = []\n    for item in coverage or []:\n        evidence = \", \".join(str(x) for x in item.get(\"evidence\", []) if x) or item.get(\"reason\", \"\")\n        rows.append(f\"<tr><td>{esc(item.get('dimension'))}</td><td>{esc(item.get('status'))}</td><td>{esc(evidence)}</td></tr>\")\n    return \"\\n\".join(rows) or '<tr><td colspan=\"3\" class=\"muted\">未提供 checklist coverage</td></tr>'\n\n\ndef main():\n    parser = argparse.ArgumentParser(description=\"Render a rich HTML report for manual code review.\")\n    parser.add_argument(\"--review-json\", default=\"\")\n    parser.add_argument(\"--quality-json\", default=\"\")\n    parser.add_argument(\"--static-json\", default=\"\")\n    parser.add_argument(\"--markdown\", default=\"\")\n    parser.add_argument(\"--output\", required=True)\n    parser.add_argument(\"--title\", default=\"代码走查报告\")\n    args = parser.parse_args()\n\n    review = load_json(Path(args.review_json)) if args.review_json else {}\n    quality = load_json(Path(args.quality_json)) if args.quality_json else {}\n    static = load_json(Path(args.static_json)) if args.static_json else {}\n    markdown = Path(args.markdown).read_text(encoding=\"utf-8\") if args.markdown and Path(args.markdown).exists() else \"\"\n    findings = findings_from(review, quality, static)\n    coverage = review.get(\"checklist_coverage\") or []\n    gate = review.get(\"gate_decision\") or quality.get(\"gate_decision\") or review.get(\"status\") or \"unknown\"\n    tool_rows = []\n    for tool in static.get(\"tools\", []) or review.get(\"tool_status\", []):\n        tool_rows.append(f\"<tr><td>{esc(tool.get('name'))}</td><td>{esc(tool.get('status'))}</td><td>{esc(tool.get('reason', ''))}</td></tr>\")\n    html_text = f'''<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>{esc(args.title)}</title>\n  <style>\n    body {{ margin: 0; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; color: #1f2933; background: #f6f8fb; }}\n    header {{ background: #0f172a; color: white; padding: 24px 32px; }}\n    main {{ padding: 24px 32px; }}\n    section {{ background: white; border: 1px solid #d9e2ec; border-radius: 8px; padding: 18px; margin: 0 0 18px; }}\n    h1, h2 {{ margin: 0 0 12px; }}\n    .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}\n    .metric {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }}\n    .metric strong {{ display: block; font-size: 22px; margin-top: 6px; }}\n    .badge {{ display: inline-block; margin: 4px 6px 4px 0; padding: 5px 8px; border-radius: 999px; background: #e8f1ff; color: #163b73; }}\n    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}\n    th, td {{ border-bottom: 1px solid #e5eaf0; padding: 8px; text-align: left; vertical-align: top; }}\n    th {{ background: #f1f5f9; }}\n    pre {{ white-space: pre-wrap; background: #0b1020; color: #dbeafe; padding: 12px; border-radius: 6px; max-height: 360px; overflow: auto; }}\n    .muted {{ color: #697586; }}\n  </style>\n</head>\n<body>\n  <header><h1>{esc(args.title)}</h1><div>gate decision: <strong>{esc(gate)}</strong></div></header>\n  <main>\n    <section class=\"summary\">\n      <div class=\"metric\">Findings<strong>{len(findings)}</strong></div>\n      <div class=\"metric\">Severity<div>{render_badges(count_by(findings, \"severity\"))}</div></div>\n      <div class=\"metric\">Quality Dimension<div>{render_badges(count_by(findings, \"dimension\"))}</div></div>\n      <div class=\"metric\">Files / Modules<div>{render_badges(count_by(findings, evidence_file, default=\"unknown\"))}</div></div>\n    </section>\n    <section>\n      <h2>静态分析工具状态</h2>\n      <table><thead><tr><th>工具</th><th>状态</th><th>原因/说明</th></tr></thead><tbody>{''.join(tool_rows) or '<tr><td colspan=\"3\" class=\"muted\">未提供工具执行报告</td></tr>'}</tbody></table>\n    </section>\n    <section>\n      <h2>Checklist Coverage</h2>\n      <table><thead><tr><th>维度</th><th>状态</th><th>证据/原因</th></tr></thead><tbody>{render_coverage(coverage)}</tbody></table>\n    </section>\n    <section>\n      <h2>问题清单</h2>\n      <table><thead><tr><th>ID</th><th>级别</th><th>维度</th><th>位置</th><th>问题</th><th>影响</th><th>建议</th><th>来源</th></tr></thead><tbody>{render_table(findings)}</tbody></table>\n    </section>\n    <section>\n      <h2>人工确认区</h2>\n      <label><input type=\"checkbox\"> blocker 已逐项确认</label><br>\n      <label><input type=\"checkbox\"> 静态分析缺失项已有审批或修复计划</label><br>\n      <label><input type=\"checkbox\"> 高风险问题已有 owner 和完成时间</label>\n    </section>\n    <section>\n      <h2>Markdown 摘要</h2>\n      <pre>{esc(markdown[-20000:])}</pre>\n    </section>\n  </main>\n</body>\n</html>\n'''\n    Path(args.output).parent.mkdir(parents=True, exist_ok=True)\n    Path(args.output).write_text(html_text, encoding=\"utf-8\")\n    print(args.output)\n\n\nif __name__ == \"__main__\":\n    main()\n",
         "validate_rule_candidates.py": """#!/usr/bin/env python3
 import json, sys
 from pathlib import Path
@@ -9850,7 +9916,7 @@ print("CI 产物目录已准备")
     for file_name, data in actions.items():
         write_text(base / "ci" / "github-actions" / file_name, json.dumps(data, ensure_ascii=False, indent=2))
 
-    write_text(base / "registry" / "skills.yaml", json.dumps({"skills": [{"skill_id": s["id"], "version": "1.0.0", "type": s["type"], "owner": s["owner"], "path": f"{SKILLS_ROOT}/{s['id']}", "risk_level": risk_level(s), "allow_implicit_invocation": s["id"] not in HIGH_RISK_SKILLS} for s in SKILLS]}, ensure_ascii=False, indent=2))
+    write_text(base / "registry" / "skills.yaml", json.dumps({"skills": [{"skill_id": s["id"], "version": SKILL_VERSION, "type": s["type"], "owner": s["owner"], "path": f"{SKILLS_ROOT}/{s['id']}", "risk_level": risk_level(s), "allow_implicit_invocation": s["id"] not in HIGH_RISK_SKILLS} for s in SKILLS]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "workflows.yaml", json.dumps({"workflows": [{"workflow_id": name, "path": f"engineering-assistant/workflows/{name}.yaml"} for name in workflows]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "standards.yaml", json.dumps({"standards": [{"id": Path(name).stem, "path": f"engineering-assistant/standards/{name}", "status": "published", "owner": "规范 owner"} for name in standards]}, ensure_ascii=False, indent=2))
     write_text(base / "registry" / "team-rule-catalog.yaml", json.dumps({"rules": TEAM_RULE_CATALOG, "eval_rule_prefixes": TEAM_RULE_PREFIXES}, ensure_ascii=False, indent=2))
@@ -9859,7 +9925,7 @@ print("CI 产物目录已准备")
     for skill in SKILLS:
         write_json(base / "runtime" / "compiled" / "skills" / f"{skill['id']}.ir.json", runtime_ir(skill))
     write_json(base / "runtime" / "compiled" / "skill-runtime-index.json", {
-        "version": "1.0.0",
+        "version": SKILL_VERSION,
         "skills": [
             {
                 "skill_id": s["id"],

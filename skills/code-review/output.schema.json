@@ -165,7 +165,118 @@
     "findings": {
       "type": "array",
       "items": {
-        "type": "object"
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "dimension",
+          "category",
+          "problem",
+          "impact",
+          "recommendation",
+          "blocking"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "critical",
+              "major",
+              "minor",
+              "info"
+            ]
+          },
+          "dimension": {
+            "enum": [
+              "bug",
+              "vulnerability",
+              "security_hotspot",
+              "code_smell",
+              "complexity",
+              "duplication",
+              "coverage",
+              "maintainability",
+              "reliability",
+              "security",
+              "performance",
+              "testability",
+              "observability"
+            ]
+          },
+          "category": {
+            "enum": [
+              "correctness",
+              "quality",
+              "security",
+              "performance",
+              "maintainability",
+              "test",
+              "observability",
+              "tooling"
+            ]
+          },
+          "code_evidence": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line_start": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line_end": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "snippet": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "diff",
+                  "static_analysis",
+                  "code_quality",
+                  "manual_review",
+                  "tooling"
+                ]
+              }
+            },
+            "additionalProperties": true
+          },
+          "source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rule_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1
+          },
+          "recommendation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "blocking": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
       }
     },
     "required_human_reviews": {

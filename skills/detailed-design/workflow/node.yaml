@@ -2,7 +2,7 @@
   "node_id": "detailed-design",
   "stage": "detailed_design",
   "skill_id": "detailed-design",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

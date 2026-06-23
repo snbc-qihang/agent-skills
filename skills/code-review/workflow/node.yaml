@@ -2,7 +2,7 @@
   "node_id": "code-review",
   "stage": "code_review",
   "skill_id": "code-review",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -12,6 +12,7 @@
   "depends_on": [],
   "inputs": [
     "code-quality-report.json",
+    "static-analysis-report.json",
     "changed-files-report.json",
     "implementation-summary.md",
     "repo_context"

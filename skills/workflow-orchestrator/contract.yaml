@@ -1,7 +1,7 @@
 {
   "skill_id": "workflow-orchestrator",
   "skill_name": "Workflow Orchestrator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stage": "workflow_orchestration",
   "type": "workflow_skill",
   "purpose": "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。",

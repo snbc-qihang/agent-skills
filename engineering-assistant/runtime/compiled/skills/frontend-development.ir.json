@@ -1,6 +1,6 @@
 {
   "skill_id": "frontend-development",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stage": "frontend_development",
   "type": "stage_skill",
   "prompt_pack": {

@@ -2,7 +2,7 @@
   "node_id": "database-design",
   "stage": "database_design",
   "skill_id": "database-design",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

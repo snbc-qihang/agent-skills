@@ -16,6 +16,7 @@ description: Use when the request is about 对代码进行人工评审辅助，�
 
 # 输入
 - `code-quality-report.json`
+- `static-analysis-report.json`
 - `changed-files-report.json`
 - `implementation-summary.md`
 - `repo_context`
@@ -65,10 +66,12 @@ description: Use when the request is about 对代码进行人工评审辅助，�
 
 
 # 深度代码走查门禁
-- 代码走查必须消费 `code-quality-report.json` 与 `static-analysis-report.json`；若缺失，必须主动运行或要求先运行 `code-quality-governor`，不得只做表层 diff 摘要。
-- 每个高优先级问题必须映射到至少一个质量维度：`bug`、`vulnerability`、`security_hotspot`、`code_smell`、`complexity`、`duplication`、`coverage`、`maintainability`、`reliability` 或 `security`。
+- 代码走查必须消费 `code-quality-report.json` 与 `static-analysis-report.json`；若缺失，必须主动运行 `engineering-assistant/scripts/run_code_review.py` 或先运行 `code-quality-governor`，不得只做表层 diff 摘要。
+- 每次正式走查必须自动生成 `review-comments.json`、`code-review-report.md`、`blocker-list.md` 和 `code-review-report.html`；不得等用户二次提示才生成报告。
+- 每个高优先级问题必须映射到至少一个质量维度：`bug`、`vulnerability`、`security_hotspot`、`code_smell`、`complexity`、`duplication`、`coverage`、`maintainability`、`reliability`、`security`、`performance`、`testability` 或 `observability`。
+- `review-comments.json` 必须包含 `checklist_coverage`，逐项说明每个质量维度是 `checked`、`not_applicable`、`missing` 还是 `blocked`；不得把“未检查”当作“没问题”。
 - 必须对复杂度、鉴权/越权、空指针、资源泄漏、事务边界、并发/幂等、异常吞噬、敏感信息、SQL/反序列化/反射、输入校验、测试断言质量进行显式检查；未覆盖项要写入假设或 required action。
-- 走查报告必须生成 `code-review-report.html`，用于人工直观看问题分布、阻断项、证据片段、工具运行状态和修复优先级。
+- 走查报告必须生成 `code-review-report.html`，用于人工直观看问题分布、阻断项、证据片段、工具运行状态、检查覆盖和修复优先级。
 
 
 # 富 HTML 报告要求
@@ -172,6 +175,9 @@ description: Use when the request is about 对代码进行人工评审辅助，�
 
 编排运行：`workflow-orchestrator` 将包含上游产物的节点 `code-review` 发送给本 skill，并等待 `StageRunResult`。
 
+# 能力维护提示
+- 如果团队反馈“需要人工提示才生成走查报告”或“只看功能 bug、不看质量/异味”，不要只加提示词；优先补执行入口、输出 schema、validator 和 eval。参考 `references/auto-report-and-quality-depth-plan.md`。
+- `code-review` 的声明要求必须落到可执行链路：读取质量/静态分析输入、生成 `review-comments.json`、渲染 `code-review-report.html`、输出 `blocker-list.md`，并由 `validate_output.py` 阻断缺失产物或缺失质量维度的结果。
 
 
 # Eval 指引

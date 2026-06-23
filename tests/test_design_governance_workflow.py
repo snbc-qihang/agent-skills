@@ -149,8 +149,8 @@ class DesignGovernanceWorkflowTests(unittest.TestCase):
     def test_delivery_document_records_current_design_governance_plan_and_version(self) -> None:
         delivery = (ROOT / "engineering-assistant-delivery.md").read_text(encoding="utf-8")
         manifest = json.loads((ROOT / "engineering-assistant" / "plugin" / "plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.0.0.3", manifest["version"])
-        self.assertIn("当前插件版本：`1.0.0.3`", delivery)
+        self.assertEqual("1.0.0.4", manifest["version"])
+        self.assertIn("当前插件版本：`1.0.0.4`", delivery)
         self.assertIn("可循环的设计治理工作流", delivery)
         self.assertIn("# 8.1 设计治理闭环与防废稿门禁", delivery)
         self.assertIn("preflight_input_state != ready", delivery)

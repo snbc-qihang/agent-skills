@@ -2,7 +2,7 @@
   "node_id": "release-retrospective",
   "stage": "release_retrospective",
   "skill_id": "release-retrospective",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

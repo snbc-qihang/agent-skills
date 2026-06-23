@@ -1,7 +1,7 @@
 {
   "skill_id": "code-review",
   "skill_name": "Code Review",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "stage": "code_review",
   "type": "stage_skill",
   "purpose": "对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。",
@@ -37,6 +37,7 @@
     ],
     "requires": [
       "code-quality-report.json",
+      "static-analysis-report.json",
       "changed-files-report.json",
       "implementation-summary.md",
       "repo_context"
@@ -324,6 +325,14 @@
       "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
     },
     {
+      "name": "static-analysis-report.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
       "name": "changed-files-report.json",
       "type": "artifact|string|object",
       "required": false,
@@ -605,6 +614,7 @@
     "node_id": "code-review",
     "input_artifacts": [
       "code-quality-report.json",
+      "static-analysis-report.json",
       "changed-files-report.json",
       "implementation-summary.md",
       "repo_context"
@@ -681,7 +691,10 @@
       "coverage",
       "maintainability",
       "reliability",
-      "security"
+      "security",
+      "performance",
+      "testability",
+      "observability"
     ],
     "block_when": [
       "required tool configured but execution failed",
@@ -706,6 +719,8 @@
       "finding severity distribution",
       "quality dimension distribution",
       "tool execution status",
+      "file/module distribution",
+      "checklist coverage",
       "evidence table",
       "required actions",
       "human review checklist"
