@@ -1,6 +1,6 @@
 {
   "workflow_id": "design-only",
-  "version": "1.0.0.3",
+  "version": "1.0.0.4",
   "states": [
     "pending",
     "running",
@@ -284,6 +284,89 @@
         "PROCESS_DOCUMENTATION_POLLUTION"
       ]
     },
+    "document_spine_policy": {
+      "spine_artifact": "docs/00-index/product-planning-spine.md",
+      "machine_index": "docs/00-index/document-index.json",
+      "active_document_budget": 12,
+      "active_context_rule": "每个任务只读取 product-planning-spine、当前任务直接关联文档、任务规则包和明确引用的 source_artifacts；不得因 docs 增长而全量扫读。",
+      "document_growth_controls": [
+        "新增 docs 文档必须登记到 document-index.json，声明 owner、status、retention_policy、supersedes/superseded_by 和 agent_read_policy",
+        "被替代的规划/设计文档必须标记 superseded 或 archived，不能和新文档同时作为 active source",
+        "过程资料先进入 .run-artifacts；确认交付后提升到 docs 并同步更新 planning spine 与 document-index",
+        "任务结束必须输出 retained-vs-transient 清单，说明保留、归档、丢弃和后续规划影响"
+      ],
+      "drift_markers": [
+        "DOC_SPRAWL_RISK",
+        "ACTIVE_CONTEXT_OVER_BUDGET",
+        "STALE_PLAN_SOURCE",
+        "UNINDEXED_FORMAL_DOC"
+      ]
+    },
+    "agent_execution_monitor_policy": {
+      "monitor_artifact": ".run-artifacts/engineering-assistant/<run_id>/agent-execution-monitor.json",
+      "required_for": [
+        "parallelization",
+        "subagent_execution",
+        "delegated_review",
+        "long_running_task"
+      ],
+      "required_agent_fields": [
+        "agent_id",
+        "role",
+        "assigned_scope",
+        "forbidden_scope",
+        "expected_outputs",
+        "required_checks",
+        "status"
+      ],
+      "strict_check_rule": "子 agent 自述不能作为通过证据；必须由 orchestrator 或独立 checker 读取产物、命令输出、diff、测试或验证报告后登记 observed_evidence。",
+      "monitor_checks": [
+        "scope_adherence",
+        "evidence_returned",
+        "independent_verification",
+        "blocked_or_failed_reported",
+        "artifact_consumed_by_orchestrator",
+        "no_unverified_success_claim"
+      ],
+      "failure_markers": [
+        "SUBAGENT_UNVERIFIED_SUCCESS",
+        "SUBAGENT_SCOPE_DRIFT",
+        "SUBAGENT_EVIDENCE_MISSING",
+        "MONITOR_CHECK_NOT_CONSUMED"
+      ]
+    },
+    "product_plan_alignment_policy": {
+      "plan_spine_artifact": "docs/00-index/product-planning-spine.md",
+      "alignment_artifact": ".run-artifacts/engineering-assistant/<run_id>/post-task-plan-alignment.json",
+      "required_before_task_close": true,
+      "required_fields": [
+        "product_goal",
+        "capability_path",
+        "accepted_scope",
+        "out_of_scope",
+        "integration_points",
+        "next_plan_update",
+        "alignment_status"
+      ],
+      "alignment_statuses": [
+        "aligned",
+        "aligned_with_followups",
+        "drift_detected",
+        "blocked"
+      ],
+      "close_blockers": [
+        "任务完成但未映射到产品能力路径",
+        "实现只在当前局部可用但破坏整体规划/边界/演进路径",
+        "发现规划漂移但未更新 planning spine 或后续任务",
+        "新增正式 docs 未登记 document-index 或未处理 superseded 文档"
+      ],
+      "drift_markers": [
+        "PRODUCT_PLAN_DRIFT",
+        "LOCAL_OPTIMUM_ONLY",
+        "MISSING_POST_TASK_ALIGNMENT",
+        "PLAN_SPINE_NOT_UPDATED"
+      ]
+    },
     "pollution_markers": [
       "TARGET_REPO_ARTIFACT_POLLUTION",
       "PROCESS_DOCUMENTATION_POLLUTION"
@@ -489,7 +572,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -568,7 +651,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -650,7 +733,7 @@
       "node_id": "high-level-design",
       "stage": "high_level_design",
       "skill_id": "high-level-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -730,7 +813,7 @@
       "node_id": "detailed-design",
       "stage": "detailed_design",
       "skill_id": "detailed-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -810,7 +893,7 @@
       "node_id": "redis-design",
       "stage": "redis_design",
       "skill_id": "redis-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -890,7 +973,7 @@
       "node_id": "mq-design",
       "stage": "mq_design",
       "skill_id": "mq-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -970,7 +1053,7 @@
       "node_id": "database-design",
       "stage": "database_design",
       "skill_id": "database-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1055,7 +1138,7 @@
       "node_id": "frontend-design",
       "stage": "frontend_design",
       "skill_id": "frontend-design",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1135,7 +1218,7 @@
       "node_id": "design-review",
       "stage": "design_review",
       "skill_id": "design-review",
-      "version": "1.0.0.3",
+      "version": "1.0.0.4",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

@@ -2,7 +2,7 @@
   "node_id": "mq-design",
   "stage": "mq_design",
   "skill_id": "mq-design",
-  "version": "1.0.0.3",
+  "version": "1.0.0.4",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

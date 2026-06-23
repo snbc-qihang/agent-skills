@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
-PLUGIN_VERSION = "1.0.0.3"
+PLUGIN_VERSION = "1.0.0.4"
 DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
 
 EVAL_CASES = [
@@ -172,6 +172,51 @@ ASSISTANT_FEEDBACK_POLICY = {
     ],
 }
 
+DOCUMENT_SPINE_POLICY = {
+    "spine_artifact": "docs/00-index/product-planning-spine.md",
+    "machine_index": "docs/00-index/document-index.json",
+    "active_document_budget": 12,
+    "active_context_rule": "每个任务只读取 product-planning-spine、当前任务直接关联文档、任务规则包和明确引用的 source_artifacts；不得因 docs 增长而全量扫读。",
+    "document_growth_controls": [
+        "新增 docs 文档必须登记到 document-index.json，声明 owner、status、retention_policy、supersedes/superseded_by 和 agent_read_policy",
+        "被替代的规划/设计文档必须标记 superseded 或 archived，不能和新文档同时作为 active source",
+        "过程资料先进入 .run-artifacts；确认交付后提升到 docs 并同步更新 planning spine 与 document-index",
+        "任务结束必须输出 retained-vs-transient 清单，说明保留、归档、丢弃和后续规划影响",
+    ],
+    "drift_markers": ["DOC_SPRAWL_RISK", "ACTIVE_CONTEXT_OVER_BUDGET", "STALE_PLAN_SOURCE", "UNINDEXED_FORMAL_DOC"],
+}
+
+AGENT_EXECUTION_MONITOR_POLICY = {
+    "monitor_artifact": ".run-artifacts/engineering-assistant/<run_id>/agent-execution-monitor.json",
+    "required_for": ["parallelization", "subagent_execution", "delegated_review", "long_running_task"],
+    "required_agent_fields": ["agent_id", "role", "assigned_scope", "forbidden_scope", "expected_outputs", "required_checks", "status"],
+    "strict_check_rule": "子 agent 自述不能作为通过证据；必须由 orchestrator 或独立 checker 读取产物、命令输出、diff、测试或验证报告后登记 observed_evidence。",
+    "monitor_checks": [
+        "scope_adherence",
+        "evidence_returned",
+        "independent_verification",
+        "blocked_or_failed_reported",
+        "artifact_consumed_by_orchestrator",
+        "no_unverified_success_claim",
+    ],
+    "failure_markers": ["SUBAGENT_UNVERIFIED_SUCCESS", "SUBAGENT_SCOPE_DRIFT", "SUBAGENT_EVIDENCE_MISSING", "MONITOR_CHECK_NOT_CONSUMED"],
+}
+
+PRODUCT_PLAN_ALIGNMENT_POLICY = {
+    "plan_spine_artifact": "docs/00-index/product-planning-spine.md",
+    "alignment_artifact": ".run-artifacts/engineering-assistant/<run_id>/post-task-plan-alignment.json",
+    "required_before_task_close": True,
+    "required_fields": ["product_goal", "capability_path", "accepted_scope", "out_of_scope", "integration_points", "next_plan_update", "alignment_status"],
+    "alignment_statuses": ["aligned", "aligned_with_followups", "drift_detected", "blocked"],
+    "close_blockers": [
+        "任务完成但未映射到产品能力路径",
+        "实现只在当前局部可用但破坏整体规划/边界/演进路径",
+        "发现规划漂移但未更新 planning spine 或后续任务",
+        "新增正式 docs 未登记 document-index 或未处理 superseded 文档",
+    ],
+    "drift_markers": ["PRODUCT_PLAN_DRIFT", "LOCAL_OPTIMUM_ONLY", "MISSING_POST_TASK_ALIGNMENT", "PLAN_SPINE_NOT_UPDATED"],
+}
+
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
     "repo-context-miner": ["A", "H", "D", "I", "E", "P", "R", "M", "DB", "FW", "FE", "QIN"],
@@ -289,9 +334,13 @@ TEAM_RULE_CATALOG = [
     {"id": "DG17", "category": "文档治理", "rule": "项目规范必须生成 artifacts/rule-governance/rule-registry.json，作为 task agent 和 reviewer 的机读规则索引。"},
     {"id": "DG18", "category": "文档治理", "rule": "每个 workflow 任务必须优先读取 artifacts/rule-governance/task-rule-packs/<task>.json；规则包缺失或校验失败时不得进入实现或审核通过。"},
     {"id": "DG19", "category": "文档治理", "rule": "规则治理产物必须排除 human-readable 和 human-review HTML，只从 agent 事实源生成。"},
-    {"id": "DG20", "category": "文档治理", "rule": "规则包必须保留 rule_id、强度、标签、规则文本、来源路径和行号。"},
+    {"id": "DG20", "category": "文档治理", "rule": "规则包必须保留 rule_id、强度、标签、规则文本、来源路径和行号，方便任务精确回源，而不是全量检索文档。"},
     {"id": "DG21", "category": "文档治理", "rule": "重复规范必须先生成 duplicate report，再由文档治理任务合并、归档或标记替代关系。"},
     {"id": "DG22", "category": "文档治理", "rule": "审核 finding 必须引用适用 rule_id；没有读取任务规则包的审核结论无效。"},
+    {"id": "DG28", "category": "文档治理", "rule": "产品/项目必须维护 product-planning-spine 与 document-index；任务不得因 docs 增长而全量读取或让多个过期规划同时作为 active source。"},
+    {"id": "DG29", "category": "文档治理", "rule": "每个任务结束必须执行 retained-vs-transient 与 post-task-plan-alignment 检查，确认新增文档、归档文档和整体规划影响。"},
+    {"id": "MON1", "category": "执行监控", "rule": "子 agent 或委派任务的通过结论必须有独立监控记录和 observed_evidence，不能只采信子 agent 自述。"},
+    {"id": "PLAN1", "category": "产品规划", "rule": "局部任务完成必须映射到产品目标、能力路径、边界和后续计划；只在当前局部可用但不符合整体规划时不得关闭。"},
 ]
 
 TEAM_EVAL_SCENARIOS = {
@@ -1264,6 +1313,78 @@ def assistant_run_feedback_schema() -> dict:
     }
 
 
+def planning_spine_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["product_goal", "capability_map", "active_documents", "document_budget", "roadmap", "decision_log"],
+        "properties": {
+            "product_goal": {"type": "string", "minLength": 1},
+            "capability_map": {"type": "array", "items": {"type": "object"}},
+            "active_documents": {"type": "array", "maxItems": DOCUMENT_SPINE_POLICY["active_document_budget"], "items": {"type": "object"}},
+            "document_budget": {"const": DOCUMENT_SPINE_POLICY["active_document_budget"]},
+            "roadmap": {"type": "array", "items": {"type": "object"}},
+            "decision_log": {"type": "array", "items": {"type": "object"}},
+            "superseded_documents": {"type": "array", "items": {"type": "object"}},
+        },
+        "additionalProperties": True,
+    }
+
+
+def agent_execution_monitor_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", "task_id", "agents", "monitor_checks", "consumed_by_orchestrator"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "task_id": {"type": "string", "minLength": 1},
+            "agents": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": AGENT_EXECUTION_MONITOR_POLICY["required_agent_fields"],
+                    "properties": {
+                        "agent_id": {"type": "string", "minLength": 1},
+                        "role": {"type": "string", "minLength": 1},
+                        "assigned_scope": {"type": "array", "items": {"type": "string"}},
+                        "forbidden_scope": {"type": "array", "items": {"type": "string"}},
+                        "expected_outputs": {"type": "array", "items": {"type": "string"}},
+                        "required_checks": {"type": "array", "items": {"type": "string"}},
+                        "status": {"enum": ["pending", "running", "succeeded", "failed", "blocked", "skipped"]},
+                        "self_report": {"type": "string"},
+                        "observed_evidence": {"type": "array", "items": {"type": "object"}},
+                        "independent_verification": {"type": "boolean"},
+                    },
+                    "additionalProperties": True,
+                },
+            },
+            "monitor_checks": {"type": "array", "items": {"type": "object"}},
+            "consumed_by_orchestrator": {"type": "boolean"},
+        },
+        "additionalProperties": True,
+    }
+
+
+def post_task_plan_alignment_schema() -> dict:
+    return {
+        "type": "object",
+        "required": ["run_id", *PRODUCT_PLAN_ALIGNMENT_POLICY["required_fields"], "drift_findings", "document_changes", "checked_by"],
+        "properties": {
+            "run_id": {"type": "string", "minLength": 1},
+            "product_goal": {"type": "string", "minLength": 1},
+            "capability_path": {"type": "string", "minLength": 1},
+            "accepted_scope": {"type": "array", "items": {"type": "string"}},
+            "out_of_scope": {"type": "array", "items": {"type": "string"}},
+            "integration_points": {"type": "array", "items": {"type": "string"}},
+            "next_plan_update": {"type": "string", "minLength": 1},
+            "alignment_status": {"enum": PRODUCT_PLAN_ALIGNMENT_POLICY["alignment_statuses"]},
+            "drift_findings": {"type": "array", "items": {"type": "object"}},
+            "document_changes": {"type": "array", "items": {"type": "object"}},
+            "checked_by": {"type": "string", "minLength": 1},
+        },
+        "additionalProperties": True,
+    }
+
+
 def skill_trigger_description(skill: dict) -> str:
     if skill["description"].startswith("Use when"):
         return skill["description"]
@@ -1377,6 +1498,9 @@ def lean_runtime_router_policy() -> dict:
         ],
         "required_feedback_artifacts": ASSISTANT_FEEDBACK_POLICY["feedback_artifacts"],
         "assistant_feedback_policy": ASSISTANT_FEEDBACK_POLICY,
+        "document_spine_policy": DOCUMENT_SPINE_POLICY,
+        "agent_execution_monitor_policy": AGENT_EXECUTION_MONITOR_POLICY,
+        "product_plan_alignment_policy": PRODUCT_PLAN_ALIGNMENT_POLICY,
         "pollution_markers": POLLUTION_MARKERS,
     }
 
@@ -1391,6 +1515,11 @@ def lean_runtime_contract_policy(skill: dict) -> dict:
         "capability_decision_required": True,
         "assistant_feedback_required": True,
         "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+        "document_spine_required": True,
+        "planning_spine_schema": "engineering-assistant/schemas/planning-spine.schema.json",
+        "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
+        "post_task_plan_alignment_required": True,
+        "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
         "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
         "full_policy_required_for": skill["id"] == "workflow-orchestrator",
     }
@@ -1716,12 +1845,18 @@ def runtime_rule_markers(skill: dict) -> list[str]:
         "CAPABILITY_HEALTH_NOT_CHECKED",
         "ASSISTANT_FEEDBACK_NOT_GENERATED",
         "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+        "DOC_SPRAWL_RISK",
+        "ACTIVE_CONTEXT_OVER_BUDGET",
+        "MISSING_POST_TASK_ALIGNMENT",
+        "PRODUCT_PLAN_DRIFT",
         *POLLUTION_MARKERS,
     ]
     if skill["id"] in {"code-development", "frontend-development", "implementation-controller"}:
         markers.extend(["DUPLICATE_CAPABILITY_RISK", "IMPLEMENTATION_STRATEGY_NOT_EVALUATED", "NO_EFFECTIVE_CODE_CHANGE", "COMMENT_GATE_DEFERRED_TO_COMMIT"])
     if skill["id"] in {"workflow-orchestrator", "code-review", "code-quality-governor"}:
         markers.append("ATEAM_GATE_NOT_EVALUATED")
+    if skill["id"] in {"workflow-orchestrator", "implementation-controller", "code-quality-governor", "code-review"}:
+        markers.extend(["SUBAGENT_UNVERIFIED_SUCCESS", "SUBAGENT_EVIDENCE_MISSING", "MONITOR_CHECK_NOT_CONSUMED"])
     return sorted(set(markers))
 
 
@@ -1741,6 +1876,9 @@ def contract(skill: dict) -> dict:
         "preflight_runtime_gate": preflight_runtime_gate(),
         "lean_runtime_router_policy": lean_runtime_contract_policy(skill),
         "design_governance_policy": design_governance_policy(),
+        "document_spine_policy": DOCUMENT_SPINE_POLICY,
+        "agent_execution_monitor_policy": AGENT_EXECUTION_MONITOR_POLICY,
+        "product_plan_alignment_policy": PRODUCT_PLAN_ALIGNMENT_POLICY,
         "language_policy": {
             "supported": ["zh-CN", "en"],
             "when_unspecified": "ask_user",
@@ -1775,6 +1913,9 @@ def contract(skill: dict) -> dict:
             "stage_result_validation_required": True,
             "runtime_route_decision_required": True,
             "assistant_feedback_consumed": True,
+            "document_spine_context_required": True,
+            "agent_execution_monitor_required_for_delegation": True,
+            "post_task_plan_alignment_required": True,
             "implementation_strategy_evaluation_required": skill["id"] in {"code-development", "frontend-development", "implementation-controller"},
             "block_when_agent_violates_contract": True,
         },
@@ -2929,6 +3070,9 @@ def generate_engineering_assistant() -> None:
         "capability-invocation-ledger.schema.json": capability_invocation_ledger_schema(),
         "capability-health.schema.json": capability_health_schema(),
         "assistant-run-feedback.schema.json": assistant_run_feedback_schema(),
+        "planning-spine.schema.json": planning_spine_schema(),
+        "agent-execution-monitor.schema.json": agent_execution_monitor_schema(),
+        "post-task-plan-alignment.schema.json": post_task_plan_alignment_schema(),
         "framework-selection.schema.json": {"type": "object", "required": ["technology_categories", "review_status", "source", "exceptions"], "properties": {"technology_categories": {"type": "object", "additionalProperties": {"type": "string"}}, "persistence_framework": {"type": "string"}, "review_status": {"enum": ["confirmed", "waiting_for_input", "approved_exception", "blocked"]}, "source": {"type": "string"}, "exceptions": {"type": "array", "items": {"type": "string"}}}},
         "task-control.schema.json": {"type": "object", "required": ["task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"], "properties": {"task_id": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1}, "language": {"enum": ["zh-CN", "en"]}, "workflow_id": {"type": "string", "minLength": 1}, "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]}, "control_dir": {"type": "string", "minLength": 1}, "created_at": {"type": "string", "minLength": 1}, "updated_at": {"type": "string"}, "project_profile": {"type": "object"}, "current_contracts": {"type": "object"}}, "additionalProperties": True},
         "design-contract.schema.json": {"type": "object", "required": ["task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"], "properties": {"task_id": {"type": "string"}, "source_design": {"type": "string"}, "source_checksum": {"type": "string"}, "goals": {"type": "array", "items": {"type": "string"}}, "acceptance_criteria": {"type": "array", "items": {"type": "string"}}, "module_boundaries": {"type": "object"}, "risks": {"type": "array", "items": {"type": "string"}}, "assumptions": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": True},
@@ -3129,6 +3273,68 @@ if errors:
     raise SystemExit("\\n".join(errors))
 print("ok")
 """,
+        "validate_agent_execution_monitor.py": """#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+
+REQUIRED_MONITOR_CHECKS = {"scope_adherence", "evidence_returned", "independent_verification", "artifact_consumed_by_orchestrator", "no_unverified_success_claim"}
+
+errors = []
+for arg in sys.argv[1:]:
+    path = Path(arg)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for field in ["run_id", "task_id", "agents", "monitor_checks", "consumed_by_orchestrator"]:
+        if field not in data:
+            errors.append(f"{path}: 缺少字段 {field}")
+    if data.get("consumed_by_orchestrator") is not True:
+        errors.append(f"{path}: MONITOR_CHECK_NOT_CONSUMED")
+    observed_checks = {check.get("check_id") for check in data.get("monitor_checks") or []}
+    missing_checks = REQUIRED_MONITOR_CHECKS - observed_checks
+    if missing_checks:
+        errors.append(f"{path}: 缺少严格监控检查 {sorted(missing_checks)}")
+    for index, agent in enumerate(data.get("agents") or []):
+        for field in ["agent_id", "role", "assigned_scope", "forbidden_scope", "expected_outputs", "required_checks", "status"]:
+            if field not in agent:
+                errors.append(f"{path}: agents[{index}] 缺少字段 {field}")
+        if agent.get("status") == "succeeded" and not agent.get("observed_evidence"):
+            errors.append(f"{path}: SUBAGENT_EVIDENCE_MISSING agents[{index}] 成功结论缺少 observed_evidence")
+        if agent.get("status") == "succeeded" and agent.get("independent_verification") is not True:
+            errors.append(f"{path}: SUBAGENT_UNVERIFIED_SUCCESS agents[{index}] 成功结论必须独立验证")
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+""",
+        "validate_post_task_plan_alignment.py": """#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+
+VALID_STATUSES = {"aligned", "aligned_with_followups", "drift_detected", "blocked"}
+BLOCKING_DRIFT = {"PRODUCT_PLAN_DRIFT", "LOCAL_OPTIMUM_ONLY", "PLAN_SPINE_NOT_UPDATED", "UNINDEXED_FORMAL_DOC"}
+
+errors = []
+for arg in sys.argv[1:]:
+    path = Path(arg)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for field in ["run_id", "product_goal", "capability_path", "accepted_scope", "out_of_scope", "integration_points", "next_plan_update", "alignment_status", "drift_findings", "document_changes", "checked_by"]:
+        if field not in data:
+            errors.append(f"{path}: 缺少字段 {field}")
+    if data.get("alignment_status") not in VALID_STATUSES:
+        errors.append(f"{path}: alignment_status 不合法")
+    if data.get("alignment_status") in {"drift_detected", "blocked"}:
+        errors.append(f"{path}: MISSING_POST_TASK_ALIGNMENT 规划漂移未关闭，任务不得完成")
+    for index, finding in enumerate(data.get("drift_findings") or []):
+        marker = finding.get("marker")
+        if marker in BLOCKING_DRIFT and not finding.get("resolved"):
+            errors.append(f"{path}: {marker} drift_findings[{index}] 未解决")
+    for index, change in enumerate(data.get("document_changes") or []):
+        if change.get("path", "").startswith("docs/") and not change.get("document_index_updated"):
+            errors.append(f"{path}: UNINDEXED_FORMAL_DOC document_changes[{index}] 未同步 document-index")
+        if change.get("replaces") and not change.get("superseded_previous"):
+            errors.append(f"{path}: STALE_PLAN_SOURCE document_changes[{index}] 替代旧文档但未标记 superseded")
+if errors:
+    raise SystemExit("\\n".join(errors))
+print("ok")
+""",
         "validate_skill_metadata.py": """#!/usr/bin/env python3
 import sys
 from pathlib import Path
@@ -3234,7 +3440,7 @@ import re
 from pathlib import Path
 
 
-PLUGIN_VERSION = \"1.0.0.3\"
+PLUGIN_VERSION = \"1.0.0.4\"
 
 
 def load_json(path: Path) -> dict:
@@ -3432,7 +3638,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
-PLUGIN_VERSION = "1.0.0.3"
+PLUGIN_VERSION = "1.0.0.4"
 
 
 def load_config(path: Path) -> dict:

@@ -1,6 +1,6 @@
 {
   "skill_id": "repo-context-miner",
-  "version": "1.0.0.3",
+  "version": "1.0.0.4",
   "stage": "repo_context",
   "type": "stage_skill",
   "prompt_pack": {
@@ -93,14 +93,23 @@
     "capability_decision_required": true,
     "assistant_feedback_required": true,
     "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+    "document_spine_required": true,
+    "planning_spine_schema": "engineering-assistant/schemas/planning-spine.schema.json",
+    "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
+    "post_task_plan_alignment_required": true,
+    "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },
   "runtime_rule_markers": [
+    "ACTIVE_CONTEXT_OVER_BUDGET",
     "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
     "ASSISTANT_FEEDBACK_NOT_GENERATED",
     "CAPABILITY_HEALTH_NOT_CHECKED",
+    "DOC_SPRAWL_RISK",
+    "MISSING_POST_TASK_ALIGNMENT",
     "PROCESS_DOCUMENTATION_POLLUTION",
+    "PRODUCT_PLAN_DRIFT",
     "TARGET_REPO_ARTIFACT_POLLUTION"
   ],
   "risk": {

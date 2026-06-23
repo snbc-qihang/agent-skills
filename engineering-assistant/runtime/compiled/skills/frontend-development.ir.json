@@ -1,6 +1,6 @@
 {
   "skill_id": "frontend-development",
-  "version": "1.0.0.3",
+  "version": "1.0.0.4",
   "stage": "frontend_development",
   "type": "stage_skill",
   "prompt_pack": {
@@ -91,18 +91,27 @@
     "capability_decision_required": true,
     "assistant_feedback_required": true,
     "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+    "document_spine_required": true,
+    "planning_spine_schema": "engineering-assistant/schemas/planning-spine.schema.json",
+    "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
+    "post_task_plan_alignment_required": true,
+    "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },
   "runtime_rule_markers": [
+    "ACTIVE_CONTEXT_OVER_BUDGET",
     "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
     "ASSISTANT_FEEDBACK_NOT_GENERATED",
     "CAPABILITY_HEALTH_NOT_CHECKED",
     "COMMENT_GATE_DEFERRED_TO_COMMIT",
+    "DOC_SPRAWL_RISK",
     "DUPLICATE_CAPABILITY_RISK",
     "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+    "MISSING_POST_TASK_ALIGNMENT",
     "NO_EFFECTIVE_CODE_CHANGE",
     "PROCESS_DOCUMENTATION_POLLUTION",
+    "PRODUCT_PLAN_DRIFT",
     "TARGET_REPO_ARTIFACT_POLLUTION"
   ],
   "risk": {

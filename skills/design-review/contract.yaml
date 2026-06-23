@@ -1,7 +1,7 @@
 {
   "skill_id": "design-review",
   "skill_name": "Design Review",
-  "version": "1.0.0.3",
+  "version": "1.0.0.4",
   "stage": "design_review",
   "type": "stage_skill",
   "purpose": "评审设计产物，判断是否可以进入代码研发。",
@@ -116,6 +116,11 @@
     "capability_decision_required": true,
     "assistant_feedback_required": true,
     "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
+    "document_spine_required": true,
+    "planning_spine_schema": "engineering-assistant/schemas/planning-spine.schema.json",
+    "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
+    "post_task_plan_alignment_required": true,
+    "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },
@@ -314,6 +319,89 @@
       "tl_review_required": true
     }
   },
+  "document_spine_policy": {
+    "spine_artifact": "docs/00-index/product-planning-spine.md",
+    "machine_index": "docs/00-index/document-index.json",
+    "active_document_budget": 12,
+    "active_context_rule": "每个任务只读取 product-planning-spine、当前任务直接关联文档、任务规则包和明确引用的 source_artifacts；不得因 docs 增长而全量扫读。",
+    "document_growth_controls": [
+      "新增 docs 文档必须登记到 document-index.json，声明 owner、status、retention_policy、supersedes/superseded_by 和 agent_read_policy",
+      "被替代的规划/设计文档必须标记 superseded 或 archived，不能和新文档同时作为 active source",
+      "过程资料先进入 .run-artifacts；确认交付后提升到 docs 并同步更新 planning spine 与 document-index",
+      "任务结束必须输出 retained-vs-transient 清单，说明保留、归档、丢弃和后续规划影响"
+    ],
+    "drift_markers": [
+      "DOC_SPRAWL_RISK",
+      "ACTIVE_CONTEXT_OVER_BUDGET",
+      "STALE_PLAN_SOURCE",
+      "UNINDEXED_FORMAL_DOC"
+    ]
+  },
+  "agent_execution_monitor_policy": {
+    "monitor_artifact": ".run-artifacts/engineering-assistant/<run_id>/agent-execution-monitor.json",
+    "required_for": [
+      "parallelization",
+      "subagent_execution",
+      "delegated_review",
+      "long_running_task"
+    ],
+    "required_agent_fields": [
+      "agent_id",
+      "role",
+      "assigned_scope",
+      "forbidden_scope",
+      "expected_outputs",
+      "required_checks",
+      "status"
+    ],
+    "strict_check_rule": "子 agent 自述不能作为通过证据；必须由 orchestrator 或独立 checker 读取产物、命令输出、diff、测试或验证报告后登记 observed_evidence。",
+    "monitor_checks": [
+      "scope_adherence",
+      "evidence_returned",
+      "independent_verification",
+      "blocked_or_failed_reported",
+      "artifact_consumed_by_orchestrator",
+      "no_unverified_success_claim"
+    ],
+    "failure_markers": [
+      "SUBAGENT_UNVERIFIED_SUCCESS",
+      "SUBAGENT_SCOPE_DRIFT",
+      "SUBAGENT_EVIDENCE_MISSING",
+      "MONITOR_CHECK_NOT_CONSUMED"
+    ]
+  },
+  "product_plan_alignment_policy": {
+    "plan_spine_artifact": "docs/00-index/product-planning-spine.md",
+    "alignment_artifact": ".run-artifacts/engineering-assistant/<run_id>/post-task-plan-alignment.json",
+    "required_before_task_close": true,
+    "required_fields": [
+      "product_goal",
+      "capability_path",
+      "accepted_scope",
+      "out_of_scope",
+      "integration_points",
+      "next_plan_update",
+      "alignment_status"
+    ],
+    "alignment_statuses": [
+      "aligned",
+      "aligned_with_followups",
+      "drift_detected",
+      "blocked"
+    ],
+    "close_blockers": [
+      "任务完成但未映射到产品能力路径",
+      "实现只在当前局部可用但破坏整体规划/边界/演进路径",
+      "发现规划漂移但未更新 planning spine 或后续任务",
+      "新增正式 docs 未登记 document-index 或未处理 superseded 文档"
+    ],
+    "drift_markers": [
+      "PRODUCT_PLAN_DRIFT",
+      "LOCAL_OPTIMUM_ONLY",
+      "MISSING_POST_TASK_ALIGNMENT",
+      "PLAN_SPINE_NOT_UPDATED"
+    ]
+  },
   "language_policy": {
     "supported": [
       "zh-CN",
@@ -437,14 +525,21 @@
     "stage_result_validation_required": true,
     "runtime_route_decision_required": true,
     "assistant_feedback_consumed": true,
+    "document_spine_context_required": true,
+    "agent_execution_monitor_required_for_delegation": true,
+    "post_task_plan_alignment_required": true,
     "implementation_strategy_evaluation_required": false,
     "block_when_agent_violates_contract": true
   },
   "runtime_rule_markers": [
+    "ACTIVE_CONTEXT_OVER_BUDGET",
     "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
     "ASSISTANT_FEEDBACK_NOT_GENERATED",
     "CAPABILITY_HEALTH_NOT_CHECKED",
+    "DOC_SPRAWL_RISK",
+    "MISSING_POST_TASK_ALIGNMENT",
     "PROCESS_DOCUMENTATION_POLLUTION",
+    "PRODUCT_PLAN_DRIFT",
     "TARGET_REPO_ARTIFACT_POLLUTION"
   ],
   "required_information_policy": {

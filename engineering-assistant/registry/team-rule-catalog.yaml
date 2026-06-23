@@ -328,7 +328,7 @@
     {
       "id": "DG20",
       "category": "文档治理",
-      "rule": "规则包必须保留 rule_id、强度、标签、规则文本、来源路径和行号。"
+      "rule": "规则包必须保留 rule_id、强度、标签、规则文本、来源路径和行号，方便任务精确回源，而不是全量检索文档。"
     },
     {
       "id": "DG21",
@@ -339,6 +339,26 @@
       "id": "DG22",
       "category": "文档治理",
       "rule": "审核 finding 必须引用适用 rule_id；没有读取任务规则包的审核结论无效。"
+    },
+    {
+      "id": "DG28",
+      "category": "文档治理",
+      "rule": "产品/项目必须维护 product-planning-spine 与 document-index；任务不得因 docs 增长而全量读取或让多个过期规划同时作为 active source。"
+    },
+    {
+      "id": "DG29",
+      "category": "文档治理",
+      "rule": "每个任务结束必须执行 retained-vs-transient 与 post-task-plan-alignment 检查，确认新增文档、归档文档和整体规划影响。"
+    },
+    {
+      "id": "MON1",
+      "category": "执行监控",
+      "rule": "子 agent 或委派任务的通过结论必须有独立监控记录和 observed_evidence，不能只采信子 agent 自述。"
+    },
+    {
+      "id": "PLAN1",
+      "category": "产品规划",
+      "rule": "局部任务完成必须映射到产品目标、能力路径、边界和后续计划；只在当前局部可用但不符合整体规划时不得关闭。"
     }
   ],
   "eval_rule_prefixes": {
