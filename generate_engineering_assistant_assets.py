@@ -80,6 +80,20 @@ UPSTREAM_MAIN_INCREMENT_CAPABILITIES = [
         "why": "teamwork 已完整吸收并扩展该能力，不需要回退到更弱的通用版本。",
     },
     {
+        "domain": "runtime governance",
+        "capability": "`runtime-route-decision.schema.json`、`assistant-run-feedback.schema.json`、`artifact-persistence-policy.schema.json` 和 `capability-health.schema.json`",
+        "status": "already-covered-by-teamwork",
+        "teamwork_handling": "已由 generator 输出、schema/validator、workflow contract 和 runtime 回归测试覆盖。",
+        "why": "这些属于通用控制面骨架能力，teamwork 已保留团队插件身份前提下完成吸收。",
+    },
+    {
+        "domain": "runtime governance",
+        "capability": "通用 `generic-platform` profile、通用标准源和通用技能文案",
+        "status": "do-not-import",
+        "teamwork_handling": "继续保留 teamwork 的团队 profile、团队规则目录、团队默认 prompt 和团队化技能文案。",
+        "why": "直接导入会弱化团队 profile、团队规则密度和团队默认行为。",
+    },
+    {
         "domain": "scored eval / workflow / regression",
         "capability": "scored eval 的 plugin manifest gate、distribution surface metric 和 published plugin sync 检查",
         "status": "already-covered-by-teamwork",
@@ -9963,6 +9977,12 @@ def upstream_main_capability_matrix_doc() -> str:
     )
     return f"""# upstream-main-capability-matrix
 
+## 当前分支基线
+
+- `main`: `547fa90`（2026-06-22 本地分支头，`feat：eval优化`）
+- `teamwork`: `cd831cf`
+- 公共祖先：`23b9745`
+
 ## 适用范围
 
 - 本矩阵只覆盖当前仓库快照下，`main` 相对公共祖先的当前可见增量。
@@ -9977,7 +9997,9 @@ def upstream_main_capability_matrix_doc() -> str:
 
 ## 当前结论
 
+- `main` 相对公共祖先的当前可见增量，主要集中在 4 个主题：traceability 报告与实现控制面、plugin manifest / publish surface / Hermes 发布、document retention / runtime route / assistant feedback 治理、eval runner / scored eval / distribution regression。
 - 当前 `main` 可见增量未发现 `needs-backport` 项；现阶段以“已覆盖”或“禁止导入”两类结论为主。
+- 结合当前 `teamwork` 源码现状，绝大多数 `main` 最新通用能力已被 `teamwork` 等价吸收或以更强团队版本覆盖；剩余差异主要属于 `do-not-import`，因为会覆盖团队插件身份、团队 profile、团队规则密度或兼容发布策略。
 - 后续若 `main` 再出现新的通用能力，应先更新本矩阵，再决定是否回收到生成器。
 
 ## Capability Matrix

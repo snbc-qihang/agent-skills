@@ -1,5 +1,11 @@
 # upstream-main-capability-matrix
 
+## 当前分支基线
+
+- `main`: `547fa90`（2026-06-22 本地分支头，`feat：eval优化`）
+- `teamwork`: `cd831cf`
+- 公共祖先：`23b9745`
+
 ## 适用范围
 
 - 本矩阵只覆盖当前仓库快照下，`main` 相对公共祖先的当前可见增量。
@@ -14,7 +20,9 @@
 
 ## 当前结论
 
+- `main` 相对公共祖先的当前可见增量，主要集中在 4 个主题：traceability 报告与实现控制面、plugin manifest / publish surface / Hermes 发布、document retention / runtime route / assistant feedback 治理、eval runner / scored eval / distribution regression。
 - 当前 `main` 可见增量未发现 `needs-backport` 项；现阶段以“已覆盖”或“禁止导入”两类结论为主。
+- 结合当前 `teamwork` 源码现状，绝大多数 `main` 最新通用能力已被 `teamwork` 等价吸收或以更强团队版本覆盖；剩余差异主要属于 `do-not-import`，因为会覆盖团队插件身份、团队 profile、团队规则密度或兼容发布策略。
 - 后续若 `main` 再出现新的通用能力，应先更新本矩阵，再决定是否回收到生成器。
 
 ## Capability Matrix
@@ -27,6 +35,8 @@
 | manifest / distribution surface | 仅按通用插件路径发布、不保留 `compatibility_alias=engineering-assistant` 的策略 | `do-not-import` | 继续保留 `compatibility_alias`，在 personal 布局下允许 teamwork 插件和通用别名共存。 | 删除兼容别名会破坏当前 Codex 安装兼容面和既有用户入口。 |
 | traceability / implementation control | `artifacts/_control/traceability-matrix.json` 作为 agent 事实源，`docs/human-readable/traceability-report.html` 只做人读入口 | `already-covered-by-teamwork` | 已由 `compile_design_contract.py`、`build_traceability_report.py`、workflow contract、validator 和专项测试覆盖。 | 保留 upstream 追踪矩阵能力，同时确保 HTML 不反向作为 agent 事实输入。 |
 | traceability / implementation control | implementation-controller / code-development 的 traceability 输出、gate 和脚本链路 | `already-covered-by-teamwork` | 已在 teamwork 的 contract、workflow、SKILL.md、runtime 脚本和 `test_team_document_design_rules.py` 中强化实现。 | teamwork 已完整吸收并扩展该能力，不需要回退到更弱的通用版本。 |
+| runtime governance | `runtime-route-decision.schema.json`、`assistant-run-feedback.schema.json`、`artifact-persistence-policy.schema.json` 和 `capability-health.schema.json` | `already-covered-by-teamwork` | 已由 generator 输出、schema/validator、workflow contract 和 runtime 回归测试覆盖。 | 这些属于通用控制面骨架能力，teamwork 已保留团队插件身份前提下完成吸收。 |
+| runtime governance | 通用 `generic-platform` profile、通用标准源和通用技能文案 | `do-not-import` | 继续保留 teamwork 的团队 profile、团队规则目录、团队默认 prompt 和团队化技能文案。 | 直接导入会弱化团队 profile、团队规则密度和团队默认行为。 |
 | scored eval / workflow / regression | scored eval 的 plugin manifest gate、distribution surface metric 和 published plugin sync 检查 | `already-covered-by-teamwork` | 已由 `run_skill_evals.py --mode scored` 实现，并由 runtime 回归测试和 distribution surface 测试约束。 | 保留 upstream 的 scored eval 能力，同时继续验证 teamwork 发布路径和 manifest 约束。 |
 | scored eval / workflow / regression | 只保留通用强度的 preflight / required-information / eval 断言，不带团队专项规则密度 | `do-not-import` | 继续使用 teamwork 更强的 preflight、required-information、team eval 和专项设计门禁。 | 回退到通用断言会削弱 teamwork 现有更强的门禁和团队规则覆盖面。 |
 | manifest / distribution surface | Hermes 目录插件发布、插件启用和限定名技能注册链路 | `already-covered-by-teamwork` | 吸收为共享发布能力，但 Hermes 插件名、目录和限定名前缀使用 `teamwork-engineering-assistant`。 | 这是通用发布能力，适合上收到 teamwork 的生成器和回归护栏中。 |
