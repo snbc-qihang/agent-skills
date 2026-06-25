@@ -194,6 +194,35 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         self.assertEqual("resolved", blocker["status"])
         self.assertFalse(blocker["blocking"])
 
+    def test_quality_contract_runner_refreshes_project_quality_inputs_after_control_sync(self) -> None:
+        root = self.make_control_root()
+        control = root / "artifacts" / "_control"
+        quality_scripts = root / "scripts" / "quality"
+        quality_scripts.mkdir(parents=True)
+        (quality_scripts / "generate_quality_inputs.py").write_text(
+            "from pathlib import Path\n"
+            "Path('artifacts/code-quality').mkdir(parents=True, exist_ok=True)\n"
+            "Path('artifacts/code-quality/refresh-order.txt').write_text('inputs\\n', encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        (quality_scripts / "generate_code_review_artifacts.py").write_text(
+            "from pathlib import Path\n"
+            "path = Path('artifacts/code-quality/refresh-order.txt')\n"
+            "path.write_text(path.read_text(encoding='utf-8') + 'review\\n', encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        write_json(
+            control / "quality-contract.json",
+            {"task_id": "refactor-readiness", "required_commands": [{"id": "unit", "command": "python3 -c 'print(1)'", "required": True}]},
+        )
+
+        result = run_script("run_quality_contract.py", "--root", str(root))
+
+        self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+        self.assertEqual("inputs\nreview\n", (root / "artifacts/code-quality/refresh-order.txt").read_text(encoding="utf-8"))
+        report = json.loads((control / "quality-run-report.json").read_text(encoding="utf-8"))
+        self.assertEqual("pass", report["status"])
+
     def test_rule_index_excludes_nested_generated_dependency_dirs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

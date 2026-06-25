@@ -6800,6 +6800,7 @@ if __name__ == "__main__":
         "run_quality_commands.py": """#!/usr/bin/env python3
 import argparse
 import subprocess
+import sys
 import time
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
@@ -6933,6 +6934,29 @@ def sync_control_plane(root: Path, report: dict, output: Path) -> None:
     ]:
         update_artifact_index(root, name, path, "json", producer)
 
+def refresh_project_quality_inputs(root: Path) -> list[dict]:
+    refresh_scripts = [
+        root / "scripts/quality/generate_quality_inputs.py",
+        root / "scripts/quality/generate_code_review_artifacts.py",
+    ]
+    if not all(path.is_file() for path in refresh_scripts):
+        return []
+    results = []
+    for script in refresh_scripts:
+        rel = script.relative_to(root)
+        run = subprocess.run([sys.executable, str(rel)], cwd=root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        results.append({
+            "id": rel.as_posix(),
+            "command": f"{sys.executable} {rel.as_posix()}",
+            "exit_code": run.returncode,
+            "returncode": run.returncode,
+            "stdout_excerpt": excerpt(run.stdout),
+            "stderr_excerpt": excerpt(run.stderr),
+        })
+        if run.returncode != 0:
+            break
+    return results
+
 def build_report(contract: dict, commands: list[dict], results: list[dict], errors: list[str]) -> dict:
     findings = []
     required_failures = [item for item in results if item.get("required") and item.get("exit_code") != 0]
@@ -6988,6 +7012,19 @@ def main():
     output = root / args.output
     write_json(output, report)
     sync_control_plane(root, report, output)
+    refresh_results = refresh_project_quality_inputs(root)
+    refresh_failures = [item for item in refresh_results if item.get("exit_code") != 0]
+    if refresh_failures and report["status"] != "block":
+        report["status"] = "block"
+        report["errors"].append("post-sync quality input refresh failed")
+        report["findings"].append({
+            "id": "QUALITY-CONTRACT-POST-SYNC-REFRESH-FAILED",
+            "severity": "blocker",
+            "summary": "post-sync quality input refresh failed after quality-run-report/control-plane updates",
+            "results": refresh_failures,
+        })
+        write_json(output, report)
+        sync_control_plane(root, report, output)
     print(output)
     if report["status"] == "block":
         raise SystemExit(1)
