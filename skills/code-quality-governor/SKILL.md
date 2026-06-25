@@ -45,6 +45,21 @@ description: Use when the request is about 建立 Q0-Q4 多层代码质量门禁
 - Java/Spring 后端持久化默认建议 `mybatis-plus`；生成直接 `JDBC` 代码前必须有明确项目约束或评审批准。
 - 任何技术替换、绕过现有 mapper/repository 模式、前端技术栈/组件库变更、测试框架或构建工具替换都必须进入 `required_information_requests` 或人工评审。
 
+# 工程治理主控
+- engineering-assistant 是软件工程治理主控，不是单纯工具路由器；必须先建立需求、上下文、架构边界、实现合同、质量证据和验收状态，再选择执行能力。
+- 设计阶段可以按任务裁剪，但不得裁剪掉需求边界、影响范围、open questions、质量命令、变更追踪和 gate decision。
+- 默认输出模式是 `control_surface_first`：优先维护目标项目 `artifacts/_control/` 下的机读控制面；长 Markdown、阶段总结、HTML 和交接叙事只在人类评审、审计、合规、交接或用户明确要求时生成。
+- 委派 Codex、Hermes、skills 或 MCP 后，本 skill 仍负责消费证据并给出工程门禁结论；被委派能力的自述成功不能直接作为通过依据。
+
+
+# 能力编排与降级
+- 执行前必须判断是否需要外部能力，并登记到 `artifacts/_control/capability-invocation-ledger.json`。
+- 代码理解优先使用 codegraph；缺失时可降级为 `rg`、定向读文件和编译/测试反馈，但必须降低影响范围结论置信度。
+- 前端产品实现和浏览器验收优先使用 build-web-apps 与 browser；缺少浏览器级能力时，不得宣称完成浏览器截图或响应式验收。
+- GitHub/PR/CI 状态优先使用 GitHub 能力；缺失时只能报告本地 git diff 和本地命令结果，不得声称远端 PR 或 CI 状态。
+- 安全、生产和高风险变更缺少必要能力或审批时必须阻断，不能降级为普通建议。
+
+
 # 执行门禁
 - preflight 阶段必须先完成语言确认和必须信息检查。
 - 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
@@ -65,6 +80,7 @@ description: Use when the request is about 建立 Q0-Q4 多层代码质量门禁
 
 # 富 HTML 报告要求
 - HTML 报告是人工走查入口，不作为唯一事实源；事实源仍以 JSON、Markdown、CI 日志和工具原始输出为准。
+- HTML/Markdown 人工报告默认只在 `evidence_level=formal`、人工评审、审计、合规或用户明确要求时刷新；普通控制面恢复和最小切片重构不得反复刷新长报告制造噪音。
 - HTML 必须包含：门禁结论、阻断摘要、问题分级统计、质量维度统计、文件/模块分布、工具运行状态、证据与建议、人工确认区。
 - HTML 中的每个 finding 必须能追溯到 `review-comments.json`、`code-quality-report.json` 或 `static-analysis-report.json` 的稳定 id。
 - HTML 不得内嵌敏感 token、账号、连接串、私钥或完整内部凭据；发现敏感信息时只展示脱敏摘要和文件位置。
@@ -73,6 +89,8 @@ description: Use when the request is about 建立 Q0-Q4 多层代码质量门禁
 
 # 控制面质量合同
 - 如果存在 `artifacts/_control/quality-contract.json`，必须执行其中 `required=true` 的质量命令，并用 `engineering-assistant/scripts/run_quality_commands.py` 生成 `quality-run-report.json`。
+- 首选入口是 `engineering-assistant/scripts/run_quality_contract.py`；该报告是阻断事实源。`make validate` 通过但 `quality-contract.json.required_commands` 中任一 required 命令失败时，仍必须阻断。
+- runner 必须把失败同步到 `current-task.json.active_slice`、`current-subtask.json` 和 `open-questions.json`，让后续 agent 能直接恢复到阻断点。
 - 如果存在 `artifacts/_control/design-to-code-validation.json` 且状态不是 `pass`，必须阻断并先修复实现范围问题；blocker 和 major finding 均不得放行。
 - 如果 `quality-contract.json` 没有 required quality commands，或命令是占位内容，必须阻断；不得用 LLM 评审替代 build/test/lint/architecture/E2E 证据。
 - 普通代码质量、规范、架构边界、测试失败和设计映射问题由 agent 自动修复并重跑门禁；只在高风险审批、业务决策或修复轮次耗尽时请求人工。

@@ -21,8 +21,23 @@ def main():
     control = ensure_control_dir(root)
     task_id = args.task_id or slug(args.title)
     profile = read_json(Path(args.project_profile), {}) if args.project_profile else {}
-    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "created_at": now_iso(), "updated_at": now_iso()}
+    active_slice = {
+        "slice_id": task_id,
+        "parent_task_id": task_id,
+        "title": args.title,
+        "kind": "initial_task",
+        "status": "initialized",
+        "control_artifacts": {
+            "current_task": "artifacts/_control/current-task.json",
+            "current_subtask": "artifacts/_control/current-subtask.json",
+            "open_questions": "artifacts/_control/open-questions.json",
+        },
+        "blockers": [],
+        "updated_at": now_iso(),
+    }
+    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
     write_json(control / "current-task.json", task)
+    write_json(control / "current-subtask.json", active_slice)
     write_json(control / "artifact-index.json", {"artifacts": {}, "updated_at": now_iso()})
     write_json(control / "decision-log.json", {"decisions": []})
     write_json(control / "open-questions.json", {"questions": []})
@@ -43,6 +58,7 @@ def main():
         "",
         "## Control Artifacts",
         "- current_task: artifacts/_control/current-task.json",
+        "- current_subtask: artifacts/_control/current-subtask.json",
         "- implementation_contract: artifacts/_control/implementation-contract.json",
         "- quality_contract: artifacts/_control/quality-contract.json",
         "- open_questions: artifacts/_control/open-questions.json",

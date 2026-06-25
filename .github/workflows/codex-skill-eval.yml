@@ -45,6 +45,10 @@
         {
           "name": "Run scored evals",
           "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"
+        },
+        {
+          "name": "Run effectiveness spec eval",
+          "run": "python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report"
         }
       ]
     }

@@ -39,6 +39,11 @@ def main():
     for name in REQUIRED_CONTROL_FILES:
         if not (control / name).exists():
             add(findings, "blocker", "missing control artifact", artifact=name)
+    task = read_json(control / "current-task.json", {})
+    if not task.get("active_slice"):
+        add(findings, "major", "current-task missing active_slice; runner will synthesize current-subtask for compatibility", artifact="current-task.json")
+    if not (control / "current-subtask.json").exists():
+        add(findings, "major", "missing current-subtask active slice artifact", artifact="current-subtask.json")
     implementation = read_json(control / "implementation-contract.json", {})
     quality = read_json(control / "quality-contract.json", {})
     if not implementation.get("technology_adoption_contract"):

@@ -45,6 +45,21 @@ description: Use when the request is about 把已审批设计转换为机器可�
 - Java/Spring 后端持久化默认建议 `mybatis-plus`；生成直接 `JDBC` 代码前必须有明确项目约束或评审批准。
 - 任何技术替换、绕过现有 mapper/repository 模式、前端技术栈/组件库变更、测试框架或构建工具替换都必须进入 `required_information_requests` 或人工评审。
 
+# 工程治理主控
+- engineering-assistant 是软件工程治理主控，不是单纯工具路由器；必须先建立需求、上下文、架构边界、实现合同、质量证据和验收状态，再选择执行能力。
+- 设计阶段可以按任务裁剪，但不得裁剪掉需求边界、影响范围、open questions、质量命令、变更追踪和 gate decision。
+- 默认输出模式是 `control_surface_first`：优先维护目标项目 `artifacts/_control/` 下的机读控制面；长 Markdown、阶段总结、HTML 和交接叙事只在人类评审、审计、合规、交接或用户明确要求时生成。
+- 委派 Codex、Hermes、skills 或 MCP 后，本 skill 仍负责消费证据并给出工程门禁结论；被委派能力的自述成功不能直接作为通过依据。
+
+
+# 能力编排与降级
+- 执行前必须判断是否需要外部能力，并登记到 `artifacts/_control/capability-invocation-ledger.json`。
+- 代码理解优先使用 codegraph；缺失时可降级为 `rg`、定向读文件和编译/测试反馈，但必须降低影响范围结论置信度。
+- 前端产品实现和浏览器验收优先使用 build-web-apps 与 browser；缺少浏览器级能力时，不得宣称完成浏览器截图或响应式验收。
+- GitHub/PR/CI 状态优先使用 GitHub 能力；缺失时只能报告本地 git diff 和本地命令结果，不得声称远端 PR 或 CI 状态。
+- 安全、生产和高风险变更缺少必要能力或审批时必须阻断，不能降级为普通建议。
+
+
 # 执行门禁
 - preflight 阶段必须先完成语言确认和必须信息检查。
 - 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
@@ -61,7 +76,7 @@ description: Use when the request is about 把已审批设计转换为机器可�
 - 初始化控制面：`init_task.py` 生成 `current-task.json`、`artifact-index.json`、`open-questions.json` 和 `task-context.agent.md`。
 - 编译设计合同：`compile_design_contract.py` 只接受已审批的 Markdown/JSON/YAML 设计产物，拒绝 HTML 作为 agent 事实源。
 - 下游实现只能消费 `task-context.agent.md`、`design-contract.json`、`implementation-contract.json`、`quality-contract.json` 和 `traceability-matrix.json`；`docs/human-readable/traceability-report.html` 只给人查看。
-- 变更后必须执行 `collect_changed_files.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `run_quality_commands.py`。
+- 变更后必须执行 `collect_changed_files.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `run_quality_contract.py`；兼容入口 `run_quality_commands.py` 仍可用。
 - `build_traceability_report.py` 必须生成机读 `artifacts/_control/traceability-matrix.json` 与人工阅览 `docs/human-readable/traceability-report.html`；HTML 是结构化追踪页面，不得由 Markdown/JSON 机械转码替代。
 - 普通实现范围、测试、lint 和设计映射问题进入 `review -> repair -> validate`，最多 2 轮；业务决策、设计冲突、高风险动作、生产动作和修复耗尽才请求人工。
 

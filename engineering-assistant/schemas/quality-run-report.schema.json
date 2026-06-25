@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "status",
+    "summary",
+    "results",
+    "errors",
+    "generated_at"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "pass",
+        "block"
+      ]
+    },
+    "summary": {
+      "type": "object"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "command",
+          "cwd",
+          "required",
+          "exit_code",
+          "duration_ms",
+          "blocking"
+        ]
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "generated_at": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

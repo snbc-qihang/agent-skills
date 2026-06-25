@@ -43,6 +43,10 @@
           "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"
         },
         {
+          "name": "Validate effectiveness eval spec",
+          "run": "python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report"
+        },
+        {
           "name": "Validate metadata",
           "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"
         },

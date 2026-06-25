@@ -1,0 +1,68 @@
+{
+  "status": "pass",
+  "mode": "report",
+  "evaluation_state": "graded",
+  "baselines": [
+    "baseline_free_codex",
+    "current_engineering_assistant",
+    "curated_tools"
+  ],
+  "evals": [
+    "minimal-fullstack-product-task",
+    "code-drift-backend-export-refactor",
+    "document-noise-minimal-context",
+    "frontend-product-quality-enterprise-console",
+    "long-task-recovery-control-plane"
+  ],
+  "metrics": {
+    "eval_count": 5,
+    "baseline_count": 3,
+    "real_result_count": 3,
+    "mean_pass_rate": {
+      "current_engineering_assistant": 0.82,
+      "baseline_free_codex": 0.62,
+      "curated_tools": 0.88
+    },
+    "mean_token_or_time_cost": {
+      "current_engineering_assistant": 1.35,
+      "baseline_free_codex": 1.0,
+      "curated_tools": 1.18
+    }
+  },
+  "pass_rate_delta": {
+    "current_engineering_assistant_vs_baseline_free_codex": 0.19999999999999996,
+    "current_engineering_assistant_vs_curated_tools": -0.06000000000000005,
+    "curated_tools_vs_baseline_free_codex": 0.26
+  },
+  "token_or_time_cost_delta": {
+    "current_engineering_assistant_vs_baseline_free_codex": 0.3500000000000001,
+    "current_engineering_assistant_vs_curated_tools": 0.17000000000000015,
+    "curated_tools_vs_baseline_free_codex": 0.17999999999999994
+  },
+  "quality_findings": [
+    {
+      "id": "FREE-CODEX-SCOPE-001",
+      "severity": "major",
+      "summary": "自由 Codex 倾向扩展成通用设置能力，超出极小公告开关范围。"
+    },
+    {
+      "id": "FREE-CODEX-FE-001",
+      "severity": "major",
+      "summary": "前端状态覆盖不完整，缺少失败态和响应式验收证据。"
+    },
+    {
+      "id": "CURATED-ROUTING-001",
+      "severity": "minor",
+      "summary": "现有优秀工具组合质量最高，但缺少统一长期控制面和后续恢复协议。"
+    },
+    {
+      "id": "EA-EVIDENCE-001",
+      "severity": "minor",
+      "summary": "插件能控制范围和状态，但仍生成较多治理说明，真实命令证据不足。"
+    }
+  ],
+  "doc_noise_score": 0.37999999999999995,
+  "frontend_product_score": 0.7200000000000001,
+  "recommendation": "delegate_to_curated_tools",
+  "generated_at": "2026-06-25T00:36:41.353326+00:00"
+}

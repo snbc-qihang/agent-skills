@@ -13,6 +13,7 @@ SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
 PLUGIN_VERSION = "1.0.0.4"
 DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
+EFFECTIVENESS_WORKSPACE = "effectiveness-evals"
 
 EVAL_CASES = [
     "happy_path",
@@ -26,6 +27,40 @@ EVAL_CASES = [
     "rule_consumption_gap",
     "context_noise_overload",
     "low_quality_automation",
+]
+
+EFFECTIVENESS_BASELINES = [
+    {
+        "id": "baseline_free_codex",
+        "label": "Free Codex baseline",
+        "description": "不加载 engineering-assistant 插件，只给真实任务、目标仓库上下文和必要约束，观察 Codex 自由完成的交付质量。",
+        "allowed_capabilities": ["repo files", "shell checks", "built-in Codex reasoning"],
+        "forbidden_capabilities": ["engineering-assistant skills", "engineering-assistant workflow artifacts"],
+    },
+    {
+        "id": "current_engineering_assistant",
+        "label": "Current engineering-assistant",
+        "description": "使用当前 engineering-assistant 插件和 workflow/control-plane 规则，观察插件是否减少代码漂移、文档噪音和质量遗漏。",
+        "allowed_capabilities": ["engineering-assistant skills", "engineering-assistant scripts", "repo files", "shell checks"],
+        "forbidden_capabilities": ["manual post-hoc rewriting outside declared artifacts"],
+    },
+    {
+        "id": "curated_tools",
+        "label": "Curated existing tools",
+        "description": "不用本插件主控流程，明确复用现有优秀能力，例如 codegraph、build-web-apps、browser、GitHub/code-review 类能力。",
+        "allowed_capabilities": ["codegraph", "build-web-apps", "browser", "github", "code-review skills"],
+        "forbidden_capabilities": ["engineering-assistant workflow orchestration"],
+    },
+]
+
+EFFECTIVENESS_RECOMMENDATIONS = ["keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"]
+
+EFFECTIVENESS_EVAL_CATEGORIES = [
+    "full_stack_minimal_product",
+    "code_drift",
+    "document_noise",
+    "frontend_product_quality",
+    "long_task_recovery",
 ]
 
 COMMON_STATES = [
@@ -215,6 +250,116 @@ PRODUCT_PLAN_ALIGNMENT_POLICY = {
         "新增正式 docs 未登记 document-index 或未处理 superseded 文档",
     ],
     "drift_markers": ["PRODUCT_PLAN_DRIFT", "LOCAL_OPTIMUM_ONLY", "MISSING_POST_TASK_ALIGNMENT", "PLAN_SPINE_NOT_UPDATED"],
+}
+
+ENGINEERING_GOVERNANCE_STATE_MACHINE = {
+    "model_name": "engineering-governance-v2",
+    "positioning": "engineering-assistant 保留软件工程方法论主控权；Codex、Hermes、skills 和 MCP 是可委派执行能力，不替代工程状态、边界、门禁和验收责任。",
+    "default_stage_model": [
+        "intake",
+        "context_modeling",
+        "architecture_boundary",
+        "implementation_contract",
+        "controlled_execution",
+        "quality_verification",
+        "review_and_release",
+        "retrospective_learning",
+    ],
+    "stage_contracts": {
+        "intake": ["requirement_contract", "scope_and_non_goals", "acceptance_criteria", "blocking_questions"],
+        "context_modeling": ["repo_context", "module_map", "reusable_capabilities", "impact_scope"],
+        "architecture_boundary": ["system_boundary", "data_flow", "interface_contract", "risk_decisions"],
+        "implementation_contract": ["allowed_modules", "forbidden_modules", "quality_commands", "traceability_matrix"],
+        "controlled_execution": ["changed_files", "delegated_capability_ledger", "repair_attempts", "control_health"],
+        "quality_verification": ["test_evidence", "build_evidence", "browser_or_runtime_evidence", "gate_decision"],
+        "review_and_release": ["findings", "approval_requests", "release_readiness", "rollback_plan"],
+        "retrospective_learning": ["lessons", "rule_candidates", "skill_improvement_candidates"],
+    },
+    "required_control_surface": [
+        "current-task.json",
+        "current-subtask.json",
+        "artifact-index.json",
+        "open-questions.json",
+        "quality-contract.json",
+        "quality-run-report.json",
+        "implementation-contract.json",
+        "traceability-matrix.json",
+        "capability-invocation-ledger.json",
+        "control-health-report.json",
+    ],
+    "hard_rules": [
+        "设计阶段可以裁剪，但不得跳过需求边界、影响范围、质量命令和阻断问题判断。",
+        "长期任务恢复必须先读取目标项目 artifacts/_control/ 机读控制面，不得用聊天记忆或历史长文档替代。",
+        "委派工具完成执行后，engineering-assistant 必须消费其证据并作 gate decision；子工具自述成功不是通过证据。",
+        "缺少关键能力时必须按能力协议降级或阻断，不得伪造浏览器、代码图谱、CI、GitHub 或生产状态。",
+    ],
+}
+
+CAPABILITY_ROUTING_PROTOCOL = {
+    "principle": "先用软件工程状态机确定阶段、边界和验收，再选择最合适执行能力；委派不转移工程责任。",
+    "decision_values": ["use_native_codex", "delegate", "fallback", "block", "skip"],
+    "capabilities": {
+        "codebase_analysis": {
+            "preferred": ["codegraph"],
+            "fallback": ["rg", "targeted_file_reads", "compiler_or_test_feedback"],
+            "missing_behavior": "continue_with_lower_confidence",
+            "required_evidence": ["queried_symbols_or_files", "impact_scope", "confidence_note"],
+        },
+        "frontend_product_execution": {
+            "preferred": ["build-web-apps", "browser"],
+            "fallback": ["repo_native_frontend_stack", "playwright_or_local_render_check"],
+            "missing_behavior": "block_browser_level_acceptance",
+            "required_evidence": ["product_ia", "state_coverage", "desktop_mobile_render_evidence"],
+        },
+        "github_pr_ci": {
+            "preferred": ["github"],
+            "fallback": ["local_git_diff", "local_quality_commands"],
+            "missing_behavior": "do_not_claim_remote_pr_or_ci_state",
+            "required_evidence": ["local_diff", "commands_run", "remote_state_if_available"],
+        },
+        "security_or_production": {
+            "preferred": ["security_tools", "human_approval"],
+            "fallback": [],
+            "missing_behavior": "block_until_review",
+            "required_evidence": ["approval_record", "risk_assessment", "rollback_or_mitigation"],
+        },
+    },
+    "ledger_artifact": "artifacts/_control/capability-invocation-ledger.json",
+    "health_artifact": "artifacts/_control/capability-health.json",
+    "block_markers": ["CAPABILITY_REQUIRED_BUT_UNAVAILABLE", "DELEGATED_OUTPUT_UNVERIFIED", "REMOTE_STATE_UNPROVEN"],
+}
+
+DOCUMENTATION_OUTPUT_MODE_POLICY = {
+    "default_mode": "control_surface_first",
+    "formal_document_mode": "on_human_review_or_audit_need",
+    "required_by_default": [
+        "machine_readable_contracts",
+        "open_questions",
+        "quality_commands",
+        "traceability",
+        "gate_decision",
+        "capability_ledger",
+    ],
+    "optional_by_default": [
+        "long_markdown_design",
+        "stage_summary",
+        "human_readable_html",
+        "workflow_summary",
+        "handoff_narrative",
+    ],
+    "promotion_rule": "长文档只有在人类评审、交接、审计、合规或用户明确要求时生成或提升到 docs/；否则保持为 .run-artifacts 或 artifacts/_control 的机读事实。",
+    "control_preservation_rule": "减少长文档不能减少控制能力；任何裁剪必须保留当前任务、范围、阻断问题、质量命令、变更追踪和验收证据。",
+}
+
+QUALITY_CONTRACT_RUNNER_POLICY = {
+    "runner": "engineering-assistant/scripts/run_quality_contract.py",
+    "compatibility_runner": "engineering-assistant/scripts/run_quality_commands.py",
+    "input": "artifacts/_control/quality-contract.json",
+    "output": "artifacts/_control/quality-run-report.json",
+    "required_command_rule": "required_commands 中 required=true 的命令失败时必须阻断，即使 make validate 或其他总体验证命令通过。",
+    "report_fields": ["command", "cwd", "exit_code", "duration_ms", "stdout_excerpt", "stderr_excerpt", "required", "blocking"],
+    "sync_targets": ["current-task.json.active_slice", "current-subtask.json", "open-questions.json", "artifact-index.json"],
+    "blocker_id_prefix": "QR-BLOCKER",
 }
 
 TEAM_RULE_PREFIXES = {
@@ -1190,6 +1335,41 @@ def required_information_request_schema() -> dict:
     }
 
 
+def skill_effectiveness_report_schema() -> dict:
+    nullable_number = {"type": ["number", "null"]}
+    return {
+        "type": "object",
+        "required": [
+            "status",
+            "mode",
+            "evaluation_state",
+            "baselines",
+            "evals",
+            "pass_rate_delta",
+            "token_or_time_cost_delta",
+            "quality_findings",
+            "doc_noise_score",
+            "frontend_product_score",
+            "recommendation",
+        ],
+        "properties": {
+            "status": {"enum": ["pass", "block", "waiting_for_input"]},
+            "mode": {"enum": ["spec", "grade", "report"]},
+            "evaluation_state": {"enum": ["spec_ready", "waiting_for_results", "graded", "blocked"]},
+            "baselines": {"type": "array", "items": {"type": "string"}},
+            "evals": {"type": "array", "items": {"type": "string"}},
+            "pass_rate_delta": {"type": "object", "additionalProperties": nullable_number},
+            "token_or_time_cost_delta": {"type": "object", "additionalProperties": nullable_number},
+            "quality_findings": {"type": "array", "items": {"type": "object", "required": ["id", "severity", "summary"]}},
+            "doc_noise_score": nullable_number,
+            "frontend_product_score": nullable_number,
+            "recommendation": {"enum": EFFECTIVENESS_RECOMMENDATIONS},
+            "generated_at": {"type": "string"},
+        },
+        "additionalProperties": True,
+    }
+
+
 def runtime_route_decision_schema() -> dict:
     return {
         "type": "object",
@@ -1482,6 +1662,10 @@ def lean_runtime_router_policy() -> dict:
         "default_evidence_level": "lite",
         "default_persistence_mode": "ephemeral",
         "routing_rule": "先判断任务类型、证据等级和持久化模式，再决定是否进入轻量上下文、标准开发、正式审计或发布链路；进入研发助手不等于进入固定重流程。",
+        "engineering_governance_state_machine": ENGINEERING_GOVERNANCE_STATE_MACHINE,
+        "capability_routing_protocol": CAPABILITY_ROUTING_PROTOCOL,
+        "documentation_output_mode_policy": DOCUMENTATION_OUTPUT_MODE_POLICY,
+        "quality_contract_runner_policy": QUALITY_CONTRACT_RUNNER_POLICY,
         "artifact_persistence_policy": ARTIFACT_PERSISTENCE_POLICY,
         "capability_families": CAPABILITY_FAMILIES,
         "capability_decisions": CAPABILITY_DECISIONS,
@@ -1517,6 +1701,11 @@ def lean_runtime_contract_policy(skill: dict) -> dict:
         "assistant_feedback_schema": "engineering-assistant/schemas/assistant-run-feedback.schema.json",
         "document_spine_required": True,
         "planning_spine_schema": "engineering-assistant/schemas/planning-spine.schema.json",
+        "engineering_governance_state_machine_required": True,
+        "capability_routing_protocol_required": True,
+        "documentation_output_mode": DOCUMENTATION_OUTPUT_MODE_POLICY["default_mode"],
+        "quality_contract_runner_required": True,
+        "quality_contract_runner": QUALITY_CONTRACT_RUNNER_POLICY["runner"],
         "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
         "post_task_plan_alignment_required": True,
         "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
@@ -1648,6 +1837,10 @@ def workflow_runtime_policy() -> dict:
             "block_next_nodes": True,
         },
         "design_governance_policy": design_governance_policy(),
+        "engineering_governance_state_machine": ENGINEERING_GOVERNANCE_STATE_MACHINE,
+        "capability_routing_protocol": CAPABILITY_ROUTING_PROTOCOL,
+        "documentation_output_mode_policy": DOCUMENTATION_OUTPUT_MODE_POLICY,
+        "quality_contract_runner_policy": QUALITY_CONTRACT_RUNNER_POLICY,
     }
 
 
@@ -1669,6 +1862,9 @@ def runtime_ir(skill: dict) -> dict:
         "outputs": skill["outputs"],
         "routing": skill_routing_metadata(skill),
         "lean_runtime_router_policy": lean_runtime_contract_policy(skill),
+        "engineering_governance_state_machine": ENGINEERING_GOVERNANCE_STATE_MACHINE,
+        "capability_routing_protocol": CAPABILITY_ROUTING_PROTOCOL,
+        "documentation_output_mode_policy": DOCUMENTATION_OUTPUT_MODE_POLICY,
         "runtime_rule_markers": runtime_rule_markers(skill),
         "risk": {
             "risk_level": risk_level(skill),
@@ -1729,6 +1925,7 @@ def rich_html_report_policy(skill: dict) -> dict:
     if skill["id"] == "implementation-controller":
         return {
             "required": True,
+            "default_generation_mode": "formal_evidence_or_human_review_only",
             "outputs": html_outputs,
             "script": "engineering-assistant/scripts/build_traceability_report.py",
             "sections": [
@@ -1743,6 +1940,7 @@ def rich_html_report_policy(skill: dict) -> dict:
         }
     return {
         "required": True,
+        "default_generation_mode": "formal_evidence_or_human_review_only",
         "outputs": html_outputs,
         "script": "engineering-assistant/scripts/render_code_review_html.py",
         "sections": [
@@ -1842,7 +2040,12 @@ def quality_audit_policy(skill: dict) -> dict:
 
 def runtime_rule_markers(skill: dict) -> list[str]:
     markers = [
+        "ENGINEERING_GOVERNANCE_STATE_NOT_ESTABLISHED",
         "CAPABILITY_HEALTH_NOT_CHECKED",
+        "CAPABILITY_REQUIRED_BUT_UNAVAILABLE",
+        "DELEGATED_OUTPUT_UNVERIFIED",
+        "REMOTE_STATE_UNPROVEN",
+        "CONTROL_SURFACE_FIRST_VIOLATED",
         "ASSISTANT_FEEDBACK_NOT_GENERATED",
         "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
         "DOC_SPRAWL_RISK",
@@ -1876,6 +2079,10 @@ def contract(skill: dict) -> dict:
         "preflight_runtime_gate": preflight_runtime_gate(),
         "lean_runtime_router_policy": lean_runtime_contract_policy(skill),
         "design_governance_policy": design_governance_policy(),
+        "engineering_governance_state_machine": ENGINEERING_GOVERNANCE_STATE_MACHINE,
+        "capability_routing_protocol": CAPABILITY_ROUTING_PROTOCOL,
+        "documentation_output_mode_policy": DOCUMENTATION_OUTPUT_MODE_POLICY,
+        "quality_contract_runner_policy": QUALITY_CONTRACT_RUNNER_POLICY,
         "document_spine_policy": DOCUMENT_SPINE_POLICY,
         "agent_execution_monitor_policy": AGENT_EXECUTION_MONITOR_POLICY,
         "product_plan_alignment_policy": PRODUCT_PLAN_ALIGNMENT_POLICY,
@@ -1908,6 +2115,12 @@ def contract(skill: dict) -> dict:
             "preflight_required_information": True,
             "preflight_before_formal_artifacts": True,
             "preflight_input_state_required": True,
+            "engineering_governance_state_required": True,
+            "control_surface_first_default": True,
+            "capability_health_checked_before_delegation": True,
+            "delegated_output_must_be_verified": True,
+            "quality_contract_runner_required": True,
+            "quality_run_report_required": True,
             "formal_generation_requires_ready": True,
             "formal_document_metadata_required": True,
             "stage_result_validation_required": True,
@@ -2105,6 +2318,7 @@ def rich_html_report_note(skill: dict) -> str:
     return """
 # 富 HTML 报告要求
 - HTML 报告是人工走查入口，不作为唯一事实源；事实源仍以 JSON、Markdown、CI 日志和工具原始输出为准。
+- HTML/Markdown 人工报告默认只在 `evidence_level=formal`、人工评审、审计、合规或用户明确要求时刷新；普通控制面恢复和最小切片重构不得反复刷新长报告制造噪音。
 - HTML 必须包含：门禁结论、阻断摘要、问题分级统计、质量维度统计、文件/模块分布、工具运行状态、证据与建议、人工确认区。
 - HTML 中的每个 finding 必须能追溯到 `review-comments.json`、`code-quality-report.json` 或 `static-analysis-report.json` 的稳定 id。
 - HTML 不得内嵌敏感 token、账号、连接串、私钥或完整内部凭据；发现敏感信息时只展示脱敏摘要和文件位置。
@@ -2121,9 +2335,30 @@ def implementation_controller_note(skill: dict) -> str:
 - 初始化控制面：`init_task.py` 生成 `current-task.json`、`artifact-index.json`、`open-questions.json` 和 `task-context.agent.md`。
 - 编译设计合同：`compile_design_contract.py` 只接受已审批的 Markdown/JSON/YAML 设计产物，拒绝 HTML 作为 agent 事实源。
 - 下游实现只能消费 `task-context.agent.md`、`design-contract.json`、`implementation-contract.json`、`quality-contract.json` 和 `traceability-matrix.json`；`docs/human-readable/traceability-report.html` 只给人查看。
-- 变更后必须执行 `collect_changed_files.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `run_quality_commands.py`。
+- 变更后必须执行 `collect_changed_files.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `run_quality_contract.py`；兼容入口 `run_quality_commands.py` 仍可用。
 - `build_traceability_report.py` 必须生成机读 `artifacts/_control/traceability-matrix.json` 与人工阅览 `docs/human-readable/traceability-report.html`；HTML 是结构化追踪页面，不得由 Markdown/JSON 机械转码替代。
 - 普通实现范围、测试、lint 和设计映射问题进入 `review -> repair -> validate`，最多 2 轮；业务决策、设计冲突、高风险动作、生产动作和修复耗尽才请求人工。
+"""
+
+
+def engineering_governance_note(skill: dict) -> str:
+    return """
+# 工程治理主控
+- engineering-assistant 是软件工程治理主控，不是单纯工具路由器；必须先建立需求、上下文、架构边界、实现合同、质量证据和验收状态，再选择执行能力。
+- 设计阶段可以按任务裁剪，但不得裁剪掉需求边界、影响范围、open questions、质量命令、变更追踪和 gate decision。
+- 默认输出模式是 `control_surface_first`：优先维护目标项目 `artifacts/_control/` 下的机读控制面；长 Markdown、阶段总结、HTML 和交接叙事只在人类评审、审计、合规、交接或用户明确要求时生成。
+- 委派 Codex、Hermes、skills 或 MCP 后，本 skill 仍负责消费证据并给出工程门禁结论；被委派能力的自述成功不能直接作为通过依据。
+"""
+
+
+def capability_routing_note(skill: dict) -> str:
+    return """
+# 能力编排与降级
+- 执行前必须判断是否需要外部能力，并登记到 `artifacts/_control/capability-invocation-ledger.json`。
+- 代码理解优先使用 codegraph；缺失时可降级为 `rg`、定向读文件和编译/测试反馈，但必须降低影响范围结论置信度。
+- 前端产品实现和浏览器验收优先使用 build-web-apps 与 browser；缺少浏览器级能力时，不得宣称完成浏览器截图或响应式验收。
+- GitHub/PR/CI 状态优先使用 GitHub 能力；缺失时只能报告本地 git diff 和本地命令结果，不得声称远端 PR 或 CI 状态。
+- 安全、生产和高风险变更缺少必要能力或审批时必须阻断，不能降级为普通建议。
 """
 
 
@@ -2133,6 +2368,8 @@ def quality_control_note(skill: dict) -> str:
     return """
 # 控制面质量合同
 - 如果存在 `artifacts/_control/quality-contract.json`，必须执行其中 `required=true` 的质量命令，并用 `engineering-assistant/scripts/run_quality_commands.py` 生成 `quality-run-report.json`。
+- 首选入口是 `engineering-assistant/scripts/run_quality_contract.py`；该报告是阻断事实源。`make validate` 通过但 `quality-contract.json.required_commands` 中任一 required 命令失败时，仍必须阻断。
+- runner 必须把失败同步到 `current-task.json.active_slice`、`current-subtask.json` 和 `open-questions.json`，让后续 agent 能直接恢复到阻断点。
 - 如果存在 `artifacts/_control/design-to-code-validation.json` 且状态不是 `pass`，必须阻断并先修复实现范围问题；blocker 和 major finding 均不得放行。
 - 如果 `quality-contract.json` 没有 required quality commands，或命令是占位内容，必须阻断；不得用 LLM 评审替代 build/test/lint/architecture/E2E 证据。
 - 普通代码质量、规范、架构边界、测试失败和设计映射问题由 agent 自动修复并重跑门禁；只在高风险审批、业务决策或修复轮次耗尽时请求人工。
@@ -2199,6 +2436,8 @@ description: {skill_trigger_description(skill)}
 - 未能从设计、repo_context 或项目 profile 确认技术选型时，必须主动询问用户。
 - Java/Spring 后端持久化默认建议 `mybatis-plus`；生成直接 `JDBC` 代码前必须有明确项目约束或评审批准。
 - 任何技术替换、绕过现有 mapper/repository 模式、前端技术栈/组件库变更、测试框架或构建工具替换都必须进入 `required_information_requests` 或人工评审。
+{engineering_governance_note(skill)}
+{capability_routing_note(skill)}
 
 # 执行门禁
 - preflight 阶段必须先完成语言确认和必须信息检查。
@@ -2696,6 +2935,334 @@ print(json.dumps({
 """)
 
 
+def skill_effectiveness_eval_spec() -> dict:
+    common_baselines = [item["id"] for item in EFFECTIVENESS_BASELINES]
+    return {
+        "skill_name": PLUGIN_NAME,
+        "version": PLUGIN_VERSION,
+        "language": "zh-CN",
+        "evaluation_goal": "证明 engineering-assistant 插件是否比自由 Codex 或现有优秀 skills/tools 更能稳定交付高质量工程结果。",
+        "baselines": EFFECTIVENESS_BASELINES,
+        "report_schema": "engineering-assistant/schemas/skill-effectiveness-report.schema.json",
+        "workspace": EFFECTIVENESS_WORKSPACE,
+        "result_contract": {
+            "required_report_fields": [
+                "pass_rate_delta",
+                "token_or_time_cost_delta",
+                "quality_findings",
+                "doc_noise_score",
+                "frontend_product_score",
+                "recommendation",
+            ],
+            "recommendation_values": EFFECTIVENESS_RECOMMENDATIONS,
+            "first_iteration_policy": "第一轮只生成可复现评测包和可填写结果目录，不自动宣称插件优于 baseline。",
+        },
+        "evals": [
+            {
+                "id": "minimal-fullstack-product-task",
+                "category": "full_stack_minimal_product",
+                "title": "极小前后端产品研发任务：公告开关",
+                "prompt": "为一个极小企业管理台实现公告开关功能：后端提供公告配置读取和保存接口，前端提供一个可编辑公告文案、启停开关和保存反馈的设置页。要求完成从需求、设计、实现证据、前后端联调状态到测试/构建证据的完整闭环，并比较自由 Codex、当前 engineering-assistant、现有优秀工具组合三组输出质量。",
+                "input_files": ["fixtures/minimal-fullstack-product-task.json"],
+                "baselines": common_baselines,
+                "expected_output": "完整但极小的前后端产品研发交付证据，包括后端接口契约、前端交互状态、联调证明、测试结果和质量评分。",
+                "assertions": [
+                    "后端接口包含读取公告配置和保存公告配置两个明确业务能力",
+                    "前端页面覆盖文案编辑、启停开关、保存中、保存成功、保存失败和表单校验",
+                    "实现范围保持极小，不新增通用配置平台、权限系统或无调用方抽象",
+                    "前后端契约字段一致，至少包含 enabled、message、updatedAt 三个字段",
+                    "评测结果同时覆盖三组 baseline，并给出 pass_rate、耗时或 token 成本、质量 finding 和推荐结论",
+                ],
+                "grading_dimensions": ["backend_contract", "frontend_interaction", "fullstack_integration", "scope_control", "test_and_build_evidence"],
+            },
+            {
+                "id": "code-drift-backend-export-refactor",
+                "category": "code_drift",
+                "title": "中等复杂后端导出任务改造防代码漂移",
+                "prompt": "在一个已有 Java/Spring 后端模块中，把同步 Excel 导出改成服务端异步任务。要求复用现有 service/mapper/DTO 模式，只改必要模块，输出进度查询和本地文件下载路径，补充单元测试，不引入新的通用异步平台。",
+                "input_files": ["fixtures/code-drift-backend-export-refactor.json"],
+                "baselines": common_baselines,
+                "expected_output": "最小必要代码变更、设计到代码映射、测试证据和无冗余抽象的实现说明。",
+                "assertions": [
+                    "变更文件仅位于 fixture 允许模块或明确解释审批原因",
+                    "每个新增接口、service、mapper 或 DTO 都能映射到任务目标",
+                    "没有新增无调用方的抽象层、重复 DTO、重复 converter 或泛化 async platform",
+                    "测试证据覆盖进度查询、成功下载、失败状态和权限/参数异常",
+                    "质量报告列出实际运行的 build/test/lint 命令或明确 blocking 原因",
+                ],
+                "grading_dimensions": ["scope_control", "design_to_code_traceability", "duplication", "test_evidence", "maintainability"],
+            },
+            {
+                "id": "document-noise-minimal-context",
+                "category": "document_noise",
+                "title": "大量历史文档噪音下只消费最小控制面",
+                "prompt": "继续推进一个已有长任务。上下文里混入历史设计、旧总结、HTML 人工阅览件和过期规划，请恢复当前任务状态并给出下一步，但不要全量扫 docs，也不要把过程摘要写进正式文档。",
+                "input_files": ["fixtures/document-noise-minimal-context.json"],
+                "baselines": common_baselines,
+                "expected_output": "只读取 task-context、artifact-index、open questions、quality contract 和必要 rule pack 后给出阻断或下一步。",
+                "assertions": [
+                    "输出明确列出已消费的机读事实源",
+                    "没有把 docs/human-readable 或 docs/human-review HTML 当作 agent 事实输入",
+                    "没有新增临时阶段总结、workflow summary 或待确认清单到正式 docs 目录",
+                    "识别 stale/over-budget context 并收敛到当前 task control plane",
+                    "doc_noise_score 低于阈值且有证据说明无关文档未参与决策",
+                ],
+                "grading_dimensions": ["context_minimization", "artifact_hygiene", "rule_consumption", "doc_noise_score", "blocked_state_honesty"],
+            },
+            {
+                "id": "frontend-product-quality-enterprise-console",
+                "category": "frontend_product_quality",
+                "title": "企业后台权限策略页产品级前端交付",
+                "prompt": "为企业后台新增权限策略管理页面。目标用户是运营管理员，需要可搜索、比较、编辑、启停和审计策略。必须遵循现有前端技术栈和组件库，覆盖 loading/empty/error/permission/validation 状态，并用浏览器截图或等价证据证明桌面和移动宽度不重叠、功能可用。",
+                "input_files": ["fixtures/frontend-product-quality-enterprise-console.json"],
+                "baselines": common_baselines,
+                "expected_output": "具备产品经理视角的信息架构、任务闭环、设计到 UI 映射、运行截图证据和前端测试/构建证据。",
+                "assertions": [
+                    "页面信息架构支持企业用户高频扫描、比较和批量判断",
+                    "UI 控件选择符合任务语义，避免营销式 hero、装饰卡片堆砌和无用说明文字",
+                    "组件复用、状态管理、路由和接口联调契约来自 repo_context 或用户确认",
+                    "loading、empty、error、permission、validation、dirty state 和成功反馈均可验证",
+                    "浏览器或截图证据覆盖桌面与移动宽度，文本和控件无重叠",
+                ],
+                "grading_dimensions": ["product_ia", "interaction_completeness", "visual_quality", "frontend_contract_mapping", "browser_verification"],
+            },
+            {
+                "id": "long-task-recovery-control-plane",
+                "category": "long_task_recovery",
+                "title": "多轮长任务恢复后控制面一致性",
+                "prompt": "一个研发任务已经经历多轮实现、修复和质量检查。请恢复任务，判断是否可以继续实现或必须阻断，并确保 open questions、quality commands、changed files、traceability matrix 和 rule consumption 一致。",
+                "input_files": ["fixtures/long-task-recovery-control-plane.json"],
+                "baselines": common_baselines,
+                "expected_output": "基于控制面一致性的继续/阻断决策，不用聊天记忆替代机读状态。",
+                "assertions": [
+                    "恢复过程读取 current-task、artifact-index、open-questions、quality-contract 和 traceability matrix",
+                    "blocking open question 未解决时不会进入实现或输出 succeeded",
+                    "changed-files 与 implementation-contract 的 allowed/forbidden modules 一致",
+                    "质量命令为空、占位或未运行时不能通过",
+                    "traceability、rule consumption 和 repair attempts 有一致的下一步判断",
+                ],
+                "grading_dimensions": ["state_recovery", "control_plane_consistency", "quality_gate_honesty", "repair_loop_integrity", "handoff_readiness"],
+            },
+        ],
+    }
+
+
+def skill_effectiveness_fixture_payload(eval_id: str) -> dict:
+    payloads = {
+        "minimal-fullstack-product-task": {
+            "fixture_id": "minimal-fullstack-product-task",
+            "task_type": "fullstack_product_development",
+            "product_goal": "企业管理员可以控制管理台顶部公告是否展示，并维护公告文案。",
+            "backend_contract": {
+                "framework": "Java/Spring style",
+                "endpoints": [
+                    {"method": "GET", "path": "/api/v1/admin/announcement", "response": {"enabled": "boolean", "message": "string", "updatedAt": "string"}},
+                    {"method": "PUT", "path": "/api/v1/admin/announcement", "request": {"enabled": "boolean", "message": "string"}, "response": {"enabled": "boolean", "message": "string", "updatedAt": "string"}},
+                ],
+                "allowed_modules": ["backend/announcement", "frontend/admin-announcement"],
+                "forbidden_expansion": ["generic settings platform", "new RBAC subsystem", "event bus", "database migration unless fixture says persistence is missing"],
+            },
+            "frontend_contract": {
+                "page": "AdminAnnouncementSettings",
+                "controls": ["message textarea", "enabled switch", "save button"],
+                "states": ["loading", "empty", "validation_error", "saving", "saved", "save_failed"],
+                "desktop_mobile_requirement": "表单和反馈在 375px 与 1280px 宽度无重叠。",
+            },
+            "quality_commands": ["backend unit tests", "frontend component tests", "frontend build"],
+            "acceptance_criteria": [
+                "读取接口返回现有公告状态",
+                "保存接口校验启用时 message 非空",
+                "前端启用但文案为空时阻止保存并显示字段错误",
+                "保存成功后展示更新时间和成功反馈",
+            ],
+        },
+        "code-drift-backend-export-refactor": {
+            "fixture_id": "code-drift-backend-export-refactor",
+            "task_type": "backend_change",
+            "repo_context": {
+                "backend_framework": "Java/Spring",
+                "persistence_framework": "mybatis-plus",
+                "existing_patterns": ["controller -> application service -> mapper", "EasyExcel streaming", "server-local file download"],
+                "allowed_modules": ["backend/export", "backend/task", "backend/common/file"],
+                "forbidden_modules": ["plugins/", "frontend/", "shared/generated-platform/"],
+            },
+            "quality_commands": ["mvn -pl backend -DskipITs test", "mvn -pl backend -DskipITs package"],
+            "known_failure_modes": ["泛化 async platform", "重复 DTO/converter", "未映射变更文件", "只写文档不跑测试"],
+        },
+        "document-noise-minimal-context": {
+            "fixture_id": "document-noise-minimal-context",
+            "task_type": "context_recovery",
+            "machine_sources": [
+                "artifacts/_control/task-context.agent.md",
+                "artifacts/_control/artifact-index.json",
+                "artifacts/_control/open-questions.json",
+                "artifacts/_control/quality-contract.json",
+                "artifacts/rule-governance/task-rule-packs/code-development.json",
+            ],
+            "noise_sources": [
+                "docs/human-readable/traceability-report.html",
+                "docs/human-review/run-001.html",
+                "docs/old-designs/superseded-plan.md",
+                "artifacts/workflow-orchestrator/workflow-summary.md",
+            ],
+            "expected_behavior": "只用 machine_sources 决策，噪音源最多作为 forbidden_sources 说明。",
+        },
+        "frontend-product-quality-enterprise-console": {
+            "fixture_id": "frontend-product-quality-enterprise-console",
+            "task_type": "frontend_product",
+            "audience": "企业运营管理员",
+            "frontend_stack_source": "repo_context_or_user_confirmation_required",
+            "required_states": ["loading", "empty", "error", "permission", "validation", "dirty", "success"],
+            "required_browser_evidence": ["desktop screenshot", "mobile screenshot", "no overlap check", "core workflow interaction proof"],
+            "product_quality_bar": ["task-first information architecture", "dense enterprise scanning", "predictable navigation", "real controls over decorative layout"],
+        },
+        "long-task-recovery-control-plane": {
+            "fixture_id": "long-task-recovery-control-plane",
+            "task_type": "long_running_recovery",
+            "control_files": [
+                "artifacts/_control/current-task.json",
+                "artifacts/_control/artifact-index.json",
+                "artifacts/_control/open-questions.json",
+                "artifacts/_control/quality-contract.json",
+                "artifacts/_control/traceability-matrix.json",
+                "artifacts/_control/changed-files-report.json",
+            ],
+            "blocking_conditions": ["open question severity=major", "quality command placeholder", "changed file outside allowed_modules", "traceability row has gap"],
+            "expected_decision": "blocked until machine-readable control plane is consistent",
+        },
+    }
+    return payloads[eval_id]
+
+
+def skill_effectiveness_simulated_result_payload(baseline: str) -> dict:
+    common = {
+        "eval_id": "minimal-fullstack-product-task",
+        "simulation": True,
+        "simulated_task_scope": "complete minimal backend API plus frontend settings page for an admin announcement toggle",
+        "source_fixture": "fixtures/minimal-fullstack-product-task.json",
+    }
+    payloads = {
+        "baseline_free_codex": {
+            **common,
+            "baseline": "baseline_free_codex",
+            "pass_rate": 0.62,
+            "token_or_time_cost": 1.0,
+            "doc_noise_score": 0.58,
+            "frontend_product_score": 0.56,
+            "assertion_results": [
+                {"assertion": "backend read/save API exists", "passed": True, "evidence": "GET/PUT contract was produced."},
+                {"assertion": "frontend states complete", "passed": False, "evidence": "Saved and validation states were present; loading and save_failed were vague."},
+                {"assertion": "scope stays minimal", "passed": False, "evidence": "Introduced a generic settings service not required by the fixture."},
+                {"assertion": "field contract consistent", "passed": True, "evidence": "enabled/message/updatedAt appeared in both API and UI notes."},
+                {"assertion": "test/build evidence", "passed": False, "evidence": "Listed tests but did not provide command outcomes."},
+            ],
+            "quality_findings": [
+                {"id": "FREE-CODEX-SCOPE-001", "severity": "major", "summary": "自由 Codex 倾向扩展成通用设置能力，超出极小公告开关范围。"},
+                {"id": "FREE-CODEX-FE-001", "severity": "major", "summary": "前端状态覆盖不完整，缺少失败态和响应式验收证据。"},
+            ],
+        },
+        "current_engineering_assistant": {
+            **common,
+            "baseline": "current_engineering_assistant",
+            "pass_rate": 0.82,
+            "token_or_time_cost": 1.35,
+            "doc_noise_score": 0.32,
+            "frontend_product_score": 0.74,
+            "assertion_results": [
+                {"assertion": "backend read/save API exists", "passed": True, "evidence": "Backend contract lists GET/PUT announcement endpoints."},
+                {"assertion": "frontend states complete", "passed": True, "evidence": "UI mapping includes loading, empty, validation_error, saving, saved, save_failed."},
+                {"assertion": "scope stays minimal", "passed": True, "evidence": "Control plane constrained allowed modules to backend/announcement and frontend/admin-announcement."},
+                {"assertion": "field contract consistent", "passed": True, "evidence": "enabled/message/updatedAt are tracked in API and UI mapping."},
+                {"assertion": "test/build evidence", "passed": False, "evidence": "Evidence lists required commands, but simulated output includes no real command log."},
+            ],
+            "quality_findings": [
+                {"id": "EA-EVIDENCE-001", "severity": "minor", "summary": "插件能控制范围和状态，但仍生成较多治理说明，真实命令证据不足。"},
+            ],
+        },
+        "curated_tools": {
+            **common,
+            "baseline": "curated_tools",
+            "pass_rate": 0.88,
+            "token_or_time_cost": 1.18,
+            "doc_noise_score": 0.24,
+            "frontend_product_score": 0.86,
+            "assertion_results": [
+                {"assertion": "backend read/save API exists", "passed": True, "evidence": "Codegraph-style context kept backend API and DTO minimal."},
+                {"assertion": "frontend states complete", "passed": True, "evidence": "Frontend skill/browser path checked all expected UI states."},
+                {"assertion": "scope stays minimal", "passed": True, "evidence": "No generic settings platform or unrelated modules were proposed."},
+                {"assertion": "field contract consistent", "passed": True, "evidence": "API client and page state share enabled/message/updatedAt."},
+                {"assertion": "test/build evidence", "passed": True, "evidence": "Simulated evidence includes backend unit, frontend component, and build checks."},
+            ],
+            "quality_findings": [
+                {"id": "CURATED-ROUTING-001", "severity": "minor", "summary": "现有优秀工具组合质量最高，但缺少统一长期控制面和后续恢复协议。"},
+            ],
+        },
+    }
+    return payloads[baseline]
+
+
+def minimal_fullstack_simulated_deliverable() -> str:
+    return """# Minimal Full-stack Product Task Simulation
+
+## Product Goal
+企业管理员可以在管理台维护顶部公告：编辑公告文案、启停公告、保存后看到更新时间和成功反馈。
+
+## Backend Scope
+- `GET /api/v1/admin/announcement` 返回 `enabled`、`message`、`updatedAt`。
+- `PUT /api/v1/admin/announcement` 接收 `enabled`、`message`，启用时 `message` 必填。
+- 极小范围：只允许公告配置读写，不扩展成通用设置平台、权限系统、事件总线或跨模块重构。
+
+## Frontend Scope
+- 页面：`AdminAnnouncementSettings`。
+- 控件：公告文案 textarea、启停 switch、保存 button。
+- 状态：loading、empty、validation_error、saving、saved、save_failed。
+- 响应式验收：375px 与 1280px 宽度下表单、按钮、状态反馈不重叠。
+
+## Simulated Integration Evidence
+- 前后端字段统一为 `enabled`、`message`、`updatedAt`。
+- 启用但文案为空时，前端阻止保存，后端也返回校验错误。
+- 保存成功后前端展示后端返回的 `updatedAt`。
+
+## Simulated Quality Evidence
+- 后端单测：读取默认公告、保存启用公告、启用空文案失败。
+- 前端组件测试：加载态、字段校验、保存中、保存成功、保存失败。
+- 构建检查：前端 build 通过，未引入新依赖。
+
+## Evaluation Outcome
+三组 baseline 的模拟结果位于 `results/`。当前评测结论：`current_engineering_assistant` 优于自由 Codex，但弱于 curated existing tools，因此推荐后续把插件瘦身为控制面与评审层，并主动委派前端和代码上下文能力给优秀工具。
+"""
+
+
+def generate_skill_effectiveness_eval_assets(base: Path) -> None:
+    spec = skill_effectiveness_eval_spec()
+    write_json(base / "evals.json", spec)
+    for item in spec["evals"]:
+        write_json(base / "fixtures" / f"{item['id']}.json", skill_effectiveness_fixture_payload(item["id"]))
+    for baseline in [item["id"] for item in EFFECTIVENESS_BASELINES]:
+        write_json(base / "results" / f"minimal-fullstack-product-task--{baseline}.json", skill_effectiveness_simulated_result_payload(baseline))
+    write_text(base / "simulated-deliverables" / "minimal-fullstack-product-task.md", minimal_fullstack_simulated_deliverable())
+    write_text(base / "README.md", """# Skill Effectiveness Evals
+
+本目录用于回答 `engineering-assistant` 插件是否真的提升交付质量。它位于仓库根目录，不在 `skills/` 或 `engineering-assistant/` 下，因此不会进入 Codex/Hermes 发布包。
+
+本轮已经模拟完成一个极小前后端产品研发任务：`minimal-fullstack-product-task`。模拟结果用于验证评测闭环，不代表真实生产性能结论。
+
+## Baselines
+- `baseline_free_codex`：不加载本插件，只给真实任务和目标仓库上下文。
+- `current_engineering_assistant`：使用当前插件 workflow、skills 和控制面脚本。
+- `curated_tools`：明确复用 codegraph、build-web-apps、browser、GitHub/code-review 等现有能力。
+
+## Commands
+```bash
+python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report
+python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode grade
+python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode report
+```
+
+`spec` 校验评测定义、fixture、baseline 和报告字段。`grade/report` 读取 `results/` 中的三组模拟结果，生成 `reports/effectiveness-report.json`。
+""")
+
+
 def generate_engineering_assistant() -> None:
     base = ROOT / "engineering-assistant"
     workflows = {
@@ -3065,6 +3632,7 @@ def generate_engineering_assistant() -> None:
         "rule-candidate.schema.json": {"type": "object", "required": ["rules"], "properties": {"rules": {"type": "array", "items": {"type": "object", "required": ["id", "title", "status", "severity", "confidence", "source_evidence", "recommended_rule", "owner", "review_required"]}}}},
         "document-lifecycle.schema.json": document_lifecycle_schema(),
         "required-information-request.schema.json": required_information_request_schema(),
+        "skill-effectiveness-report.schema.json": skill_effectiveness_report_schema(),
         "runtime-route-decision.schema.json": runtime_route_decision_schema(),
         "artifact-persistence-policy.schema.json": artifact_persistence_policy_schema(),
         "capability-invocation-ledger.schema.json": capability_invocation_ledger_schema(),
@@ -3074,10 +3642,70 @@ def generate_engineering_assistant() -> None:
         "agent-execution-monitor.schema.json": agent_execution_monitor_schema(),
         "post-task-plan-alignment.schema.json": post_task_plan_alignment_schema(),
         "framework-selection.schema.json": {"type": "object", "required": ["technology_categories", "review_status", "source", "exceptions"], "properties": {"technology_categories": {"type": "object", "additionalProperties": {"type": "string"}}, "persistence_framework": {"type": "string"}, "review_status": {"enum": ["confirmed", "waiting_for_input", "approved_exception", "blocked"]}, "source": {"type": "string"}, "exceptions": {"type": "array", "items": {"type": "string"}}}},
-        "task-control.schema.json": {"type": "object", "required": ["task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"], "properties": {"task_id": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1}, "language": {"enum": ["zh-CN", "en"]}, "workflow_id": {"type": "string", "minLength": 1}, "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]}, "control_dir": {"type": "string", "minLength": 1}, "created_at": {"type": "string", "minLength": 1}, "updated_at": {"type": "string"}, "project_profile": {"type": "object"}, "current_contracts": {"type": "object"}}, "additionalProperties": True},
+        "task-control.schema.json": {
+            "type": "object",
+            "required": ["task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"],
+            "properties": {
+                "task_id": {"type": "string", "minLength": 1},
+                "title": {"type": "string", "minLength": 1},
+                "language": {"enum": ["zh-CN", "en"]},
+                "workflow_id": {"type": "string", "minLength": 1},
+                "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
+                "control_dir": {"type": "string", "minLength": 1},
+                "created_at": {"type": "string", "minLength": 1},
+                "updated_at": {"type": "string"},
+                "project_profile": {"type": "object"},
+                "current_contracts": {"type": "object"},
+                "active_slice": {
+                    "type": "object",
+                    "required": ["slice_id", "parent_task_id", "status", "control_artifacts"],
+                    "properties": {
+                        "slice_id": {"type": "string", "minLength": 1},
+                        "title": {"type": "string"},
+                        "parent_task_id": {"type": "string", "minLength": 1},
+                        "kind": {"type": "string"},
+                        "status": {"enum": ["initialized", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
+                        "control_artifacts": {"type": "object"},
+                        "blockers": {"type": "array", "items": {"type": "string"}},
+                        "updated_at": {"type": "string"},
+                    },
+                    "additionalProperties": True,
+                },
+            },
+            "additionalProperties": True,
+        },
+        "current-subtask.schema.json": {
+            "type": "object",
+            "required": ["slice_id", "parent_task_id", "status", "control_artifacts", "updated_at"],
+            "properties": {
+                "slice_id": {"type": "string", "minLength": 1},
+                "parent_task_id": {"type": "string", "minLength": 1},
+                "title": {"type": "string"},
+                "kind": {"type": "string"},
+                "status": {"enum": ["initialized", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
+                "control_artifacts": {"type": "object"},
+                "quality_status": {"type": "string"},
+                "blockers": {"type": "array", "items": {"type": "object"}},
+                "updated_at": {"type": "string"},
+            },
+            "additionalProperties": True,
+        },
         "design-contract.schema.json": {"type": "object", "required": ["task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"], "properties": {"task_id": {"type": "string"}, "source_design": {"type": "string"}, "source_checksum": {"type": "string"}, "goals": {"type": "array", "items": {"type": "string"}}, "acceptance_criteria": {"type": "array", "items": {"type": "string"}}, "module_boundaries": {"type": "object"}, "risks": {"type": "array", "items": {"type": "string"}}, "assumptions": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": True},
         "implementation-contract.schema.json": {"type": "object", "required": ["task_id", "allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "expected_interfaces", "expected_services", "expected_repositories_or_mappers", "technology_adoption_contract"], "properties": {"task_id": {"type": "string"}, "allowed_modules": {"type": "array", "items": {"type": "string"}}, "forbidden_modules": {"type": "array", "items": {"type": "string"}}, "required_files_or_patterns": {"type": "array", "items": {"type": "string"}}, "architecture_rules": {"type": "array", "items": {"type": "string"}}, "required_tests": {"type": "array", "items": {"type": "string"}}, "done_conditions": {"type": "array", "items": {"type": "string"}}, "expected_interfaces": {"type": "array", "items": {"type": "string"}}, "expected_services": {"type": "array", "items": {"type": "string"}}, "expected_repositories_or_mappers": {"type": "array", "items": {"type": "string"}}, "technology_adoption_contract": {"type": "object"}}, "additionalProperties": True},
-        "quality-contract.schema.json": {"type": "object", "required": ["task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy"], "properties": {"task_id": {"type": "string"}, "required_commands": {"type": "array", "items": {"type": "object", "required": ["id", "command"], "properties": {"id": {"type": "string"}, "command": {"type": "string"}, "required": {"type": "boolean"}}}}, "required_evidence": {"type": "array", "items": {"type": "string"}}, "quality_gates": {"type": "array", "items": {"type": "string"}}, "repair_policy": {"type": "object"}}, "additionalProperties": True},
+        "quality-contract.schema.json": {"type": "object", "required": ["task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy"], "properties": {"task_id": {"type": "string"}, "required_commands": {"type": "array", "items": {"type": "object", "required": ["id", "command"], "properties": {"id": {"type": "string"}, "command": {"type": "string"}, "cwd": {"type": "string"}, "required": {"type": "boolean"}, "timeout_seconds": {"type": "integer"}}}}, "required_evidence": {"type": "array", "items": {"type": "string"}}, "quality_gates": {"type": "array", "items": {"type": "string"}}, "repair_policy": {"type": "object"}}, "additionalProperties": True},
+        "quality-run-report.schema.json": {
+            "type": "object",
+            "required": ["status", "summary", "results", "errors", "generated_at"],
+            "properties": {
+                "status": {"enum": ["pass", "block"]},
+                "summary": {"type": "object"},
+                "results": {"type": "array", "items": {"type": "object", "required": ["id", "command", "cwd", "required", "exit_code", "duration_ms", "blocking"]}},
+                "errors": {"type": "array", "items": {"type": "string"}},
+                "findings": {"type": "array", "items": {"type": "object"}},
+                "generated_at": {"type": "string"},
+            },
+            "additionalProperties": True,
+        },
         "control-health-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
         "technology-adoption-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
         "rule-consumption-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
@@ -5010,6 +5638,215 @@ if warnings:
     print("\\n".join(f"warning: {item}" for item in warnings))
 print("ok")
 """,
+        "run_skill_effectiveness_evals.py": """#!/usr/bin/env python3
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+BASELINES = {"baseline_free_codex", "current_engineering_assistant", "curated_tools"}
+CATEGORIES = {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery"}
+RECOMMENDATIONS = {"keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"}
+REPORT_FIELDS = {"pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "recommendation"}
+DEFAULT_SPEC = Path("effectiveness-evals/evals.json")
+DEFAULT_REPORT = Path("effectiveness-evals/reports/effectiveness-report.json")
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def load_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"{path}: missing file")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{path}: invalid JSON: {exc}")
+
+
+def validate_spec(spec_path: Path) -> tuple[dict, list[str]]:
+    errors = []
+    spec = load_json(spec_path)
+    root = spec_path.parent
+    baseline_ids = {item.get("id") for item in spec.get("baselines", [])}
+    if baseline_ids != BASELINES:
+        errors.append(f"{spec_path}: baselines must be {sorted(BASELINES)}")
+    result_contract = spec.get("result_contract", {})
+    missing_report_fields = REPORT_FIELDS - set(result_contract.get("required_report_fields", []))
+    if missing_report_fields:
+        errors.append(f"{spec_path}: result_contract.required_report_fields missing {sorted(missing_report_fields)}")
+    if set(result_contract.get("recommendation_values", [])) != RECOMMENDATIONS:
+        errors.append(f"{spec_path}: recommendation_values must be {sorted(RECOMMENDATIONS)}")
+    evals = spec.get("evals", [])
+    categories = {item.get("category") for item in evals}
+    if categories != CATEGORIES:
+        errors.append(f"{spec_path}: eval categories must be {sorted(CATEGORIES)}")
+    if len(evals) != len(CATEGORIES):
+        errors.append(f"{spec_path}: expected exactly {len(CATEGORIES)} effectiveness evals")
+    for item in evals:
+        eval_id = item.get("id", "<missing>")
+        if not item.get("prompt") or len(item["prompt"]) < 80:
+            errors.append(f"{eval_id}: prompt must be realistic and at least 80 chars")
+        if set(item.get("baselines", [])) != BASELINES:
+            errors.append(f"{eval_id}: baselines must include all comparison groups")
+        if len(item.get("assertions", [])) < 5:
+            errors.append(f"{eval_id}: assertions must include at least 5 checks")
+        if len(item.get("grading_dimensions", [])) < 5:
+            errors.append(f"{eval_id}: grading_dimensions must include at least 5 dimensions")
+        for rel in item.get("input_files", []):
+            fixture = root / rel
+            if not fixture.exists():
+                errors.append(f"{eval_id}: missing input fixture {rel}")
+                continue
+            payload = load_json(fixture)
+            if payload.get("fixture_id") != eval_id:
+                errors.append(f"{eval_id}: fixture_id mismatch in {rel}")
+    return spec, errors
+
+
+def empty_delta() -> dict:
+    return {
+        "current_engineering_assistant_vs_baseline_free_codex": None,
+        "current_engineering_assistant_vs_curated_tools": None,
+        "curated_tools_vs_baseline_free_codex": None,
+    }
+
+
+def base_report(mode: str, spec: dict, status: str, state: str, findings: list[dict]) -> dict:
+    return {
+        "status": status,
+        "mode": mode,
+        "evaluation_state": state,
+        "baselines": [item["id"] for item in spec.get("baselines", [])],
+        "evals": [item["id"] for item in spec.get("evals", [])],
+        "metrics": {
+            "eval_count": len(spec.get("evals", [])),
+            "baseline_count": len(spec.get("baselines", [])),
+            "real_result_count": 0,
+        },
+        "pass_rate_delta": empty_delta(),
+        "token_or_time_cost_delta": empty_delta(),
+        "quality_findings": findings,
+        "doc_noise_score": None,
+        "frontend_product_score": None,
+        "recommendation": "keep_and_slim",
+        "recommendation_reason": "provisional default until real with-plugin/baseline runs are graded",
+        "generated_at": now_iso(),
+    }
+
+
+def load_result_files(results_dir: Path) -> list[dict]:
+    if not results_dir.exists():
+        return []
+    return [load_json(path) for path in sorted(results_dir.glob("*.json"))]
+
+
+def score_results(spec: dict, result_files: list[dict]) -> dict:
+    if not result_files:
+        return base_report(
+            "grade",
+            spec,
+            "waiting_for_input",
+            "waiting_for_results",
+            [{"id": "EFFECTIVENESS-RESULTS-MISSING", "severity": "major", "summary": "缺少真实 baseline/current/curated_tools 运行结果，不能判断插件是否有效。"}],
+        )
+    by_baseline = {baseline: [] for baseline in BASELINES}
+    cost_by_baseline = {baseline: [] for baseline in BASELINES}
+    findings = []
+    doc_noise_scores = []
+    frontend_scores = []
+    for result in result_files:
+        baseline = result.get("baseline")
+        eval_id = result.get("eval_id")
+        if baseline not in BASELINES:
+            findings.append({"id": "UNKNOWN-BASELINE", "severity": "blocker", "summary": f"{eval_id}: unknown baseline {baseline}"})
+            continue
+        score = result.get("pass_rate")
+        if not isinstance(score, (int, float)):
+            findings.append({"id": "MISSING-PASS-RATE", "severity": "blocker", "summary": f"{eval_id}/{baseline}: pass_rate missing"})
+            continue
+        by_baseline[baseline].append(float(score))
+        if isinstance(result.get("token_or_time_cost"), (int, float)):
+            cost_by_baseline[baseline].append(float(result["token_or_time_cost"]))
+        if isinstance(result.get("doc_noise_score"), (int, float)):
+            doc_noise_scores.append(float(result["doc_noise_score"]))
+        if isinstance(result.get("frontend_product_score"), (int, float)):
+            frontend_scores.append(float(result["frontend_product_score"]))
+        findings.extend(result.get("quality_findings", []))
+    means = {key: (sum(values) / len(values) if values else None) for key, values in by_baseline.items()}
+    deltas = {
+        "current_engineering_assistant_vs_baseline_free_codex": None if means["current_engineering_assistant"] is None or means["baseline_free_codex"] is None else means["current_engineering_assistant"] - means["baseline_free_codex"],
+        "current_engineering_assistant_vs_curated_tools": None if means["current_engineering_assistant"] is None or means["curated_tools"] is None else means["current_engineering_assistant"] - means["curated_tools"],
+            "curated_tools_vs_baseline_free_codex": None if means["curated_tools"] is None or means["baseline_free_codex"] is None else means["curated_tools"] - means["baseline_free_codex"],
+    }
+    cost_means = {key: (sum(values) / len(values) if values else None) for key, values in cost_by_baseline.items()}
+    cost_deltas = {
+        "current_engineering_assistant_vs_baseline_free_codex": None if cost_means["current_engineering_assistant"] is None or cost_means["baseline_free_codex"] is None else cost_means["current_engineering_assistant"] - cost_means["baseline_free_codex"],
+        "current_engineering_assistant_vs_curated_tools": None if cost_means["current_engineering_assistant"] is None or cost_means["curated_tools"] is None else cost_means["current_engineering_assistant"] - cost_means["curated_tools"],
+        "curated_tools_vs_baseline_free_codex": None if cost_means["curated_tools"] is None or cost_means["baseline_free_codex"] is None else cost_means["curated_tools"] - cost_means["baseline_free_codex"],
+    }
+    recommendation = "keep_and_slim"
+    current_vs_free = deltas["current_engineering_assistant_vs_baseline_free_codex"]
+    current_vs_curated = deltas["current_engineering_assistant_vs_curated_tools"]
+    if current_vs_free is not None and current_vs_curated is not None:
+        if current_vs_free < 0 and current_vs_curated < 0:
+            recommendation = "retire_skill"
+        elif current_vs_curated < 0:
+            recommendation = "delegate_to_curated_tools"
+        elif current_vs_free < 0.05:
+            recommendation = "split_capabilities"
+    status = "block" if any(item.get("severity") == "blocker" for item in findings) else "pass"
+    return {
+        "status": status,
+        "mode": "grade",
+        "evaluation_state": "graded" if status == "pass" else "blocked",
+        "baselines": [item["id"] for item in spec.get("baselines", [])],
+        "evals": [item["id"] for item in spec.get("evals", [])],
+        "metrics": {"eval_count": len(spec.get("evals", [])), "baseline_count": len(spec.get("baselines", [])), "real_result_count": len(result_files), "mean_pass_rate": means, "mean_token_or_time_cost": cost_means},
+        "pass_rate_delta": deltas,
+        "token_or_time_cost_delta": cost_deltas,
+        "quality_findings": findings,
+        "doc_noise_score": sum(doc_noise_scores) / len(doc_noise_scores) if doc_noise_scores else None,
+        "frontend_product_score": sum(frontend_scores) / len(frontend_scores) if frontend_scores else None,
+        "recommendation": recommendation,
+        "generated_at": now_iso(),
+    }
+
+
+def write_report(path: Path, report: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Validate and report engineering-assistant skill effectiveness evals.")
+    parser.add_argument("--mode", choices=["spec", "grade", "report"], default="spec")
+    parser.add_argument("--spec", default=str(DEFAULT_SPEC))
+    parser.add_argument("--results-dir", default="effectiveness-evals/results")
+    parser.add_argument("--output", default=str(DEFAULT_REPORT))
+    parser.add_argument("--no-write-report", action="store_true")
+    args = parser.parse_args()
+    spec_path = Path(args.spec)
+    spec, errors = validate_spec(spec_path)
+    if errors:
+        report = base_report(args.mode, spec if isinstance(spec, dict) else {}, "block", "blocked", [{"id": "EFFECTIVENESS-SPEC-INVALID", "severity": "blocker", "summary": item} for item in errors])
+    elif args.mode == "spec":
+        report = base_report(args.mode, spec, "pass", "spec_ready", [{"id": "EFFECTIVENESS-SPEC-READY", "severity": "info", "summary": "评测规格、baseline、fixture 和报告字段已就绪；尚未运行真实对照任务。"}])
+    else:
+        report = score_results(spec, load_result_files(Path(args.results_dir)))
+        if args.mode == "report":
+            report["mode"] = "report"
+    if not args.no_write_report:
+        write_report(Path(args.output), report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if report["status"] == "block":
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
+""",
         "control_runtime.py": """#!/usr/bin/env python3
 import hashlib
 import html.parser
@@ -5166,8 +6003,23 @@ def main():
     control = ensure_control_dir(root)
     task_id = args.task_id or slug(args.title)
     profile = read_json(Path(args.project_profile), {}) if args.project_profile else {}
-    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "created_at": now_iso(), "updated_at": now_iso()}
+    active_slice = {
+        "slice_id": task_id,
+        "parent_task_id": task_id,
+        "title": args.title,
+        "kind": "initial_task",
+        "status": "initialized",
+        "control_artifacts": {
+            "current_task": "artifacts/_control/current-task.json",
+            "current_subtask": "artifacts/_control/current-subtask.json",
+            "open_questions": "artifacts/_control/open-questions.json",
+        },
+        "blockers": [],
+        "updated_at": now_iso(),
+    }
+    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
     write_json(control / "current-task.json", task)
+    write_json(control / "current-subtask.json", active_slice)
     write_json(control / "artifact-index.json", {"artifacts": {}, "updated_at": now_iso()})
     write_json(control / "decision-log.json", {"decisions": []})
     write_json(control / "open-questions.json", {"questions": []})
@@ -5188,6 +6040,7 @@ def main():
         "",
         "## Control Artifacts",
         "- current_task: artifacts/_control/current-task.json",
+        "- current_subtask: artifacts/_control/current-subtask.json",
         "- implementation_contract: artifacts/_control/implementation-contract.json",
         "- quality_contract: artifacts/_control/quality-contract.json",
         "- open_questions: artifacts/_control/open-questions.json",
@@ -5506,10 +6359,31 @@ def main():
     write_traceability_outputs(root, control, traceability_matrix)
     context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
     (control / "task-context.agent.md").write_text("\\n".join(context), encoding="utf-8")
-    for name, rel, artifact_type in [("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
+    for name, rel, artifact_type in [("current-subtask.json", control / "current-subtask.json", "json"), ("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
         update_artifact_index(root, name, rel, artifact_type, "implementation-controller")
-    task.update({"task_id": task_id, "status": "contract_compiled", "current_contracts": {"design_contract": str((control / "design-contract.json").relative_to(root)), "implementation_contract": str((control / "implementation-contract.json").relative_to(root)), "quality_contract": str((control / "quality-contract.json").relative_to(root)), "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)), "traceability_report": "docs/human-readable/traceability-report.html", "context_pack": str((control / "task-context.agent.md").relative_to(root))}, "updated_at": now_iso()})
+    active_slice = {
+        "slice_id": task_id,
+        "parent_task_id": task.get("task_id") or task_id,
+        "title": task.get("title") or design_path.stem,
+        "kind": "implementation_contract",
+        "status": "contract_compiled",
+        "control_artifacts": {
+            "current_task": "artifacts/_control/current-task.json",
+            "current_subtask": "artifacts/_control/current-subtask.json",
+            "design_contract": str((control / "design-contract.json").relative_to(root)),
+            "implementation_contract": str((control / "implementation-contract.json").relative_to(root)),
+            "quality_contract": str((control / "quality-contract.json").relative_to(root)),
+            "quality_run_report": "artifacts/_control/quality-run-report.json",
+            "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)),
+            "traceability_report": "docs/human-readable/traceability-report.html",
+            "context_pack": str((control / "task-context.agent.md").relative_to(root)),
+        },
+        "blockers": [],
+        "updated_at": now_iso(),
+    }
+    task.update({"task_id": task.get("task_id") or task_id, "status": "contract_compiled", "active_slice": active_slice, "current_contracts": active_slice["control_artifacts"], "updated_at": now_iso()})
     write_json(control / "current-task.json", task)
+    write_json(control / "current-subtask.json", active_slice)
     print(control / "implementation-contract.json")
 
 if __name__ == "__main__":
@@ -5926,14 +6800,169 @@ if __name__ == "__main__":
         "run_quality_commands.py": """#!/usr/bin/env python3
 import argparse
 import subprocess
+import time
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
 PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
+QUALITY_BLOCKER_ID = "QR-BLOCKER-001"
 
 def is_placeholder(command: str) -> bool:
     lowered = command.lower()
     return any(token.lower() in lowered for token in PLACEHOLDER_TOKENS)
+
+def excerpt(value: str, limit: int = 12000) -> str:
+    return (value or "")[-limit:]
+
+def safe_cwd(root: Path, cwd_value: str | None) -> Path:
+    cwd = root / (cwd_value or ".")
+    resolved = cwd.resolve()
+    if root.resolve() not in [resolved, *resolved.parents]:
+        raise SystemExit(f"quality command cwd escapes project root: {cwd_value}")
+    return resolved
+
+def run_command(root: Path, item: dict) -> dict:
+    command = item["command"]
+    cwd = safe_cwd(root, item.get("cwd"))
+    timeout = item.get("timeout_seconds")
+    started = time.monotonic()
+    if not cwd.exists():
+        return {
+            "id": item.get("id", command),
+            "command": command,
+            "cwd": str(cwd.relative_to(root)),
+            "required": item.get("required", True),
+            "exit_code": 127,
+            "returncode": 127,
+            "duration_ms": 0,
+            "timed_out": False,
+            "blocking": bool(item.get("required", True)),
+            "stdout_excerpt": "",
+            "stderr_excerpt": f"cwd does not exist: {cwd.relative_to(root)}",
+            "output": f"cwd does not exist: {cwd.relative_to(root)}",
+        }
+    try:
+        run = subprocess.run(command, cwd=cwd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+        exit_code = run.returncode
+        stdout = run.stdout
+        stderr = run.stderr
+        timed_out = False
+    except subprocess.TimeoutExpired as exc:
+        exit_code = 124
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        timed_out = True
+    duration_ms = int((time.monotonic() - started) * 1000)
+    required = item.get("required", True)
+    return {
+        "id": item.get("id", command),
+        "command": command,
+        "cwd": str(cwd.relative_to(root)),
+        "required": required,
+        "exit_code": exit_code,
+        "returncode": exit_code,
+        "duration_ms": duration_ms,
+        "timed_out": timed_out,
+        "blocking": bool(required and exit_code != 0),
+        "stdout_excerpt": excerpt(stdout),
+        "stderr_excerpt": excerpt(stderr),
+        "output": excerpt((stdout or "") + (stderr or "")),
+    }
+
+def current_slice(root: Path, task: dict) -> dict:
+    control = ensure_control_dir(root)
+    subtask = read_json(control / "current-subtask.json", {})
+    active = task.get("active_slice") if isinstance(task.get("active_slice"), dict) else {}
+    result = {**subtask, **active}
+    parent = task.get("task_id") or result.get("parent_task_id") or result.get("slice_id") or "unknown-task"
+    result.setdefault("slice_id", result.get("slice_id") or parent)
+    result.setdefault("parent_task_id", parent)
+    result.setdefault("title", task.get("title") or result.get("slice_id"))
+    result.setdefault("kind", "quality_contract")
+    result.setdefault("control_artifacts", {})
+    result["control_artifacts"].update({
+        "current_task": "artifacts/_control/current-task.json",
+        "current_subtask": "artifacts/_control/current-subtask.json",
+        "quality_contract": "artifacts/_control/quality-contract.json",
+        "quality_run_report": "artifacts/_control/quality-run-report.json",
+        "open_questions": "artifacts/_control/open-questions.json",
+    })
+    return result
+
+def sync_control_plane(root: Path, report: dict, output: Path) -> None:
+    control = ensure_control_dir(root)
+    task_path = control / "current-task.json"
+    subtask_path = control / "current-subtask.json"
+    questions_path = control / "open-questions.json"
+    task = read_json(task_path, {"task_id": report.get("task_id") or "unknown-task", "status": "initialized", "control_dir": "artifacts/_control"})
+    active = current_slice(root, task)
+    blockers = [finding for finding in report.get("findings", []) if finding.get("severity") == "blocker"]
+    active["quality_status"] = report["status"]
+    active["status"] = "blocked" if report["status"] == "block" else "succeeded"
+    active["blockers"] = blockers
+    active["updated_at"] = now_iso()
+    task["active_slice"] = active
+    task["status"] = "blocked" if report["status"] == "block" else task.get("status", "quality_running")
+    task["updated_at"] = now_iso()
+    write_json(task_path, task)
+    write_json(subtask_path, active)
+    questions = read_json(questions_path, {"questions": []})
+    existing = {item.get("id"): item for item in questions.get("questions", []) if isinstance(item, dict)}
+    if blockers:
+        existing[QUALITY_BLOCKER_ID] = {
+            "id": QUALITY_BLOCKER_ID,
+            "severity": "blocker",
+            "status": "open",
+            "blocking": True,
+            "question": "quality-contract required commands failed; inspect artifacts/_control/quality-run-report.json before continuing",
+            "source_artifact": str(output.relative_to(root)),
+            "updated_at": now_iso(),
+        }
+    elif QUALITY_BLOCKER_ID in existing:
+        existing[QUALITY_BLOCKER_ID]["status"] = "resolved"
+        existing[QUALITY_BLOCKER_ID]["blocking"] = False
+        existing[QUALITY_BLOCKER_ID]["updated_at"] = now_iso()
+    questions["questions"] = list(existing.values())
+    questions["updated_at"] = now_iso()
+    write_json(questions_path, questions)
+    for path, name, producer in [
+        (task_path, "current-task.json", "run_quality_contract"),
+        (subtask_path, "current-subtask.json", "run_quality_contract"),
+        (questions_path, "open-questions.json", "run_quality_contract"),
+        (output, output.name, "run_quality_contract"),
+    ]:
+        update_artifact_index(root, name, path, "json", producer)
+
+def build_report(contract: dict, commands: list[dict], results: list[dict], errors: list[str]) -> dict:
+    findings = []
+    required_failures = [item for item in results if item.get("required") and item.get("exit_code") != 0]
+    make_validate_passed = any("make validate" in item.get("command", "") and item.get("exit_code") == 0 for item in results)
+    for item in required_failures:
+        findings.append({"id": f"QUALITY-COMMAND-FAILED-{item['id']}", "severity": "blocker", "summary": f"required quality command failed: {item['id']}", "command": item["command"], "exit_code": item["exit_code"]})
+    if make_validate_passed and required_failures:
+        findings.append({"id": "QUALITY-CONTRACT-REQUIRED-FAILED-DESPITE-MAKE-VALIDATE", "severity": "blocker", "summary": "make validate passed, but quality-contract required command failed; quality contract remains blocking."})
+    for error in errors:
+        findings.append({"id": "QUALITY-CONTRACT-RUNNER-ERROR", "severity": "blocker", "summary": error})
+    status = "block" if errors or required_failures or not commands else "pass"
+    if not commands and "no required quality commands declared" not in errors:
+        errors.append("no required quality commands declared")
+        findings.append({"id": "QUALITY-CONTRACT-NO-REQUIRED-COMMANDS", "severity": "blocker", "summary": "no required quality commands declared"})
+        status = "block"
+    return {
+        "status": status,
+        "task_id": contract.get("task_id"),
+        "summary": {
+            "commands_total": len(commands),
+            "required_total": sum(1 for item in commands if item.get("required", True)),
+            "required_failed": len(required_failures),
+            "optional_failed": sum(1 for item in results if not item.get("required") and item.get("exit_code") != 0),
+            "make_validate_passed": make_validate_passed,
+        },
+        "errors": errors,
+        "findings": findings,
+        "results": results,
+        "generated_at": now_iso(),
+    }
 
 def main():
     parser = argparse.ArgumentParser(description="Run quality commands declared in quality-contract.json.")
@@ -5947,31 +6976,27 @@ def main():
     results = []
     errors = []
     for item in commands:
-        command = item.get("command")
+        command = item.get("command") if isinstance(item, dict) else None
         if not command:
-            errors.append(f"quality command {item.get('id', '<missing-id>')} is missing command")
+            errors.append(f"quality command {item.get('id', '<missing-id>') if isinstance(item, dict) else '<invalid>'} is missing command")
             continue
         if is_placeholder(command):
             errors.append(f"quality command {item.get('id', command)} contains placeholder text")
             continue
-        run = subprocess.run(command, cwd=root, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        results.append({"id": item.get("id", command), "command": command, "required": item.get("required", True), "returncode": run.returncode, "output": run.stdout[-12000:]})
-    status = "pass"
-    if not commands:
-        errors.append("no required quality commands declared")
-        status = "block"
-    elif errors:
-        status = "block"
-    elif any(item["required"] and item["returncode"] != 0 for item in results):
-        status = "block"
-    report = {"status": status, "errors": errors, "results": results, "generated_at": now_iso()}
+        results.append(run_command(root, item))
+    report = build_report(contract, commands, results, errors)
     output = root / args.output
     write_json(output, report)
-    ensure_control_dir(root)
-    update_artifact_index(root, output.name, output, "json", "run_quality_commands")
+    sync_control_plane(root, report, output)
     print(output)
-    if status == "block":
+    if report["status"] == "block":
         raise SystemExit(1)
+
+if __name__ == "__main__":
+    main()
+""",
+        "run_quality_contract.py": """#!/usr/bin/env python3
+from run_quality_commands import main
 
 if __name__ == "__main__":
     main()
@@ -6017,6 +7042,11 @@ def main():
     for name in REQUIRED_CONTROL_FILES:
         if not (control / name).exists():
             add(findings, "blocker", "missing control artifact", artifact=name)
+    task = read_json(control / "current-task.json", {})
+    if not task.get("active_slice"):
+        add(findings, "major", "current-task missing active_slice; runner will synthesize current-subtask for compatibility", artifact="current-task.json")
+    if not (control / "current-subtask.json").exists():
+        add(findings, "major", "missing current-subtask active slice artifact", artifact="current-subtask.json")
     implementation = read_json(control / "implementation-contract.json", {})
     quality = read_json(control / "quality-contract.json", {})
     if not implementation.get("technology_adoption_contract"):
@@ -6357,6 +7387,7 @@ required = [
     "engineering-assistant/scripts/validate_control_plane_readonly.py",
     "engineering-assistant/scripts/validate_design_to_code.py",
     "engineering-assistant/scripts/build_traceability_report.py",
+    "engineering-assistant/scripts/run_quality_contract.py",
     "engineering-assistant/scripts/run_quality_commands.py",
     "engineering-assistant/scripts/validate_control_health.py",
     "engineering-assistant/scripts/validate_technology_adoption.py",
@@ -6888,6 +7919,7 @@ python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant
 python3 engineering-assistant/scripts/run_skill_evals.py
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored
 python3 engineering-assistant/scripts/run_skill_evals.py --mode scored --no-write-report
+python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report
 python3 engineering-assistant/scripts/validate_skill_metadata.py
 python3 engineering-assistant/scripts/validate_plugin_manifest.py
 python3 engineering-assistant/scripts/publish_plugin.py --layout personal --publish-root /tmp/engineering-assistant-personal
@@ -6920,6 +7952,7 @@ def generate_root_ci() -> None:
                 {"name": "Validate workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "Validate skill evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Validate scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},
+                {"name": "Validate effectiveness eval spec", "run": "python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report"},
                 {"name": "Validate metadata", "run": "python3 engineering-assistant/scripts/validate_skill_metadata.py"},
                 {"name": "Validate plugin manifest", "run": "python3 engineering-assistant/scripts/validate_plugin_manifest.py"},
                 {"name": "Publish plugin package", "run": "python3 engineering-assistant/scripts/publish_plugin.py --publish-root /tmp/engineering-assistant-plugin --marketplace-path /tmp/engineering-assistant-plugin/.agents/plugins/marketplace.json"},
@@ -6940,6 +7973,7 @@ def generate_root_ci() -> None:
                 {"name": "Validate workflows", "run": "python3 engineering-assistant/scripts/validate_workflow.py engineering-assistant/workflows/*.yaml"},
                 {"name": "Run static evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py"},
                 {"name": "Run scored evals", "run": "python3 engineering-assistant/scripts/run_skill_evals.py --mode scored"},
+                {"name": "Run effectiveness spec eval", "run": "python3 engineering-assistant/scripts/run_skill_effectiveness_evals.py --mode spec --no-write-report"},
             ]}},
         },
         "codex-knowledge-mining.yml": {
@@ -6964,6 +7998,7 @@ def main() -> None:
     generate_root_ci()
     generate_skills()
     generate_engineering_assistant()
+    generate_skill_effectiveness_eval_assets(ROOT / EFFECTIVENESS_WORKSPACE)
     write_text(ROOT / "engineering-assistant-delivery.md", delivery_doc())
 
 

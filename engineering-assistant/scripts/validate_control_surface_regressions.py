@@ -8,6 +8,7 @@ required = [
     "engineering-assistant/scripts/validate_control_plane_readonly.py",
     "engineering-assistant/scripts/validate_design_to_code.py",
     "engineering-assistant/scripts/build_traceability_report.py",
+    "engineering-assistant/scripts/run_quality_contract.py",
     "engineering-assistant/scripts/run_quality_commands.py",
     "engineering-assistant/scripts/validate_control_health.py",
     "engineering-assistant/scripts/validate_technology_adoption.py",

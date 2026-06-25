@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "slice_id",
+    "parent_task_id",
+    "status",
+    "control_artifacts",
+    "updated_at"
+  ],
+  "properties": {
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "initialized",
+        "contract_compiled",
+        "implementing",
+        "quality_running",
+        "blocked",
+        "succeeded"
+      ]
+    },
+    "control_artifacts": {
+      "type": "object"
+    },
+    "quality_status": {
+      "type": "string"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

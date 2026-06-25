@@ -56,6 +56,54 @@
     },
     "current_contracts": {
       "type": "object"
+    },
+    "active_slice": {
+      "type": "object",
+      "required": [
+        "slice_id",
+        "parent_task_id",
+        "status",
+        "control_artifacts"
+      ],
+      "properties": {
+        "slice_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "parent_task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "initialized",
+            "contract_compiled",
+            "implementing",
+            "quality_running",
+            "blocked",
+            "succeeded"
+          ]
+        },
+        "control_artifacts": {
+          "type": "object"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

@@ -251,10 +251,31 @@ def main():
     write_traceability_outputs(root, control, traceability_matrix)
     context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
     (control / "task-context.agent.md").write_text("\n".join(context), encoding="utf-8")
-    for name, rel, artifact_type in [("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
+    for name, rel, artifact_type in [("current-subtask.json", control / "current-subtask.json", "json"), ("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
         update_artifact_index(root, name, rel, artifact_type, "implementation-controller")
-    task.update({"task_id": task_id, "status": "contract_compiled", "current_contracts": {"design_contract": str((control / "design-contract.json").relative_to(root)), "implementation_contract": str((control / "implementation-contract.json").relative_to(root)), "quality_contract": str((control / "quality-contract.json").relative_to(root)), "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)), "traceability_report": "docs/human-readable/traceability-report.html", "context_pack": str((control / "task-context.agent.md").relative_to(root))}, "updated_at": now_iso()})
+    active_slice = {
+        "slice_id": task_id,
+        "parent_task_id": task.get("task_id") or task_id,
+        "title": task.get("title") or design_path.stem,
+        "kind": "implementation_contract",
+        "status": "contract_compiled",
+        "control_artifacts": {
+            "current_task": "artifacts/_control/current-task.json",
+            "current_subtask": "artifacts/_control/current-subtask.json",
+            "design_contract": str((control / "design-contract.json").relative_to(root)),
+            "implementation_contract": str((control / "implementation-contract.json").relative_to(root)),
+            "quality_contract": str((control / "quality-contract.json").relative_to(root)),
+            "quality_run_report": "artifacts/_control/quality-run-report.json",
+            "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)),
+            "traceability_report": "docs/human-readable/traceability-report.html",
+            "context_pack": str((control / "task-context.agent.md").relative_to(root)),
+        },
+        "blockers": [],
+        "updated_at": now_iso(),
+    }
+    task.update({"task_id": task.get("task_id") or task_id, "status": "contract_compiled", "active_slice": active_slice, "current_contracts": active_slice["control_artifacts"], "updated_at": now_iso()})
     write_json(control / "current-task.json", task)
+    write_json(control / "current-subtask.json", active_slice)
     print(control / "implementation-contract.json")
 
 if __name__ == "__main__":

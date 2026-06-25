@@ -1,0 +1,33 @@
+{
+  "fixture_id": "code-drift-backend-export-refactor",
+  "task_type": "backend_change",
+  "repo_context": {
+    "backend_framework": "Java/Spring",
+    "persistence_framework": "mybatis-plus",
+    "existing_patterns": [
+      "controller -> application service -> mapper",
+      "EasyExcel streaming",
+      "server-local file download"
+    ],
+    "allowed_modules": [
+      "backend/export",
+      "backend/task",
+      "backend/common/file"
+    ],
+    "forbidden_modules": [
+      "plugins/",
+      "frontend/",
+      "shared/generated-platform/"
+    ]
+  },
+  "quality_commands": [
+    "mvn -pl backend -DskipITs test",
+    "mvn -pl backend -DskipITs package"
+  ],
+  "known_failure_modes": [
+    "泛化 async platform",
+    "重复 DTO/converter",
+    "未映射变更文件",
+    "只写文档不跑测试"
+  ]
+}

@@ -27,8 +27,14 @@
           "command": {
             "type": "string"
           },
+          "cwd": {
+            "type": "string"
+          },
           "required": {
             "type": "boolean"
+          },
+          "timeout_seconds": {
+            "type": "integer"
           }
         }
       }

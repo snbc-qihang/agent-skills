@@ -139,6 +139,61 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         self.assertEqual("block", report["status"])
         self.assertIn("no required quality commands", report["errors"][0])
 
+    def test_quality_contract_runner_blocks_required_failure_even_when_make_validate_passes(self) -> None:
+        root = self.make_control_root()
+        control = root / "artifacts" / "_control"
+        write_json(
+            control / "quality-contract.json",
+            {
+                "task_id": "refactor-readiness",
+                "required_commands": [
+                    {"id": "make-validate", "command": "sh -c 'echo make validate passed'", "required": True},
+                    {"id": "backend-required-test", "command": "python3 -c 'import sys; sys.exit(2)'", "required": True},
+                ],
+            },
+        )
+
+        result = run_script("run_quality_contract.py", "--root", str(root))
+
+        self.assertNotEqual(0, result.returncode)
+        report = json.loads((control / "quality-run-report.json").read_text(encoding="utf-8"))
+        self.assertEqual("block", report["status"])
+        self.assertTrue(report["summary"]["make_validate_passed"])
+        self.assertEqual(1, report["summary"]["required_failed"])
+        finding_ids = {item["id"] for item in report["findings"]}
+        self.assertIn("QUALITY-CONTRACT-REQUIRED-FAILED-DESPITE-MAKE-VALIDATE", finding_ids)
+
+        task = json.loads((control / "current-task.json").read_text(encoding="utf-8"))
+        subtask = json.loads((control / "current-subtask.json").read_text(encoding="utf-8"))
+        questions = json.loads((control / "open-questions.json").read_text(encoding="utf-8"))
+        self.assertEqual("blocked", task["status"])
+        self.assertEqual("blocked", task["active_slice"]["status"])
+        self.assertEqual("blocked", subtask["status"])
+        self.assertTrue(any(item["id"] == "QR-BLOCKER-001" and item["blocking"] for item in questions["questions"]))
+
+    def test_quality_contract_runner_records_success_and_resolves_quality_blocker(self) -> None:
+        root = self.make_control_root()
+        control = root / "artifacts" / "_control"
+        write_json(
+            control / "open-questions.json",
+            {"questions": [{"id": "QR-BLOCKER-001", "severity": "blocker", "status": "open", "blocking": True}]},
+        )
+        write_json(
+            control / "quality-contract.json",
+            {"task_id": "refactor-readiness", "required_commands": [{"id": "unit", "command": "python3 -c 'print(1)'", "required": True}]},
+        )
+
+        result = run_script("run_quality_contract.py", "--root", str(root))
+
+        self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+        report = json.loads((control / "quality-run-report.json").read_text(encoding="utf-8"))
+        self.assertEqual("pass", report["status"])
+        self.assertEqual(0, report["results"][0]["exit_code"])
+        questions = json.loads((control / "open-questions.json").read_text(encoding="utf-8"))
+        blocker = next(item for item in questions["questions"] if item["id"] == "QR-BLOCKER-001")
+        self.assertEqual("resolved", blocker["status"])
+        self.assertFalse(blocker["blocking"])
+
     def test_rule_index_excludes_nested_generated_dependency_dirs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
