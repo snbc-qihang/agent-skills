@@ -1,6 +1,6 @@
 {
   "workflow_id": "full-feature-development",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "states": [
     "pending",
     "running",
@@ -777,7 +777,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -856,7 +856,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -938,7 +938,7 @@
       "node_id": "high-level-design",
       "stage": "high_level_design",
       "skill_id": "high-level-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1018,7 +1018,7 @@
       "node_id": "detailed-design",
       "stage": "detailed_design",
       "skill_id": "detailed-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1098,7 +1098,7 @@
       "node_id": "redis-design",
       "stage": "redis_design",
       "skill_id": "redis-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1178,7 +1178,7 @@
       "node_id": "mq-design",
       "stage": "mq_design",
       "skill_id": "mq-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1258,7 +1258,7 @@
       "node_id": "database-design",
       "stage": "database_design",
       "skill_id": "database-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1343,7 +1343,7 @@
       "node_id": "frontend-design",
       "stage": "frontend_design",
       "skill_id": "frontend-design",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1423,7 +1423,7 @@
       "node_id": "design-review",
       "stage": "design_review",
       "skill_id": "design-review",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1502,7 +1502,7 @@
       "node_id": "implementation-controller",
       "stage": "implementation_control",
       "skill_id": "implementation-controller",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1603,7 +1603,7 @@
       "node_id": "code-development",
       "stage": "code_development",
       "skill_id": "code-development",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1686,7 +1686,7 @@
       "node_id": "frontend-development",
       "stage": "frontend_development",
       "skill_id": "frontend-development",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1766,7 +1766,7 @@
       "node_id": "self-test",
       "stage": "self_test",
       "skill_id": "self-test",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1848,7 +1848,7 @@
       "node_id": "code-quality-governor",
       "stage": "code_quality",
       "skill_id": "code-quality-governor",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1941,7 +1941,7 @@
       "node_id": "code-review",
       "stage": "code_review",
       "skill_id": "code-review",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -2023,7 +2023,7 @@
       "node_id": "release-readiness",
       "stage": "release_readiness",
       "skill_id": "release-readiness",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -2106,7 +2106,7 @@
       "node_id": "release-verification",
       "stage": "release_verification",
       "skill_id": "release-verification",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -2184,7 +2184,7 @@
       "node_id": "release-retrospective",
       "stage": "release_retrospective",
       "skill_id": "release-retrospective",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -2262,7 +2262,7 @@
       "node_id": "engineering-knowledge-miner",
       "stage": "knowledge_mining",
       "skill_id": "engineering-knowledge-miner",
-      "version": "1.0.0.4",
+      "version": "2.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

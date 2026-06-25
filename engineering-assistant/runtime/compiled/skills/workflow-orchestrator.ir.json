@@ -1,6 +1,6 @@
 {
   "skill_id": "workflow-orchestrator",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "workflow_orchestration",
   "type": "workflow_skill",
   "prompt_pack": {

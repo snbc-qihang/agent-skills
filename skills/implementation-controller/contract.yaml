@@ -1,7 +1,7 @@
 {
   "skill_id": "implementation-controller",
   "skill_name": "Implementation Controller",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "implementation_control",
   "type": "control_skill",
   "purpose": "把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。",

@@ -43,6 +43,108 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         (control / "task-context.agent.md").write_text("# Agent Context\n", encoding="utf-8")
         return root
 
+    def make_strict_control_root(self) -> Path:
+        root = self.make_control_root()
+        control = root / "artifacts" / "_control"
+        active_slice = {
+            "schema_version": "2.0.0",
+            "slice_id": "aip",
+            "parent_task_id": "aip",
+            "title": "AIP",
+            "kind": "implementation_contract",
+            "status": "contract_compiled",
+            "control_artifacts": {
+                "current_task": "artifacts/_control/current-task.json",
+                "current_subtask": "artifacts/_control/current-subtask.json",
+                "quality_contract": "artifacts/_control/quality-contract.json",
+            },
+            "updated_at": "2026-06-25T00:00:00Z",
+        }
+        write_json(
+            control / "current-task.json",
+            {
+                "schema_version": "2.0.0",
+                "task_id": "aip",
+                "title": "AIP",
+                "language": "zh-CN",
+                "workflow_id": "contract-driven-development",
+                "status": "contract_compiled",
+                "control_dir": "artifacts/_control",
+                "created_at": "2026-06-25T00:00:00Z",
+                "updated_at": "2026-06-25T00:00:00Z",
+                "current_contracts": {},
+                "active_slice": active_slice,
+            },
+        )
+        write_json(control / "current-subtask.json", active_slice)
+        write_json(
+            control / "design-contract.json",
+            {
+                "schema_version": "2.0.0",
+                "task_id": "aip",
+                "source_design": "docs/design.md",
+                "source_checksum": "sha256:test",
+                "goals": ["deliver product"],
+                "acceptance_criteria": ["validated"],
+                "module_boundaries": {"allowed_from_design": ["backend/"]},
+                "assumptions": ["test fixture"],
+            },
+        )
+        write_json(
+            control / "implementation-contract.json",
+            {
+                "schema_version": "2.0.0",
+                "task_id": "aip",
+                "allowed_modules": ["backend/"],
+                "forbidden_modules": ["frontend/"],
+                "required_files_or_patterns": ["backend/"],
+                "architecture_rules": ["Follow architecture"],
+                "required_tests": ["unit"],
+                "done_conditions": ["validated"],
+                "expected_interfaces": ["api"],
+                "expected_services": ["service"],
+                "expected_repositories_or_mappers": ["mapper"],
+                "technology_adoption_contract": {"required_indicators": [], "forbidden_indicators": [], "minimum_required_indicators": 0},
+            },
+        )
+        write_json(
+            control / "quality-contract.json",
+            {
+                "schema_version": "2.0.0",
+                "task_id": "aip",
+                "required_commands": [{"id": "unit", "command": "python3 -c 'print(1)'", "required": True}],
+                "required_evidence": ["quality_commands"],
+                "quality_gates": ["build_lint_test"],
+                "repair_policy": {"max_attempts": 2},
+            },
+        )
+        return root
+
+    def test_strict_control_contracts_block_unknown_fields_and_placeholder_commands(self) -> None:
+        root = self.make_strict_control_root()
+        control = root / "artifacts" / "_control"
+        design = json.loads((control / "design-contract.json").read_text(encoding="utf-8"))
+        design["unexpected"] = True
+        write_json(control / "design-contract.json", design)
+        quality = json.loads((control / "quality-contract.json").read_text(encoding="utf-8"))
+        quality["required_commands"] = [{"id": "todo", "command": "TODO", "required": True}]
+        write_json(control / "quality-contract.json", quality)
+
+        result = run_script("validate_strict_control_contracts.py", "--root", str(root))
+
+        self.assertNotEqual(0, result.returncode)
+        output = result.stdout + result.stderr
+        self.assertIn("unknown fields", output)
+        self.assertIn("placeholder command", output)
+
+    def test_strict_control_contracts_accept_v2_control_surface(self) -> None:
+        root = self.make_strict_control_root()
+
+        result = run_script("validate_strict_control_contracts.py", "--root", str(root))
+
+        self.assertEqual(0, result.returncode, result.stderr + result.stdout)
+        self.assertEqual("pass", json.loads(result.stdout)["status"])
+
     def test_contract_control_blocks_weak_implementation_contract(self) -> None:
         root = self.make_control_root()
         control = root / "artifacts" / "_control"

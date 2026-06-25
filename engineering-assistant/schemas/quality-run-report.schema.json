@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": [
+    "schema_version",
     "status",
     "summary",
     "results",
@@ -9,14 +10,21 @@
     "generated_at"
   ],
   "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
     "status": {
       "enum": [
         "pass",
         "block"
       ]
     },
+    "task_id": {
+      "type": "string"
+    },
     "summary": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     },
     "results": {
       "type": "array",
@@ -30,7 +38,8 @@
           "exit_code",
           "duration_ms",
           "blocking"
-        ]
+        ],
+        "additionalProperties": true
       }
     },
     "errors": {
@@ -49,5 +58,6 @@
       "type": "string"
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false,
+  "title": "Strict engineering-assistant quality run report"
 }

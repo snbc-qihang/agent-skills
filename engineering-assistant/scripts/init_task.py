@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, validate_target_project_root, write_json
 
+SCHEMA_VERSION = "2.0.0"
+
 def slug(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip()).strip("-").lower()
     return value or "task"
@@ -22,6 +24,7 @@ def main():
     task_id = args.task_id or slug(args.title)
     profile = read_json(Path(args.project_profile), {}) if args.project_profile else {}
     active_slice = {
+        "schema_version": SCHEMA_VERSION,
         "slice_id": task_id,
         "parent_task_id": task_id,
         "title": args.title,
@@ -35,7 +38,7 @@ def main():
         "blockers": [],
         "updated_at": now_iso(),
     }
-    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
+    task = {"schema_version": SCHEMA_VERSION, "task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
     write_json(control / "current-task.json", task)
     write_json(control / "current-subtask.json", active_slice)
     write_json(control / "artifact-index.json", {"artifacts": {}, "updated_at": now_iso()})
@@ -65,6 +68,7 @@ def main():
         "- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json",
         "",
         "## Mandatory Entry Checks",
+        "- python3 engineering-assistant/scripts/validate_strict_control_contracts.py --root <project-root>",
         "- python3 engineering-assistant/scripts/validate_contract_control.py <project-root>",
         "- python3 engineering-assistant/scripts/validate_control_health.py --root <project-root>",
         "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly",

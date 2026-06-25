@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
+SCHEMA_VERSION = "2.0.0"
 PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
 QUALITY_BLOCKER_ID = "QR-BLOCKER-001"
 
@@ -77,6 +78,7 @@ def current_slice(root: Path, task: dict) -> dict:
     active = task.get("active_slice") if isinstance(task.get("active_slice"), dict) else {}
     result = {**subtask, **active}
     parent = task.get("task_id") or result.get("parent_task_id") or result.get("slice_id") or "unknown-task"
+    result["schema_version"] = SCHEMA_VERSION
     result.setdefault("slice_id", result.get("slice_id") or parent)
     result.setdefault("parent_task_id", parent)
     result.setdefault("title", task.get("title") or result.get("slice_id"))
@@ -96,7 +98,8 @@ def sync_control_plane(root: Path, report: dict, output: Path) -> None:
     task_path = control / "current-task.json"
     subtask_path = control / "current-subtask.json"
     questions_path = control / "open-questions.json"
-    task = read_json(task_path, {"task_id": report.get("task_id") or "unknown-task", "status": "initialized", "control_dir": "artifacts/_control"})
+    task = read_json(task_path, {"schema_version": SCHEMA_VERSION, "task_id": report.get("task_id") or "unknown-task", "status": "initialized", "control_dir": "artifacts/_control"})
+    task["schema_version"] = SCHEMA_VERSION
     active = current_slice(root, task)
     blockers = [finding for finding in report.get("findings", []) if finding.get("severity") == "blocker"]
     active["quality_status"] = report["status"]
@@ -174,6 +177,7 @@ def build_report(contract: dict, commands: list[dict], results: list[dict], erro
         findings.append({"id": "QUALITY-CONTRACT-NO-REQUIRED-COMMANDS", "severity": "blocker", "summary": "no required quality commands declared"})
         status = "block"
     return {
+        "schema_version": SCHEMA_VERSION,
         "status": status,
         "task_id": contract.get("task_id"),
         "summary": {

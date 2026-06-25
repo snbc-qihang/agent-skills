@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": [
+    "schema_version",
     "task_id",
     "title",
     "language",
@@ -11,6 +12,9 @@
     "created_at"
   ],
   "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
     "task_id": {
       "type": "string",
       "minLength": 1
@@ -29,6 +33,9 @@
       "type": "string",
       "minLength": 1
     },
+    "active_stage": {
+      "type": "string"
+    },
     "status": {
       "enum": [
         "initialized",
@@ -37,7 +44,9 @@
         "implementing",
         "quality_running",
         "blocked",
-        "succeeded"
+        "succeeded",
+        "in_progress",
+        "completed"
       ]
     },
     "control_dir": {
@@ -55,17 +64,33 @@
       "type": "object"
     },
     "current_contracts": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "supersedes_active_task": {
+      "type": "string"
+    },
+    "previous_task": {
+      "type": "string"
+    },
+    "next_action": {
+      "type": "string"
     },
     "active_slice": {
       "type": "object",
       "required": [
+        "schema_version",
         "slice_id",
         "parent_task_id",
         "status",
         "control_artifacts"
       ],
       "properties": {
+        "schema_version": {
+          "const": "2.0.0"
+        },
         "slice_id": {
           "type": "string",
           "minLength": 1
@@ -90,21 +115,34 @@
             "succeeded"
           ]
         },
+        "quality_status": {
+          "type": "string"
+        },
         "control_artifacts": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "blockers": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object"
           }
+        },
+        "browser_evidence": {
+          "type": "object"
+        },
+        "next_required_action": {
+          "type": "string"
         },
         "updated_at": {
           "type": "string"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false,
+  "title": "Strict engineering-assistant task control contract"
 }

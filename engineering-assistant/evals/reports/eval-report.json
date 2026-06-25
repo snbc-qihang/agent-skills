@@ -93,7 +93,7 @@
       "detail": {
         "skipped": true,
         "reason": "external canary root is unavailable on this machine",
-        "root": "/Users/sunliming/work/project/personal/ai-platform-v1"
+        "root": "<set ENGINEERING_ASSISTANT_CANARY_ROOT to an ai-platform checkout>"
       }
     },
     {
@@ -102,43 +102,43 @@
       "detail": {
         "skipped": true,
         "reason": "external canary root is unavailable on this machine",
-        "root": "/Users/sunliming/work/project/personal/ai-platform-v1"
+        "root": "<set ENGINEERING_ASSISTANT_CANARY_ROOT to an ai-platform checkout>"
       }
     },
     {
       "id": "plugin-sync-skills",
       "left": "skills",
-      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/plugins/engineering-assistant/skills",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/plugins/engineering-assistant/skills",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-engineering-assistant",
       "left": "engineering-assistant",
-      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/plugins/engineering-assistant/engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/plugins/engineering-assistant/engineering-assistant",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-plugin-manifest",
       "left": "plugin-manifest",
-      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/plugins/engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/plugins/engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/publish/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/publish/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     },
     {
       "id": "plugin-sync-personal-marketplace",
       "left": "personal-marketplace",
-      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/personal/.agents/plugins/marketplace.json",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/personal/.agents/plugins/marketplace.json",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/personal/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/personal/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/personal/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/personal/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     },
     {
       "id": "plugin-sync-hermes-plugin",
       "left": "hermes-plugin",
-      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/hermes/plugins/engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/hermes/plugins/engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/hermes/plugins/engineering-assistant\",\n  \"hermes_plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/hermes/plugins/engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmp0k6e21ur/hermes/plugins/engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 21\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/hermes/plugins/engineering-assistant\",\n  \"hermes_plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/hermes/plugins/engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmpqn1sj1fp/hermes/plugins/engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 21\n}\n"
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "fixture_id": "ai-platform-v1",
-  "root": "/Users/sunliming/work/project/personal/ai-platform-v1",
+  "root": "<set ENGINEERING_ASSISTANT_CANARY_ROOT to an ai-platform checkout>",
   "mode": "readonly",
   "task_id": "complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime",
   "expected_route": "waiting_for_input",

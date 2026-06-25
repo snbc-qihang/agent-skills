@@ -4,6 +4,7 @@ required = [
     "engineering-assistant/scripts/init_task.py",
     "engineering-assistant/scripts/ensure_agent_entrypoint.py",
     "engineering-assistant/scripts/compile_design_contract.py",
+    "engineering-assistant/scripts/validate_strict_control_contracts.py",
     "engineering-assistant/scripts/validate_contract_control.py",
     "engineering-assistant/scripts/validate_control_plane_readonly.py",
     "engineering-assistant/scripts/validate_design_to_code.py",

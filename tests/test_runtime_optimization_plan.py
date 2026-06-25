@@ -71,7 +71,8 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         self.assertIn("engineering-assistant:requirement-intake", text)
         self.assertIn("~/.agents/plugins/marketplace.json", text)
         self.assertIn("~/.hermes/plugins/engineering-assistant/plugin.yaml", text)
-        self.assertIn("/Users/sunliming/work/project/personal/ai-platform-v1", text)
+        self.assertIn("ENGINEERING_ASSISTANT_CANARY_ROOT", text)
+        self.assertNotIn("/Users/sunliming/work/project/personal/ai-platform-v1", text)
         self.assertIn("run_skill_evals.py --mode scored", text)
         self.assertIn("run_skill_effectiveness_evals.py --mode spec", text)
 
@@ -277,6 +278,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
             "engineering-assistant/schemas/current-subtask.schema.json",
             "engineering-assistant/schemas/quality-run-report.schema.json",
             "engineering-assistant/scripts/run_quality_contract.py",
+            "engineering-assistant/scripts/validate_strict_control_contracts.py",
             "engineering-assistant/scripts/run_skill_effectiveness_evals.py",
             "engineering-assistant/runtime/codex/policies/tool-policy.yaml",
         ]:

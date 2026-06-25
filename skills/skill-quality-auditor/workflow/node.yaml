@@ -2,7 +2,7 @@
   "node_id": "skill-quality-auditor",
   "stage": "skill_quality",
   "skill_id": "skill-quality-auditor",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

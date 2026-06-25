@@ -1,7 +1,7 @@
 {
   "skill_id": "high-level-design",
   "skill_name": "High Level Design",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "high_level_design",
   "type": "stage_skill",
   "purpose": "从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。",

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": [
+    "schema_version",
     "task_id",
     "allowed_modules",
     "forbidden_modules",
@@ -15,66 +16,114 @@
     "technology_adoption_contract"
   ],
   "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
     "task_id": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "allowed_modules": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
     },
     "forbidden_modules": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
     },
     "required_files_or_patterns": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "architecture_rules": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
     },
     "required_tests": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
     },
     "done_conditions": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
     },
     "expected_interfaces": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "expected_services": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "expected_repositories_or_mappers": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "technology_adoption_contract": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
+    },
+    "document_number": {
+      "type": "string"
+    },
+    "document_status": {
+      "type": "string"
+    },
+    "retention_policy": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "language": {
+      "enum": [
+        "zh-CN",
+        "en"
+      ]
+    },
+    "canonical_path": {
+      "type": "string"
+    },
+    "source_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false,
+  "title": "Strict engineering-assistant implementation contract"
 }

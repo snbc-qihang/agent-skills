@@ -1,7 +1,7 @@
 {
   "skill_id": "engineering-knowledge-miner",
   "skill_name": "Engineering Knowledge Miner",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "purpose": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",

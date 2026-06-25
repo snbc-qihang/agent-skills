@@ -29,8 +29,8 @@ def main():
     untracked = git_lines(["git", "ls-files", "--others", "--exclude-standard"], root)
     changed = sorted(set(unstaged + staged + untracked))
     rel_output = str(output.relative_to(root))
-    if rel_output not in changed:
-        changed = sorted(set(changed + [rel_output]))
+    artifact_index = "artifacts/_control/artifact-index.json"
+    changed = sorted(set(changed + [rel_output, artifact_index]))
     report = {"base": args.base, "changed_files": changed, "workspace_fingerprint": fingerprint(changed), "unstaged_files": unstaged, "staged_files": staged, "untracked_files": untracked, "generated_at": now_iso()}
     write_json(output, report)
     ensure_control_dir(root)

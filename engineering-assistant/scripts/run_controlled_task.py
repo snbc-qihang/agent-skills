@@ -26,6 +26,7 @@ def main():
     py = sys.executable
     if args.mode == "audit-readonly":
         steps = [
+            ("validate_strict_control_contracts", [py, str(here / "validate_strict_control_contracts.py"), "--root", str(root)]),
             ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
             ("validate_control_plane_readonly", [py, str(here / "validate_control_plane_readonly.py"), "--root", str(root), "--changed-files-report", args.changed_files_report]),
         ]
@@ -40,6 +41,7 @@ def main():
             raise SystemExit(1)
         return
     steps = [
+        ("validate_strict_control_contracts", [py, str(here / "validate_strict_control_contracts.py"), "--root", str(root)]),
         ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
         ("validate_control_health", [py, str(here / "validate_control_health.py"), "--root", str(root), "--task-type", args.task_type]),
         ("collect_changed_files", [py, str(here / "collect_changed_files.py"), "--root", str(root)]),

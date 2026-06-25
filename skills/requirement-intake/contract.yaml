@@ -1,7 +1,7 @@
 {
   "skill_id": "requirement-intake",
   "skill_name": "Requirement Intake",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "requirement_intake",
   "type": "stage_skill",
   "purpose": "判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。",

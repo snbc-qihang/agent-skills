@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -11,8 +12,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "engineering-assistant"
-PLUGIN_VERSION = "1.0.0.4"
-DOWNSTREAM_CANARY_ROOT = "/Users/sunliming/work/project/personal/ai-platform-v1"
+PLUGIN_VERSION = "2.0.0"
+STRICT_CONTROL_SCHEMA_VERSION = "2.0.0"
+DOWNSTREAM_CANARY_ROOT = os.environ.get(
+    "ENGINEERING_ASSISTANT_CANARY_ROOT",
+    "<set ENGINEERING_ASSISTANT_CANARY_ROOT to an ai-platform checkout>",
+)
 EFFECTIVENESS_WORKSPACE = "effectiveness-evals"
 
 EVAL_CASES = [
@@ -1257,6 +1262,38 @@ def write_text(path: Path, content: str) -> None:
 
 def write_json(path: Path, data: object) -> None:
     write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def strict_object_schema(required: list[str], properties: dict, *, title: str | None = None) -> dict:
+    """Build a closed JSON object schema for control-plane contracts."""
+    schema = {
+        "type": "object",
+        "required": required,
+        "properties": properties,
+        "additionalProperties": False,
+    }
+    if title:
+        schema["title"] = title
+    return schema
+
+
+def string_array_schema(min_items: int = 0) -> dict:
+    schema = {"type": "array", "items": {"type": "string", "minLength": 1}}
+    if min_items:
+        schema["minItems"] = min_items
+    return schema
+
+
+def control_document_metadata_schema() -> dict:
+    return {
+        "document_number": {"type": "string"},
+        "document_status": {"type": "string"},
+        "retention_policy": {"type": "string"},
+        "owner": {"type": "string"},
+        "language": {"enum": ["zh-CN", "en"]},
+        "canonical_path": {"type": "string"},
+        "source_artifacts": string_array_schema(),
+    }
 
 
 def copy_generated_tree(source: Path, target: Path) -> None:
@@ -3642,70 +3679,139 @@ def generate_engineering_assistant() -> None:
         "agent-execution-monitor.schema.json": agent_execution_monitor_schema(),
         "post-task-plan-alignment.schema.json": post_task_plan_alignment_schema(),
         "framework-selection.schema.json": {"type": "object", "required": ["technology_categories", "review_status", "source", "exceptions"], "properties": {"technology_categories": {"type": "object", "additionalProperties": {"type": "string"}}, "persistence_framework": {"type": "string"}, "review_status": {"enum": ["confirmed", "waiting_for_input", "approved_exception", "blocked"]}, "source": {"type": "string"}, "exceptions": {"type": "array", "items": {"type": "string"}}}},
-        "task-control.schema.json": {
-            "type": "object",
-            "required": ["task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"],
-            "properties": {
+        "task-control.schema.json": strict_object_schema(
+            ["schema_version", "task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
                 "task_id": {"type": "string", "minLength": 1},
                 "title": {"type": "string", "minLength": 1},
                 "language": {"enum": ["zh-CN", "en"]},
                 "workflow_id": {"type": "string", "minLength": 1},
-                "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
+                "active_stage": {"type": "string"},
+                "status": {"enum": ["initialized", "design_approved", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded", "in_progress", "completed"]},
                 "control_dir": {"type": "string", "minLength": 1},
                 "created_at": {"type": "string", "minLength": 1},
                 "updated_at": {"type": "string"},
                 "project_profile": {"type": "object"},
-                "current_contracts": {"type": "object"},
+                "current_contracts": {"type": "object", "additionalProperties": {"type": "string"}},
+                "supersedes_active_task": {"type": "string"},
+                "previous_task": {"type": "string"},
+                "next_action": {"type": "string"},
                 "active_slice": {
                     "type": "object",
-                    "required": ["slice_id", "parent_task_id", "status", "control_artifacts"],
+                    "required": ["schema_version", "slice_id", "parent_task_id", "status", "control_artifacts"],
                     "properties": {
+                        "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
                         "slice_id": {"type": "string", "minLength": 1},
                         "title": {"type": "string"},
                         "parent_task_id": {"type": "string", "minLength": 1},
                         "kind": {"type": "string"},
                         "status": {"enum": ["initialized", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
-                        "control_artifacts": {"type": "object"},
-                        "blockers": {"type": "array", "items": {"type": "string"}},
+                        "quality_status": {"type": "string"},
+                        "control_artifacts": {"type": "object", "additionalProperties": {"type": "string"}},
+                        "blockers": {"type": "array", "items": {"type": "object"}},
+                        "browser_evidence": {"type": "object"},
+                        "next_required_action": {"type": "string"},
                         "updated_at": {"type": "string"},
                     },
-                    "additionalProperties": True,
+                    "additionalProperties": False,
                 },
             },
-            "additionalProperties": True,
-        },
-        "current-subtask.schema.json": {
-            "type": "object",
-            "required": ["slice_id", "parent_task_id", "status", "control_artifacts", "updated_at"],
-            "properties": {
+            title="Strict engineering-assistant task control contract",
+        ),
+        "current-subtask.schema.json": strict_object_schema(
+            ["schema_version", "slice_id", "parent_task_id", "status", "control_artifacts", "updated_at"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
                 "slice_id": {"type": "string", "minLength": 1},
                 "parent_task_id": {"type": "string", "minLength": 1},
                 "title": {"type": "string"},
                 "kind": {"type": "string"},
                 "status": {"enum": ["initialized", "contract_compiled", "implementing", "quality_running", "blocked", "succeeded"]},
-                "control_artifacts": {"type": "object"},
+                "control_artifacts": {"type": "object", "additionalProperties": {"type": "string"}},
                 "quality_status": {"type": "string"},
                 "blockers": {"type": "array", "items": {"type": "object"}},
+                "browser_evidence": {"type": "object"},
+                "next_required_action": {"type": "string"},
                 "updated_at": {"type": "string"},
             },
-            "additionalProperties": True,
-        },
-        "design-contract.schema.json": {"type": "object", "required": ["task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"], "properties": {"task_id": {"type": "string"}, "source_design": {"type": "string"}, "source_checksum": {"type": "string"}, "goals": {"type": "array", "items": {"type": "string"}}, "acceptance_criteria": {"type": "array", "items": {"type": "string"}}, "module_boundaries": {"type": "object"}, "risks": {"type": "array", "items": {"type": "string"}}, "assumptions": {"type": "array", "items": {"type": "string"}}}, "additionalProperties": True},
-        "implementation-contract.schema.json": {"type": "object", "required": ["task_id", "allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "expected_interfaces", "expected_services", "expected_repositories_or_mappers", "technology_adoption_contract"], "properties": {"task_id": {"type": "string"}, "allowed_modules": {"type": "array", "items": {"type": "string"}}, "forbidden_modules": {"type": "array", "items": {"type": "string"}}, "required_files_or_patterns": {"type": "array", "items": {"type": "string"}}, "architecture_rules": {"type": "array", "items": {"type": "string"}}, "required_tests": {"type": "array", "items": {"type": "string"}}, "done_conditions": {"type": "array", "items": {"type": "string"}}, "expected_interfaces": {"type": "array", "items": {"type": "string"}}, "expected_services": {"type": "array", "items": {"type": "string"}}, "expected_repositories_or_mappers": {"type": "array", "items": {"type": "string"}}, "technology_adoption_contract": {"type": "object"}}, "additionalProperties": True},
-        "quality-contract.schema.json": {"type": "object", "required": ["task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy"], "properties": {"task_id": {"type": "string"}, "required_commands": {"type": "array", "items": {"type": "object", "required": ["id", "command"], "properties": {"id": {"type": "string"}, "command": {"type": "string"}, "cwd": {"type": "string"}, "required": {"type": "boolean"}, "timeout_seconds": {"type": "integer"}}}}, "required_evidence": {"type": "array", "items": {"type": "string"}}, "quality_gates": {"type": "array", "items": {"type": "string"}}, "repair_policy": {"type": "object"}}, "additionalProperties": True},
-        "quality-run-report.schema.json": {
-            "type": "object",
-            "required": ["status", "summary", "results", "errors", "generated_at"],
-            "properties": {
+            title="Strict engineering-assistant current subtask contract",
+        ),
+        "design-contract.schema.json": strict_object_schema(
+            ["schema_version", "task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
+                "task_id": {"type": "string", "minLength": 1},
+                "source_design": {"type": "string", "minLength": 1},
+                "source_checksum": {"type": "string", "minLength": 1},
+                "goals": string_array_schema(1),
+                "acceptance_criteria": string_array_schema(1),
+                "module_boundaries": {"type": "object", "additionalProperties": True},
+                "risks": string_array_schema(),
+                "assumptions": string_array_schema(),
+                **control_document_metadata_schema(),
+            },
+            title="Strict engineering-assistant design contract",
+        ),
+        "implementation-contract.schema.json": strict_object_schema(
+            ["schema_version", "task_id", "allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "expected_interfaces", "expected_services", "expected_repositories_or_mappers", "technology_adoption_contract"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
+                "task_id": {"type": "string", "minLength": 1},
+                "allowed_modules": string_array_schema(1),
+                "forbidden_modules": string_array_schema(1),
+                "required_files_or_patterns": string_array_schema(),
+                "architecture_rules": string_array_schema(1),
+                "required_tests": string_array_schema(1),
+                "done_conditions": string_array_schema(1),
+                "expected_interfaces": string_array_schema(),
+                "expected_services": string_array_schema(),
+                "expected_repositories_or_mappers": string_array_schema(),
+                "technology_adoption_contract": {"type": "object", "additionalProperties": True},
+                **control_document_metadata_schema(),
+            },
+            title="Strict engineering-assistant implementation contract",
+        ),
+        "quality-contract.schema.json": strict_object_schema(
+            ["schema_version", "task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
+                "task_id": {"type": "string", "minLength": 1},
+                "required_commands": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": strict_object_schema(
+                        ["id", "command"],
+                        {
+                            "id": {"type": "string", "minLength": 1},
+                            "command": {"type": "string", "minLength": 1},
+                            "cwd": {"type": "string"},
+                            "required": {"type": "boolean"},
+                            "timeout_seconds": {"type": "integer"},
+                        },
+                    ),
+                },
+                "required_evidence": string_array_schema(1),
+                "quality_gates": string_array_schema(1),
+                "repair_policy": {"type": "object", "additionalProperties": True},
+                **control_document_metadata_schema(),
+            },
+            title="Strict engineering-assistant quality contract",
+        ),
+        "quality-run-report.schema.json": strict_object_schema(
+            ["schema_version", "status", "summary", "results", "errors", "generated_at"],
+            {
+                "schema_version": {"const": STRICT_CONTROL_SCHEMA_VERSION},
                 "status": {"enum": ["pass", "block"]},
-                "summary": {"type": "object"},
-                "results": {"type": "array", "items": {"type": "object", "required": ["id", "command", "cwd", "required", "exit_code", "duration_ms", "blocking"]}},
+                "task_id": {"type": "string"},
+                "summary": {"type": "object", "additionalProperties": True},
+                "results": {"type": "array", "items": {"type": "object", "required": ["id", "command", "cwd", "required", "exit_code", "duration_ms", "blocking"], "additionalProperties": True}},
                 "errors": {"type": "array", "items": {"type": "string"}},
                 "findings": {"type": "array", "items": {"type": "object"}},
                 "generated_at": {"type": "string"},
             },
-            "additionalProperties": True,
-        },
+            title="Strict engineering-assistant quality run report",
+        ),
         "control-health-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
         "technology-adoption-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
         "rule-consumption-report.schema.json": {"type": "object", "required": ["status", "findings", "generated_at"], "properties": {"status": {"enum": ["pass", "block"]}, "findings": {"type": "array", "items": {"type": "object"}}, "generated_at": {"type": "string"}}, "additionalProperties": True},
@@ -4068,7 +4174,7 @@ import re
 from pathlib import Path
 
 
-PLUGIN_VERSION = \"1.0.0.4\"
+PLUGIN_VERSION = \"2.0.0\"
 
 
 def load_json(path: Path) -> dict:
@@ -4266,7 +4372,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
-PLUGIN_VERSION = "1.0.0.4"
+PLUGIN_VERSION = "2.0.0"
 
 
 def load_config(path: Path) -> dict:
@@ -5986,6 +6092,8 @@ import re
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, validate_target_project_root, write_json
 
+SCHEMA_VERSION = "2.0.0"
+
 def slug(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip()).strip("-").lower()
     return value or "task"
@@ -6004,6 +6112,7 @@ def main():
     task_id = args.task_id or slug(args.title)
     profile = read_json(Path(args.project_profile), {}) if args.project_profile else {}
     active_slice = {
+        "schema_version": SCHEMA_VERSION,
         "slice_id": task_id,
         "parent_task_id": task_id,
         "title": args.title,
@@ -6017,7 +6126,7 @@ def main():
         "blockers": [],
         "updated_at": now_iso(),
     }
-    task = {"task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
+    task = {"schema_version": SCHEMA_VERSION, "task_id": task_id, "title": args.title, "language": args.language, "workflow_id": args.workflow_id, "status": "initialized", "control_dir": str(control.relative_to(root)), "project_profile": profile, "current_contracts": {}, "active_slice": active_slice, "created_at": now_iso(), "updated_at": now_iso()}
     write_json(control / "current-task.json", task)
     write_json(control / "current-subtask.json", active_slice)
     write_json(control / "artifact-index.json", {"artifacts": {}, "updated_at": now_iso()})
@@ -6047,6 +6156,7 @@ def main():
         "- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json",
         "",
         "## Mandatory Entry Checks",
+        "- python3 engineering-assistant/scripts/validate_strict_control_contracts.py --root <project-root>",
         "- python3 engineering-assistant/scripts/validate_contract_control.py <project-root>",
         "- python3 engineering-assistant/scripts/validate_control_health.py --root <project-root>",
         "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly",
@@ -6108,11 +6218,13 @@ if __name__ == "__main__":
 """,
         "compile_design_contract.py": """#!/usr/bin/env python3
 import argparse
+import html
 import json
 import re
 from pathlib import Path
 from control_runtime import checksum, compact_lines, ensure_control_dir, find_file_patterns, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
+SCHEMA_VERSION = "2.0.0"
 DEFAULT_FORBIDDEN = [".git/", ".idea/", "node_modules/", "target/", "build/", "dist/", "coverage/"]
 DEFAULT_RULES = [
     "Every changed source file must map to design-contract goals or acceptance criteria.",
@@ -6349,19 +6461,20 @@ def main():
     lines = compact_lines(text, 32)
     file_patterns = find_file_patterns(text)
     expected = infer_expected_contracts(text, lines, file_patterns)
-    design_contract = {"task_id": task_id, "source_design": str(design_path.relative_to(root)), "source_checksum": checksum(design_path), "generated_at": now_iso(), "goals": lines[:8] or ["Implement the approved design without expanding scope."], "acceptance_criteria": lines[:12], "module_boundaries": {"allowed_from_design": file_patterns, "source": "compiled_from_design_artifact"}, "assumptions": ["The human-approved design is the source of truth for implementation scope."]}
-    implementation_contract = {"task_id": task_id, "allowed_modules": file_patterns, "forbidden_modules": DEFAULT_FORBIDDEN, "required_files_or_patterns": file_patterns, "expected_interfaces": expected["expected_interfaces"], "expected_services": expected["expected_services"], "expected_repositories_or_mappers": expected["expected_repositories_or_mappers"], "technology_adoption_contract": infer_technology_adoption_contract(text, file_patterns, profile), "architecture_rules": DEFAULT_RULES, "required_tests": infer_required_tests(text, file_patterns, profile), "done_conditions": ["No changed file is outside allowed scope unless approved.", "Design-to-code validation passes with no blocker or major findings.", "Technology adoption validation passes.", "Rule consumption validation passes.", "Required quality commands pass; missing commands are blocking.", "Open blocking questions are empty."], "generated_at": now_iso()}
-    quality_contract = {"task_id": task_id, "required_commands": infer_commands(profile, file_patterns), "required_evidence": ["control_health", "design_to_code_mapping", "traceability_matrix", "traceability_report_html", "technology_adoption", "rule_consumption", "quality_commands"], "quality_gates": ["control_health", "design_to_code_mapping", "traceability_matrix", "technology_adoption", "rule_consumption", "architecture_boundary", "build_lint_test", "semantic_review"], "repair_policy": {"max_attempts": 2, "ask_human_only_for": ["approved design conflict", "business decision missing", "high risk approval", "production action", "repair attempts exhausted"]}, "generated_at": now_iso()}
+    design_contract = {"schema_version": SCHEMA_VERSION, "task_id": task_id, "source_design": str(design_path.relative_to(root)), "source_checksum": checksum(design_path), "generated_at": now_iso(), "goals": lines[:8] or ["Implement the approved design without expanding scope."], "acceptance_criteria": lines[:12], "module_boundaries": {"allowed_from_design": file_patterns, "source": "compiled_from_design_artifact"}, "assumptions": ["The human-approved design is the source of truth for implementation scope."]}
+    implementation_contract = {"schema_version": SCHEMA_VERSION, "task_id": task_id, "allowed_modules": file_patterns, "forbidden_modules": DEFAULT_FORBIDDEN, "required_files_or_patterns": file_patterns, "expected_interfaces": expected["expected_interfaces"], "expected_services": expected["expected_services"], "expected_repositories_or_mappers": expected["expected_repositories_or_mappers"], "technology_adoption_contract": infer_technology_adoption_contract(text, file_patterns, profile), "architecture_rules": DEFAULT_RULES, "required_tests": infer_required_tests(text, file_patterns, profile), "done_conditions": ["No changed file is outside allowed scope unless approved.", "Design-to-code validation passes with no blocker or major findings.", "Technology adoption validation passes.", "Rule consumption validation passes.", "Required quality commands pass; missing commands are blocking.", "Open blocking questions are empty."], "generated_at": now_iso()}
+    quality_contract = {"schema_version": SCHEMA_VERSION, "task_id": task_id, "required_commands": infer_commands(profile, file_patterns), "required_evidence": ["control_health", "design_to_code_mapping", "traceability_matrix", "traceability_report_html", "technology_adoption", "rule_consumption", "quality_commands"], "quality_gates": ["control_health", "design_to_code_mapping", "traceability_matrix", "technology_adoption", "rule_consumption", "architecture_boundary", "build_lint_test", "semantic_review"], "repair_policy": {"max_attempts": 2, "ask_human_only_for": ["approved design conflict", "business decision missing", "high risk approval", "production action", "repair attempts exhausted"]}, "generated_at": now_iso()}
     write_json(control / "design-contract.json", design_contract)
     write_json(control / "implementation-contract.json", implementation_contract)
     write_json(control / "quality-contract.json", quality_contract)
     traceability_matrix = build_initial_traceability(design_contract, implementation_contract, quality_contract)
     write_traceability_outputs(root, control, traceability_matrix)
-    context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
+    context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/validate_strict_control_contracts.py --root <project-root>", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
     (control / "task-context.agent.md").write_text("\\n".join(context), encoding="utf-8")
     for name, rel, artifact_type in [("current-subtask.json", control / "current-subtask.json", "json"), ("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
         update_artifact_index(root, name, rel, artifact_type, "implementation-controller")
     active_slice = {
+        "schema_version": SCHEMA_VERSION,
         "slice_id": task_id,
         "parent_task_id": task.get("task_id") or task_id,
         "title": task.get("title") or design_path.stem,
@@ -6381,7 +6494,7 @@ def main():
         "blockers": [],
         "updated_at": now_iso(),
     }
-    task.update({"task_id": task.get("task_id") or task_id, "status": "contract_compiled", "active_slice": active_slice, "current_contracts": active_slice["control_artifacts"], "updated_at": now_iso()})
+    task.update({"schema_version": SCHEMA_VERSION, "task_id": task.get("task_id") or task_id, "status": "contract_compiled", "active_slice": active_slice, "current_contracts": active_slice["control_artifacts"], "updated_at": now_iso()})
     write_json(control / "current-task.json", task)
     write_json(control / "current-subtask.json", active_slice)
     print(control / "implementation-contract.json")
@@ -6420,8 +6533,8 @@ def main():
     untracked = git_lines(["git", "ls-files", "--others", "--exclude-standard"], root)
     changed = sorted(set(unstaged + staged + untracked))
     rel_output = str(output.relative_to(root))
-    if rel_output not in changed:
-        changed = sorted(set(changed + [rel_output]))
+    artifact_index = "artifacts/_control/artifact-index.json"
+    changed = sorted(set(changed + [rel_output, artifact_index]))
     report = {"base": args.base, "changed_files": changed, "workspace_fingerprint": fingerprint(changed), "unstaged_files": unstaged, "staged_files": staged, "untracked_files": untracked, "generated_at": now_iso()}
     write_json(output, report)
     ensure_control_dir(root)
@@ -6726,6 +6839,175 @@ def main():
 if __name__ == "__main__":
     main()
 """,
+        "validate_strict_control_contracts.py": """#!/usr/bin/env python3
+import argparse
+import json
+from pathlib import Path
+from control_runtime import validate_target_project_root
+
+SCHEMA_VERSION = "2.0.0"
+PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
+STANDARD_METADATA_FIELDS = {"document_number", "document_status", "retention_policy", "owner", "language", "canonical_path", "source_artifacts"}
+
+CONTRACTS = {
+    "current-task.json": {
+        "required": {"schema_version", "task_id", "title", "language", "workflow_id", "status", "control_dir", "created_at"},
+        "allowed": {"schema_version", "task_id", "title", "language", "workflow_id", "active_stage", "status", "control_dir", "created_at", "updated_at", "project_profile", "current_contracts", "supersedes_active_task", "previous_task", "next_action", "active_slice"},
+    },
+    "current-subtask.json": {
+        "required": {"schema_version", "slice_id", "parent_task_id", "status", "control_artifacts", "updated_at"},
+        "allowed": {"schema_version", "slice_id", "parent_task_id", "title", "kind", "status", "control_artifacts", "quality_status", "blockers", "browser_evidence", "next_required_action", "updated_at"},
+    },
+    "design-contract.json": {
+        "required": {"schema_version", "task_id", "source_design", "source_checksum", "goals", "acceptance_criteria", "module_boundaries", "assumptions"},
+        "allowed": {"schema_version", "task_id", "source_design", "source_checksum", "generated_at", "goals", "acceptance_criteria", "module_boundaries", "risks", "assumptions"} | STANDARD_METADATA_FIELDS,
+    },
+    "implementation-contract.json": {
+        "required": {"schema_version", "task_id", "allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "expected_interfaces", "expected_services", "expected_repositories_or_mappers", "technology_adoption_contract"},
+        "allowed": {"schema_version", "task_id", "allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "expected_interfaces", "expected_services", "expected_repositories_or_mappers", "technology_adoption_contract", "generated_at"} | STANDARD_METADATA_FIELDS,
+        "non_empty": {"allowed_modules", "forbidden_modules", "architecture_rules", "required_tests", "done_conditions"},
+    },
+    "quality-contract.json": {
+        "required": {"schema_version", "task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy"},
+        "allowed": {"schema_version", "task_id", "required_commands", "required_evidence", "quality_gates", "repair_policy", "generated_at"} | STANDARD_METADATA_FIELDS,
+        "non_empty": {"required_commands", "required_evidence", "quality_gates"},
+    },
+}
+
+OPTIONAL_CONTRACTS = {
+    "quality-run-report.json": {
+        "required": {"schema_version", "status", "summary", "results", "errors", "generated_at"},
+        "allowed": {"schema_version", "status", "task_id", "summary", "results", "errors", "findings", "generated_at"},
+    },
+}
+
+ACTIVE_SLICE_ALLOWED = {"schema_version", "slice_id", "parent_task_id", "title", "kind", "status", "quality_status", "control_artifacts", "blockers", "browser_evidence", "next_required_action", "updated_at"}
+ACTIVE_SLICE_REQUIRED = {"schema_version", "slice_id", "parent_task_id", "status", "control_artifacts"}
+
+
+def read_json(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(f"{path.name}: invalid json: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{path.name}: expected object")
+    return value
+
+
+def is_missing(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def contains_placeholder(value) -> bool:
+    text = json.dumps(value, ensure_ascii=False).lower() if not isinstance(value, str) else value.lower()
+    return any(token.lower() in text for token in PLACEHOLDER_TOKENS)
+
+
+def validate_shape(name: str, data: dict, spec: dict) -> list[str]:
+    errors = []
+    unknown = sorted(set(data) - spec["allowed"])
+    if unknown:
+        errors.append(f"{name}: unknown fields {unknown}")
+    missing = sorted(field for field in spec["required"] if field not in data or is_missing(data.get(field)))
+    if missing:
+        errors.append(f"{name}: missing required fields {missing}")
+    if data.get("schema_version") != SCHEMA_VERSION:
+        errors.append(f"{name}: schema_version must be {SCHEMA_VERSION}")
+    for field in spec.get("non_empty", set()):
+        if is_missing(data.get(field)):
+            errors.append(f"{name}: {field} must be non-empty")
+    return errors
+
+
+def validate_task_active_slice(task: dict) -> list[str]:
+    active = task.get("active_slice")
+    if active is None:
+        return []
+    if not isinstance(active, dict):
+        return ["current-task.json: active_slice must be an object"]
+    errors = []
+    unknown = sorted(set(active) - ACTIVE_SLICE_ALLOWED)
+    if unknown:
+        errors.append(f"current-task.json.active_slice: unknown fields {unknown}")
+    missing = sorted(field for field in ACTIVE_SLICE_REQUIRED if field not in active or is_missing(active.get(field)))
+    if missing:
+        errors.append(f"current-task.json.active_slice: missing required fields {missing}")
+    if active.get("schema_version") != SCHEMA_VERSION:
+        errors.append(f"current-task.json.active_slice: schema_version must be {SCHEMA_VERSION}")
+    return errors
+
+
+def validate_quality_commands(quality: dict) -> list[str]:
+    errors = []
+    commands = quality.get("required_commands")
+    if not isinstance(commands, list) or not commands:
+        return ["quality-contract.json: required_commands must be a non-empty array"]
+    for index, item in enumerate(commands):
+        prefix = f"quality-contract.json.required_commands[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix}: command entry must be an object")
+            continue
+        unknown = sorted(set(item) - {"id", "command", "cwd", "required", "timeout_seconds"})
+        if unknown:
+            errors.append(f"{prefix}: unknown fields {unknown}")
+        if is_missing(item.get("id")):
+            errors.append(f"{prefix}: id is required")
+        command = item.get("command")
+        if is_missing(command):
+            errors.append(f"{prefix}: command is required")
+        elif contains_placeholder(command):
+            errors.append(f"{prefix}: placeholder command is forbidden")
+    return errors
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Validate strict v2 engineering-assistant control contracts.")
+    parser.add_argument("--root", required=True)
+    args = parser.parse_args()
+    root = validate_target_project_root(Path(args.root))
+    control = root / "artifacts" / "_control"
+    errors = []
+    payloads = {}
+    for name, spec in CONTRACTS.items():
+        path = control / name
+        if not path.exists():
+            errors.append(f"{name}: missing control contract")
+            continue
+        try:
+            payload = read_json(path)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        payloads[name] = payload
+        errors.extend(validate_shape(name, payload, spec))
+    for name, spec in OPTIONAL_CONTRACTS.items():
+        path = control / name
+        if not path.exists():
+            continue
+        try:
+            payload = read_json(path)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        errors.extend(validate_shape(name, payload, spec))
+    if "current-task.json" in payloads:
+        errors.extend(validate_task_active_slice(payloads["current-task.json"]))
+    if "quality-contract.json" in payloads:
+        errors.extend(validate_quality_commands(payloads["quality-contract.json"]))
+    report = {"status": "pass" if not errors else "block", "schema_version": SCHEMA_VERSION, "errors": errors}
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if errors:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
+""",
         "validate_contract_control.py": """#!/usr/bin/env python3
 import json
 import sys
@@ -6805,6 +7087,7 @@ import time
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
+SCHEMA_VERSION = "2.0.0"
 PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
 QUALITY_BLOCKER_ID = "QR-BLOCKER-001"
 
@@ -6876,6 +7159,7 @@ def current_slice(root: Path, task: dict) -> dict:
     active = task.get("active_slice") if isinstance(task.get("active_slice"), dict) else {}
     result = {**subtask, **active}
     parent = task.get("task_id") or result.get("parent_task_id") or result.get("slice_id") or "unknown-task"
+    result["schema_version"] = SCHEMA_VERSION
     result.setdefault("slice_id", result.get("slice_id") or parent)
     result.setdefault("parent_task_id", parent)
     result.setdefault("title", task.get("title") or result.get("slice_id"))
@@ -6895,7 +7179,8 @@ def sync_control_plane(root: Path, report: dict, output: Path) -> None:
     task_path = control / "current-task.json"
     subtask_path = control / "current-subtask.json"
     questions_path = control / "open-questions.json"
-    task = read_json(task_path, {"task_id": report.get("task_id") or "unknown-task", "status": "initialized", "control_dir": "artifacts/_control"})
+    task = read_json(task_path, {"schema_version": SCHEMA_VERSION, "task_id": report.get("task_id") or "unknown-task", "status": "initialized", "control_dir": "artifacts/_control"})
+    task["schema_version"] = SCHEMA_VERSION
     active = current_slice(root, task)
     blockers = [finding for finding in report.get("findings", []) if finding.get("severity") == "blocker"]
     active["quality_status"] = report["status"]
@@ -6973,6 +7258,7 @@ def build_report(contract: dict, commands: list[dict], results: list[dict], erro
         findings.append({"id": "QUALITY-CONTRACT-NO-REQUIRED-COMMANDS", "severity": "blocker", "summary": "no required quality commands declared"})
         status = "block"
     return {
+        "schema_version": SCHEMA_VERSION,
         "status": status,
         "task_id": contract.get("task_id"),
         "summary": {
@@ -7368,6 +7654,7 @@ def main():
     py = sys.executable
     if args.mode == "audit-readonly":
         steps = [
+            ("validate_strict_control_contracts", [py, str(here / "validate_strict_control_contracts.py"), "--root", str(root)]),
             ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
             ("validate_control_plane_readonly", [py, str(here / "validate_control_plane_readonly.py"), "--root", str(root), "--changed-files-report", args.changed_files_report]),
         ]
@@ -7382,6 +7669,7 @@ def main():
             raise SystemExit(1)
         return
     steps = [
+        ("validate_strict_control_contracts", [py, str(here / "validate_strict_control_contracts.py"), "--root", str(root)]),
         ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
         ("validate_control_health", [py, str(here / "validate_control_health.py"), "--root", str(root), "--task-type", args.task_type]),
         ("collect_changed_files", [py, str(here / "collect_changed_files.py"), "--root", str(root)]),
@@ -7420,6 +7708,7 @@ required = [
     "engineering-assistant/scripts/init_task.py",
     "engineering-assistant/scripts/ensure_agent_entrypoint.py",
     "engineering-assistant/scripts/compile_design_contract.py",
+    "engineering-assistant/scripts/validate_strict_control_contracts.py",
     "engineering-assistant/scripts/validate_contract_control.py",
     "engineering-assistant/scripts/validate_control_plane_readonly.py",
     "engineering-assistant/scripts/validate_design_to_code.py",

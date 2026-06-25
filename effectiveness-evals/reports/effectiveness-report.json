@@ -19,13 +19,13 @@
     "baseline_count": 3,
     "real_result_count": 3,
     "mean_pass_rate": {
-      "current_engineering_assistant": 0.82,
       "baseline_free_codex": 0.62,
+      "current_engineering_assistant": 0.82,
       "curated_tools": 0.88
     },
     "mean_token_or_time_cost": {
-      "current_engineering_assistant": 1.35,
       "baseline_free_codex": 1.0,
+      "current_engineering_assistant": 1.35,
       "curated_tools": 1.18
     }
   },
@@ -64,5 +64,5 @@
   "doc_noise_score": 0.37999999999999995,
   "frontend_product_score": 0.7200000000000001,
   "recommendation": "delegate_to_curated_tools",
-  "generated_at": "2026-06-25T00:36:41.353326+00:00"
+  "generated_at": "2026-06-25T07:15:43.974613+00:00"
 }

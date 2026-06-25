@@ -1,7 +1,7 @@
 {
   "skill_id": "database-design",
   "skill_name": "Database Design",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "database_design",
   "type": "stage_skill",
   "purpose": "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。",

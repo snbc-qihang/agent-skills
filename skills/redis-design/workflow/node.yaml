@@ -2,7 +2,7 @@
   "node_id": "redis-design",
   "stage": "redis_design",
   "skill_id": "redis-design",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",

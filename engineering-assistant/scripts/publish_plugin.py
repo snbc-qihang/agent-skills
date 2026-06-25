@@ -10,7 +10,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
-PLUGIN_VERSION = "1.0.0.4"
+PLUGIN_VERSION = "2.0.0"
 
 
 def load_config(path: Path) -> dict:

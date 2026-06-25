@@ -98,6 +98,6 @@ diff -qr engineering-assistant /tmp/engineering-assistant-plugin/plugins/enginee
 
 第一轮只读 canary 仓库：
 
-`/Users/sunliming/work/project/personal/ai-platform-v1`
+`<set ENGINEERING_ASSISTANT_CANARY_ROOT to an ai-platform checkout>`
 
 `engineering-assistant/evals/fixtures/ai-platform-v1.json` 记录允许读取的 workflow/control-plane 入口。`run_skill_evals.py --mode scored` 会验证 router、context pack 和发布包同步，不写入下游仓库。

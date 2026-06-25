@@ -1,7 +1,7 @@
 {
   "skill_id": "code-quality-governor",
   "skill_name": "Code Quality Governor",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "code_quality",
   "type": "cross_cutting_skill",
   "purpose": "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。",

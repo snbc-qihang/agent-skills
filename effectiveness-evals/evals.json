@@ -1,6 +1,6 @@
 {
   "skill_name": "engineering-assistant",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "language": "zh-CN",
   "evaluation_goal": "证明 engineering-assistant 插件是否比自由 Codex 或现有优秀 skills/tools 更能稳定交付高质量工程结果。",
   "baselines": [

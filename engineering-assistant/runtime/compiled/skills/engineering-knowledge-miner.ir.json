@@ -1,6 +1,6 @@
 {
   "skill_id": "engineering-knowledge-miner",
-  "version": "1.0.0.4",
+  "version": "2.0.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "prompt_pack": {
