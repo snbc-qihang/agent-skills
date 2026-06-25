@@ -2,22 +2,27 @@
 
 本仓库维护 `engineering-assistant` 插件的源码、治理资产、skills 和发布配置。仓库不保留临时发布目录，Codex 可识别插件由发布脚本生成到配置目录。
 
+当前 `v2.0.0` 是控制面 v2 checkpoint，不代表结构性重构已完成。结构重构完成标准是：根生成器只保留兼容入口、生成逻辑拆入 `generator/` 包、核心控制 schema strict、前端产品验收通过显式委派和浏览器证据阻断验证。
+
 ## 目录边界
 
 - `skills/`：可触发 skill 源树，包含 `SKILL.md`、`contract.yaml`、`output.schema.json`、eval 和 workflow node。
+- `generator/`：生成器实现包，按 catalog、schema、skills、workflows、scripts、plugin_manifest、evals、runtime_ir、tests_support 拆分维护；根生成器只做兼容入口。
 - `engineering-assistant/`：治理与运行时资产，包含 standards、schemas、scripts、workflows、registry、runtime policy、compiled skill IR 和 eval fixtures。
 - `.agent/plugins/publish-config.json`：本地发布配置，指定默认发布根目录和 marketplace 输出路径。
 - 发布目录：由 `publish_plugin.py` 生成，不能手补回仓库；默认 local-root 发布到 `~/.codex/local-plugins/local-engineering/plugins/engineering-assistant/`。
 
 ## 修改方式
 
-优先修改 `generate_engineering_assistant_assets.py` 和回归测试，然后运行：
+优先修改 `generator/` 包、兼容入口 `generate_engineering_assistant_assets.py` 和回归测试，然后运行：
 
 ```bash
 python3 generate_engineering_assistant_assets.py
 ```
 
 生成器会刷新 `skills/`、`engineering-assistant/`、发布脚本输入和本地发布配置。新增运行时能力也必须进入生成器、schema、测试，并通过发布脚本进入 Codex 插件包。
+
+默认工作流只要求机读控制面；长 Markdown、HTML 报告和交接叙事仅在人类评审、审计、合规、交接或用户明确要求时生成。前端产品级验收必须消费 build-web-apps、browser/chrome 或等价 Playwright/截图证据；缺少浏览器证据时只能声明代码级验证，不能声明前端产品验收完成。
 
 ## 发布给 Codex 使用
 

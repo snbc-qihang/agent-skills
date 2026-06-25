@@ -437,7 +437,8 @@
       "frontend_product_execution": {
         "preferred": [
           "build-web-apps",
-          "browser"
+          "browser",
+          "chrome"
         ],
         "fallback": [
           "repo_native_frontend_stack",
@@ -447,8 +448,15 @@
         "required_evidence": [
           "product_ia",
           "state_coverage",
-          "desktop_mobile_render_evidence"
-        ]
+          "desktop_mobile_render_evidence",
+          "console_error_check",
+          "core_workflow_interaction"
+        ],
+        "claim_boundaries": {
+          "without_browser_capability": "code_level_validation_only",
+          "with_browser_evidence": "frontend_product_acceptance_allowed",
+          "missing_browser_evidence": "frontend_product_acceptance_blocked"
+        }
       },
       "github_pr_ci": {
         "preferred": [

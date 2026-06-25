@@ -93,7 +93,73 @@
     },
     "technology_adoption_contract": {
       "type": "object",
-      "additionalProperties": true
+      "required": [],
+      "properties": {
+        "backend_framework": {
+          "type": "string"
+        },
+        "persistence_framework": {
+          "type": "string"
+        },
+        "frontend_framework": {
+          "type": "string"
+        },
+        "frontend_stack": {
+          "type": "string"
+        },
+        "frontend_component_library": {
+          "type": "string"
+        },
+        "state_management": {
+          "type": "string"
+        },
+        "test_frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "build_tools": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required_indicators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden_indicators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "minimum_required_indicators": {
+          "type": "integer"
+        },
+        "review_required_for": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "type": "string"
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
     },
     "document_number": {
       "type": "string"

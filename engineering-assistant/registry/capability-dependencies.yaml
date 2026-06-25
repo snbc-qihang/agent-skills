@@ -1,0 +1,57 @@
+{
+  "schema_version": "2.0.0",
+  "plugin_role": "engineering_control_plane",
+  "principle": "先用软件工程状态机确定阶段、边界和验收，再选择最合适执行能力；委派不转移工程责任。",
+  "dependencies": {
+    "codebase_analysis": {
+      "recommended": [
+        "codegraph"
+      ],
+      "fallback": [
+        "rg",
+        "targeted_file_reads",
+        "compiler_or_test_feedback"
+      ],
+      "missing_behavior": "continue_with_lower_confidence"
+    },
+    "frontend_product_execution": {
+      "recommended": [
+        "build-web-apps",
+        "browser",
+        "chrome",
+        "Playwright"
+      ],
+      "fallback": [
+        "repo_native_frontend_stack",
+        "code_level_tests"
+      ],
+      "missing_behavior": "block_browser_level_acceptance",
+      "claim_boundary": "without browser/screenshot/console/viewport evidence, only code-level validation may be claimed",
+      "required_evidence": [
+        "screenshot",
+        "console_error_check",
+        "viewport",
+        "core_workflow_interaction",
+        "no_overlap_check"
+      ]
+    },
+    "github_pr_ci": {
+      "recommended": [
+        "github"
+      ],
+      "fallback": [
+        "local_git_diff",
+        "local_quality_commands"
+      ],
+      "missing_behavior": "do_not_claim_remote_pr_or_ci_state"
+    },
+    "security_or_production": {
+      "recommended": [
+        "security_tools",
+        "human_approval"
+      ],
+      "fallback": [],
+      "missing_behavior": "block_until_review"
+    }
+  }
+}

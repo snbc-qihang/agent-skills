@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BASELINES = {"baseline_free_codex", "current_engineering_assistant", "curated_tools"}
-CATEGORIES = {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery"}
+CATEGORIES = {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery", "generator_structure", "schema_strictness", "frontend_delegation"}
 RECOMMENDATIONS = {"keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"}
 REPORT_FIELDS = {"pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "recommendation"}
 DEFAULT_SPEC = Path("effectiveness-evals/evals.json")

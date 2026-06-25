@@ -212,6 +212,93 @@
         "repair_loop_integrity",
         "handoff_readiness"
       ]
+    },
+    {
+      "id": "generator-structure-risk",
+      "category": "generator_structure",
+      "title": "生成器拆分后主入口不再承担全部职责",
+      "prompt": "审查 engineering-assistant 插件源码，确认根生成器只是兼容入口，生成逻辑已经拆入 generator 包；不得用普通 skill eval 通过来掩盖 8000 行单体生成器风险。",
+      "input_files": [
+        "fixtures/generator-structure-risk.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "生成器结构风险评估，包含入口行数、generator 包模块、兼容命令、发布路径不变和未完成拆分风险。",
+      "assertions": [
+        "根 generate_engineering_assistant_assets.py 行数不超过 1500 行",
+        "generator 包存在 catalog、schema、skills、workflows、scripts、plugin_manifest、evals、runtime_ir、tests_support 模块",
+        "python3 generate_engineering_assistant_assets.py 仍能刷新原有生成产物",
+        "不改变插件名、skill id、workflow id、personal 发布布局或 Hermes 限定名",
+        "报告必须区分结构拆分完成项和仍需继续拆出的 legacy 实现风险"
+      ],
+      "grading_dimensions": [
+        "entrypoint_size",
+        "module_boundaries",
+        "compatibility",
+        "publish_layout_stability",
+        "residual_risk_honesty"
+      ]
+    },
+    {
+      "id": "strict-schema-nested-contracts",
+      "category": "schema_strictness",
+      "title": "核心控制 schema 禁止业务字段散落 additionalProperties true",
+      "prompt": "检查 design-contract、implementation-contract、quality-contract、quality-run-report、task-control 等核心控制 schema。嵌套业务对象必须显式字段化，扩展只能进入 metadata 或 extensions；旧 v2 控制面未知字段必须迁移或 blocked。",
+      "input_files": [
+        "fixtures/strict-schema-nested-contracts.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "严格 schema 审查结果，列出所有 additionalProperties true 的位置、白名单理由、迁移策略和阻断样例。",
+      "assertions": [
+        "module_boundaries 不再允许任意业务字段",
+        "technology_adoption_contract 不再允许任意业务字段",
+        "repair_policy 不再允许任意业务字段",
+        "quality-run-report.summary 和 results.items 不再允许任意业务字段",
+        "旧 v2 未知字段只能进入 extensions/metadata 或触发 blocked migration"
+      ],
+      "grading_dimensions": [
+        "schema_strictness",
+        "extension_boundary",
+        "migration_policy",
+        "blocked_fixture",
+        "validator_coverage"
+      ]
+    },
+    {
+      "id": "frontend-delegation-browser-claim",
+      "category": "frontend_delegation",
+      "title": "缺少浏览器能力时不得声明前端产品验收完成",
+      "prompt": "模拟一个前端产品任务：当前运行时缺少 browser/chrome/build-web-apps 证据，只能运行代码级测试。检查 engineering-assistant 是否会阻断产品级验收声明，并在有截图、console、viewport 和交互证据时才允许通过。",
+      "input_files": [
+        "fixtures/frontend-delegation-browser-claim.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "前端委派边界报告，明确代码级验证、浏览器级验收、缺失能力降级和证据登记规则。",
+      "assertions": [
+        "无 browser/build-web-apps/Playwright 截图证据时不得写 frontend_product_acceptance=passed",
+        "只能声明 code_level_validation 或 blocked_browser_level_acceptance",
+        "有浏览器证据时必须登记截图、console/error、viewport、核心交互和无重叠检查",
+        "frontend-design 与 frontend-development 负责控制合同和证据消费，不伪装成完整设计系统",
+        "能力缺失必须进入 capability-invocation-ledger 或 capability-health"
+      ],
+      "grading_dimensions": [
+        "delegation_boundary",
+        "browser_evidence",
+        "claim_honesty",
+        "capability_ledger",
+        "frontend_product_score"
+      ]
     }
   ]
 }

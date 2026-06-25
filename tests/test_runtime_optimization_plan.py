@@ -146,9 +146,11 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
             self.assertIs(True, gates[gate])
 
         skill_text = (ROOT / "skills" / "workflow-orchestrator" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("engineering-assistant 是软件工程治理主控，不是单纯工具路由器", skill_text)
-        self.assertIn("默认输出模式是 `control_surface_first`", skill_text)
-        self.assertIn("缺少浏览器级能力时，不得宣称完成浏览器截图或响应式验收", skill_text)
+        shared_text = (ROOT / "engineering-assistant" / "shared" / "governance-protocol.md").read_text(encoding="utf-8")
+        self.assertIn("engineering-assistant/shared/governance-protocol.md", skill_text)
+        self.assertIn("engineering-assistant 是成熟软件工程控制面，不是单纯工具路由器", shared_text)
+        self.assertIn("默认输出模式是 `control_surface_first`", shared_text)
+        self.assertIn("缺少浏览器级能力时，只能声明“代码级验证完成”", shared_text)
 
         workflow = json.loads((ROOT / "engineering-assistant" / "workflows" / "full-feature-development.yaml").read_text(encoding="utf-8"))
         router = workflow["lean_runtime_router_policy"]
@@ -303,10 +305,10 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
             {item["id"] for item in spec["baselines"]},
         )
         self.assertEqual(
-            {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery"},
+            {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery", "generator_structure", "schema_strictness", "frontend_delegation"},
             {item["category"] for item in spec["evals"]},
         )
-        self.assertEqual(5, len(spec["evals"]))
+        self.assertEqual(8, len(spec["evals"]))
         deliverable = (ROOT / "effectiveness-evals" / "simulated-deliverables" / "minimal-fullstack-product-task.md").read_text(encoding="utf-8")
         self.assertIn("GET /api/v1/admin/announcement", deliverable)
         self.assertIn("PUT /api/v1/admin/announcement", deliverable)
@@ -337,7 +339,7 @@ class RuntimeOptimizationPlanTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertEqual("pass", report["status"])
         self.assertEqual("spec_ready", report["evaluation_state"])
-        self.assertEqual(5, report["metrics"]["eval_count"])
+        self.assertEqual(8, report["metrics"]["eval_count"])
         self.assertEqual(3, report["metrics"]["baseline_count"])
         self.assertIn(report["recommendation"], ["keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"])
 

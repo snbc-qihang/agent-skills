@@ -208,7 +208,7 @@ class DocumentGovernanceSourceSyncTest(unittest.TestCase):
         self.assertIn("retention_policy:", template)
 
     def test_generator_preserves_standard_plugin_layout(self) -> None:
-        generator = (ROOT / "generate_engineering_assistant_assets.py").read_text(encoding="utf-8")
+        generator = (ROOT / "generator" / "legacy_generator.py").read_text(encoding="utf-8")
         self.assertIn('"publish_plugin.py"', generator)
         self.assertIn('copy_tree(skills, plugin_root / "skills")', generator)
         self.assertIn('copy_tree(runtime, plugin_root / "engineering-assistant")', generator)
