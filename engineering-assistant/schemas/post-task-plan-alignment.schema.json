@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "run_id",
+    "product_goal",
+    "capability_path",
+    "accepted_scope",
+    "out_of_scope",
+    "integration_points",
+    "next_plan_update",
+    "alignment_status",
+    "drift_findings",
+    "document_changes",
+    "checked_by"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "product_goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "accepted_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "integration_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_plan_update": {
+      "type": "string",
+      "minLength": 1
+    },
+    "alignment_status": {
+      "enum": [
+        "aligned",
+        "aligned_with_followups",
+        "drift_detected",
+        "blocked"
+      ]
+    },
+    "drift_findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "document_changes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "checked_by": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": true
+}

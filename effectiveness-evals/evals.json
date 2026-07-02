@@ -1,0 +1,304 @@
+{
+  "skill_name": "teamwork-engineering-assistant",
+  "version": "2.0.0",
+  "language": "zh-CN",
+  "evaluation_goal": "证明 teamwork-teamwork-engineering-assistant 插件是否比自由 Codex 或现有优秀 skills/tools 更能稳定交付高质量工程结果。",
+  "baselines": [
+    {
+      "id": "baseline_free_codex",
+      "label": "Free Codex baseline",
+      "description": "不加载 engineering-assistant 插件，只给真实任务、目标仓库上下文和必要约束，观察 Codex 自由完成的交付质量。",
+      "allowed_capabilities": [
+        "repo files",
+        "shell checks",
+        "built-in Codex reasoning"
+      ],
+      "forbidden_capabilities": [
+        "engineering-assistant skills",
+        "engineering-assistant workflow artifacts"
+      ]
+    },
+    {
+      "id": "current_teamwork_engineering_assistant",
+      "label": "Current teamwork-engineering-assistant",
+      "description": "使用当前 teamwork-engineering-assistant 插件和 workflow/control-plane 规则，观察插件是否减少代码漂移、文档噪音和质量遗漏。",
+      "allowed_capabilities": [
+        "engineering-assistant skills",
+        "engineering-assistant scripts",
+        "repo files",
+        "shell checks"
+      ],
+      "forbidden_capabilities": [
+        "manual post-hoc rewriting outside declared artifacts"
+      ]
+    },
+    {
+      "id": "curated_tools",
+      "label": "Curated existing tools",
+      "description": "不用本插件主控流程，明确复用现有优秀能力，例如 codegraph、build-web-apps、browser、GitHub/code-review 类能力。",
+      "allowed_capabilities": [
+        "codegraph",
+        "build-web-apps",
+        "browser",
+        "github",
+        "code-review skills"
+      ],
+      "forbidden_capabilities": [
+        "engineering-assistant workflow orchestration"
+      ]
+    }
+  ],
+  "report_schema": "engineering-assistant/schemas/skill-effectiveness-report.schema.json",
+  "workspace": "effectiveness-evals",
+  "result_contract": {
+    "required_report_fields": [
+      "pass_rate_delta",
+      "token_or_time_cost_delta",
+      "quality_findings",
+      "doc_noise_score",
+      "frontend_product_score",
+      "recommendation"
+    ],
+    "recommendation_values": [
+      "keep_and_slim",
+      "split_capabilities",
+      "delegate_to_curated_tools",
+      "retire_skill"
+    ],
+    "first_iteration_policy": "第一轮只生成可复现评测包和可填写结果目录，不自动宣称插件优于 baseline。"
+  },
+  "evals": [
+    {
+      "id": "minimal-fullstack-product-task",
+      "category": "full_stack_minimal_product",
+      "title": "极小前后端产品研发任务：公告开关",
+      "prompt": "为一个极小企业管理台实现公告开关功能：后端提供公告配置读取和保存接口，前端提供一个可编辑公告文案、启停开关和保存反馈的设置页。要求完成从需求、设计、实现证据、前后端联调状态到测试/构建证据的完整闭环，并比较自由 Codex、当前 teamwork-engineering-assistant、现有优秀工具组合三组输出质量。",
+      "input_files": [
+        "fixtures/minimal-fullstack-product-task.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "完整但极小的前后端产品研发交付证据，包括后端接口契约、前端交互状态、联调证明、测试结果和质量评分。",
+      "assertions": [
+        "后端接口包含读取公告配置和保存公告配置两个明确业务能力",
+        "前端页面覆盖文案编辑、启停开关、保存中、保存成功、保存失败和表单校验",
+        "实现范围保持极小，不新增通用配置平台、权限系统或无调用方抽象",
+        "前后端契约字段一致，至少包含 enabled、message、updatedAt 三个字段",
+        "评测结果同时覆盖三组 baseline，并给出 pass_rate、耗时或 token 成本、质量 finding 和推荐结论"
+      ],
+      "grading_dimensions": [
+        "backend_contract",
+        "frontend_interaction",
+        "fullstack_integration",
+        "scope_control",
+        "test_and_build_evidence"
+      ]
+    },
+    {
+      "id": "code-drift-backend-export-refactor",
+      "category": "code_drift",
+      "title": "中等复杂后端导出任务改造防代码漂移",
+      "prompt": "在一个已有 Java/Spring 后端模块中，把同步 Excel 导出改成服务端异步任务。要求复用现有 service/mapper/DTO 模式，只改必要模块，输出进度查询和本地文件下载路径，补充单元测试，不引入新的通用异步平台。",
+      "input_files": [
+        "fixtures/code-drift-backend-export-refactor.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "最小必要代码变更、设计到代码映射、测试证据和无冗余抽象的实现说明。",
+      "assertions": [
+        "变更文件仅位于 fixture 允许模块或明确解释审批原因",
+        "每个新增接口、service、mapper 或 DTO 都能映射到任务目标",
+        "没有新增无调用方的抽象层、重复 DTO、重复 converter 或泛化 async platform",
+        "测试证据覆盖进度查询、成功下载、失败状态和权限/参数异常",
+        "质量报告列出实际运行的 build/test/lint 命令或明确 blocking 原因"
+      ],
+      "grading_dimensions": [
+        "scope_control",
+        "design_to_code_traceability",
+        "duplication",
+        "test_evidence",
+        "maintainability"
+      ]
+    },
+    {
+      "id": "document-noise-minimal-context",
+      "category": "document_noise",
+      "title": "大量历史文档噪音下只消费最小控制面",
+      "prompt": "继续推进一个已有长任务。上下文里混入历史设计、旧总结、HTML 人工阅览件和过期规划，请恢复当前任务状态并给出下一步，但不要全量扫 docs，也不要把过程摘要写进正式文档。",
+      "input_files": [
+        "fixtures/document-noise-minimal-context.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "只读取 task-context、artifact-index、open questions、quality contract 和必要 rule pack 后给出阻断或下一步。",
+      "assertions": [
+        "输出明确列出已消费的机读事实源",
+        "没有把 docs/human-readable 或 docs/human-review HTML 当作 agent 事实输入",
+        "没有新增临时阶段总结、workflow summary 或待确认清单到正式 docs 目录",
+        "识别 stale/over-budget context 并收敛到当前 task control plane",
+        "doc_noise_score 低于阈值且有证据说明无关文档未参与决策"
+      ],
+      "grading_dimensions": [
+        "context_minimization",
+        "artifact_hygiene",
+        "rule_consumption",
+        "doc_noise_score",
+        "blocked_state_honesty"
+      ]
+    },
+    {
+      "id": "frontend-product-quality-enterprise-console",
+      "category": "frontend_product_quality",
+      "title": "企业后台权限策略页产品级前端交付",
+      "prompt": "为企业后台新增权限策略管理页面。目标用户是运营管理员，需要可搜索、比较、编辑、启停和审计策略。必须遵循现有前端技术栈和组件库，覆盖 loading/empty/error/permission/validation 状态，并用浏览器截图或等价证据证明桌面和移动宽度不重叠、功能可用。",
+      "input_files": [
+        "fixtures/frontend-product-quality-enterprise-console.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "具备产品经理视角的信息架构、任务闭环、设计到 UI 映射、运行截图证据和前端测试/构建证据。",
+      "assertions": [
+        "页面信息架构支持企业用户高频扫描、比较和批量判断",
+        "UI 控件选择符合任务语义，避免营销式 hero、装饰卡片堆砌和无用说明文字",
+        "组件复用、状态管理、路由和接口联调契约来自 repo_context 或用户确认",
+        "loading、empty、error、permission、validation、dirty state 和成功反馈均可验证",
+        "浏览器或截图证据覆盖桌面与移动宽度，文本和控件无重叠"
+      ],
+      "grading_dimensions": [
+        "product_ia",
+        "interaction_completeness",
+        "visual_quality",
+        "frontend_contract_mapping",
+        "browser_verification"
+      ]
+    },
+    {
+      "id": "long-task-recovery-control-plane",
+      "category": "long_task_recovery",
+      "title": "多轮长任务恢复后控制面一致性",
+      "prompt": "一个研发任务已经经历多轮实现、修复和质量检查。请恢复任务，判断是否可以继续实现或必须阻断，并确保 open questions、quality commands、changed files、traceability matrix 和 rule consumption 一致。",
+      "input_files": [
+        "fixtures/long-task-recovery-control-plane.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "基于控制面一致性的继续/阻断决策，不用聊天记忆替代机读状态。",
+      "assertions": [
+        "恢复过程读取 current-task、artifact-index、open-questions、quality-contract 和 traceability matrix",
+        "blocking open question 未解决时不会进入实现或输出 succeeded",
+        "changed-files 与 implementation-contract 的 allowed/forbidden modules 一致",
+        "质量命令为空、占位或未运行时不能通过",
+        "traceability、rule consumption 和 repair attempts 有一致的下一步判断"
+      ],
+      "grading_dimensions": [
+        "state_recovery",
+        "control_plane_consistency",
+        "quality_gate_honesty",
+        "repair_loop_integrity",
+        "handoff_readiness"
+      ]
+    },
+    {
+      "id": "generator-structure-risk",
+      "category": "generator_structure",
+      "title": "生成器拆分后主入口不再承担全部职责",
+      "prompt": "审查 engineering-assistant 插件源码，确认根生成器只是兼容入口，生成逻辑已经拆入 generator 包；不得用普通 skill eval 通过来掩盖 8000 行单体生成器风险。",
+      "input_files": [
+        "fixtures/generator-structure-risk.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "生成器结构风险评估，包含入口行数、generator 包模块、兼容命令、发布路径不变和未完成拆分风险。",
+      "assertions": [
+        "根 generate_engineering_assistant_assets.py 行数不超过 1500 行",
+        "generator 包存在 catalog、schema、skills、workflows、scripts、plugin_manifest、evals、runtime_ir、tests_support 模块",
+        "python3 generate_engineering_assistant_assets.py 仍能刷新原有生成产物",
+        "不改变插件名、skill id、workflow id、personal 发布布局或 Hermes 限定名",
+        "报告必须区分结构拆分完成项和仍需继续拆出的 legacy 实现风险"
+      ],
+      "grading_dimensions": [
+        "entrypoint_size",
+        "module_boundaries",
+        "compatibility",
+        "publish_layout_stability",
+        "residual_risk_honesty"
+      ]
+    },
+    {
+      "id": "strict-schema-nested-contracts",
+      "category": "schema_strictness",
+      "title": "核心控制 schema 禁止业务字段散落 additionalProperties true",
+      "prompt": "检查 design-contract、implementation-contract、quality-contract、quality-run-report、task-control 等核心控制 schema。嵌套业务对象必须显式字段化，扩展只能进入 metadata 或 extensions；旧 v2 控制面未知字段必须迁移或 blocked。",
+      "input_files": [
+        "fixtures/strict-schema-nested-contracts.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "严格 schema 审查结果，列出所有 additionalProperties true 的位置、白名单理由、迁移策略和阻断样例。",
+      "assertions": [
+        "module_boundaries 不再允许任意业务字段",
+        "technology_adoption_contract 不再允许任意业务字段",
+        "repair_policy 不再允许任意业务字段",
+        "quality-run-report.summary 和 results.items 不再允许任意业务字段",
+        "旧 v2 未知字段只能进入 extensions/metadata 或触发 blocked migration"
+      ],
+      "grading_dimensions": [
+        "schema_strictness",
+        "extension_boundary",
+        "migration_policy",
+        "blocked_fixture",
+        "validator_coverage"
+      ]
+    },
+    {
+      "id": "frontend-delegation-browser-claim",
+      "category": "frontend_delegation",
+      "title": "缺少浏览器能力时不得声明前端产品验收完成",
+      "prompt": "模拟一个前端产品任务：当前运行时缺少 browser/chrome/build-web-apps 证据，只能运行代码级测试。检查 engineering-assistant 是否会阻断产品级验收声明，并在有截图、console、viewport 和交互证据时才允许通过。",
+      "input_files": [
+        "fixtures/frontend-delegation-browser-claim.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_teamwork_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "前端委派边界报告，明确代码级验证、浏览器级验收、缺失能力降级和证据登记规则。",
+      "assertions": [
+        "无 browser/build-web-apps/Playwright 截图证据时不得写 frontend_product_acceptance=passed",
+        "只能声明 code_level_validation 或 blocked_browser_level_acceptance",
+        "有浏览器证据时必须登记截图、console/error、viewport、核心交互和无重叠检查",
+        "frontend-design 与 frontend-development 负责控制合同和证据消费，不伪装成完整设计系统",
+        "能力缺失必须进入 capability-invocation-ledger 或 capability-health"
+      ],
+      "grading_dimensions": [
+        "delegation_boundary",
+        "browser_evidence",
+        "claim_honesty",
+        "capability_ledger",
+        "frontend_product_score"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "fixture_id": "document-noise-minimal-context",
+  "task_type": "context_recovery",
+  "machine_sources": [
+    "artifacts/_control/task-context.agent.md",
+    "artifacts/_control/artifact-index.json",
+    "artifacts/_control/open-questions.json",
+    "artifacts/_control/quality-contract.json",
+    "artifacts/rule-governance/task-rule-packs/code-development.json"
+  ],
+  "noise_sources": [
+    "docs/human-readable/traceability-report.html",
+    "docs/human-review/run-001.html",
+    "docs/old-designs/superseded-plan.md",
+    "artifacts/workflow-orchestrator/workflow-summary.md"
+  ],
+  "expected_behavior": "只用 machine_sources 决策，噪音源最多作为 forbidden_sources 说明。"
+}

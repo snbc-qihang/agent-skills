@@ -52,7 +52,7 @@ def run_publish(*args: str) -> subprocess.CompletedProcess[str]:
 
 class PluginRuntimeRefactorTests(unittest.TestCase):
     def test_implementation_controller_is_source_generated_and_mirrored(self) -> None:
-        generator = (ROOT / "generate_engineering_assistant_assets.py").read_text(encoding="utf-8")
+        generator = (ROOT / "generator" / "legacy_generator.py").read_text(encoding="utf-8")
         self.assertIn('"id": "implementation-controller"', generator)
         self.assertIn('"contract-driven-development"', generator)
         self.assertIn('"init_task.py"', generator)

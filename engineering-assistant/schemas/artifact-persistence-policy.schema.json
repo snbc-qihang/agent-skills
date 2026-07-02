@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "run_id",
+    "default_persistence_mode",
+    "effective_persistence_mode",
+    "project_run_artifacts_root",
+    "ephemeral_root",
+    "target_repo_writes"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "default_persistence_mode": {
+      "const": "ephemeral"
+    },
+    "effective_persistence_mode": {
+      "enum": [
+        "inline",
+        "ephemeral",
+        "target_repo",
+        "blocked"
+      ]
+    },
+    "project_run_artifacts_root": {
+      "const": ".run-artifacts/"
+    },
+    "ephemeral_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_repo_writes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "docs_promotions": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "pollution_markers": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "TARGET_REPO_ARTIFACT_POLLUTION",
+          "PROCESS_DOCUMENTATION_POLLUTION"
+        ]
+      }
+    }
+  },
+  "additionalProperties": true
+}

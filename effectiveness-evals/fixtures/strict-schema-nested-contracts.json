@@ -1,0 +1,23 @@
+{
+  "fixture_id": "strict-schema-nested-contracts",
+  "task_type": "schema_strictness_audit",
+  "core_schemas": [
+    "design-contract.schema.json",
+    "implementation-contract.schema.json",
+    "quality-contract.schema.json",
+    "quality-run-report.schema.json",
+    "task-control.schema.json"
+  ],
+  "forbidden_open_business_fields": [
+    "module_boundaries",
+    "technology_adoption_contract",
+    "repair_policy",
+    "quality-run-report.summary",
+    "quality-run-report.results.items"
+  ],
+  "allowed_extension_fields": [
+    "metadata",
+    "extensions"
+  ],
+  "legacy_v2_unknown_field_policy": "move non-business data to extensions or block when it affects scope, quality, frontend acceptance, risk or approval"
+}

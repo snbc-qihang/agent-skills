@@ -1,0 +1,45 @@
+{
+  "eval_id": "minimal-fullstack-product-task",
+  "simulation": true,
+  "simulated_task_scope": "complete minimal backend API plus frontend settings page for an admin announcement toggle",
+  "source_fixture": "fixtures/minimal-fullstack-product-task.json",
+  "baseline": "curated_tools",
+  "pass_rate": 0.88,
+  "token_or_time_cost": 1.18,
+  "doc_noise_score": 0.24,
+  "frontend_product_score": 0.86,
+  "assertion_results": [
+    {
+      "assertion": "backend read/save API exists",
+      "passed": true,
+      "evidence": "Codegraph-style context kept backend API and DTO minimal."
+    },
+    {
+      "assertion": "frontend states complete",
+      "passed": true,
+      "evidence": "Frontend skill/browser path checked all expected UI states."
+    },
+    {
+      "assertion": "scope stays minimal",
+      "passed": true,
+      "evidence": "No generic settings platform or unrelated modules were proposed."
+    },
+    {
+      "assertion": "field contract consistent",
+      "passed": true,
+      "evidence": "API client and page state share enabled/message/updatedAt."
+    },
+    {
+      "assertion": "test/build evidence",
+      "passed": true,
+      "evidence": "Simulated evidence includes backend unit, frontend component, and build checks."
+    }
+  ],
+  "quality_findings": [
+    {
+      "id": "CURATED-ROUTING-001",
+      "severity": "minor",
+      "summary": "现有优秀工具组合质量最高，但缺少统一长期控制面和后续恢复协议。"
+    }
+  ]
+}

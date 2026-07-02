@@ -20,6 +20,7 @@ description: Use when the request is about 审计 skills 质量，防止空泛 p
 - `skill-contract.schema.json`
 
 # 前置条件
+- 先读取共享治理协议 `engineering-assistant/shared/governance-protocol.md`，再按团队 profile 和本阶段 contract 执行。
 - 加载适用的团队规范、`engineering-assistant/profiles/rrq-yq-team.yaml`、`engineering-assistant/registry/team-rule-catalog.yaml` 和风险策略。
 - 若目标项目提供更具体的 profile，以目标项目 profile 为准，并记录与团队默认 profile 的冲突。
 - 确认目标范围和运行模式。

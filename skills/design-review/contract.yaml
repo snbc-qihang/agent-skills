@@ -388,7 +388,32 @@
     "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
-    "block_when_agent_violates_contract": true
+    "block_when_agent_violates_contract": true,
+    "assistant_feedback_consumed": true,
+    "implementation_strategy_evaluation_required": true,
+    "document_spine_context_required": true,
+    "agent_execution_monitor_required_for_delegation": true,
+    "post_task_plan_alignment_required": true
+  },
+  "runtime_rule_markers": [
+    "DUPLICATE_CAPABILITY_RISK",
+    "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
+    "DOC_SPRAWL_RISK",
+    "PRODUCT_PLAN_DRIFT",
+    "SUBAGENT_UNVERIFIED_SUCCESS",
+    "SUBAGENT_EVIDENCE_MISSING"
+  ],
+  "quality_audit_policy": {
+    "required_dimensions": [
+      "correctness",
+      "security",
+      "performance",
+      "testability",
+      "observability",
+      "simplification",
+      "duplicate_capability",
+      "comment_quality"
+    ]
   },
   "required_information_policy": {
     "must_ask_when": [
