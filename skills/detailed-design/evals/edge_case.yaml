@@ -2,6 +2,7 @@
   "id": "detailed-design-edge_case",
   "name": "Detailed Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "低冲突状态更新选择乐观锁",
     "material": "状态更新低频，设计使用 version 乐观锁，并说明冲突后重读、提示和重试策略。",

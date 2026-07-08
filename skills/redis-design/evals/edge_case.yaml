@@ -2,6 +2,7 @@
   "id": "redis-design-edge_case",
   "name": "Redis Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "库存扣减不能使用 Spring Cache 注解",
     "material": "设计计划用 @Cacheable/@CacheEvict 包装库存扣减和幂等校验。",

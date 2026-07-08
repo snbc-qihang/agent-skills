@@ -2,9 +2,10 @@
   "id": "release-readiness-missing_required_input",
   "name": "Release Readiness missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Readiness missing required input 团队规则场景",
-    "material": "缺少必填输入 code-quality-report.json，但请求仍要求直接执行 Release Readiness 并给出通过结论。",
+    "material": "缺少必填输入 code-quality-report.json，但请求仍要求执行 Release Readiness；应按停止条件处理：质量门禁、回滚、监控或审批缺失时 blocked。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "R1",

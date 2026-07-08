@@ -18,7 +18,7 @@ metadata:
   owner: "架构师"
   stage: "high_level_design"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。；Do not use when 不深入代码实现细节；不跳过架构风险。"
+  trigger_description: "Use when 需求契约和仓库上下文已具备，需要确定架构边界、业务域、数据流、异常流和发布影响时；Do not use when do not深入代码实现细节。"
 routing:
   intent_tags:
     - "design"

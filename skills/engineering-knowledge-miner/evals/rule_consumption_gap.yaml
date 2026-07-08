@@ -2,6 +2,7 @@
   "id": "engineering-knowledge-miner-rule_consumption_gap",
   "name": "Engineering Knowledge Miner rule consumption gap",
   "case_type": "rule_consumption_gap",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Engineering Knowledge Miner rule consumption gap 团队规则场景",
     "material": "任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。",
@@ -32,7 +33,7 @@
       "skill_id": "engineering-knowledge-miner",
       "mode": "standalone",
       "inputs": {
-        "design reports": "provided: 任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。"
+        "feedback-inbox.json": "provided: 任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。"
       },
       "artifacts": {},
       "context": {

@@ -50,7 +50,7 @@ def make_contract_root(root: Path) -> None:
     control = root / "artifacts" / "_control"
     control.mkdir(parents=True)
     active_slice = {
-        "schema_version": "2.0.0",
+        "schema_version": "3.1.0",
         "slice_id": "aip",
         "parent_task_id": "aip",
         "title": "AIP",
@@ -66,7 +66,7 @@ def make_contract_root(root: Path) -> None:
     write_json(
         control / "current-task.json",
         {
-            "schema_version": "2.0.0",
+            "schema_version": "3.1.0",
             "task_id": "aip",
             "title": "AIP",
             "language": "zh-CN",
@@ -83,7 +83,7 @@ def make_contract_root(root: Path) -> None:
     write_json(
         control / "design-contract.json",
         {
-            "schema_version": "2.0.0",
+            "schema_version": "3.1.0",
             "task_id": "aip",
             "source_design": "docs/design.md",
             "source_checksum": "sha256:test",
@@ -98,7 +98,7 @@ def make_contract_root(root: Path) -> None:
     write_json(
         control / "implementation-contract.json",
         {
-            "schema_version": "2.0.0",
+            "schema_version": "3.1.0",
             "task_id": "aip",
             "allowed_modules": ["backend/"],
             "forbidden_modules": ["frontend/"],
@@ -115,7 +115,7 @@ def make_contract_root(root: Path) -> None:
     write_json(
         control / "quality-contract.json",
         {
-            "schema_version": "2.0.0",
+            "schema_version": "3.1.0",
             "task_id": "aip",
             "required_commands": [{"id": "noop", "command": "python3 -c 'print(1)'", "required": True}],
             "required_evidence": ["quality_commands"],

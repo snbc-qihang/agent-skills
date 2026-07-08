@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from control_runtime import validate_target_project_root
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "3.1.0"
 PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
 STANDARD_METADATA_FIELDS = {"document_number", "document_status", "retention_policy", "owner", "language", "canonical_path", "source_artifacts"}
 

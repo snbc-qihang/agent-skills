@@ -2,9 +2,10 @@
   "id": "frontend-design-happy_path",
   "name": "Frontend Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
-    "title": "Frontend Design happy path 团队规则场景",
-    "material": "输入材料覆盖 将需求和接口契约转化为可实现的前端设计，明确页面、组件、状态、交互、接口联调和验证策略。，并提供 页面和组件边界明确 的证据、产物路径和人工审批状态。",
+    "title": "前端设计消费已通过原型",
+    "material": "已有 prototype gate pass、桌面/移动截图、interaction-state-map 和接口契约，需要生成页面结构、组件边界、状态机和联调矩阵。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -13,10 +14,10 @@
       "FE2"
     ],
     "risk_focus": [
-      "页面和组件边界明确",
-      "FE1 页面结构、组件边界、状态管理、路由和交互流程明确",
-      "证据链",
-      "门禁决策"
+      "原型事实源",
+      "组件契约",
+      "状态覆盖",
+      "接口联调"
     ],
     "forbidden_behavior": [
       "无证据宣称通过",
@@ -32,7 +33,7 @@
       "skill_id": "frontend-design",
       "mode": "standalone",
       "inputs": {
-        "requirement-contract.json": "provided: 输入材料覆盖 将需求和接口契约转化为可实现的前端设计，明确页面、组件、状态、交互、接口联调和验证策略。，并提供 页面和组件边界明确 的证据、产物路径和人工审批状态。"
+        "requirement-contract.json": "provided: 已有 prototype gate pass、桌面/移动截图、interaction-state-map 和接口契约，需要生成页面结构、组件边界、状态机和联调矩阵。"
       },
       "artifacts": {},
       "context": {

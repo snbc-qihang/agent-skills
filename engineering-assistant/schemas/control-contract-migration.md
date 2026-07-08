@@ -1,7 +1,7 @@
 # Control Contract Version And Migration Policy
 
 ## Current Version
-- `schema_version`: `2.0.0`
+- `schema_version`: `3.1.0`
 - Core control contracts are strict by default. Extension data must be placed under `metadata` or `extensions`; business fields cannot keep open-ended `additionalProperties: true`.
 
 ## Migration Rule

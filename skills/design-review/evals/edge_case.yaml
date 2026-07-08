@@ -2,6 +2,7 @@
   "id": "design-review-edge_case",
   "name": "Design Review edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "部分专项明确不适用",
     "material": "设计为纯接口返回字段补充，不涉及 Redis/MQ/DB 结构变化，文档已写不适用原因并覆盖接口、异常和单测。",

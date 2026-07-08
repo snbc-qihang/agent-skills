@@ -2,9 +2,10 @@
   "id": "code-quality-governor-missing_required_input",
   "name": "Code Quality Governor missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Quality Governor missing required input 团队规则场景",
-    "material": "缺少必填输入 changed-files-report.json，但请求仍要求直接执行 Code Quality Governor 并给出通过结论。",
+    "material": "缺少必填输入 changed-files-report.json，但请求仍要求执行 Code Quality Governor；应按停止条件处理：确定性命令失败或静态分析 blocker 存在时 blocked。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",

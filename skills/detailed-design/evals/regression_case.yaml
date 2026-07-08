@@ -2,6 +2,7 @@
   "id": "detailed-design-regression_case",
   "name": "Detailed Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：异常只打印不抛",
     "material": "伪代码 catch Exception 后 log.error 并返回成功，错误消息硬编码为处理失败，没有 TraceId 和异常码。",

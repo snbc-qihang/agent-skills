@@ -2,6 +2,7 @@
 
 检查项：
 - 证据收集
+- feedback inbox 消费
 - finding 抽取
 - 问题归类
 - 模式识别

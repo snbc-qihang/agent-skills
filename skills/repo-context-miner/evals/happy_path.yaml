@@ -2,9 +2,10 @@
   "id": "repo-context-miner-happy_path",
   "name": "Repo Context Miner happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Repo Context Miner happy path 团队规则场景",
-    "material": "输入材料覆盖 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。，并提供 仓库路径可访问 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：需求需要基于现有仓库做设计或实现，必须先提取模块、接口、数据、中间件和影响范围时。；材料包含 优先使用 codegraph 或 rg 定位 controller/service/domain/mapper/repository、DTO、异常码和权限模式。，并提供 repo-context-report.md 引用具体文件、符号、接口或配置路径。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "repo-context-miner",
       "mode": "standalone",
       "inputs": {
-        "repository_path": "provided: 输入材料覆盖 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。，并提供 仓库路径可访问 的证据、产物路径和人工审批状态。"
+        "repository_path": "provided: 正向触发：需求需要基于现有仓库做设计或实现，必须先提取模块、接口、数据、中间件和影响范围时。；材料包含 优先使用 codegraph 或 rg 定位 controller/service/domain/mapper/repository、DTO、异常码和权限模式。，并提供 repo-context-report.md 引用具体文件、符号、接口或配置路径。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

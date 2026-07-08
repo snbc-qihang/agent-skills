@@ -62,6 +62,7 @@ class FrameworkFrontendCapabilitiesTest(unittest.TestCase):
     def test_backend_skills_require_framework_selection_review(self) -> None:
         contract = json.loads((ROOT / "skills" / "code-development" / "contract.yaml").read_text(encoding="utf-8"))
         skill_md = (ROOT / "skills" / "code-development" / "SKILL.md").read_text(encoding="utf-8")
+        stage_guidance = (ROOT / "skills" / "code-development" / "references" / "stage-guidance.md").read_text(encoding="utf-8")
 
         self.assertIn("technology_selection_policy", contract)
         policy = contract["technology_selection_policy"]
@@ -72,12 +73,12 @@ class FrameworkFrontendCapabilitiesTest(unittest.TestCase):
         self.assertEqual("mybatis-plus", policy["team_defaults"]["java_spring_persistence"])
         self.assertIn("JDBC", policy["requires_review"])
 
-        self.assertIn("技术/框架选型", skill_md)
-        self.assertIn("前端技术栈", skill_md)
-        self.assertIn("测试框架", skill_md)
-        self.assertIn("mybatis-plus", skill_md)
-        self.assertIn("JDBC", skill_md)
-        self.assertIn("主动询问", skill_md)
+        self.assertIn("# References / Scripts", skill_md)
+        self.assertIn("references/stage-guidance.md", skill_md)
+        self.assertIn("FW1", stage_guidance)
+        self.assertIn("mybatis-plus", json.dumps(policy, ensure_ascii=False))
+        self.assertIn("JDBC", json.dumps(policy, ensure_ascii=False))
+        self.assertTrue(policy["ask_user_when_unspecified"])
 
     def test_frontend_skills_and_workflows_exist(self) -> None:
         plugin_root = publish_to_temp(self)

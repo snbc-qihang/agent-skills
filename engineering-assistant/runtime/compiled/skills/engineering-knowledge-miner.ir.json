@@ -1,13 +1,13 @@
 {
   "skill_id": "engineering-knowledge-miner",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "prompt_pack": {
     "display_name": "Engineering Knowledge Miner",
-    "short_description": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
+    "short_description": "从研发流程产物和已采集反馈事件中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
     "default_prompt": "使用 engineering-knowledge-miner，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。",
+    "trigger_description": "Use when 需要从反馈事件、评审、CI、PR、发布或事故中抽取可复用工程知识和规范候选时；Do not use when do not无证据创建规范。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -17,6 +17,7 @@
     }
   },
   "inputs": [
+    "feedback-inbox.json",
     "design reports",
     "code quality reports",
     "review reports",
@@ -44,7 +45,7 @@
       "knowledge_mining",
       "miner",
       "skill",
-      "从研发流程产物中抽取可复用经验",
+      "从研发流程产物和已采集反馈事件中抽取可复用经验",
       "反哺建议。",
       "回归样例候选和",
       "检查清单候选"
@@ -52,7 +53,7 @@
     "positive_triggers": [
       "engineering-knowledge-miner",
       "Engineering Knowledge Miner",
-      "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
+      "从研发流程产物和已采集反馈事件中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
     ],
     "negative_triggers": [
       "只解释 Engineering Knowledge Miner 的用途，不执行任务",
@@ -60,6 +61,7 @@
       "不生成产物"
     ],
     "requires": [
+      "feedback-inbox.json",
       "design reports",
       "code quality reports",
       "review reports",
@@ -73,6 +75,7 @@
     "cost_class": "high",
     "evidence_required": [
       "每条经验有来源证据",
+      "feedback event 已被消费或拒绝",
       "规则默认 candidate",
       "owner 和适用范围明确",
       "反哺路径明确"
@@ -114,6 +117,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },
@@ -333,6 +341,7 @@
   },
   "quality_gates": [
     "每条经验有来源证据",
+    "feedback event 已被消费或拒绝",
     "规则默认 candidate",
     "owner 和适用范围明确",
     "反哺路径明确"

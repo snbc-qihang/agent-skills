@@ -4,10 +4,10 @@
   "simulated_task_scope": "complete minimal backend API plus frontend settings page for an admin announcement toggle",
   "source_fixture": "fixtures/minimal-fullstack-product-task.json",
   "baseline": "baseline_free_codex",
-  "pass_rate": 0.62,
+  "pass_rate": 0.7,
   "token_or_time_cost": 1.0,
-  "doc_noise_score": 0.58,
-  "frontend_product_score": 0.56,
+  "doc_noise_score": 0.28,
+  "frontend_product_score": 0.78,
   "assertion_results": [
     {
       "assertion": "backend read/save API exists",

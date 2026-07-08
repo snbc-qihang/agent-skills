@@ -2,9 +2,10 @@
   "id": "release-readiness-happy_path",
   "name": "Release Readiness happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Readiness happy path 团队规则场景",
-    "material": "输入材料覆盖 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。，并提供 发布窗口明确 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：发布前需要检查发布窗口、影响范围、回滚、灰度、监控、值班和审批是否齐全时。；材料包含 读取 code-quality-report、code-review-report、release standard 和风险策略。，并提供 release-gate-decision.json 明确是否可发布。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "R1",
@@ -32,7 +33,7 @@
       "skill_id": "release-readiness",
       "mode": "standalone",
       "inputs": {
-        "code-quality-report.json": "provided: 输入材料覆盖 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。，并提供 发布窗口明确 的证据、产物路径和人工审批状态。"
+        "code-quality-report.json": "provided: 正向触发：发布前需要检查发布窗口、影响范围、回滚、灰度、监控、值班和审批是否齐全时。；材料包含 读取 code-quality-report、code-review-report、release standard 和风险策略。，并提供 release-gate-decision.json 明确是否可发布。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

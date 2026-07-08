@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "proposal_id",
+    "target_skill_id",
+    "source_candidate_id",
+    "change_summary",
+    "files_to_change",
+    "approval_status",
+    "auto_apply"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_skill_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "change_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "files_to_change": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "approval_status": {
+      "enum": [
+        "candidate",
+        "waiting_for_human_review",
+        "approved",
+        "rejected"
+      ]
+    },
+    "auto_apply": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

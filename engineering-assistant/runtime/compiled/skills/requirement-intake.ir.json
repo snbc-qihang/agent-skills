@@ -1,13 +1,13 @@
 {
   "skill_id": "requirement-intake",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "requirement_intake",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Requirement Intake",
     "short_description": "判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。",
     "default_prompt": "使用 requirement-intake，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。；Do not use when 不替代产品决策；不生成代码。",
+    "trigger_description": "Use when 需求还没有形成可进入设计的契约，需要判断目标、范围、验收标准、依赖和风险是否齐全时；Do not use when do not替产品负责人做业务取舍或批准高风险需求。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -101,6 +101,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

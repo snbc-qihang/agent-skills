@@ -2,6 +2,7 @@
   "id": "database-design-missing_required_input",
   "name": "Database Design missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "只有建表 SQL 没有用途说明",
     "material": "输入只有 CREATE TABLE，没有字段用途、索引用途、查询模式、容量预估、迁移和回滚方案。",

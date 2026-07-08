@@ -144,7 +144,7 @@ class PluginRuntimeRefactorTests(unittest.TestCase):
 
             expected = sorted(path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md"))
             self.assertEqual(expected, sorted(name for name, _, _ in registered))
-            self.assertEqual(21, len(registered))
+            self.assertEqual(len(expected), len(registered))
             self.assertTrue(all(path.exists() for _, path, _ in registered))
             self.assertTrue(all(description for _, _, description in registered))
 

@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-HIGH_RISK = {"workflow-orchestrator", "code-development", "code-quality-governor", "release-readiness", "release-verification", "engineering-knowledge-miner", "implementation-controller"}
+HIGH_RISK = {"workflow-orchestrator", "code-development", "code-quality-governor", "release-readiness", "release-verification", "engineering-knowledge-miner", "skill-evolution-review", "implementation-controller"}
 EXPLAIN_ONLY = ["只解释", "用途", "不执行", "不生成产物", "explain"]
 
 

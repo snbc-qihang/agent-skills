@@ -2,6 +2,7 @@
   "id": "high-level-design-ambiguous_input",
   "name": "High Level Design ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "跨系统协作描述含糊",
     "material": "需求写明客户端系统要读取业务经营数据，但未说明通过接口、事件还是共享库；未说明读取频率、权限、数据一致性要求。",

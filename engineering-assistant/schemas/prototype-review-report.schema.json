@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "review_rounds",
+    "minimum_review_rounds",
+    "open_blockers",
+    "gate_decision",
+    "frozen_inputs_for_design"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "3.1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_rounds": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object"
+      }
+    },
+    "minimum_review_rounds": {
+      "const": 3
+    },
+    "open_blockers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "gate_decision": {
+      "enum": [
+        "pass",
+        "block",
+        "waiting_for_human_review"
+      ]
+    },
+    "frozen_inputs_for_design": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -2,9 +2,10 @@
   "id": "frontend-development-regression_case",
   "name": "Frontend Development regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
-    "title": "Frontend Development regression case 团队规则场景",
-    "material": "历史问题再次出现：执行前必须读取 artifacts/_control/task-context.agent.md、implementation-contract.json、quality-contract.json 和任务规则包 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
+    "title": "回归：实现偏离已接受原型",
+    "material": "代码实现新增了原型没有的营销 hero、装饰卡片和文案，且没有 design-to-ui mapping 说明偏离原因。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -13,10 +14,9 @@
       "E7"
     ],
     "risk_focus": [
-      "每个 UI 变更映射到前端设计",
-      "执行前必须读取 artifacts/_control/task-context.agent.md、implementation-contract.json、quality-contract.json 和任务规则包",
-      "证据链",
-      "门禁决策"
+      "原型偏离",
+      "demo 感 UI",
+      "映射缺失"
     ],
     "forbidden_behavior": [
       "无证据宣称通过",
@@ -32,7 +32,7 @@
       "skill_id": "frontend-development",
       "mode": "standalone",
       "inputs": {
-        "frontend-design.md": "provided: 历史问题再次出现：执行前必须读取 artifacts/_control/task-context.agent.md、implementation-contract.json、quality-contract.json 和任务规则包 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。"
+        "frontend-design.md": "provided: 代码实现新增了原型没有的营销 hero、装饰卡片和文案，且没有 design-to-ui mapping 说明偏离原因。"
       },
       "artifacts": {},
       "context": {

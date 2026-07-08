@@ -1,0 +1,75 @@
+{
+  "node_id": "assistant-feedback-capture",
+  "stage": "feedback_capture",
+  "skill_id": "assistant-feedback-capture",
+  "version": "3.1.0",
+  "mode": "standalone|workflow",
+  "entry_modes": [
+    "auto_flow",
+    "from_node",
+    "single_node"
+  ],
+  "depends_on": [],
+  "inputs": [
+    "StageRunResult",
+    "assistant-run-feedback.json",
+    "workflow-trace.json",
+    "user correction summary",
+    "tool logs"
+  ],
+  "outputs": [
+    "feedback-event.json",
+    "feedback-inbox-entry.json",
+    "feedback-capture-report.md"
+  ],
+  "preconditions": [
+    "contract 输入可用",
+    "风险策略已加载"
+  ],
+  "postconditions": [
+    "StageRunResult 已输出",
+    "产物已登记索引"
+  ],
+  "quality_gates": [
+    "反馈事件有证据路径",
+    "用户纠正优先级已标记",
+    "目标项目与中心仓库落点明确",
+    "事件已标记 consumed_by_evolution_review=false"
+  ],
+  "approval_policy": {
+    "required_for": [
+      "采集敏感内容",
+      "提升为正式规范候选",
+      "修改正式 skill"
+    ],
+    "decision": [
+      "pending",
+      "approved",
+      "rejected"
+    ]
+  },
+  "retry_policy": {
+    "max_attempts": 1,
+    "retry_on": [
+      "TOOL_UNAVAILABLE",
+      "UNKNOWN_ERROR"
+    ]
+  },
+  "failure_policy": {
+    "block_on": [
+      "QUALITY_GATE_FAILED",
+      "RISK_POLICY_VIOLATION",
+      "STAGE_RESULT_CONTRACT_VIOLATION"
+    ],
+    "pause_on": [
+      "HUMAN_APPROVAL_REQUIRED",
+      "MISSING_REQUIRED_INPUT"
+    ]
+  },
+  "next_nodes": [],
+  "artifact_mapping": {
+    "feedback-event.json": "artifacts/assistant-feedback-capture/feedback-event.json",
+    "feedback-inbox-entry.json": "artifacts/assistant-feedback-capture/feedback-inbox-entry.json",
+    "feedback-capture-report.md": "artifacts/assistant-feedback-capture/feedback-capture-report.md"
+  }
+}

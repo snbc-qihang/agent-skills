@@ -2,6 +2,7 @@
   "id": "code-review-control_plane_drift",
   "name": "Code Review control plane drift",
   "case_type": "control_plane_drift",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Review control plane drift 团队规则场景",
     "material": "任务已进入研发后多轮执行，但 artifacts/_control 中 current-task、artifact-index、quality-contract、implementation-contract 或 task-context.agent.md 与 stage result 状态不一致。",

@@ -2,6 +2,7 @@
   "id": "high-level-design-missing_required_input",
   "name": "High Level Design missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "缺少需求契约仍尝试输出概要设计",
     "material": "只有一句话：做一个订单状态同步能力。没有业务目标、验收标准、涉及系统、数据范围、接口人或排期约束。",

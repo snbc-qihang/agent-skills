@@ -2,6 +2,7 @@
   "id": "database-design-edge_case",
   "name": "Database Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "删除主数据的关联校验",
     "material": "设计删除业务配置，采用逻辑删除，并检查是否存在未完结订单、未结算账单和启用中的客户端展示。",

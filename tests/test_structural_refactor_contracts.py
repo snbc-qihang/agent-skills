@@ -48,7 +48,9 @@ class StructuralRefactorContractTests(unittest.TestCase):
 
         for skill_md in (ROOT / "skills").glob("*/SKILL.md"):
             text = skill_md.read_text(encoding="utf-8")
-            self.assertIn("engineering-assistant/shared/governance-protocol.md", text, str(skill_md))
+            self.assertIn("# References / Scripts", text, str(skill_md))
+            self.assertLessEqual(len(text.splitlines()), 120, str(skill_md))
+            self.assertNotIn("engineering-assistant/shared/governance-protocol.md", text, str(skill_md))
             self.assertNotIn("# 工程治理主控", text, str(skill_md))
             self.assertNotIn("# 能力编排与降级", text, str(skill_md))
 

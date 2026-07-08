@@ -2,6 +2,7 @@
   "id": "code-development-context_noise_overload",
   "name": "Code Development context noise overload",
   "case_type": "context_noise_overload",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Development context noise overload 团队规则场景",
     "material": "上下文中混入大量无关历史、长规范和旧任务摘要；当前任务没有最小 task-context.agent.md，也没有说明适用规则包和停止条件。",

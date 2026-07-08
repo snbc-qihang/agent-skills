@@ -1,6 +1,6 @@
 {
   "skill_name": "engineering-assistant",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "language": "zh-CN",
   "evaluation_goal": "证明 engineering-assistant 插件是否比自由 Codex 或现有优秀 skills/tools 更能稳定交付高质量工程结果。",
   "baselines": [
@@ -57,6 +57,7 @@
       "quality_findings",
       "doc_noise_score",
       "frontend_product_score",
+      "skill_sop_metrics",
       "recommendation"
     ],
     "recommendation_values": [
@@ -182,6 +183,64 @@
         "visual_quality",
         "frontend_contract_mapping",
         "browser_verification"
+      ]
+    },
+    {
+      "id": "prototype-gate-three-round-review",
+      "category": "prototype_gate_quality",
+      "title": "Web/App 产品必须先过高保真原型和三轮 agent 评审",
+      "prompt": "模拟一个企业级 web/app 产品研发任务：需求方要求尽快实现，但当前没有高保真原型、桌面/移动截图、交互状态图或三轮 agent review verdict。检查 workflow 是否阻断进入 high-level-design、frontend-design 和 implementation，并在证据齐全时才允许继续。",
+      "input_files": [
+        "fixtures/prototype-gate-three-round-review.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "原型硬门禁评估报告，包含 product-prototype-contract、prototype-review-report、截图证据、三轮 review findings 和 gate decision。",
+      "assertions": [
+        "full-feature-development 和 frontend-only 在 frontend-design/implementation 前包含 product-prototype-design 与 prototype-review-loop",
+        "prototype-review-report.review_rounds 至少 3 轮",
+        "缺少 desktop/mobile screenshot 或 interaction-state-map 时 gate_decision 必须 block",
+        "非 web/app 任务跳过原型门禁时必须写 skip_reason",
+        "第三方设计/浏览器能力调用写入 third-party-capability-ledger"
+      ],
+      "grading_dimensions": [
+        "prototype_contract",
+        "visual_evidence",
+        "review_rounds",
+        "workflow_gate_order",
+        "third_party_capability_ledger"
+      ]
+    },
+    {
+      "id": "feedback-evolution-user-corrections",
+      "category": "feedback_evolution",
+      "title": "用户反复纠正驱动 skill 演进候选而非直接污染正式规范",
+      "prompt": "模拟一段时间内用户三次纠正同一 skill 的输出偏差，同时出现第三方工具失败和文档噪声。检查 assistant-feedback-capture 是否生成 feedback event，skill-evolution-review 是否聚类为 skill patch/eval 候选，并在未经人工审批时阻断正式 skill 修改。",
+      "input_files": [
+        "fixtures/feedback-evolution-user-corrections.json"
+      ],
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "expected_output": "反馈演进报告，包含 feedback inbox、accepted/rejected verdict、regression-case-candidates 和 skill-patch-proposals 的人工审批状态。",
+      "assertions": [
+        "每个 feedback event 包含 source_task_id、triggered_skill_id、symptom、evidence_paths、repeat_count 和 recommended_action",
+        "repeat_count >= 3 的用户纠正必须生成 regression_case_candidate",
+        "第三方工具失败必须同时进入 third-party-capability-ledger 和 feedback inbox",
+        "低价值反馈必须记录 rejected_noise 和 reject_reason",
+        "未经人工审批的 skill patch proposal 不得 auto_apply"
+      ],
+      "grading_dimensions": [
+        "feedback_capture",
+        "event_evidence",
+        "regression_candidate",
+        "approval_gate",
+        "noise_rejection"
       ]
     },
     {

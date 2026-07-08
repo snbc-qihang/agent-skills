@@ -2,6 +2,7 @@
   "id": "release-retrospective-low_quality_automation",
   "name": "Release Retrospective low quality automation",
   "case_type": "low_quality_automation",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Retrospective low quality automation 团队规则场景",
     "material": "自动化任务连续执行失败，但没有 bounded repair 次数上限、repair-attempts.json、失败步骤证据或人工暂停条件。",

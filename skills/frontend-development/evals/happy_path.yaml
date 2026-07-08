@@ -2,9 +2,10 @@
   "id": "frontend-development-happy_path",
   "name": "Frontend Development happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
-    "title": "Frontend Development happy path 团队规则场景",
-    "material": "输入材料覆盖 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。，并提供 每个 UI 变更映射到前端设计 的证据、产物路径和人工审批状态。",
+    "title": "前端实现按原型和设计事实源交付",
+    "material": "已有通过评审的原型、frontend-design、component-contracts 和 interface-contracts；实现一个权限策略页切片并采集桌面/移动截图、console 和交互证据。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -13,10 +14,10 @@
       "E7"
     ],
     "risk_focus": [
-      "每个 UI 变更映射到前端设计",
-      "执行前必须读取 artifacts/_control/task-context.agent.md、implementation-contract.json、quality-contract.json 和任务规则包",
-      "证据链",
-      "门禁决策"
+      "design-to-ui mapping",
+      "浏览器证据",
+      "核心交互",
+      "截图对齐"
     ],
     "forbidden_behavior": [
       "无证据宣称通过",
@@ -32,7 +33,7 @@
       "skill_id": "frontend-development",
       "mode": "standalone",
       "inputs": {
-        "frontend-design.md": "provided: 输入材料覆盖 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。，并提供 每个 UI 变更映射到前端设计 的证据、产物路径和人工审批状态。"
+        "frontend-design.md": "provided: 已有通过评审的原型、frontend-design、component-contracts 和 interface-contracts；实现一个权限策略页切片并采集桌面/移动截图、console 和交互证据。"
       },
       "artifacts": {},
       "context": {

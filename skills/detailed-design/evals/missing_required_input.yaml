@@ -2,6 +2,7 @@
   "id": "detailed-design-missing_required_input",
   "name": "Detailed Design missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "只有概要设计缺少接口和业务规则",
     "material": "输入只包含概要设计结论，没有接口路径、请求响应、业务规则、状态机、异常码、幂等点和事务边界。",

@@ -2,9 +2,10 @@
   "id": "implementation-controller-edge_case",
   "name": "Implementation Controller edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Implementation Controller edge case 团队规则场景",
-    "material": "输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。",
+    "material": "Implementation Controller 遇到边界任务：部分检查不适用，但材料提供了 skip reason、证据路径和不扩大范围说明。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "implementation-controller",
       "mode": "standalone",
       "inputs": {
-        "approved design artifact": "provided: 输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。"
+        "approved design artifact": "provided: Implementation Controller 遇到边界任务：部分检查不适用，但材料提供了 skip reason、证据路径和不扩大范围说明。"
       },
       "artifacts": {},
       "context": {

@@ -1,0 +1,37 @@
+display_name: "Assistant Feedback Capture"
+short_description: "把每次 workflow、review、测试、用户纠正和失败重试中的有价值问题转化为可消费 feedback event 和中心反馈 inbox 候选。"
+default_prompt: "使用 assistant-feedback-capture，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+language_policy:
+  supported:
+    - "zh-CN"
+    - "en"
+  when_unspecified: "ask_user"
+  question: "请确认输出语言：简体中文还是 English？"
+policy:
+  allow_implicit_invocation: true
+  risk_level: "medium"
+  human_approval_required:
+    - "采集敏感内容"
+    - "提升为正式规范候选"
+    - "修改正式 skill"
+metadata:
+  owner: "workflow owner"
+  stage: "feedback_capture"
+  type: "cross_cutting_skill"
+  trigger_description: "Use when workflow、review、测试、用户纠正、失败重试或第三方工具调用暴露有价值问题时；Do not use when do not直接修改正式 skill、workflow、schema 或发布版本。"
+routing:
+  intent_tags:
+    - "assistant"
+    - "assistant-feedback-capture"
+    - "capture"
+    - "cross_cutting_skill"
+    - "event"
+    - "feedback"
+    - "feedback_capture"
+    - "inbox"
+    - "review"
+    - "workflow"
+    - "候选。"
+    - "和中心反馈"
+  allow_implicit_invocation: true
+  cost_class: "medium"

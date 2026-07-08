@@ -2,9 +2,10 @@
   "id": "frontend-design-policy_conflict",
   "name": "Frontend Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
-    "title": "Frontend Design policy conflict 团队规则场景",
-    "material": "输入材料与 FE1 页面结构、组件边界、状态管理、路由和交互流程明确 冲突，并要求 skill 将风险降级为普通建议后继续流转；材料中没有证据、没有审批，也没有说明对核心链路、数据一致性和发布风险的影响。",
+    "title": "前端设计绕过原型门禁",
+    "material": "要求只根据接口契约和组件库直接出 frontend-design，没有 prototype-review-report 或截图证据。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -13,10 +14,9 @@
       "FE2"
     ],
     "risk_focus": [
-      "页面和组件边界明确",
-      "FE1 页面结构、组件边界、状态管理、路由和交互流程明确",
-      "证据链",
-      "门禁决策"
+      "绕过原型",
+      "视觉事实源缺失",
+      "状态不完整"
     ],
     "forbidden_behavior": [
       "无证据宣称通过",
@@ -32,7 +32,7 @@
       "skill_id": "frontend-design",
       "mode": "standalone",
       "inputs": {
-        "requirement-contract.json": "provided: 输入材料与 FE1 页面结构、组件边界、状态管理、路由和交互流程明确 冲突，并要求 skill 将风险降级为普通建议后继续流转；材料中没有证据、没有审批，也没有说明对核心链路、数据一致性和发布风险的影响。"
+        "requirement-contract.json": "provided: 要求只根据接口契约和组件库直接出 frontend-design，没有 prototype-review-report 或截图证据。"
       },
       "artifacts": {},
       "context": {

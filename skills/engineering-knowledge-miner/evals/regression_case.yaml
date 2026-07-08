@@ -2,9 +2,10 @@
   "id": "engineering-knowledge-miner-regression_case",
   "name": "Engineering Knowledge Miner regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Engineering Knowledge Miner regression case 团队规则场景",
-    "material": "历史问题再次出现：证据收集 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
+    "material": "历史问题再次出现：Engineering Knowledge Miner 未遵守 证据收集，缺少证据却被标记为通过，需要生成 finding、required action 和回归保护。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "engineering-knowledge-miner",
       "mode": "standalone",
       "inputs": {
-        "design reports": "provided: 历史问题再次出现：证据收集 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。"
+        "feedback-inbox.json": "provided: 历史问题再次出现：Engineering Knowledge Miner 未遵守 证据收集，缺少证据却被标记为通过，需要生成 finding、required action 和回归保护。"
       },
       "artifacts": {},
       "context": {

@@ -2,9 +2,10 @@
   "id": "engineering-knowledge-miner-happy_path",
   "name": "Engineering Knowledge Miner happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Engineering Knowledge Miner happy path 团队规则场景",
-    "material": "输入材料覆盖 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。，并提供 每条经验有来源证据 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：需要从反馈事件、评审、CI、PR、发布或事故中抽取可复用工程知识和规范候选时。；材料包含 读取 feedback inbox、设计/质量/评审/发布报告、CI logs、PR comments 和 incident reports。，并提供 engineering-lessons.md 每条经验有来源证据。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "engineering-knowledge-miner",
       "mode": "standalone",
       "inputs": {
-        "design reports": "provided: 输入材料覆盖 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。，并提供 每条经验有来源证据 的证据、产物路径和人工审批状态。"
+        "feedback-inbox.json": "provided: 正向触发：需要从反馈事件、评审、CI、PR、发布或事故中抽取可复用工程知识和规范候选时。；材料包含 读取 feedback inbox、设计/质量/评审/发布报告、CI logs、PR comments 和 incident reports。，并提供 engineering-lessons.md 每条经验有来源证据。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

@@ -1,13 +1,13 @@
 {
   "skill_id": "redis-design",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "redis_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Redis Design",
     "short_description": "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。",
     "default_prompt": "使用 redis-design，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。",
+    "trigger_description": "Use when 设计涉及 Redis 缓存、分布式锁、限流、会话、排行榜或临时状态，需要明确 key/value/TTL/一致性时；Do not use when do not替代数据库主数据设计。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -105,6 +105,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

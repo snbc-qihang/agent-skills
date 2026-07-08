@@ -2,6 +2,7 @@
   "id": "high-level-design-technology_demo_adoption",
   "name": "High Level Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "High Level Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 A1 设计文档必须体现系统边界、业务域、事件协作和最终一致性；不强制平台采用微服务、事件驱动或 DDD 作为技术路线，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

@@ -2,9 +2,10 @@
   "id": "skill-quality-auditor-ambiguous_input",
   "name": "Skill Quality Auditor ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Skill Quality Auditor ambiguous input 团队规则场景",
-    "material": "输入材料对 front matter 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",
+    "material": "Skill Quality Auditor 的关键判断含糊：front matter 没有 owner、截止时间、证据路径或审批记录。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "skill-quality-auditor",
       "mode": "standalone",
       "inputs": {
-        "skills": "provided: 输入材料对 front matter 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。"
+        "skills": "provided: Skill Quality Auditor 的关键判断含糊：front matter 没有 owner、截止时间、证据路径或审批记录。"
       },
       "artifacts": {},
       "context": {

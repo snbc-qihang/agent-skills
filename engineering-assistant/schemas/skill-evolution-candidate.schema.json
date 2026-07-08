@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "candidate_id",
+    "target_skill_id",
+    "source_event_ids",
+    "problem_pattern",
+    "verdict",
+    "human_approval_required",
+    "recommended_outputs"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_skill_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_event_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "problem_pattern": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict": {
+      "enum": [
+        "accepted_candidate",
+        "rejected_noise",
+        "needs_more_evidence",
+        "merged_with_existing",
+        "waiting_for_human_review"
+      ]
+    },
+    "reject_reason": {
+      "type": "string"
+    },
+    "human_approval_required": {
+      "const": true
+    },
+    "recommended_outputs": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "skill_patch",
+          "regression_eval",
+          "workflow_gate",
+          "schema_change",
+          "reference_update",
+          "reject_log"
+        ]
+      }
+    }
+  },
+  "additionalProperties": true
+}

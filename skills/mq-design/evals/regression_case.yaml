@@ -2,6 +2,7 @@
   "id": "mq-design-regression_case",
   "name": "MQ Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：重复消费无幂等",
     "material": "消费者更新结算状态，未使用 messageId 或业务唯一键记录消费结果，重试会重复入账。",

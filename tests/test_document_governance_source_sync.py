@@ -192,11 +192,11 @@ class DocumentGovernanceSourceSyncTest(unittest.TestCase):
         self.assertIn("language", output_schema["required"])
 
         skill_md = skill_md_path.read_text(encoding="utf-8")
-        self.assertIn("语言策略", skill_md)
-        self.assertIn("未指定输出语言时", skill_md)
-        self.assertIn("主动询问", skill_md)
+        self.assertIn("# Stop / Escalate", skill_md)
         self.assertIn("waiting_for_input", skill_md)
-        self.assertIn("执行门禁", skill_md)
+        self.assertIn("contract.yaml", skill_md)
+        self.assertNotIn("语言策略", skill_md)
+        self.assertNotIn("主动询问策略", skill_md)
 
         agent_meta = agent_meta_path.read_text(encoding="utf-8")
         self.assertIn("language_policy:", agent_meta)

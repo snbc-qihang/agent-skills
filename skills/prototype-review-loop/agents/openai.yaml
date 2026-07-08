@@ -1,0 +1,36 @@
+display_name: "Prototype Review Loop"
+short_description: "对产品原型执行至少三轮 agent 评审，形成可阻断后续设计和实现的 prototype review verdict。"
+default_prompt: "使用 prototype-review-loop，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+language_policy:
+  supported:
+    - "zh-CN"
+    - "en"
+  when_unspecified: "ask_user"
+  question: "请确认输出语言：简体中文还是 English？"
+policy:
+  allow_implicit_invocation: true
+  risk_level: "medium"
+  human_approval_required:
+    - "少于三轮评审放行"
+    - "保留未关闭 blocker"
+    - "原型和实现不一致豁免"
+metadata:
+  owner: "产品/设计评审负责人"
+  stage: "prototype_review"
+  type: "stage_skill"
+  trigger_description: "Use when 已有高保真原型，需要至少三轮 agent review 后决定是否进入工程设计或实现时；Do not use when do not替代人工最终审批。"
+routing:
+  intent_tags:
+    - "agent"
+    - "loop"
+    - "prototype"
+    - "prototype-review-loop"
+    - "prototype_review"
+    - "review"
+    - "stage_skill"
+    - "verdict。"
+    - "对产品原型执行至少三轮"
+    - "形成可阻断后续设计和实现的"
+    - "评审"
+  allow_implicit_invocation: true
+  cost_class: "medium"

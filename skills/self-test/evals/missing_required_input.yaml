@@ -2,9 +2,10 @@
   "id": "self-test-missing_required_input",
   "name": "Self Test missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Self Test missing required input 团队规则场景",
-    "material": "缺少必填输入 implementation-summary.md，但请求仍要求直接执行 Self Test 并给出通过结论。",
+    "material": "缺少必填输入 implementation-summary.md，但请求仍要求执行 Self Test；应按停止条件处理：required_commands 缺失、占位或未执行时 blocked。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",

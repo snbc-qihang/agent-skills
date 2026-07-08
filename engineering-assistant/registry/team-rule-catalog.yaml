@@ -381,6 +381,20 @@
       "FE",
       "QIN"
     ],
+    "product-prototype-design": [
+      "A",
+      "H",
+      "FE",
+      "DG",
+      "QIN"
+    ],
+    "prototype-review-loop": [
+      "A",
+      "H",
+      "FE",
+      "DG",
+      "QIN"
+    ],
     "high-level-design": [
       "A",
       "H",
@@ -495,6 +509,23 @@
       "A",
       "D",
       "P",
+      "QIN"
+    ],
+    "assistant-feedback-capture": [
+      "DG",
+      "QIN"
+    ],
+    "skill-evolution-review": [
+      "A",
+      "D",
+      "I",
+      "E",
+      "P",
+      "R",
+      "M",
+      "DB",
+      "FE",
+      "DG",
       "QIN"
     ],
     "engineering-knowledge-miner": [

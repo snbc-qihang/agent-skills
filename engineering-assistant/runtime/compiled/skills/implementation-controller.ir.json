@@ -1,13 +1,13 @@
 {
   "skill_id": "implementation-controller",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "implementation_control",
   "type": "control_skill",
   "prompt_pack": {
     "display_name": "Implementation Controller",
     "short_description": "把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。",
     "default_prompt": "使用 implementation-controller，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。；Do not use when 不审批设计进入研发；不直接替代 code-development 编写业务代码。",
+    "trigger_description": "Use when 已审批设计需要编译成实现合同、质量合同和控制面产物，才能让代码实现安全推进时；Do not use when do not审批设计进入研发。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -113,6 +113,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

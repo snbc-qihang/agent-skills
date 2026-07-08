@@ -1,16 +1,16 @@
 {
   "skill_id": "engineering-knowledge-miner",
   "skill_name": "Engineering Knowledge Miner",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
-  "purpose": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
+  "purpose": "从研发流程产物和已采集反馈事件中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
   "non_goals": [
     "不无证据创建规范",
     "不未经审批修改正式规范",
     "不把偶发低风险问题升级为强制规范"
   ],
-  "trigger_description": "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。",
+  "trigger_description": "Use when 需要从反馈事件、评审、CI、PR、发布或事故中抽取可复用工程知识和规范候选时；Do not use when do not无证据创建规范。",
   "routing": {
     "intent_tags": [
       "cross_cutting_skill",
@@ -21,7 +21,7 @@
       "knowledge_mining",
       "miner",
       "skill",
-      "从研发流程产物中抽取可复用经验",
+      "从研发流程产物和已采集反馈事件中抽取可复用经验",
       "反哺建议。",
       "回归样例候选和",
       "检查清单候选"
@@ -29,7 +29,7 @@
     "positive_triggers": [
       "engineering-knowledge-miner",
       "Engineering Knowledge Miner",
-      "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
+      "从研发流程产物和已采集反馈事件中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
     ],
     "negative_triggers": [
       "只解释 Engineering Knowledge Miner 的用途，不执行任务",
@@ -37,6 +37,7 @@
       "不生成产物"
     ],
     "requires": [
+      "feedback-inbox.json",
       "design reports",
       "code quality reports",
       "review reports",
@@ -50,6 +51,7 @@
     "cost_class": "high",
     "evidence_required": [
       "每条经验有来源证据",
+      "feedback event 已被消费或拒绝",
       "规则默认 candidate",
       "owner 和适用范围明确",
       "反哺路径明确"
@@ -133,6 +135,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },
@@ -229,6 +236,7 @@
       "specialty_scope_confirmed_before_specialty_docs": true,
       "self_review_passed_before_human_review": true,
       "human_review_approved_before_final": true,
+      "prototype_three_round_review_before_frontend_design": true,
       "approved_or_final_before_code_control_surface": true
     },
     "waiting_for_input_policy": {
@@ -305,12 +313,16 @@
       "candidate_outputs": [
         "rule-candidates.json",
         "prompt-optimization-candidates.md",
-        "tl-review-package.json"
+        "tl-review-package.json",
+        "skill-evolution-candidates.json",
+        "regression-case-candidates.yaml"
       ],
       "candidate_types": [
         "team-rule-candidate",
         "document-template-candidate",
-        "agent-behavior-candidate"
+        "agent-behavior-candidate",
+        "skill-patch-candidate",
+        "regression-eval-candidate"
       ],
       "required_fields": [
         "candidate_id",
@@ -327,6 +339,8 @@
         "suggested_landing_zone",
         "tl_review_status"
       ],
+      "feedback_inbox_required": true,
+      "feedback_event_verdict_required": true,
       "auto_apply_to_plugin": false,
       "tl_review_required": true
     }
@@ -627,6 +641,89 @@
       "PLAN_SPINE_NOT_UPDATED"
     ]
   },
+  "prototype_review_policy": {
+    "required_for_task_types": [
+      "web_product",
+      "app_product",
+      "frontend_product"
+    ],
+    "prototype_stage": "product-prototype-design",
+    "review_stage": "prototype-review-loop",
+    "minimum_review_rounds": 3,
+    "hard_gate_before": [
+      "high-level-design",
+      "detailed-design",
+      "frontend-design",
+      "implementation-controller",
+      "code-development",
+      "frontend-development"
+    ],
+    "required_artifacts": [
+      "product-prototype-contract.json",
+      "prototype-source.md",
+      "desktop-prototype-screenshot.png",
+      "mobile-prototype-screenshot.png",
+      "interaction-state-map.json",
+      "prototype-review-report.json"
+    ],
+    "required_evidence": [
+      "high_fidelity_visual_reference",
+      "desktop_and_mobile_screenshots",
+      "primary_user_flows",
+      "loading_empty_error_permission_states",
+      "accessibility_and_layout_review",
+      "three_agent_review_rounds"
+    ],
+    "delegation_preferences": [
+      "build-web-apps",
+      "browser",
+      "chrome",
+      "figma"
+    ],
+    "missing_behavior": "block_design_and_implementation"
+  },
+  "feedback_evolution_policy": {
+    "target_project_feedback_root": "artifacts/_control/feedback/",
+    "central_feedback_root": "feedback-inbox/",
+    "capture_stage": "assistant-feedback-capture",
+    "evolution_stage": "skill-evolution-review",
+    "auto_apply_to_formal_skills": false,
+    "human_approval_required_before_skill_change": true,
+    "minimum_repeat_count_for_regression_candidate": 3,
+    "event_sources": [
+      "skill_execution_failure",
+      "user_correction",
+      "review_miss",
+      "test_failure",
+      "third_party_tool_failure",
+      "context_drift",
+      "document_noise",
+      "prototype_gate_failure",
+      "acceptance_failure"
+    ],
+    "required_event_fields": [
+      "event_id",
+      "source_task_id",
+      "source_run_id",
+      "triggered_skill_id",
+      "event_type",
+      "severity",
+      "symptom",
+      "user_correction_summary",
+      "evidence_paths",
+      "repeat_count",
+      "recommended_action",
+      "regression_case_candidate",
+      "consumed_by_evolution_review"
+    ],
+    "verdicts": [
+      "accepted_candidate",
+      "rejected_noise",
+      "needs_more_evidence",
+      "merged_with_existing",
+      "waiting_for_human_review"
+    ]
+  },
   "language_policy": {
     "supported": [
       "zh-CN",
@@ -672,9 +769,17 @@
   },
   "inputs": [
     {
-      "name": "design reports",
+      "name": "feedback-inbox.json",
       "type": "artifact|string|object",
       "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "design reports",
+      "type": "artifact|string|object",
+      "required": false,
       "source": "user|workflow|repo|ci",
       "validation": "必填输入必须存在，选填输入必须可追溯来源",
       "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
@@ -803,6 +908,9 @@
     "document_spine_context_required": true,
     "agent_execution_monitor_required_for_delegation": true,
     "post_task_plan_alignment_required": true,
+    "prototype_review_gate_required_for_frontend_products": true,
+    "feedback_event_capture_required": true,
+    "feedback_evolution_requires_human_approval": true,
     "implementation_strategy_evaluation_required": false,
     "block_when_agent_violates_contract": true
   },
@@ -912,20 +1020,27 @@
     },
     {
       "gate_id": "engineering-knowledge-miner-gate-2",
+      "name": "feedback event 已被消费或拒绝",
+      "type": "deterministic",
+      "pass_condition": "feedback event 已被消费或拒绝 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "engineering-knowledge-miner-gate-3",
       "name": "规则默认 candidate",
       "type": "deterministic",
       "pass_condition": "规则默认 candidate 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "engineering-knowledge-miner-gate-3",
+      "gate_id": "engineering-knowledge-miner-gate-4",
       "name": "owner 和适用范围明确",
       "type": "deterministic",
       "pass_condition": "owner 和适用范围明确 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "engineering-knowledge-miner-gate-4",
+      "gate_id": "engineering-knowledge-miner-gate-5",
       "name": "反哺路径明确",
       "type": "deterministic",
       "pass_condition": "反哺路径明确 有证据证明已满足",
@@ -980,11 +1095,18 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "engineering-knowledge-miner",
     "input_artifacts": [
+      "feedback-inbox.json",
       "design reports",
       "code quality reports",
       "review reports",

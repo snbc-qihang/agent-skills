@@ -2,9 +2,10 @@
   "id": "engineering-knowledge-miner-missing_required_input",
   "name": "Engineering Knowledge Miner missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Engineering Knowledge Miner missing required input 团队规则场景",
-    "material": "缺少必填输入 design reports，但请求仍要求直接执行 Engineering Knowledge Miner 并给出通过结论。",
+    "material": "缺少必填输入 feedback-inbox.json，但请求仍要求执行 Engineering Knowledge Miner；应按停止条件处理：feedback event 未消费或缺少 accept/reject verdict 时 blocked。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "engineering-knowledge-miner",
       "mode": "standalone",
       "inputs": {
-        "design reports": ""
+        "feedback-inbox.json": ""
       },
       "artifacts": {},
       "context": {

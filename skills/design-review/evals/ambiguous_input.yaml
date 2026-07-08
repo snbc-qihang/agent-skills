@@ -2,6 +2,7 @@
   "id": "design-review-ambiguous_input",
   "name": "Design Review ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "设计中多处写待确认",
     "material": "接口权限、Redis TTL、MQ 死信、DDL 回滚均写待确认，但设计评审结论要求进入研发。",

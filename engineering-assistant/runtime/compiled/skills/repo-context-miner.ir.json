@@ -1,13 +1,13 @@
 {
   "skill_id": "repo-context-miner",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "repo_context",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Repo Context Miner",
     "short_description": "从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。",
     "default_prompt": "使用 repo-context-miner，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。；Do not use when 不直接修改代码；不替代业务设计。",
+    "trigger_description": "Use when 需求需要基于现有仓库做设计或实现，必须先提取模块、接口、数据、中间件和影响范围时；Do not use when do not直接修改代码。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -103,6 +103,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

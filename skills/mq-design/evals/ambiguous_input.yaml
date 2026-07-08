@@ -2,6 +2,7 @@
   "id": "mq-design-ambiguous_input",
   "name": "MQ Design ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "顺序消息扩展性未评审",
     "material": "设计要求订单状态消息严格顺序消费，计划单节点消费，但未说明吞吐影响、扩容策略和失败积压处理。",

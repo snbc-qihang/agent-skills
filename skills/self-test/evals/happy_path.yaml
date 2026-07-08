@@ -2,9 +2,10 @@
   "id": "self-test-happy_path",
   "name": "Self Test happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Self Test happy path 团队规则场景",
-    "material": "输入材料覆盖 生成并执行自测方案，输出失败原因、影响范围和阻断判断。，并提供 测试命令实际执行 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时。；材料包含 读取 implementation-summary、changed-files、test-strategy、repo context 和 quality-contract。，并提供 test-commands.log 包含实际执行命令和结果。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",
@@ -32,7 +33,7 @@
       "skill_id": "self-test",
       "mode": "standalone",
       "inputs": {
-        "implementation-summary.md": "provided: 输入材料覆盖 生成并执行自测方案，输出失败原因、影响范围和阻断判断。，并提供 测试命令实际执行 的证据、产物路径和人工审批状态。"
+        "implementation-summary.md": "provided: 正向触发：代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时。；材料包含 读取 implementation-summary、changed-files、test-strategy、repo context 和 quality-contract。，并提供 test-commands.log 包含实际执行命令和结果。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

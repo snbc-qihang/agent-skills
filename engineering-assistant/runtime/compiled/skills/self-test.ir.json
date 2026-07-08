@@ -1,13 +1,13 @@
 {
   "skill_id": "self-test",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "self_test",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Self Test",
     "short_description": "生成并执行自测方案，输出失败原因、影响范围和阻断判断。",
     "default_prompt": "使用 self-test，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。",
+    "trigger_description": "Use when 代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时；Do not use when do not伪造测试结果。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -102,6 +102,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

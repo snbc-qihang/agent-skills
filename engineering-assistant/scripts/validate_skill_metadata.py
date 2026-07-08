@@ -16,7 +16,7 @@ for skill_md in sorted(Path("skills").glob("*/SKILL.md")):
     for required in ["display_name:", "short_description:", "default_prompt:", "language_policy:", "when_unspecified: \"ask_user\"", "policy:", "allow_implicit_invocation:", "risk_level:", "metadata:"]:
         if required not in meta_text:
             errors.append(f"{meta}: 缺少 {required}")
-    if skill_dir.name in {"workflow-orchestrator", "code-development", "code-quality-governor", "release-readiness", "release-verification", "engineering-knowledge-miner"} and "allow_implicit_invocation: false" not in meta_text:
+    if skill_dir.name in {"workflow-orchestrator", "code-development", "code-quality-governor", "release-readiness", "release-verification", "engineering-knowledge-miner", "skill-evolution-review", "implementation-controller"} and "allow_implicit_invocation: false" not in meta_text:
         errors.append(f"{meta}: 高风险 skill 必须 explicit-only")
 if errors:
     raise SystemExit("\n".join(errors))

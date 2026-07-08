@@ -2,7 +2,7 @@
   "node_id": "engineering-knowledge-miner",
   "stage": "knowledge_mining",
   "skill_id": "engineering-knowledge-miner",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -11,6 +11,7 @@
   ],
   "depends_on": [],
   "inputs": [
+    "feedback-inbox.json",
     "design reports",
     "code quality reports",
     "review reports",
@@ -38,6 +39,7 @@
   ],
   "quality_gates": [
     "每条经验有来源证据",
+    "feedback event 已被消费或拒绝",
     "规则默认 candidate",
     "owner 和适用范围明确",
     "反哺路径明确"

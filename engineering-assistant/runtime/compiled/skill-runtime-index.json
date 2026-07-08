@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "3.1.0",
   "skills": [
     {
       "skill_id": "requirement-intake",
@@ -10,6 +10,18 @@
     {
       "skill_id": "repo-context-miner",
       "path": "engineering-assistant/runtime/compiled/skills/repo-context-miner.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "product-prototype-design",
+      "path": "engineering-assistant/runtime/compiled/skills/product-prototype-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "prototype-review-loop",
+      "path": "engineering-assistant/runtime/compiled/skills/prototype-review-loop.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
@@ -108,6 +120,18 @@
       "path": "engineering-assistant/runtime/compiled/skills/release-retrospective.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "assistant-feedback-capture",
+      "path": "engineering-assistant/runtime/compiled/skills/assistant-feedback-capture.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "skill-evolution-review",
+      "path": "engineering-assistant/runtime/compiled/skills/skill-evolution-review.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
     },
     {
       "skill_id": "engineering-knowledge-miner",

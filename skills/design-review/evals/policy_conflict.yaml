@@ -2,6 +2,7 @@
   "id": "design-review-policy_conflict",
   "name": "Design Review policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "多项团队规范冲突仍申请通过",
     "material": "设计直接查其他系统库、Redis 作为事实源、MQ 无死信、接口通用 CRUD、异常只打印不抛。",

@@ -1,13 +1,13 @@
 {
   "skill_id": "mq-design",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "mq_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "MQ Design",
     "short_description": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
     "default_prompt": "使用 mq-design，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
+    "trigger_description": "Use when 设计涉及异步消息、事件通知、任务流转、重试、死信、回放或跨系统最终一致性时；Do not use when do not未经审批删除或重命名 topic。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -105,6 +105,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

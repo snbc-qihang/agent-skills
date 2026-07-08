@@ -2,9 +2,10 @@
   "id": "release-verification-regression_case",
   "name": "Release Verification regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Verification regression case 团队规则场景",
-    "material": "历史问题再次出现：核心功能验证 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
+    "material": "历史问题再次出现：Release Verification 未遵守 核心功能验证，缺少证据却被标记为通过，需要生成 finding、required action 和回归保护。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "E5",
@@ -32,7 +33,7 @@
       "skill_id": "release-verification",
       "mode": "standalone",
       "inputs": {
-        "release-plan.md": "provided: 历史问题再次出现：核心功能验证 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。"
+        "release-plan.md": "provided: 历史问题再次出现：Release Verification 未遵守 核心功能验证，缺少证据却被标记为通过，需要生成 finding、required action 和回归保护。"
       },
       "artifacts": {},
       "context": {

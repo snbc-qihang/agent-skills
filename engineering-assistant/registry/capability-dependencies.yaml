@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "3.1.0",
   "plugin_role": "engineering_control_plane",
   "principle": "先用软件工程状态机确定阶段、边界和验收，再选择最合适执行能力；委派不转移工程责任。",
   "dependencies": {

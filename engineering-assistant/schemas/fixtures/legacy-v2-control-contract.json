@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "3.1.0",
   "migration_expectation": "blocked_or_extensions",
   "reason": "legacy nested additionalProperties must be moved to extensions or blocked when it affects scope/quality/frontend acceptance",
   "sample": {

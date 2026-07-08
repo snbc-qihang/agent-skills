@@ -2,6 +2,7 @@
   "id": "detailed-design-happy_path",
   "name": "Detailed Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "订单状态同步详细设计完整",
     "material": "详细设计包含接口、状态机、异常码、幂等键、事务边界、回滚策略、单元测试和接口文档字段说明。",

@@ -1,138 +1,39 @@
 ---
 name: self-test
-description: Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。
+description: Use when 代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时；Do not use when do not伪造测试结果。
 ---
 
-# 角色
-作为研发助手 workflow 中 `self_test` 阶段的负责人工作。输出必须有证据支撑，并且可被人工评审、CI 和下游 skill 消费。
+# When To Use
+- 代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时。
+- 需要把 quality-contract 中的测试命令、覆盖率、失败原因和风险形成证据时。
 
-# 范围
-生成并执行自测方案，输出失败原因、影响范围和阻断判断。
+# Do Not Use When
+- 不要伪造测试结果。
+- 不要忽略失败测试或空命令。
+- 不要替代发布验证。
 
-# 非目标
-- 不伪造测试结果
-- 不忽略失败测试
-- 不替代发布验证
-
-# 输入
+# Inputs
 - `implementation-summary.md`
 - `changed-files-report.json`
 - `test-strategy.md`
 - `repo_context`
 
-# 共享治理协议
-- 先读取 `engineering-assistant/shared/governance-protocol.md`；该文件是工程治理主控、能力委派、文档保留和前端验收边界的共享事实源。
-- 本 skill 只覆盖 `self_test` 阶段；不得扩展到无关阶段或替代专业外部能力。
+# Do This
+- 读取 implementation-summary、changed-files、test-strategy、repo context 和 quality-contract。
+- 按 required_commands 执行单元、集成、回归、边界、异常、幂等和一致性测试。
+- 记录命令、退出码、关键日志、覆盖率、失败测试和影响范围。
+- 输出 self-test-report、test-commands.log、coverage-summary 和 test-risk-report。
 
-# 语言策略
-- 未指定输出语言时，必须先询问用户选择 `zh-CN`（简体中文）或 `en`（English）。
-- 用户确认后，将语言写入 `StageRunRequest.context.language` 和 `StageRunResult.language`。
-- 未确认语言时，不得生成正式文档；状态置为 `waiting_for_input` 并输出 blocking 问题。
+# Evidence / Done
+- test-commands.log 包含实际执行命令和结果。
+- failed-tests.md 对每个失败给出原因、影响和下一步。
+- test-risk-report.json 明确是否阻断后续质量门禁。
 
-# 主动询问策略
-- 执行前先检查输入、仓库上下文、上游产物和 profile，区分“可推导信息”和“必须用户确认信息”。
-- 对必须用户确认的信息，输出 `required_information_requests`，每个问题包含 `question`、`reason`、`required`、`priority`、`expected_format` 和可选示例。
-- blocking 问题未回答时，`StageRunResult.status` 必须为 `waiting_for_input`，不得继续生成通过性结论或正式文档。
-- 进入 `waiting_for_input` 或 `waiting_for_human_review` 时，必须在目标项目 `docs/human-review/` 生成可填写的 HTML 人工审阅包；页面必须支持填写每个待确认项并复制或下载结构化答案 JSON；agent 不得把 HTML 作为事实输入源。
-- 一次只询问完成本阶段所需的最小问题集，优先级按 `critical`、`major`、`minor` 排序。
-- 用户补充后，将答案写回 `StageRunRequest.context` 或 artifact index，并保留来源。
+# Stop / Escalate
+- required_commands 缺失、占位或未执行时 blocked。
+- 高风险测试豁免或关键测试无法执行时 waiting_for_human_review。
 
-# 技术/框架选型
-- 编码、设计、评审和上下文分析必须确认后端框架、持久化框架、前端技术栈、组件库、测试框架和构建工具。
-- Java/Spring 持久化默认遵循 `mybatis-plus`；直接 `JDBC`、前端技术栈替换、测试框架替换或绕过既有 mapper/repository/service 模式必须主动询问或进入人工评审。
-
-# 执行门禁
-- preflight 阶段必须先完成语言确认和必须信息检查。
-- 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
-- 暂停等待人工输入或审批时，`StageRunResult.artifacts` 必须登记 HTML 审阅包，且该 HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
-- 输出 `StageRunResult` 后必须运行 `engineering-assistant/scripts/validate_stage_run_result.py`；校验失败视为阶段节点未遵守契约，workflow 必须 `blocked`。
-
-
-
-
-
-
-# 控制面消费门禁
-- 执行前必须读取目标项目 `artifacts/_control/task-context.agent.md`、`implementation-contract.json`、`quality-contract.json` 和 `artifacts/rule-governance/task-rule-packs/<task>.json`。
-- 不得依赖聊天上下文记忆替代机读控制面；规则、技术栈、质量命令和停止条件必须来自控制产物。
-- 进入实现、自测、质量治理或代码评审前必须先运行 `validate_control_health.py`；控制面缺失、规则包缺失或 blocking open question 必须阻断。
-- 涉及代码变更后必须运行 `validate_technology_adoption.py`、`validate_design_to_code.py`、`build_traceability_report.py` 和 `validate_rule_consumption.py`。
-
-
-# 操作流程
-1. 将请求规范化为 `StageRunRequest`。
-2. 校验必填输入并记录假设。
-3. 基于来源证据执行以下检查。
-- 执行前必须读取 artifacts/_control/quality-contract.json 和任务规则包
-- 单元测试
-- 集成测试
-- 回归测试
-- 边界测试
-- 异常路径
-- 幂等测试
-- 数据一致性测试
-- 发布验证前置测试
-4. 生成全部声明产物。
-5. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
-6. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
-
-# 输出契约
-在 `artifacts/self-test/` 下生成以下产物：
-- `self-test-report.md`
-- `test-commands.log`
-- `coverage-summary.md`
-- `failed-tests.md`
-- `test-risk-report.json`
-
-# 文档治理
-- `artifacts/<skill_id>/` 下的输出默认是本次 run artifact，不自动等同正式留存文档。
-- 需要正式留存的文档必须满足 `DG1-DG6`：具备唯一编号、状态、留存策略、owner、来源证据和审批状态。
-- `draft`、`reviewing`、`blocked`、`waiting_for_input`、任务过程摘要、缺失输入清单和临时评审意见不得作为正式文档沉淀。
-- 只有 `document_status=approved|final` 且 `retention_policy=persist` 的文档可进入正式文档目录；否则只保留在 workflow trace 或 run artifact 中。
-
-
-# 质量门禁
-- 测试命令实际执行
-- 失败测试明确阻断
-- 覆盖主干/边界/异常/幂等
-- 覆盖率变化有解释
-
-# 失败处理
-- `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
-- `INVALID_OUTPUT_SCHEMA`：重新生成不合规产物并再次运行校验。
-- `QUALITY_GATE_FAILED`：状态置为 `blocked`，并列出 required actions。
-- `HUMAN_APPROVAL_REQUIRED`：创建审批请求，暂停在 `waiting_for_human_review`。
-
-# 人工审批规则
-- 高风险测试豁免
-- 无法执行关键测试
-- 发布前置测试缺失
-
-# 独立运行模式
-当用户只要求执行本阶段时，直接运行该 skill。生成完整产物集和门禁决策，不调用无关阶段。
-
-# Workflow 编排模式
-通过 `StageRunRequest` 接收上游产物，保留产物血缘，并向 `workflow-orchestrator` 返回 `StageRunResult`。
-
-# 评审检查清单
-- 每个结论都有证据或已记录假设。
-- 每个输出路径都已进入 artifact index。
-- 每个阻断问题都已形成 finding。
-- 每个高风险动作都有人工审批记录。
-- 输出可通过 `output.schema.json` 校验。
-- `StageRunResult` 可通过 `validate_stage_run_result.py` 校验。
-
-# 禁止行为
-- 不得在无证据时宣称门禁通过。
-- 不得隐藏缺失输入。
-- 不得自动批准高风险动作。
-- 不得用主观判断替代确定性检查。
-- 不得变更生产系统。
-
-# 示例
-独立运行："使用 `self-test` 基于当前设计文档生成本阶段产物。"
-
-编排运行：`workflow-orchestrator` 将包含上游产物的节点 `self-test` 发送给本 skill，并等待 `StageRunResult`。
-
-# Eval 指引
-运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。
+# References / Scripts
+- contract.yaml：输入、输出、审批和质量门禁的机器契约。
+- references/stage-guidance.md
+- scripts/validate_output.py

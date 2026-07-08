@@ -1,13 +1,13 @@
 {
   "skill_id": "skill-quality-auditor",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "skill_quality",
   "type": "audit_skill",
   "prompt_pack": {
     "display_name": "Skill Quality Auditor",
     "short_description": "审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。",
     "default_prompt": "使用 skill-quality-auditor，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；Do not use when 不执行业务研发阶段；不替代 eval 执行。",
+    "trigger_description": "Use when 需要审计人工或 agent 生成的 Codex skills，判断触发、边界、SOP、资源、脚本、eval 和 workflow 是否合格时；Do not use when do not执行业务研发阶段。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -105,6 +105,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

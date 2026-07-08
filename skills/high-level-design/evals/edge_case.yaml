@@ -2,6 +2,7 @@
   "id": "high-level-design-edge_case",
   "name": "High Level Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "只改服务内部 CRUD 不应过度进入关键场景设计",
     "material": "目标业务系统内部新增一个后台配置项维护页面，不跨系统、不异步、不涉及 Redis/MQ/DB 结构变化。",

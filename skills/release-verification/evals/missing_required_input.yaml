@@ -2,9 +2,10 @@
   "id": "release-verification-missing_required_input",
   "name": "Release Verification missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Verification missing required input 团队规则场景",
-    "material": "缺少必填输入 release-plan.md，但请求仍要求直接执行 Release Verification 并给出通过结论。",
+    "material": "缺少必填输入 release-plan.md，但请求仍要求执行 Release Verification；应按停止条件处理：核心功能失败、阈值触发或关键数据缺失时 blocked。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "E5",

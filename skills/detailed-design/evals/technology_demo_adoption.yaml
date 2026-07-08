@@ -2,6 +2,7 @@
   "id": "detailed-design-technology_demo_adoption",
   "name": "Detailed Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Detailed Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 D1 模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

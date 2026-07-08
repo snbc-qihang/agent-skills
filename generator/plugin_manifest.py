@@ -8,7 +8,7 @@ from .io_utils import write_json
 
 
 PLUGIN_NAME = "engineering-assistant"
-PLUGIN_VERSION = "2.0.0"
+PLUGIN_VERSION = "3.1.0"
 
 
 def plugin_manifest() -> dict:

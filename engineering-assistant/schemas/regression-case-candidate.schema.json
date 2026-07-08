@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "case_id",
+    "target_skill_id",
+    "source_event_ids",
+    "trigger_prompt",
+    "expected_behavior",
+    "repeat_count",
+    "approval_status"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_skill_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_event_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "trigger_prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected_behavior": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repeat_count": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "approval_status": {
+      "enum": [
+        "candidate",
+        "waiting_for_human_review",
+        "approved",
+        "rejected"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

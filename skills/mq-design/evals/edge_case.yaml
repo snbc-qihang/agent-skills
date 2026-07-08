@@ -2,6 +2,7 @@
   "id": "mq-design-edge_case",
   "name": "MQ Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "消息体超过 10KB",
     "material": "设计把完整门店档案和图片元数据塞入消息体，压缩后仍约 28KB，未说明拆分、对象存储引用、评审结论或消费者兼容策略。",

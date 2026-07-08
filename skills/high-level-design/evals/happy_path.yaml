@@ -2,6 +2,7 @@
   "id": "high-level-design-happy_path",
   "name": "High Level Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "业务后台新增客户端订单协作链路概要设计",
     "material": "需求要求目标业务系统支持目标客户端系统订单查询和状态同步，已有开放服务接口和业务事件，设计需说明系统边界、业务域、事件协作、最终一致性和异常流。",

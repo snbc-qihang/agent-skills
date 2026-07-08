@@ -18,7 +18,7 @@ metadata:
   owner: "后端开发"
   stage: "code_development"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 基于设计文档进行最小必要代码变更或生成代码修改计划。；Do not use when 不修改无关模块；不绕过测试。"
+  trigger_description: "Use when 设计已审批，需要按实现合同做最小必要代码变更时；Do not use when do not做无设计依据的大范围重构。"
 routing:
   intent_tags:
     - "code"

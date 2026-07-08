@@ -2,6 +2,7 @@
   "id": "redis-design-happy_path",
   "name": "Redis Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "短态查询缓存设计完整",
     "material": "设计使用 Redis 缓存业务对象汇总列表，Key 含服务模块、租户、结构和业务 key，TTL 30 分钟加随机抖动，MySQL 为事实源，提供缓存穿透、降级和回滚方案。",

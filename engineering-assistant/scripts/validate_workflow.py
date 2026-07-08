@@ -31,4 +31,21 @@ for arg in sys.argv[1:]:
         for previous_node in node.get("depends_on", []):
             if previous_node not in node_id_set:
                 raise SystemExit(f"{arg}: {node.get('node_id')} depends_on 指向未知节点 {previous_node}")
+    if data.get("workflow_id") in {"full-feature-development", "frontend-only", "design-only"}:
+        for required in ["product-prototype-design", "prototype-review-loop"]:
+            if required not in node_id_set:
+                raise SystemExit(f"{arg}: web/app workflow 缺少原型硬门禁节点 {required}")
+        review_index = node_ids.index("prototype-review-loop")
+        for downstream in ["frontend-design", "implementation-controller", "code-development", "frontend-development"]:
+            if downstream in node_id_set and review_index > node_ids.index(downstream):
+                raise SystemExit(f"{arg}: prototype-review-loop 必须位于 {downstream} 之前")
+        policy = data.get("prototype_review_policy") or {}
+        if policy.get("minimum_review_rounds") != 3:
+            raise SystemExit(f"{arg}: prototype_review_policy.minimum_review_rounds 必须为 3")
+    if data.get("workflow_id") == "knowledge-review":
+        expected_order = ["assistant-feedback-capture", "engineering-knowledge-miner", "skill-evolution-review", "skill-quality-auditor"]
+        if node_ids != expected_order:
+            raise SystemExit(f"{arg}: knowledge-review 必须按 feedback capture -> knowledge miner -> evolution review -> quality auditor 执行")
+    if "feedback_evolution_policy" not in data:
+        raise SystemExit(f"{arg}: 缺少 feedback_evolution_policy")
 print("ok")

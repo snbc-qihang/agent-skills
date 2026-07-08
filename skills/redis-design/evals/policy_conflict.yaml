@@ -2,6 +2,7 @@
   "id": "redis-design-policy_conflict",
   "name": "Redis Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Redis 被设计成跨服务事实源",
     "material": "设计要求目标业务系统写 Redis，目标客户端系统直接读同一个 Redis key 作为订单状态最终来源。",

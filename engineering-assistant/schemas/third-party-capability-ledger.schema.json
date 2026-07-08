@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "run_id",
+    "capability_invocations",
+    "fallbacks",
+    "evidence_consumed"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability_invocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool_or_skill",
+          "source",
+          "purpose",
+          "status",
+          "evidence_paths"
+        ],
+        "properties": {
+          "tool_or_skill": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "enum": [
+              "openai_curated",
+              "external_open_source",
+              "local_plugin",
+              "built_in",
+              "repo_native"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "called",
+              "unavailable",
+              "failed",
+              "skipped",
+              "fallback_used"
+            ]
+          },
+          "evidence_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "fallbacks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "evidence_consumed": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

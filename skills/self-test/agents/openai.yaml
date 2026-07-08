@@ -18,7 +18,7 @@ metadata:
   owner: "测试负责人"
   stage: "self_test"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。"
+  trigger_description: "Use when 代码实现完成后，需要生成并执行自测方案，判断失败是否阻断发布时；Do not use when do not伪造测试结果。"
 routing:
   intent_tags:
     - "self"

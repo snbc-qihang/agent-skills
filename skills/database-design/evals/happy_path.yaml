@@ -2,6 +2,7 @@
   "id": "database-design-happy_path",
   "name": "Database Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "表结构和索引用途完整",
     "material": "数据库设计说明每个字段、唯一约束、状态字段和索引用途，写明事务边界、逻辑删除、迁移步骤、灰度和回滚。",

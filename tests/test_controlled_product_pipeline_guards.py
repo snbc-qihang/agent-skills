@@ -47,7 +47,7 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         root = self.make_control_root()
         control = root / "artifacts" / "_control"
         active_slice = {
-            "schema_version": "2.0.0",
+            "schema_version": "3.1.0",
             "slice_id": "aip",
             "parent_task_id": "aip",
             "title": "AIP",
@@ -63,7 +63,7 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         write_json(
             control / "current-task.json",
             {
-                "schema_version": "2.0.0",
+                "schema_version": "3.1.0",
                 "task_id": "aip",
                 "title": "AIP",
                 "language": "zh-CN",
@@ -80,7 +80,7 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         write_json(
             control / "design-contract.json",
             {
-                "schema_version": "2.0.0",
+                "schema_version": "3.1.0",
                 "task_id": "aip",
                 "source_design": "docs/design.md",
                 "source_checksum": "sha256:test",
@@ -93,7 +93,7 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         write_json(
             control / "implementation-contract.json",
             {
-                "schema_version": "2.0.0",
+                "schema_version": "3.1.0",
                 "task_id": "aip",
                 "allowed_modules": ["backend/"],
                 "forbidden_modules": ["frontend/"],
@@ -110,7 +110,7 @@ class ControlledProductPipelineGuardTests(unittest.TestCase):
         write_json(
             control / "quality-contract.json",
             {
-                "schema_version": "2.0.0",
+                "schema_version": "3.1.0",
                 "task_id": "aip",
                 "required_commands": [{"id": "unit", "command": "python3 -c 'print(1)'", "required": True}],
                 "required_evidence": ["quality_commands"],

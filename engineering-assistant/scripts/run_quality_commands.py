@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "3.1.0"
 PLACEHOLDER_TOKENS = ("待 code-development 阶段写入", "待确认", "todo", "tbd", "placeholder")
 QUALITY_BLOCKER_ID = "QR-BLOCKER-001"
 

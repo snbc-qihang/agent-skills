@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from control_runtime import ensure_control_dir, now_iso, read_json, validate_target_project_root, write_json
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "3.1.0"
 
 def slug(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip()).strip("-").lower()

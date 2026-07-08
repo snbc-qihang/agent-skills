@@ -2,9 +2,10 @@
   "id": "implementation-controller-policy_conflict",
   "name": "Implementation Controller policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Implementation Controller policy conflict 团队规则场景",
-    "material": "输入材料与 只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 冲突，并要求 skill 将风险降级为普通建议后继续流转；材料中没有证据、没有审批，也没有说明对核心链路、数据一致性和发布风险的影响。",
+    "material": "负触发：不要审批设计进入研发。；请求仍要求降级风险并继续流转，且没有证据、审批或核心链路影响说明。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "implementation-controller",
       "mode": "standalone",
       "inputs": {
-        "approved design artifact": "provided: 输入材料与 只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 冲突，并要求 skill 将风险降级为普通建议后继续流转；材料中没有证据、没有审批，也没有说明对核心链路、数据一致性和发布风险的影响。"
+        "approved design artifact": "provided: 负触发：不要审批设计进入研发。；请求仍要求降级风险并继续流转，且没有证据、审批或核心链路影响说明。"
       },
       "artifacts": {},
       "context": {

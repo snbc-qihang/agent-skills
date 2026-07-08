@@ -2,9 +2,10 @@
   "id": "workflow-orchestrator-happy_path",
   "name": "Workflow Orchestrator happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
-    "title": "Workflow Orchestrator happy path 团队规则场景",
-    "material": "输入材料覆盖 支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。，并提供 节点 contract 匹配 的证据、产物路径和人工审批状态。",
+    "title": "编排 web/app 流程并阻断未过原型门禁实现",
+    "material": "full-feature-development 包含 requirement-intake、repo-context-miner、product-prototype-design、prototype-review-loop，再进入设计和实现；artifact-index 和 workflow-trace 完整。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -13,10 +14,10 @@
       "A4"
     ],
     "risk_focus": [
-      "节点 contract 匹配",
-      "阶段选择",
-      "证据链",
-      "门禁决策"
+      "workflow order",
+      "prototype gate",
+      "artifact routing",
+      "feedback capture"
     ],
     "forbidden_behavior": [
       "无证据宣称通过",
@@ -32,7 +33,7 @@
       "skill_id": "workflow-orchestrator",
       "mode": "standalone",
       "inputs": {
-        "workflow.yaml": "provided: 输入材料覆盖 支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。，并提供 节点 contract 匹配 的证据、产物路径和人工审批状态。"
+        "workflow.yaml": "provided: full-feature-development 包含 requirement-intake、repo-context-miner、product-prototype-design、prototype-review-loop，再进入设计和实现；artifact-index 和 workflow-trace 完整。"
       },
       "artifacts": {},
       "context": {

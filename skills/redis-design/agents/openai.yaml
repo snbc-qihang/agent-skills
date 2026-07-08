@@ -18,7 +18,7 @@ metadata:
   owner: "架构师"
   stage: "redis_design"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。"
+  trigger_description: "Use when 设计涉及 Redis 缓存、分布式锁、限流、会话、排行榜或临时状态，需要明确 key/value/TTL/一致性时；Do not use when do not替代数据库主数据设计。"
 routing:
   intent_tags:
     - "Redis"

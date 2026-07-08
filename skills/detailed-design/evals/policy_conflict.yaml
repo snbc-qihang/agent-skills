@@ -2,6 +2,7 @@
   "id": "detailed-design-policy_conflict",
   "name": "Detailed Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "接口只是数据库 CRUD 包装",
     "material": "设计新增 /api/v1/franchise/updateDbField，入参 tableName、fieldName、value，用于任意更新配置表。",

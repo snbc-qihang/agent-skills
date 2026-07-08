@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 
-PLUGIN_VERSION = "2.0.0"
+PLUGIN_VERSION = "3.1.0"
 
 
 def load_json(path: Path) -> dict:

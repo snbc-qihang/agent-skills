@@ -18,7 +18,7 @@ metadata:
   owner: "架构师"
   stage: "design_review"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 评审设计产物，判断是否可以进入代码研发。；Do not use when 不代替审批人签字；不修正文档内容。"
+  trigger_description: "Use when 概要、详细和专项设计完成后，需要判断是否可以进入代码研发时；Do not use when do not代替审批人签字。"
 routing:
   intent_tags:
     - "design"

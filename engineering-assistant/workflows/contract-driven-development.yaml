@@ -1,6 +1,6 @@
 {
   "workflow_id": "contract-driven-development",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "states": [
     "pending",
     "running",
@@ -411,8 +411,9 @@
       "frontend_runtime": {
         "candidates": [
           "build-web-apps",
-          "ui-frontend-craft",
-          "browser/chrome"
+          "browser/chrome",
+          "figma",
+          "ui-frontend-craft"
         ],
         "call_when": [
           "页面",
@@ -473,19 +474,65 @@
       "docs_and_memory"
     ],
     "required_feedback_artifacts": [
-      "assistant-run-feedback.json"
+      "assistant-run-feedback.json",
+      "feedback-event.json",
+      "feedback-inbox-entry.json"
     ],
     "assistant_feedback_policy": {
       "required_before_final_response": true,
       "default_persistence_mode": "ephemeral",
       "feedback_artifacts": [
-        "assistant-run-feedback.json"
+        "assistant-run-feedback.json",
+        "feedback-event.json",
+        "feedback-inbox-entry.json"
       ],
       "summary_artifact_allowed_when": [
         "evidence_level=formal",
         "用户明确要求交接或审计留档"
       ],
       "must_be_consumed_by_agent": true,
+      "evolution_policy": {
+        "target_project_feedback_root": "artifacts/_control/feedback/",
+        "central_feedback_root": "feedback-inbox/",
+        "capture_stage": "assistant-feedback-capture",
+        "evolution_stage": "skill-evolution-review",
+        "auto_apply_to_formal_skills": false,
+        "human_approval_required_before_skill_change": true,
+        "minimum_repeat_count_for_regression_candidate": 3,
+        "event_sources": [
+          "skill_execution_failure",
+          "user_correction",
+          "review_miss",
+          "test_failure",
+          "third_party_tool_failure",
+          "context_drift",
+          "document_noise",
+          "prototype_gate_failure",
+          "acceptance_failure"
+        ],
+        "required_event_fields": [
+          "event_id",
+          "source_task_id",
+          "source_run_id",
+          "triggered_skill_id",
+          "event_type",
+          "severity",
+          "symptom",
+          "user_correction_summary",
+          "evidence_paths",
+          "repeat_count",
+          "recommended_action",
+          "regression_case_candidate",
+          "consumed_by_evolution_review"
+        ],
+        "verdicts": [
+          "accepted_candidate",
+          "rejected_noise",
+          "needs_more_evidence",
+          "merged_with_existing",
+          "waiting_for_human_review"
+        ]
+      },
       "darwin_trigger_markers": [
         "DUPLICATE_CAPABILITY_RISK",
         "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
@@ -493,8 +540,94 @@
         "CAPABILITY_HEALTH_NOT_CHECKED",
         "ASSISTANT_FEEDBACK_NOT_GENERATED",
         "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+        "FEEDBACK_EVENT_MISSING_EVIDENCE",
+        "FEEDBACK_EVENT_NOT_CONSUMED",
+        "REGRESSION_CANDIDATE_REQUIRED",
         "TARGET_REPO_ARTIFACT_POLLUTION",
         "PROCESS_DOCUMENTATION_POLLUTION"
+      ]
+    },
+    "prototype_review_policy": {
+      "required_for_task_types": [
+        "web_product",
+        "app_product",
+        "frontend_product"
+      ],
+      "prototype_stage": "product-prototype-design",
+      "review_stage": "prototype-review-loop",
+      "minimum_review_rounds": 3,
+      "hard_gate_before": [
+        "high-level-design",
+        "detailed-design",
+        "frontend-design",
+        "implementation-controller",
+        "code-development",
+        "frontend-development"
+      ],
+      "required_artifacts": [
+        "product-prototype-contract.json",
+        "prototype-source.md",
+        "desktop-prototype-screenshot.png",
+        "mobile-prototype-screenshot.png",
+        "interaction-state-map.json",
+        "prototype-review-report.json"
+      ],
+      "required_evidence": [
+        "high_fidelity_visual_reference",
+        "desktop_and_mobile_screenshots",
+        "primary_user_flows",
+        "loading_empty_error_permission_states",
+        "accessibility_and_layout_review",
+        "three_agent_review_rounds"
+      ],
+      "delegation_preferences": [
+        "build-web-apps",
+        "browser",
+        "chrome",
+        "figma"
+      ],
+      "missing_behavior": "block_design_and_implementation"
+    },
+    "feedback_evolution_policy": {
+      "target_project_feedback_root": "artifacts/_control/feedback/",
+      "central_feedback_root": "feedback-inbox/",
+      "capture_stage": "assistant-feedback-capture",
+      "evolution_stage": "skill-evolution-review",
+      "auto_apply_to_formal_skills": false,
+      "human_approval_required_before_skill_change": true,
+      "minimum_repeat_count_for_regression_candidate": 3,
+      "event_sources": [
+        "skill_execution_failure",
+        "user_correction",
+        "review_miss",
+        "test_failure",
+        "third_party_tool_failure",
+        "context_drift",
+        "document_noise",
+        "prototype_gate_failure",
+        "acceptance_failure"
+      ],
+      "required_event_fields": [
+        "event_id",
+        "source_task_id",
+        "source_run_id",
+        "triggered_skill_id",
+        "event_type",
+        "severity",
+        "symptom",
+        "user_correction_summary",
+        "evidence_paths",
+        "repeat_count",
+        "recommended_action",
+        "regression_case_candidate",
+        "consumed_by_evolution_review"
+      ],
+      "verdicts": [
+        "accepted_candidate",
+        "rejected_noise",
+        "needs_more_evidence",
+        "merged_with_existing",
+        "waiting_for_human_review"
       ]
     },
     "document_spine_policy": {
@@ -678,6 +811,7 @@
       "specialty_scope_confirmed_before_specialty_docs": true,
       "self_review_passed_before_human_review": true,
       "human_review_approved_before_final": true,
+      "prototype_three_round_review_before_frontend_design": true,
       "approved_or_final_before_code_control_surface": true
     },
     "waiting_for_input_policy": {
@@ -754,12 +888,16 @@
       "candidate_outputs": [
         "rule-candidates.json",
         "prompt-optimization-candidates.md",
-        "tl-review-package.json"
+        "tl-review-package.json",
+        "skill-evolution-candidates.json",
+        "regression-case-candidates.yaml"
       ],
       "candidate_types": [
         "team-rule-candidate",
         "document-template-candidate",
-        "agent-behavior-candidate"
+        "agent-behavior-candidate",
+        "skill-patch-candidate",
+        "regression-eval-candidate"
       ],
       "required_fields": [
         "candidate_id",
@@ -776,16 +914,101 @@
         "suggested_landing_zone",
         "tl_review_status"
       ],
+      "feedback_inbox_required": true,
+      "feedback_event_verdict_required": true,
       "auto_apply_to_plugin": false,
       "tl_review_required": true
     }
+  },
+  "prototype_review_policy": {
+    "required_for_task_types": [
+      "web_product",
+      "app_product",
+      "frontend_product"
+    ],
+    "prototype_stage": "product-prototype-design",
+    "review_stage": "prototype-review-loop",
+    "minimum_review_rounds": 3,
+    "hard_gate_before": [
+      "high-level-design",
+      "detailed-design",
+      "frontend-design",
+      "implementation-controller",
+      "code-development",
+      "frontend-development"
+    ],
+    "required_artifacts": [
+      "product-prototype-contract.json",
+      "prototype-source.md",
+      "desktop-prototype-screenshot.png",
+      "mobile-prototype-screenshot.png",
+      "interaction-state-map.json",
+      "prototype-review-report.json"
+    ],
+    "required_evidence": [
+      "high_fidelity_visual_reference",
+      "desktop_and_mobile_screenshots",
+      "primary_user_flows",
+      "loading_empty_error_permission_states",
+      "accessibility_and_layout_review",
+      "three_agent_review_rounds"
+    ],
+    "delegation_preferences": [
+      "build-web-apps",
+      "browser",
+      "chrome",
+      "figma"
+    ],
+    "missing_behavior": "block_design_and_implementation"
+  },
+  "feedback_evolution_policy": {
+    "target_project_feedback_root": "artifacts/_control/feedback/",
+    "central_feedback_root": "feedback-inbox/",
+    "capture_stage": "assistant-feedback-capture",
+    "evolution_stage": "skill-evolution-review",
+    "auto_apply_to_formal_skills": false,
+    "human_approval_required_before_skill_change": true,
+    "minimum_repeat_count_for_regression_candidate": 3,
+    "event_sources": [
+      "skill_execution_failure",
+      "user_correction",
+      "review_miss",
+      "test_failure",
+      "third_party_tool_failure",
+      "context_drift",
+      "document_noise",
+      "prototype_gate_failure",
+      "acceptance_failure"
+    ],
+    "required_event_fields": [
+      "event_id",
+      "source_task_id",
+      "source_run_id",
+      "triggered_skill_id",
+      "event_type",
+      "severity",
+      "symptom",
+      "user_correction_summary",
+      "evidence_paths",
+      "repeat_count",
+      "recommended_action",
+      "regression_case_candidate",
+      "consumed_by_evolution_review"
+    ],
+    "verdicts": [
+      "accepted_candidate",
+      "rejected_noise",
+      "needs_more_evidence",
+      "merged_with_existing",
+      "waiting_for_human_review"
+    ]
   },
   "nodes": [
     {
       "node_id": "design-review",
       "stage": "design_review",
       "skill_id": "design-review",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -862,7 +1085,7 @@
       "node_id": "implementation-controller",
       "stage": "implementation_control",
       "skill_id": "implementation-controller",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -963,7 +1186,7 @@
       "node_id": "code-development",
       "stage": "code_development",
       "skill_id": "code-development",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1046,7 +1269,7 @@
       "node_id": "frontend-development",
       "stage": "frontend_development",
       "skill_id": "frontend-development",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1126,7 +1349,7 @@
       "node_id": "self-test",
       "stage": "self_test",
       "skill_id": "self-test",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1208,7 +1431,7 @@
       "node_id": "code-quality-governor",
       "stage": "code_quality",
       "skill_id": "code-quality-governor",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -1301,7 +1524,7 @@
       "node_id": "code-review",
       "stage": "code_review",
       "skill_id": "code-review",
-      "version": "2.0.0",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",

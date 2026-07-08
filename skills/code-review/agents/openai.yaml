@@ -18,7 +18,7 @@ metadata:
   owner: "研发负责人"
   stage: "code_review"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。；Do not use when 不替代 code-quality-governor；不输出无证据建议。"
+  trigger_description: "Use when 质量报告和变更文件已具备，需要做语义代码评审、定位缺陷和整理 blocker 清单时；Do not use when do not替代 code-quality-governor。"
 routing:
   intent_tags:
     - "code"

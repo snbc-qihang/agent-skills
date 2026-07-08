@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from control_runtime import checksum, compact_lines, ensure_control_dir, find_file_patterns, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
 
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "3.1.0"
 DEFAULT_FORBIDDEN = [".git/", ".idea/", "node_modules/", "target/", "build/", "dist/", "coverage/"]
 DEFAULT_RULES = [
     "Every changed source file must map to design-contract goals or acceptance criteria.",

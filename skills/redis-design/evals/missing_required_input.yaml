@@ -2,6 +2,7 @@
   "id": "redis-design-missing_required_input",
   "name": "Redis Design missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "缺少 Redis 版本和资源信息",
     "material": "设计只写使用 Redis 缓存查询结果，没有版本、集群、持久化、淘汰策略、Key、TTL、容量和降级说明。",

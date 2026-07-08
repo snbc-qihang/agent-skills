@@ -2,6 +2,7 @@
   "id": "detailed-design-ambiguous_input",
   "name": "Detailed Design ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "批处理任务边界不清",
     "material": "设计提到每天同步门店数据，但没有数据量上限、批次大小、超时、进度查询和失败重试说明。",

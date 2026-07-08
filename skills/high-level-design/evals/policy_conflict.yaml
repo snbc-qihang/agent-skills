@@ -2,6 +2,7 @@
   "id": "high-level-design-policy_conflict",
   "name": "High Level Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "设计提出直接调用未开放接口",
     "material": "概要设计方案要求目标客户端系统直接调用目标业务系统内部 service 方法，并在客户端侧拼装数据库字段。",

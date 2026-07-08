@@ -1,5 +1,5 @@
 display_name: "Engineering Knowledge Miner"
-short_description: "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
+short_description: "从研发流程产物和已采集反馈事件中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。"
 default_prompt: "使用 engineering-knowledge-miner，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
@@ -18,7 +18,7 @@ metadata:
   owner: "规范 owner"
   stage: "knowledge_mining"
   type: "cross_cutting_skill"
-  trigger_description: "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。"
+  trigger_description: "Use when 需要从反馈事件、评审、CI、PR、发布或事故中抽取可复用工程知识和规范候选时；Do not use when do not无证据创建规范。"
 routing:
   intent_tags:
     - "cross_cutting_skill"
@@ -29,7 +29,7 @@ routing:
     - "knowledge_mining"
     - "miner"
     - "skill"
-    - "从研发流程产物中抽取可复用经验"
+    - "从研发流程产物和已采集反馈事件中抽取可复用经验"
     - "反哺建议。"
     - "回归样例候选和"
     - "检查清单候选"

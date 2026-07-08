@@ -1,6 +1,6 @@
 {
   "workflow_id": "knowledge-review",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "states": [
     "pending",
     "running",
@@ -26,7 +26,7 @@
     "single_node"
   ],
   "default_entry_mode": "auto_flow",
-  "start_node": "engineering-knowledge-miner",
+  "start_node": "assistant-feedback-capture",
   "terminal_nodes": [
     "skill-quality-auditor"
   ],
@@ -411,8 +411,9 @@
       "frontend_runtime": {
         "candidates": [
           "build-web-apps",
-          "ui-frontend-craft",
-          "browser/chrome"
+          "browser/chrome",
+          "figma",
+          "ui-frontend-craft"
         ],
         "call_when": [
           "页面",
@@ -473,19 +474,65 @@
       "docs_and_memory"
     ],
     "required_feedback_artifacts": [
-      "assistant-run-feedback.json"
+      "assistant-run-feedback.json",
+      "feedback-event.json",
+      "feedback-inbox-entry.json"
     ],
     "assistant_feedback_policy": {
       "required_before_final_response": true,
       "default_persistence_mode": "ephemeral",
       "feedback_artifacts": [
-        "assistant-run-feedback.json"
+        "assistant-run-feedback.json",
+        "feedback-event.json",
+        "feedback-inbox-entry.json"
       ],
       "summary_artifact_allowed_when": [
         "evidence_level=formal",
         "用户明确要求交接或审计留档"
       ],
       "must_be_consumed_by_agent": true,
+      "evolution_policy": {
+        "target_project_feedback_root": "artifacts/_control/feedback/",
+        "central_feedback_root": "feedback-inbox/",
+        "capture_stage": "assistant-feedback-capture",
+        "evolution_stage": "skill-evolution-review",
+        "auto_apply_to_formal_skills": false,
+        "human_approval_required_before_skill_change": true,
+        "minimum_repeat_count_for_regression_candidate": 3,
+        "event_sources": [
+          "skill_execution_failure",
+          "user_correction",
+          "review_miss",
+          "test_failure",
+          "third_party_tool_failure",
+          "context_drift",
+          "document_noise",
+          "prototype_gate_failure",
+          "acceptance_failure"
+        ],
+        "required_event_fields": [
+          "event_id",
+          "source_task_id",
+          "source_run_id",
+          "triggered_skill_id",
+          "event_type",
+          "severity",
+          "symptom",
+          "user_correction_summary",
+          "evidence_paths",
+          "repeat_count",
+          "recommended_action",
+          "regression_case_candidate",
+          "consumed_by_evolution_review"
+        ],
+        "verdicts": [
+          "accepted_candidate",
+          "rejected_noise",
+          "needs_more_evidence",
+          "merged_with_existing",
+          "waiting_for_human_review"
+        ]
+      },
       "darwin_trigger_markers": [
         "DUPLICATE_CAPABILITY_RISK",
         "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
@@ -493,8 +540,94 @@
         "CAPABILITY_HEALTH_NOT_CHECKED",
         "ASSISTANT_FEEDBACK_NOT_GENERATED",
         "ASSISTANT_FEEDBACK_NOT_CONSUMED_BY_AGENT",
+        "FEEDBACK_EVENT_MISSING_EVIDENCE",
+        "FEEDBACK_EVENT_NOT_CONSUMED",
+        "REGRESSION_CANDIDATE_REQUIRED",
         "TARGET_REPO_ARTIFACT_POLLUTION",
         "PROCESS_DOCUMENTATION_POLLUTION"
+      ]
+    },
+    "prototype_review_policy": {
+      "required_for_task_types": [
+        "web_product",
+        "app_product",
+        "frontend_product"
+      ],
+      "prototype_stage": "product-prototype-design",
+      "review_stage": "prototype-review-loop",
+      "minimum_review_rounds": 3,
+      "hard_gate_before": [
+        "high-level-design",
+        "detailed-design",
+        "frontend-design",
+        "implementation-controller",
+        "code-development",
+        "frontend-development"
+      ],
+      "required_artifacts": [
+        "product-prototype-contract.json",
+        "prototype-source.md",
+        "desktop-prototype-screenshot.png",
+        "mobile-prototype-screenshot.png",
+        "interaction-state-map.json",
+        "prototype-review-report.json"
+      ],
+      "required_evidence": [
+        "high_fidelity_visual_reference",
+        "desktop_and_mobile_screenshots",
+        "primary_user_flows",
+        "loading_empty_error_permission_states",
+        "accessibility_and_layout_review",
+        "three_agent_review_rounds"
+      ],
+      "delegation_preferences": [
+        "build-web-apps",
+        "browser",
+        "chrome",
+        "figma"
+      ],
+      "missing_behavior": "block_design_and_implementation"
+    },
+    "feedback_evolution_policy": {
+      "target_project_feedback_root": "artifacts/_control/feedback/",
+      "central_feedback_root": "feedback-inbox/",
+      "capture_stage": "assistant-feedback-capture",
+      "evolution_stage": "skill-evolution-review",
+      "auto_apply_to_formal_skills": false,
+      "human_approval_required_before_skill_change": true,
+      "minimum_repeat_count_for_regression_candidate": 3,
+      "event_sources": [
+        "skill_execution_failure",
+        "user_correction",
+        "review_miss",
+        "test_failure",
+        "third_party_tool_failure",
+        "context_drift",
+        "document_noise",
+        "prototype_gate_failure",
+        "acceptance_failure"
+      ],
+      "required_event_fields": [
+        "event_id",
+        "source_task_id",
+        "source_run_id",
+        "triggered_skill_id",
+        "event_type",
+        "severity",
+        "symptom",
+        "user_correction_summary",
+        "evidence_paths",
+        "repeat_count",
+        "recommended_action",
+        "regression_case_candidate",
+        "consumed_by_evolution_review"
+      ],
+      "verdicts": [
+        "accepted_candidate",
+        "rejected_noise",
+        "needs_more_evidence",
+        "merged_with_existing",
+        "waiting_for_human_review"
       ]
     },
     "document_spine_policy": {
@@ -678,6 +811,7 @@
       "specialty_scope_confirmed_before_specialty_docs": true,
       "self_review_passed_before_human_review": true,
       "human_review_approved_before_final": true,
+      "prototype_three_round_review_before_frontend_design": true,
       "approved_or_final_before_code_control_surface": true
     },
     "waiting_for_input_policy": {
@@ -754,12 +888,16 @@
       "candidate_outputs": [
         "rule-candidates.json",
         "prompt-optimization-candidates.md",
-        "tl-review-package.json"
+        "tl-review-package.json",
+        "skill-evolution-candidates.json",
+        "regression-case-candidates.yaml"
       ],
       "candidate_types": [
         "team-rule-candidate",
         "document-template-candidate",
-        "agent-behavior-candidate"
+        "agent-behavior-candidate",
+        "skill-patch-candidate",
+        "regression-eval-candidate"
       ],
       "required_fields": [
         "candidate_id",
@@ -776,16 +914,101 @@
         "suggested_landing_zone",
         "tl_review_status"
       ],
+      "feedback_inbox_required": true,
+      "feedback_event_verdict_required": true,
       "auto_apply_to_plugin": false,
       "tl_review_required": true
     }
   },
+  "prototype_review_policy": {
+    "required_for_task_types": [
+      "web_product",
+      "app_product",
+      "frontend_product"
+    ],
+    "prototype_stage": "product-prototype-design",
+    "review_stage": "prototype-review-loop",
+    "minimum_review_rounds": 3,
+    "hard_gate_before": [
+      "high-level-design",
+      "detailed-design",
+      "frontend-design",
+      "implementation-controller",
+      "code-development",
+      "frontend-development"
+    ],
+    "required_artifacts": [
+      "product-prototype-contract.json",
+      "prototype-source.md",
+      "desktop-prototype-screenshot.png",
+      "mobile-prototype-screenshot.png",
+      "interaction-state-map.json",
+      "prototype-review-report.json"
+    ],
+    "required_evidence": [
+      "high_fidelity_visual_reference",
+      "desktop_and_mobile_screenshots",
+      "primary_user_flows",
+      "loading_empty_error_permission_states",
+      "accessibility_and_layout_review",
+      "three_agent_review_rounds"
+    ],
+    "delegation_preferences": [
+      "build-web-apps",
+      "browser",
+      "chrome",
+      "figma"
+    ],
+    "missing_behavior": "block_design_and_implementation"
+  },
+  "feedback_evolution_policy": {
+    "target_project_feedback_root": "artifacts/_control/feedback/",
+    "central_feedback_root": "feedback-inbox/",
+    "capture_stage": "assistant-feedback-capture",
+    "evolution_stage": "skill-evolution-review",
+    "auto_apply_to_formal_skills": false,
+    "human_approval_required_before_skill_change": true,
+    "minimum_repeat_count_for_regression_candidate": 3,
+    "event_sources": [
+      "skill_execution_failure",
+      "user_correction",
+      "review_miss",
+      "test_failure",
+      "third_party_tool_failure",
+      "context_drift",
+      "document_noise",
+      "prototype_gate_failure",
+      "acceptance_failure"
+    ],
+    "required_event_fields": [
+      "event_id",
+      "source_task_id",
+      "source_run_id",
+      "triggered_skill_id",
+      "event_type",
+      "severity",
+      "symptom",
+      "user_correction_summary",
+      "evidence_paths",
+      "repeat_count",
+      "recommended_action",
+      "regression_case_candidate",
+      "consumed_by_evolution_review"
+    ],
+    "verdicts": [
+      "accepted_candidate",
+      "rejected_noise",
+      "needs_more_evidence",
+      "merged_with_existing",
+      "waiting_for_human_review"
+    ]
+  },
   "nodes": [
     {
-      "node_id": "engineering-knowledge-miner",
-      "stage": "knowledge_mining",
-      "skill_id": "engineering-knowledge-miner",
-      "version": "2.0.0",
+      "node_id": "assistant-feedback-capture",
+      "stage": "feedback_capture",
+      "skill_id": "assistant-feedback-capture",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -794,6 +1017,86 @@
       ],
       "depends_on": [],
       "inputs": [
+        "StageRunResult",
+        "assistant-run-feedback.json",
+        "workflow-trace.json",
+        "user correction summary",
+        "tool logs"
+      ],
+      "outputs": [
+        "feedback-event.json",
+        "feedback-inbox-entry.json",
+        "feedback-capture-report.md"
+      ],
+      "preconditions": [
+        "contract 输入可用",
+        "风险策略已加载"
+      ],
+      "postconditions": [
+        "StageRunResult 已输出",
+        "产物已登记索引"
+      ],
+      "quality_gates": [
+        "反馈事件有证据路径",
+        "用户纠正优先级已标记",
+        "目标项目与中心仓库落点明确",
+        "事件已标记 consumed_by_evolution_review=false"
+      ],
+      "approval_policy": {
+        "required_for": [
+          "采集敏感内容",
+          "提升为正式规范候选",
+          "修改正式 skill"
+        ],
+        "decision": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "retry_policy": {
+        "max_attempts": 1,
+        "retry_on": [
+          "TOOL_UNAVAILABLE",
+          "UNKNOWN_ERROR"
+        ]
+      },
+      "failure_policy": {
+        "block_on": [
+          "QUALITY_GATE_FAILED",
+          "RISK_POLICY_VIOLATION",
+          "STAGE_RESULT_CONTRACT_VIOLATION"
+        ],
+        "pause_on": [
+          "HUMAN_APPROVAL_REQUIRED",
+          "MISSING_REQUIRED_INPUT"
+        ]
+      },
+      "next_nodes": [
+        "engineering-knowledge-miner"
+      ],
+      "artifact_mapping": {
+        "feedback-event.json": "artifacts/assistant-feedback-capture/feedback-event.json",
+        "feedback-inbox-entry.json": "artifacts/assistant-feedback-capture/feedback-inbox-entry.json",
+        "feedback-capture-report.md": "artifacts/assistant-feedback-capture/feedback-capture-report.md"
+      }
+    },
+    {
+      "node_id": "engineering-knowledge-miner",
+      "stage": "knowledge_mining",
+      "skill_id": "engineering-knowledge-miner",
+      "version": "3.1.0",
+      "mode": "standalone|workflow",
+      "entry_modes": [
+        "auto_flow",
+        "from_node",
+        "single_node"
+      ],
+      "depends_on": [
+        "assistant-feedback-capture"
+      ],
+      "inputs": [
+        "feedback-inbox.json",
         "design reports",
         "code quality reports",
         "review reports",
@@ -821,6 +1124,7 @@
       ],
       "quality_gates": [
         "每条经验有来源证据",
+        "feedback event 已被消费或拒绝",
         "规则默认 candidate",
         "owner 和适用范围明确",
         "反哺路径明确"
@@ -856,7 +1160,7 @@
         ]
       },
       "next_nodes": [
-        "skill-quality-auditor"
+        "skill-evolution-review"
       ],
       "artifact_mapping": {
         "engineering-lessons.md": "artifacts/engineering-knowledge-miner/engineering-lessons.md",
@@ -869,10 +1173,10 @@
       }
     },
     {
-      "node_id": "skill-quality-auditor",
-      "stage": "skill_quality",
-      "skill_id": "skill-quality-auditor",
-      "version": "2.0.0",
+      "node_id": "skill-evolution-review",
+      "stage": "skill_evolution_review",
+      "skill_id": "skill-evolution-review",
+      "version": "3.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -881,6 +1185,89 @@
       ],
       "depends_on": [
         "engineering-knowledge-miner"
+      ],
+      "inputs": [
+        "feedback-inbox.json",
+        "feedback-event.json",
+        "engineering-lessons.md",
+        "skill registry"
+      ],
+      "outputs": [
+        "skill-evolution-report.md",
+        "skill-evolution-candidates.json",
+        "skill-patch-proposals.json",
+        "regression-case-candidates.yaml",
+        "feedback-rejection-log.json"
+      ],
+      "preconditions": [
+        "contract 输入可用",
+        "风险策略已加载"
+      ],
+      "postconditions": [
+        "StageRunResult 已输出",
+        "产物已登记索引"
+      ],
+      "quality_gates": [
+        "每个候选有来源事件",
+        "accept/reject verdict 明确",
+        "重复用户纠正已生成回归候选",
+        "正式 skill 修改需要人工审批"
+      ],
+      "approval_policy": {
+        "required_for": [
+          "应用 skill patch",
+          "新增强制 eval",
+          "修改 workflow 或 quality gate",
+          "发布插件版本"
+        ],
+        "decision": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "retry_policy": {
+        "max_attempts": 1,
+        "retry_on": [
+          "TOOL_UNAVAILABLE",
+          "UNKNOWN_ERROR"
+        ]
+      },
+      "failure_policy": {
+        "block_on": [
+          "QUALITY_GATE_FAILED",
+          "RISK_POLICY_VIOLATION",
+          "STAGE_RESULT_CONTRACT_VIOLATION"
+        ],
+        "pause_on": [
+          "HUMAN_APPROVAL_REQUIRED",
+          "MISSING_REQUIRED_INPUT"
+        ]
+      },
+      "next_nodes": [
+        "skill-quality-auditor"
+      ],
+      "artifact_mapping": {
+        "skill-evolution-report.md": "artifacts/skill-evolution-review/skill-evolution-report.md",
+        "skill-evolution-candidates.json": "artifacts/skill-evolution-review/skill-evolution-candidates.json",
+        "skill-patch-proposals.json": "artifacts/skill-evolution-review/skill-patch-proposals.json",
+        "regression-case-candidates.yaml": "artifacts/skill-evolution-review/regression-case-candidates.yaml",
+        "feedback-rejection-log.json": "artifacts/skill-evolution-review/feedback-rejection-log.json"
+      }
+    },
+    {
+      "node_id": "skill-quality-auditor",
+      "stage": "skill_quality",
+      "skill_id": "skill-quality-auditor",
+      "version": "3.1.0",
+      "mode": "standalone|workflow",
+      "entry_modes": [
+        "auto_flow",
+        "from_node",
+        "single_node"
+      ],
+      "depends_on": [
+        "skill-evolution-review"
       ],
       "inputs": [
         "skills",

@@ -4,10 +4,10 @@
   "simulated_task_scope": "complete minimal backend API plus frontend settings page for an admin announcement toggle",
   "source_fixture": "fixtures/minimal-fullstack-product-task.json",
   "baseline": "current_engineering_assistant",
-  "pass_rate": 0.82,
-  "token_or_time_cost": 1.35,
-  "doc_noise_score": 0.32,
-  "frontend_product_score": 0.74,
+  "pass_rate": 0.89,
+  "token_or_time_cost": 1.15,
+  "doc_noise_score": 0.11,
+  "frontend_product_score": 0.9,
   "assertion_results": [
     {
       "assertion": "backend read/save API exists",
@@ -37,9 +37,9 @@
   ],
   "quality_findings": [
     {
-      "id": "EA-EVIDENCE-001",
+      "id": "EA-SOP-001",
       "severity": "minor",
-      "summary": "插件能控制范围和状态，但仍生成较多治理说明，真实命令证据不足。"
+      "summary": "3.1.0 全量 skill 已瘦身为任务 SOP；仍应继续真实项目回放，验证模拟指标是否成立。"
     }
   ]
 }

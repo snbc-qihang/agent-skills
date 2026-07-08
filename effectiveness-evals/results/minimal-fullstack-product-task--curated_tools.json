@@ -6,8 +6,8 @@
   "baseline": "curated_tools",
   "pass_rate": 0.88,
   "token_or_time_cost": 1.18,
-  "doc_noise_score": 0.24,
-  "frontend_product_score": 0.86,
+  "doc_noise_score": 0.16,
+  "frontend_product_score": 0.91,
   "assertion_results": [
     {
       "assertion": "backend read/save API exists",

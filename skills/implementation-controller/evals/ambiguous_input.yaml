@@ -2,9 +2,10 @@
   "id": "implementation-controller-ambiguous_input",
   "name": "Implementation Controller ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Implementation Controller ambiguous input 团队规则场景",
-    "material": "输入材料对 只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",
+    "material": "Implementation Controller 的关键判断含糊：只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 没有 owner、截止时间、证据路径或审批记录。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "implementation-controller",
       "mode": "standalone",
       "inputs": {
-        "approved design artifact": "provided: 输入材料对 只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。"
+        "approved design artifact": "provided: Implementation Controller 的关键判断含糊：只接受已审批 Markdown/JSON/YAML 设计产物，HTML 仅作为人工审阅入口 没有 owner、截止时间、证据路径或审批记录。"
       },
       "artifacts": {},
       "context": {

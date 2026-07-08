@@ -21,7 +21,7 @@ metadata:
   owner: "DBA"
   stage: "database_design"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。"
+  trigger_description: "Use when 设计涉及表结构、字段、索引、唯一约束、迁移、订正、灰度或回滚时；Do not use when do not执行生产 DDL。"
 routing:
   intent_tags:
     - "database"

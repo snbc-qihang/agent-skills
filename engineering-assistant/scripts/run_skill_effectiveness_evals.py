@@ -2,12 +2,14 @@
 import argparse
 import json
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
+import re
 
 BASELINES = {"baseline_free_codex", "current_engineering_assistant", "curated_tools"}
-CATEGORIES = {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery", "generator_structure", "schema_strictness", "frontend_delegation"}
+CATEGORIES = {"full_stack_minimal_product", "code_drift", "document_noise", "frontend_product_quality", "long_task_recovery", "generator_structure", "schema_strictness", "frontend_delegation", "prototype_gate_quality", "feedback_evolution"}
 RECOMMENDATIONS = {"keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"}
-REPORT_FIELDS = {"pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "recommendation"}
+REPORT_FIELDS = {"pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "skill_sop_metrics", "recommendation"}
 DEFAULT_SPEC = Path("effectiveness-evals/evals.json")
 DEFAULT_REPORT = Path("effectiveness-evals/reports/effectiveness-report.json")
 
@@ -73,6 +75,57 @@ def empty_delta() -> dict:
     }
 
 
+def normalized_skill_text(text: str) -> str:
+    text = re.sub(r"---.*?---", "", text, count=1, flags=re.S)
+    return " ".join(text.lower().split())
+
+
+def average_similarity(items: list[str]) -> float:
+    if len(items) < 2:
+        return 0.0
+    scores = []
+    for left_index, left in enumerate(items):
+        for right in items[left_index + 1:]:
+            scores.append(SequenceMatcher(None, left, right).ratio())
+    return sum(scores) / len(scores)
+
+
+def compute_skill_sop_metrics(skills_root: Path = Path("skills")) -> dict:
+    docs = {}
+    headings_by_skill = {}
+    descriptions = {}
+    line_counts = {}
+    for skill_md in sorted(skills_root.glob("*/SKILL.md")):
+        skill_id = skill_md.parent.name
+        text = skill_md.read_text(encoding="utf-8")
+        docs[skill_id] = normalized_skill_text(text)
+        headings_by_skill[skill_id] = [match.group(1).strip() for match in re.finditer(r"^#\s+(.+)$", text, flags=re.M)]
+        descriptions[skill_id] = next((line for line in text.splitlines() if line.startswith("description: ")), "")
+        line_counts[skill_id] = len(text.splitlines())
+    common_headings = sorted(set.intersection(*(set(values) for values in headings_by_skill.values()))) if headings_by_skill else []
+    route_quality = [
+        desc.startswith("description: Use when ")
+        and "Do not use" in desc
+        and "request is about" not in desc
+        for desc in descriptions.values()
+    ]
+    evidence_ready = [
+        "Evidence / Done" in (skills_root / skill_id / "SKILL.md").read_text(encoding="utf-8")
+        and "Stop / Escalate" in (skills_root / skill_id / "SKILL.md").read_text(encoding="utf-8")
+        for skill_id in docs
+    ]
+    return {
+        "task_sop_skill_count": len(docs),
+        "task_sop_average_similarity": round(average_similarity(list(docs.values())), 3),
+        "global_average_similarity": round(average_similarity(list(docs.values())), 3),
+        "common_heading_count": len(common_headings),
+        "common_headings": common_headings,
+        "description_route_quality": round(sum(route_quality) / len(route_quality), 3) if route_quality else 0,
+        "context_budget": {"max_skill_md_lines": max(line_counts.values()) if line_counts else 0, "pass": all(count <= 120 for count in line_counts.values())},
+        "real_output_evidence": {"task_sop_sections_present": all(evidence_ready), "skills_checked": len(evidence_ready)},
+    }
+
+
 def base_report(mode: str, spec: dict, status: str, state: str, findings: list[dict]) -> dict:
     return {
         "status": status,
@@ -90,6 +143,7 @@ def base_report(mode: str, spec: dict, status: str, state: str, findings: list[d
         "quality_findings": findings,
         "doc_noise_score": None,
         "frontend_product_score": None,
+        "skill_sop_metrics": compute_skill_sop_metrics(),
         "recommendation": "keep_and_slim",
         "recommendation_reason": "provisional default until real with-plugin/baseline runs are graded",
         "generated_at": now_iso(),
@@ -169,6 +223,7 @@ def score_results(spec: dict, result_files: list[dict]) -> dict:
         "quality_findings": findings,
         "doc_noise_score": sum(doc_noise_scores) / len(doc_noise_scores) if doc_noise_scores else None,
         "frontend_product_score": sum(frontend_scores) / len(frontend_scores) if frontend_scores else None,
+        "skill_sop_metrics": compute_skill_sop_metrics(),
         "recommendation": recommendation,
         "generated_at": now_iso(),
     }

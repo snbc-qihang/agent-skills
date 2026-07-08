@@ -2,6 +2,7 @@
   "id": "skill-quality-auditor-technology_demo_adoption",
   "name": "Skill Quality Auditor technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Skill Quality Auditor technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 front matter，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

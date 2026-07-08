@@ -12,6 +12,7 @@
     "quality_findings",
     "doc_noise_score",
     "frontend_product_score",
+    "skill_sop_metrics",
     "recommendation"
   ],
   "properties": {
@@ -89,6 +90,10 @@
         "number",
         "null"
       ]
+    },
+    "skill_sop_metrics": {
+      "type": "object",
+      "additionalProperties": true
     },
     "recommendation": {
       "enum": [

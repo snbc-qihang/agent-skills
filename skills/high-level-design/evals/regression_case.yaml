@@ -2,6 +2,7 @@
   "id": "high-level-design-regression_case",
   "name": "High Level Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：只画流程不写最终一致性",
     "material": "概要设计有系统调用流程图，但没有说明客户端状态、业务系统状态和 MQ 事件失败后的补偿关系。",

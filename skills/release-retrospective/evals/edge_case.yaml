@@ -2,9 +2,10 @@
   "id": "release-retrospective-edge_case",
   "name": "Release Retrospective edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Retrospective edge case 团队规则场景",
-    "material": "输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。",
+    "material": "Release Retrospective 遇到边界任务：部分检查不适用，但材料提供了 skip reason、证据路径和不扩大范围说明。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "release-retrospective",
       "mode": "standalone",
       "inputs": {
-        "release-verification-report.md": "provided: 输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。"
+        "release-verification-report.md": "provided: Release Retrospective 遇到边界任务：部分检查不适用，但材料提供了 skip reason、证据路径和不扩大范围说明。"
       },
       "artifacts": {},
       "context": {

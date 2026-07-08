@@ -2,9 +2,10 @@
   "id": "self-test-ambiguous_input",
   "name": "Self Test ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Self Test ambiguous input 团队规则场景",
-    "material": "输入材料对 执行前必须读取 artifacts/_control/quality-contract.json 和任务规则包 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",
+    "material": "Self Test 的关键判断含糊：执行前必须读取 artifacts/_control/quality-contract.json 和任务规则包 没有 owner、截止时间、证据路径或审批记录。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",
@@ -32,7 +33,7 @@
       "skill_id": "self-test",
       "mode": "standalone",
       "inputs": {
-        "implementation-summary.md": "provided: 输入材料对 执行前必须读取 artifacts/_control/quality-contract.json 和任务规则包 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。"
+        "implementation-summary.md": "provided: Self Test 的关键判断含糊：执行前必须读取 artifacts/_control/quality-contract.json 和任务规则包 没有 owner、截止时间、证据路径或审批记录。"
       },
       "artifacts": {},
       "context": {

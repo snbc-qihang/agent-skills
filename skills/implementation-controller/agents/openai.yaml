@@ -19,7 +19,7 @@ metadata:
   owner: "研发负责人"
   stage: "implementation_control"
   type: "control_skill"
-  trigger_description: "Use when the request is about 把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。；Do not use when 不审批设计进入研发；不直接替代 code-development 编写业务代码。"
+  trigger_description: "Use when 已审批设计需要编译成实现合同、质量合同和控制面产物，才能让代码实现安全推进时；Do not use when do not审批设计进入研发。"
 routing:
   intent_tags:
     - "control_skill"

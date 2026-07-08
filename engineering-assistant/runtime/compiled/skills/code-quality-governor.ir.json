@@ -1,13 +1,13 @@
 {
   "skill_id": "code-quality-governor",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "code_quality",
   "type": "cross_cutting_skill",
   "prompt_pack": {
     "display_name": "Code Quality Governor",
     "short_description": "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。",
     "default_prompt": "使用 code-quality-governor，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。",
+    "trigger_description": "Use when 代码变更需要通过 Q0-Q4 质量门禁、静态分析、设计一致性和发布前风险检查时；Do not use when do not以 LLM 判断替代 build/test/lint。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -112,6 +112,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

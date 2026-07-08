@@ -1,13 +1,13 @@
 {
   "skill_id": "code-review",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "code_review",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Code Review",
     "short_description": "对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。",
     "default_prompt": "使用 code-review，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。；Do not use when 不替代 code-quality-governor；不输出无证据建议。",
+    "trigger_description": "Use when 质量报告和变更文件已具备，需要做语义代码评审、定位缺陷和整理 blocker 清单时；Do not use when do not替代 code-quality-governor。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -106,6 +106,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

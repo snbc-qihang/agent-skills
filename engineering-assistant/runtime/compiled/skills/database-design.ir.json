@@ -1,13 +1,13 @@
 {
   "skill_id": "database-design",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "stage": "database_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Database Design",
     "short_description": "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。",
     "default_prompt": "使用 database-design，先确认语言和必填输入，再输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。",
+    "trigger_description": "Use when 设计涉及表结构、字段、索引、唯一约束、迁移、订正、灰度或回滚时；Do not use when do not执行生产 DDL。",
     "language_policy": {
       "supported": [
         "zh-CN",
@@ -104,6 +104,11 @@
     "agent_execution_monitor_schema": "engineering-assistant/schemas/agent-execution-monitor.schema.json",
     "post_task_plan_alignment_required": true,
     "post_task_plan_alignment_schema": "engineering-assistant/schemas/post-task-plan-alignment.schema.json",
+    "prototype_review_required_for_frontend_products": true,
+    "product_prototype_contract_schema": "engineering-assistant/schemas/product-prototype-contract.schema.json",
+    "prototype_review_report_schema": "engineering-assistant/schemas/prototype-review-report.schema.json",
+    "feedback_event_schema": "engineering-assistant/schemas/feedback-event.schema.json",
+    "skill_evolution_candidate_schema": "engineering-assistant/schemas/skill-evolution-candidate.schema.json",
     "policy_source": "workflow-orchestrator.workflow_runtime_policy.lean_runtime_router_policy",
     "full_policy_required_for": false
   },

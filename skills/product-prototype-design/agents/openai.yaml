@@ -1,0 +1,35 @@
+display_name: "Product Prototype Design"
+short_description: "为 web/app 产品研发生成可评审的高保真原型合同、视觉证据和交互状态映射，作为后续设计与实现的硬门禁。"
+default_prompt: "使用 product-prototype-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
+language_policy:
+  supported:
+    - "zh-CN"
+    - "en"
+  when_unspecified: "ask_user"
+  question: "请确认输出语言：简体中文还是 English？"
+policy:
+  allow_implicit_invocation: true
+  risk_level: "medium"
+  human_approval_required:
+    - "跳过原型门禁"
+    - "使用非项目既有设计系统"
+    - "核心信息架构变更"
+metadata:
+  owner: "产品设计负责人"
+  stage: "product_prototype_design"
+  type: "stage_skill"
+  trigger_description: "Use when Web/App 产品任务缺少可作为实现事实源的高保真原型时；Do not use when do not把低保真线框图、接口说明或组件清单当成产品原型通过。"
+routing:
+  intent_tags:
+    - "design"
+    - "product"
+    - "product-prototype-design"
+    - "product_prototype_design"
+    - "prototype"
+    - "stage_skill"
+    - "web/app"
+    - "产品研发生成可评审的高保真原型合同"
+    - "作为后续设计与实现的硬门禁。"
+    - "视觉证据和交互状态映射"
+  allow_implicit_invocation: true
+  cost_class: "medium"
