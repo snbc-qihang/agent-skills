@@ -1,0 +1,45 @@
+{
+  "eval_id": "minimal-fullstack-product-task",
+  "simulation": true,
+  "simulated_task_scope": "complete minimal backend API plus frontend settings page for an admin announcement toggle",
+  "source_fixture": "fixtures/minimal-fullstack-product-task.json",
+  "baseline": "current_teamwork_engineering_assistant",
+  "pass_rate": 0.82,
+  "token_or_time_cost": 1.35,
+  "doc_noise_score": 0.32,
+  "frontend_product_score": 0.74,
+  "assertion_results": [
+    {
+      "assertion": "backend read/save API exists",
+      "passed": true,
+      "evidence": "Backend contract lists GET/PUT announcement endpoints."
+    },
+    {
+      "assertion": "frontend states complete",
+      "passed": true,
+      "evidence": "UI mapping includes loading, empty, validation_error, saving, saved, save_failed."
+    },
+    {
+      "assertion": "scope stays minimal",
+      "passed": true,
+      "evidence": "Control plane constrained allowed modules to backend/announcement and frontend/admin-announcement."
+    },
+    {
+      "assertion": "field contract consistent",
+      "passed": true,
+      "evidence": "enabled/message/updatedAt are tracked in API and UI mapping."
+    },
+    {
+      "assertion": "test/build evidence",
+      "passed": false,
+      "evidence": "Evidence lists required commands, but simulated output includes no real command log."
+    }
+  ],
+  "quality_findings": [
+    {
+      "id": "EA-EVIDENCE-001",
+      "severity": "minor",
+      "summary": "插件能控制范围和状态，但仍生成较多治理说明，真实命令证据不足。"
+    }
+  ]
+}

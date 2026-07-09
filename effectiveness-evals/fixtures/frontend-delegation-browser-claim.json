@@ -1,0 +1,22 @@
+{
+  "fixture_id": "frontend-delegation-browser-claim",
+  "task_type": "frontend_delegation_boundary",
+  "missing_capabilities": [
+    "browser",
+    "chrome",
+    "build-web-apps"
+  ],
+  "allowed_claim_without_browser": "code_level_validation_only",
+  "forbidden_claim_without_browser": "frontend_product_acceptance_passed",
+  "required_browser_evidence": [
+    "screenshot",
+    "console_error_check",
+    "viewport",
+    "core_workflow_interaction",
+    "no_overlap_check"
+  ],
+  "ledger_artifacts": [
+    "artifacts/_control/capability-invocation-ledger.json",
+    "artifacts/_control/capability-health.json"
+  ]
+}

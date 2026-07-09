@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "summary",
+    "results",
+    "errors",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0.0"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "block"
+      ]
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "commands_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required_failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "optional_failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "make_validate_passed": {
+          "type": "boolean"
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "command",
+          "cwd",
+          "required",
+          "exit_code",
+          "duration_ms",
+          "blocking"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "exit_code": {
+            "type": "integer"
+          },
+          "returncode": {
+            "type": "integer"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "timed_out": {
+            "type": "boolean"
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "stdout_excerpt": {
+            "type": "string"
+          },
+          "stderr_excerpt": {
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "extensions": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "generated_at": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "title": "Strict engineering-assistant quality run report"
+}

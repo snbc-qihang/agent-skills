@@ -236,6 +236,58 @@
       "tl_review_required": true
     }
   },
+  "lean_runtime_router_policy": {
+    "artifact_persistence_policy": {
+      "default_persistence_mode": "ephemeral",
+      "ephemeral_root_scope": "target_project",
+      "run_artifact_root": ".run-artifacts/",
+      "ephemeral_root_template": ".run-artifacts/engineering-assistant/<run_id>/",
+      "docs_promotion_policy": {
+        "target_root": "docs/",
+        "requires_explicit_user_request": true,
+        "requires_delivery_material_confirmation": true
+      }
+    },
+    "evidence_levels": [
+      "inline",
+      "lite",
+      "standard",
+      "formal"
+    ],
+    "persistence_modes": [
+      "inline",
+      "ephemeral",
+      "target_repo",
+      "blocked"
+    ],
+    "required_feedback_artifacts": [
+      "assistant-run-feedback.json"
+    ],
+    "pollution_markers": [
+      "TARGET_REPO_ARTIFACT_POLLUTION",
+      "PROCESS_DOCUMENTATION_POLLUTION"
+    ],
+    "document_spine_policy": {
+      "spine_artifact": "docs/00-index/product-planning-spine.md",
+      "machine_index": "docs/00-index/document-index.json",
+      "active_document_budget": 12,
+      "active_context_rule": "不得因 docs 增长而全量扫读；必须通过 planning spine 和 document index 选择最小上下文。"
+    },
+    "agent_execution_monitor_policy": {
+      "failure_markers": [
+        "SUBAGENT_UNVERIFIED_SUCCESS",
+        "SUBAGENT_EVIDENCE_MISSING"
+      ],
+      "strict_check_rule": "subagent 成功必须有 observed_evidence、independent_verification 和 orchestrator 消费记录。"
+    },
+    "product_plan_alignment_policy": {
+      "required_before_task_close": true,
+      "drift_markers": [
+        "LOCAL_OPTIMUM_ONLY",
+        "PRODUCT_PLAN_DRIFT"
+      ]
+    }
+  },
   "nodes": [
     {
       "node_id": "requirement-intake",
