@@ -1,13 +1,13 @@
 {
   "skill_id": "detailed-design",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "detailed_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Detailed Design",
     "short_description": "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。",
     "default_prompt": "使用 detailed-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when the request is about 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。；Do not use when 不批准设计进入研发；不直接修改代码。",
+    "trigger_description": "Use when 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略；Do not use when do not 批准设计进入研发。",
     "language_policy": {
       "supported": [
         "zh-CN",

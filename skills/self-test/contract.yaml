@@ -1,7 +1,7 @@
 {
   "skill_id": "self-test",
   "skill_name": "Self Test",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "self_test",
   "type": "stage_skill",
   "purpose": "生成并执行自测方案，输出失败原因、影响范围和阻断判断。",
@@ -10,7 +10,7 @@
     "不忽略失败测试",
     "不替代发布验证"
   ],
-  "trigger_description": "Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。",
+  "trigger_description": "Use when 生成并执行自测方案，输出失败原因、影响范围和阻断判断；Do not use when do not 伪造测试结果。",
   "routing": {
     "intent_tags": [
       "self",
@@ -587,7 +587,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "self-test",

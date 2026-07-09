@@ -1,13 +1,13 @@
 {
   "skill_id": "high-level-design",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "high_level_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "High Level Design",
     "short_description": "从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。",
     "default_prompt": "使用 high-level-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when the request is about 从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。；Do not use when 不深入代码实现细节；不跳过架构风险。",
+    "trigger_description": "Use when 从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响；Do not use when do not 深入代码实现细节。",
     "language_policy": {
       "supported": [
         "zh-CN",

@@ -1,7 +1,7 @@
 {
   "skill_id": "code-quality-governor",
   "skill_name": "Code Quality Governor",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "code_quality",
   "type": "cross_cutting_skill",
   "purpose": "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。",
@@ -10,7 +10,7 @@
     "不在测试失败时输出 pass",
     "不降级 blocker"
   ],
-  "trigger_description": "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。",
+  "trigger_description": "Use when 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告；Do not use when do not 以 LLM 判断替代 build/test/lint。",
   "routing": {
     "intent_tags": [
       "CI/CD",
@@ -637,7 +637,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "code-quality-governor",

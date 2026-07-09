@@ -18,6 +18,7 @@ HIGH_RISK_SKILLS = {
     "release-readiness",
     "release-verification",
     "engineering-knowledge-miner",
+    "skill-evolution-review",
     "implementation-controller",
 }
 

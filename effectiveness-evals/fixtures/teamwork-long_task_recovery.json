@@ -1,0 +1,7 @@
+{
+  "fixture_id": "teamwork-long_task_recovery",
+  "category": "long_task_recovery",
+  "teamwork_plugin": "teamwork-engineering-assistant",
+  "version": "1.1.0.0",
+  "expected_skill_count": 25
+}

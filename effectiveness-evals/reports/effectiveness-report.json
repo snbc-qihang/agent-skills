@@ -1,0 +1,73 @@
+{
+  "status": "waiting_for_input",
+  "mode": "report",
+  "evaluation_state": "waiting_for_results",
+  "baselines": [
+    "baseline_free_codex",
+    "current_engineering_assistant",
+    "curated_tools"
+  ],
+  "evals": [
+    "teamwork-full_stack_minimal_product",
+    "teamwork-code_drift",
+    "teamwork-document_noise",
+    "teamwork-frontend_product_quality",
+    "teamwork-long_task_recovery",
+    "teamwork-generator_structure",
+    "teamwork-schema_strictness",
+    "teamwork-frontend_delegation",
+    "teamwork-prototype_gate_quality",
+    "teamwork-feedback_evolution"
+  ],
+  "metrics": {
+    "eval_count": 10,
+    "baseline_count": 3,
+    "real_result_count": 0
+  },
+  "pass_rate_delta": {
+    "current_engineering_assistant_vs_baseline_free_codex": null,
+    "current_engineering_assistant_vs_curated_tools": null,
+    "curated_tools_vs_baseline_free_codex": null
+  },
+  "token_or_time_cost_delta": {
+    "current_engineering_assistant_vs_baseline_free_codex": null,
+    "current_engineering_assistant_vs_curated_tools": null,
+    "curated_tools_vs_baseline_free_codex": null
+  },
+  "quality_findings": [
+    {
+      "id": "EFFECTIVENESS-RESULTS-MISSING",
+      "severity": "major",
+      "summary": "缺少真实 baseline/current/curated_tools 运行结果，不能判断插件真实交付收益。"
+    }
+  ],
+  "doc_noise_score": null,
+  "frontend_product_score": null,
+  "skill_sop_metrics": {
+    "task_sop_skill_count": 25,
+    "task_sop_average_similarity": 0.274,
+    "global_average_similarity": 0.274,
+    "common_heading_count": 7,
+    "common_headings": [
+      "Do Not Use When",
+      "Do This",
+      "Evidence / Done",
+      "Inputs",
+      "References / Scripts",
+      "Stop / Escalate",
+      "When To Use"
+    ],
+    "description_route_quality": 1.0,
+    "context_budget": {
+      "max_skill_md_lines": 49,
+      "pass": true
+    },
+    "real_output_evidence": {
+      "task_sop_sections_present": true,
+      "skills_checked": 25
+    }
+  },
+  "recommendation": "keep_and_slim",
+  "recommendation_reason": "teamwork spec gate validates short SOP, prototype gate, and feedback evolution before real baseline runs are graded",
+  "generated_at": "2026-07-09T00:12:01.695414+00:00"
+}

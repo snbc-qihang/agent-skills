@@ -26,7 +26,7 @@ metadata:
   owner: "skill owner"
   stage: "skill_quality"
   type: "audit_skill"
-  trigger_description: "Use when the request is about 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；Do not use when 不执行业务研发阶段；不替代 eval 执行。"
+  trigger_description: "Use when 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库；Do not use when do not 执行业务研发阶段。"
 routing:
   intent_tags:
     - "audit_skill"

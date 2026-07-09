@@ -1,13 +1,13 @@
 {
   "skill_id": "self-test",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "self_test",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Self Test",
     "short_description": "生成并执行自测方案，输出失败原因、影响范围和阻断判断。",
     "default_prompt": "使用 self-test，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。",
+    "trigger_description": "Use when 生成并执行自测方案，输出失败原因、影响范围和阻断判断；Do not use when do not 伪造测试结果。",
     "language_policy": {
       "supported": [
         "zh-CN",

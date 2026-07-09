@@ -1,13 +1,13 @@
 {
   "skill_id": "design-review",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "design_review",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Design Review",
     "short_description": "评审设计产物，判断是否可以进入代码研发。",
     "default_prompt": "使用 design-review，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 评审设计产物，判断是否可以进入代码研发。；Do not use when 不代替审批人签字；不修正文档内容。",
+    "trigger_description": "Use when 评审设计产物，判断是否可以进入代码研发；Do not use when do not 代替审批人签字。",
     "language_policy": {
       "supported": [
         "zh-CN",

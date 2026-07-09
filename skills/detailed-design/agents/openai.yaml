@@ -29,7 +29,7 @@ metadata:
   owner: "后端开发"
   stage: "detailed_design"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。；Do not use when 不批准设计进入研发；不直接修改代码。"
+  trigger_description: "Use when 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略；Do not use when do not 批准设计进入研发。"
 routing:
   intent_tags:
     - "design"

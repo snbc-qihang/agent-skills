@@ -1,7 +1,7 @@
 {
   "skill_id": "mq-design",
   "skill_name": "MQ Design",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "mq_design",
   "type": "stage_skill",
   "purpose": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
@@ -10,7 +10,7 @@
     "不隐藏重复消费风险",
     "不把不同语义消息混成单一处理流"
   ],
-  "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
+  "trigger_description": "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。",
   "routing": {
     "intent_tags": [
       "MQ",
@@ -614,7 +614,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "mq-design",

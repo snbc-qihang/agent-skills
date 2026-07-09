@@ -2,6 +2,7 @@
   "id": "detailed-design-regression_case",
   "name": "Detailed Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：异常只打印不抛",
     "material": "伪代码 catch Exception 后 log.error 并返回成功，错误消息硬编码为处理失败，没有 TraceId 和异常码。",
@@ -75,7 +76,11 @@
     "策略要求审批时已请求人工审批",
     "生成正式 Markdown 文档前必须先读取对应 assets template",
     "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input"
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+    "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
+    "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
+    "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
+    "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts"
   ],
   "severity_when_failed": "critical",
   "grader": {

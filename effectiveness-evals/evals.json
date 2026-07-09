@@ -1,0 +1,318 @@
+{
+  "schema_version": "1.0",
+  "plugin": "teamwork-engineering-assistant",
+  "version": "1.1.0.0",
+  "baselines": [
+    {
+      "id": "baseline_free_codex",
+      "label": "No plugin baseline"
+    },
+    {
+      "id": "current_engineering_assistant",
+      "label": "teamwork-engineering-assistant 1.1.0.0"
+    },
+    {
+      "id": "curated_tools",
+      "label": "Curated third-party skills/tools"
+    }
+  ],
+  "evals": [
+    {
+      "id": "teamwork-full_stack_minimal_product",
+      "category": "full_stack_minimal_product",
+      "prompt": "Evaluate teamwork-engineering-assistant for full_stack_minimal_product: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-full_stack_minimal_product.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-code_drift",
+      "category": "code_drift",
+      "prompt": "Evaluate teamwork-engineering-assistant for code_drift: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-code_drift.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-document_noise",
+      "category": "document_noise",
+      "prompt": "Evaluate teamwork-engineering-assistant for document_noise: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-document_noise.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-frontend_product_quality",
+      "category": "frontend_product_quality",
+      "prompt": "Evaluate teamwork-engineering-assistant for frontend_product_quality: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-frontend_product_quality.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-long_task_recovery",
+      "category": "long_task_recovery",
+      "prompt": "Evaluate teamwork-engineering-assistant for long_task_recovery: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-long_task_recovery.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-generator_structure",
+      "category": "generator_structure",
+      "prompt": "Evaluate teamwork-engineering-assistant for generator_structure: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-generator_structure.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-schema_strictness",
+      "category": "schema_strictness",
+      "prompt": "Evaluate teamwork-engineering-assistant for schema_strictness: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-schema_strictness.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-frontend_delegation",
+      "category": "frontend_delegation",
+      "prompt": "Evaluate teamwork-engineering-assistant for frontend_delegation: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-frontend_delegation.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-prototype_gate_quality",
+      "category": "prototype_gate_quality",
+      "prompt": "Evaluate teamwork-engineering-assistant for prototype_gate_quality: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-prototype_gate_quality.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    },
+    {
+      "id": "teamwork-feedback_evolution",
+      "category": "feedback_evolution",
+      "prompt": "Evaluate teamwork-engineering-assistant for feedback_evolution: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+      "baselines": [
+        "baseline_free_codex",
+        "current_engineering_assistant",
+        "curated_tools"
+      ],
+      "input_files": [
+        "fixtures/teamwork-feedback_evolution.json"
+      ],
+      "assertions": [
+        "skill trigger is specific and has negative boundary",
+        "workflow uses only necessary evidence and avoids long template dumping",
+        "outputs include concrete delivery evidence or explicit blocked reason",
+        "teamwork plugin identity and rrq-yq-team profile are preserved",
+        "high-risk or formal evolution changes require human approval"
+      ],
+      "grading_dimensions": [
+        "routing",
+        "execution_sop",
+        "evidence",
+        "cost",
+        "teamwork_preservation",
+        "failure_handling"
+      ]
+    }
+  ],
+  "result_contract": {
+    "required_report_fields": [
+      "pass_rate_delta",
+      "token_or_time_cost_delta",
+      "quality_findings",
+      "doc_noise_score",
+      "frontend_product_score",
+      "skill_sop_metrics",
+      "recommendation"
+    ],
+    "recommendation_values": [
+      "keep_and_slim",
+      "split_capabilities",
+      "delegate_to_curated_tools",
+      "retire_skill"
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "skill_id": "assistant-feedback-capture",
+  "version": "1.1.0",
+  "stage": "feedback_capture",
+  "type": "cross_cutting_skill",
+  "prompt_pack": {
+    "display_name": "Assistant Feedback Capture",
+    "short_description": "把每次 workflow、review、测试、用户纠正和失败重试中的有价值问题转化为可消费 feedback event 和中心反馈 inbox 候选。",
+    "default_prompt": "使用 assistant-feedback-capture，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
+    "trigger_description": "Use when workflow、review、测试、用户纠正、失败重试或第三方工具调用暴露有价值问题时；Do not use when do not直接修改正式 skill、workflow、schema 或发布版本。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
+    }
+  },
+  "inputs": [
+    "StageRunResult",
+    "assistant-run-feedback.json",
+    "workflow-trace.json",
+    "user correction summary",
+    "tool logs"
+  ],
+  "outputs": [
+    "feedback-event.json",
+    "feedback-inbox-entry.json",
+    "feedback-capture-report.md"
+  ],
+  "routing": {
+    "intent_tags": [
+      "assistant",
+      "assistant-feedback-capture",
+      "capture",
+      "cross_cutting_skill",
+      "event",
+      "feedback",
+      "feedback_capture",
+      "inbox",
+      "review",
+      "workflow",
+      "候选。",
+      "和中心反馈"
+    ],
+    "positive_triggers": [
+      "assistant-feedback-capture",
+      "Assistant Feedback Capture",
+      "把每次 workflow、review、测试、用户纠正和失败重试中的有价值问题转化为可消费 feedback event 和中心反馈 inbox 候选。"
+    ],
+    "negative_triggers": [
+      "只解释 Assistant Feedback Capture 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "StageRunResult",
+      "assistant-run-feedback.json",
+      "workflow-trace.json",
+      "user correction summary",
+      "tool logs"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "反馈事件有证据路径",
+      "用户纠正优先级已标记",
+      "目标项目与中心仓库落点明确",
+      "事件已标记 consumed_by_evolution_review=false"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "采集敏感内容",
+      "提升为正式规范候选",
+      "修改正式 skill"
+    ]
+  },
+  "quality_gates": [
+    "反馈事件有证据路径",
+    "用户纠正优先级已标记",
+    "目标项目与中心仓库落点明确",
+    "事件已标记 consumed_by_evolution_review=false"
+  ],
+  "workflow": {
+    "node_id": "assistant-feedback-capture",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "skills/assistant-feedback-capture/SKILL.md",
+    "skills/assistant-feedback-capture/contract.yaml",
+    "skills/assistant-feedback-capture/workflow/node.yaml",
+    "skills/assistant-feedback-capture/agents/openai.yaml"
+  ]
+}

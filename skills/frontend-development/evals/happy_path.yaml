@@ -2,9 +2,10 @@
   "id": "frontend-development-happy_path",
   "name": "Frontend Development happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Development happy path 团队规则场景",
-    "material": "输入材料覆盖 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。，并提供 每个 UI 变更映射到前端设计 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时。；材料包含 读取 frontend-design、component-contracts、interface-contracts、repo_context 和 prototype gate verdict。，并提供 design-to-ui-mapping.yaml 每行变更能追溯到原型或 frontend-design。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -32,7 +33,7 @@
       "skill_id": "frontend-development",
       "mode": "standalone",
       "inputs": {
-        "frontend-design.md": "provided: 输入材料覆盖 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。，并提供 每个 UI 变更映射到前端设计 的证据、产物路径和人工审批状态。"
+        "frontend-design.md": "provided: 正向触发：已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时。；材料包含 读取 frontend-design、component-contracts、interface-contracts、repo_context 和 prototype gate verdict。，并提供 design-to-ui-mapping.yaml 每行变更能追溯到原型或 frontend-design。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-development 必须按原型和 frontend-design 实现，并输出 design-to-ui-mapping.yaml",
+    "缺少浏览器、截图、console 或交互证据时不得声明产品级通过"
   ],
   "severity_when_failed": "major",
   "grader": {

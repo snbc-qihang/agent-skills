@@ -2,6 +2,7 @@
   "id": "high-level-design-technology_demo_adoption",
   "name": "High Level Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "High Level Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 A1 设计文档必须体现系统边界、业务域、事件协作和最终一致性；不强制平台采用微服务、事件驱动或 DDD 作为技术路线，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",
@@ -77,7 +78,10 @@
     "策略要求审批时已请求人工审批",
     "生成正式 Markdown 文档前必须先读取对应 assets template",
     "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input"
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+    "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
+    "团队概要设计模板规则必须保留系统逻辑视图、研发视图、核心功能、中间件设计和数据视图",
+    "跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且不得包含 flowchart"
   ],
   "severity_when_failed": "major",
   "grader": {

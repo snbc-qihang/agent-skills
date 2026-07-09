@@ -2,6 +2,7 @@
   "id": "release-verification-ambiguous_input",
   "name": "Release Verification ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Release Verification ambiguous input 团队规则场景",
     "material": "输入材料对 核心功能验证 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",

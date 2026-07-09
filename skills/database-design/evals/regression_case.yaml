@@ -2,6 +2,7 @@
   "id": "database-design-regression_case",
   "name": "Database Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：审计字段无实际用途",
     "material": "表里新增 8 个备用字段和 4 个审计字段，设计没有任何查询、约束、迁移或业务用途说明。",

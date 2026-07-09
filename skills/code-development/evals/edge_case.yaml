@@ -2,6 +2,7 @@
   "id": "code-development-edge_case",
   "name": "Code Development edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Development edge case 团队规则场景",
     "material": "输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。",

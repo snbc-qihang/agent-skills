@@ -2,9 +2,10 @@
   "id": "code-development-missing_required_input",
   "name": "Code Development missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Development missing required input 团队规则场景",
-    "material": "缺少必填输入 detailed-design.md，但请求仍要求直接执行 Code Development 并给出通过结论。",
+    "material": "缺少必填输入 detailed-design.md，但请求仍要求直接执行 Code Development；应按停止条件处理：缺少 `detailed-design.md` 或其来源证据时 waiting_for_input，不得生成正式产物。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",

@@ -1,13 +1,13 @@
 {
   "skill_id": "engineering-knowledge-miner",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "prompt_pack": {
     "display_name": "Engineering Knowledge Miner",
     "short_description": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
     "default_prompt": "使用 engineering-knowledge-miner，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。",
+    "trigger_description": "Use when 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议；Do not use when do not 无证据创建规范。",
     "language_policy": {
       "supported": [
         "zh-CN",

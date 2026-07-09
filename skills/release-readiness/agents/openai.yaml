@@ -27,7 +27,7 @@ metadata:
   owner: "发布负责人"
   stage: "release_readiness"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。；Do not use when 不执行生产发布；不绕过高风险发布审批。"
+  trigger_description: "Use when 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策；Do not use when do not 执行生产发布。"
 routing:
   intent_tags:
     - "gate"

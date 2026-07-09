@@ -2,6 +2,7 @@
   "id": "frontend-design-technology_demo_adoption",
   "name": "Frontend Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 FE1 页面结构、组件边界、状态管理、路由和交互流程明确，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+    "缺少三轮 prototype review verdict 时必须 blocked"
   ],
   "severity_when_failed": "major",
   "grader": {

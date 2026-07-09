@@ -2,6 +2,7 @@
   "id": "mq-design-policy_conflict",
   "name": "MQ Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "进程内异步被设计成 MQ",
     "material": "服务内部发送短信后的日志写入被设计为 RabbitMQ 消息，没有跨服务解耦、削峰或失败重试需求。",

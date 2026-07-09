@@ -2,6 +2,7 @@
   "id": "mq-design-missing_required_input",
   "name": "MQ Design missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "消费者契约缺失",
     "material": "生产者已定义 Exchange 和 routingKey，但没有消费者队列名、是否单节点消费、队列类型、死信、监控阈值。",

@@ -1,0 +1,46 @@
+display_name: "Skill Evolution Review"
+short_description: "将已采集反馈事件转化为可评审的 skill 改进候选、回归 eval 候选、治理规则候选和拒绝入库原因。"
+default_prompt: "使用 skill-evolution-review，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后再进入 formal_generation 输出声明产物、findings、required actions 和 gate decision。"
+language_policy:
+  supported:
+    - "zh-CN"
+    - "en"
+  when_unspecified: "ask_user"
+  question: "请确认输出语言：简体中文还是 English？"
+preflight_gate:
+  state_field: "preflight_input_state"
+  states:
+    - "ready"
+    - "waiting_for_input"
+    - "waiting_for_human_review"
+    - "blocked"
+  formal_generation_entry_condition: "preflight_input_state == ready"
+policy:
+  allow_implicit_invocation: false
+  risk_level: "high"
+  human_approval_required:
+    - "应用 skill patch"
+    - "新增强制 eval"
+    - "修改 workflow 或 quality gate"
+    - "发布插件版本"
+metadata:
+  owner: "skill owner"
+  stage: "skill_evolution_review"
+  type: "audit_skill"
+  trigger_description: "Use when 周期性消费 feedback inbox，需要聚类为 skill patch、eval regression 或治理规则候选时；Do not use when do not未经人工审批自动修改正式 SKILL.md、contract、workflow 或 schema。"
+routing:
+  intent_tags:
+    - "audit_skill"
+    - "eval"
+    - "evolution"
+    - "review"
+    - "skill"
+    - "skill-evolution-review"
+    - "skill_evolution_review"
+    - "候选"
+    - "回归"
+    - "将已采集反馈事件转化为可评审的"
+    - "改进候选"
+    - "治理规则候选和拒绝入库原因。"
+  allow_implicit_invocation: false
+  cost_class: "high"

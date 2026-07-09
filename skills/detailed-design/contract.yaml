@@ -1,7 +1,7 @@
 {
   "skill_id": "detailed-design",
   "skill_name": "Detailed Design",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "detailed_design",
   "type": "stage_skill",
   "purpose": "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。",
@@ -10,7 +10,7 @@
     "不直接修改代码",
     "不省略专项设计"
   ],
-  "trigger_description": "Use when the request is about 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。；Do not use when 不批准设计进入研发；不直接修改代码。",
+  "trigger_description": "Use when 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略；Do not use when do not 批准设计进入研发。",
   "routing": {
     "intent_tags": [
       "design",
@@ -615,7 +615,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "detailed-design",

@@ -91,48 +91,18 @@
       "id": "canary-required-files",
       "status": "pass",
       "detail": {
-        "missing": []
+        "skipped": true,
+        "reason": "external canary root is unavailable on this machine",
+        "root": "/Users/sunliming/work/project/personal/ai-platform-v1"
       }
     },
     {
       "id": "canary-context-pack",
       "status": "pass",
       "detail": {
-        "root": "/Users/sunliming/work/project/personal/ai-platform-v1",
-        "skill_id": "workflow-orchestrator",
-        "task_id": "complete_identity_access_rbac_and_model_usage_policy_projection_before_rag_runtime",
-        "status": "pass",
-        "sources": [
-          {
-            "path": "artifacts/workflow-orchestrator/artifact-index.json",
-            "kind": "workflow_artifact_index",
-            "bytes": 188
-          },
-          {
-            "path": "artifacts/workflow-orchestrator/workflow-summary.md",
-            "kind": "workflow_summary",
-            "bytes": 70
-          },
-          {
-            "path": "artifacts/_control/architecture-baseline.json",
-            "kind": "architecture_baseline",
-            "bytes": 55
-          },
-          {
-            "path": "Makefile",
-            "kind": "validation_entrypoint",
-            "bytes": 21
-          },
-          {
-            "path": "artifacts/_control/architecture-baseline.json",
-            "kind": "document_control",
-            "bytes": 55
-          }
-        ],
-        "forbidden_sources": [
-          "docs/human-readable/context.html"
-        ],
-        "missing_required_sources": []
+        "skipped": true,
+        "reason": "external canary root is unavailable on this machine",
+        "root": "/Users/sunliming/work/project/personal/ai-platform-v1"
       }
     },
     {
@@ -168,7 +138,7 @@
       "left": "hermes-plugin",
       "right": "$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant\",\n  \"hermes_plugin_manifest\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 21\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant\",\n  \"hermes_plugin_manifest\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 25\n}\n"
     }
   ]
 }

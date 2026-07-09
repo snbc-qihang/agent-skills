@@ -27,7 +27,7 @@ metadata:
   owner: "研发负责人"
   stage: "code_quality"
   type: "cross_cutting_skill"
-  trigger_description: "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。"
+  trigger_description: "Use when 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告；Do not use when do not 以 LLM 判断替代 build/test/lint。"
 routing:
   intent_tags:
     - "CI/CD"

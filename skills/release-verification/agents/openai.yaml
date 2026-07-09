@@ -26,7 +26,7 @@ metadata:
   owner: "SRE"
   stage: "release_verification"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 发布后验证核心功能、监控、日志、业务指标和回滚条件。；Do not use when 不执行未审批回滚；不忽略异常。"
+  trigger_description: "Use when 发布后验证核心功能、监控、日志、业务指标和回滚条件；Do not use when do not 执行未审批回滚。"
 routing:
   intent_tags:
     - "release"

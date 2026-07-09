@@ -29,7 +29,7 @@ metadata:
   owner: "架构师"
   stage: "mq_design"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。"
+  trigger_description: "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。"
 routing:
   intent_tags:
     - "MQ"

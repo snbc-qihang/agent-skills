@@ -1,7 +1,7 @@
 {
   "skill_id": "repo-context-miner",
   "skill_name": "Repo Context Miner",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "repo_context",
   "type": "stage_skill",
   "purpose": "从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。",
@@ -10,7 +10,7 @@
     "不替代业务设计",
     "不在缺少证据时推断实现细节"
   ],
-  "trigger_description": "Use when the request is about 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。；Do not use when 不直接修改代码；不替代业务设计。",
+  "trigger_description": "Use when 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围；Do not use when do not 直接修改代码。",
   "routing": {
     "intent_tags": [
       "context",
@@ -588,7 +588,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "repo-context-miner",

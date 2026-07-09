@@ -1,0 +1,7 @@
+{
+  "fixture_id": "teamwork-code_drift",
+  "category": "code_drift",
+  "teamwork_plugin": "teamwork-engineering-assistant",
+  "version": "1.1.0.0",
+  "expected_skill_count": 25
+}

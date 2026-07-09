@@ -2,6 +2,7 @@
   "id": "redis-design-technology_demo_adoption",
   "name": "Redis Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Redis Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 R1 Redis 只做加速层、协调层、短态承载层，不做事实库、分析库、跨服务共享源、消息队列，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

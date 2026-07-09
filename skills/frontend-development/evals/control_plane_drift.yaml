@@ -2,6 +2,7 @@
   "id": "frontend-development-control_plane_drift",
   "name": "Frontend Development control plane drift",
   "case_type": "control_plane_drift",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Development control plane drift 团队规则场景",
     "material": "任务已进入研发后多轮执行，但 artifacts/_control 中 current-task、artifact-index、quality-contract、implementation-contract 或 task-context.agent.md 与 stage result 状态不一致。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-development 必须按原型和 frontend-design 实现，并输出 design-to-ui-mapping.yaml",
+    "缺少浏览器、截图、console 或交互证据时不得声明产品级通过"
   ],
   "severity_when_failed": "major",
   "grader": {

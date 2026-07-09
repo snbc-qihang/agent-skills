@@ -1,7 +1,7 @@
 {
   "skill_id": "engineering-knowledge-miner",
   "skill_name": "Engineering Knowledge Miner",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "purpose": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
@@ -10,7 +10,7 @@
     "不未经审批修改正式规范",
     "不把偶发低风险问题升级为强制规范"
   ],
-  "trigger_description": "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。",
+  "trigger_description": "Use when 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议；Do not use when do not 无证据创建规范。",
   "routing": {
     "intent_tags": [
       "cross_cutting_skill",
@@ -632,7 +632,13 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation"
+    "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected"
   ],
   "workflow_interface": {
     "node_id": "engineering-knowledge-miner",

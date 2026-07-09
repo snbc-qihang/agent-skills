@@ -2,6 +2,7 @@
   "id": "frontend-design-low_quality_automation",
   "name": "Frontend Design low quality automation",
   "case_type": "low_quality_automation",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Design low quality automation 团队规则场景",
     "material": "自动化任务连续执行失败，但没有 bounded repair 次数上限、repair-attempts.json、失败步骤证据或人工暂停条件。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+    "缺少三轮 prototype review verdict 时必须 blocked"
   ],
   "severity_when_failed": "major",
   "grader": {

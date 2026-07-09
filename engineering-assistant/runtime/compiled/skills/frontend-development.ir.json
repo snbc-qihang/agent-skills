@@ -1,13 +1,13 @@
 {
   "skill_id": "frontend-development",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "frontend_development",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Frontend Development",
     "short_description": "基于前端设计和接口契约实施页面、组件、状态和接口联调变更。",
     "default_prompt": "使用 frontend-development，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。；Do not use when 不修改无关页面；不绕过前端设计。",
+    "trigger_description": "Use when 已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时；Do not use when do not凭组件文档或接口文档绕过高保真原型。",
     "language_policy": {
       "supported": [
         "zh-CN",

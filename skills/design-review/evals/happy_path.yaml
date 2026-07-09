@@ -2,6 +2,7 @@
   "id": "design-review-happy_path",
   "name": "Design Review happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "完整设计包评审",
     "material": "设计包包含需求契约、概要设计、详细设计、Redis/MQ/DB 专项、不适用说明、测试策略、高风险审批和回滚方案。",

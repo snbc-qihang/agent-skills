@@ -2,6 +2,7 @@
   "id": "design-review-missing_required_input",
   "name": "Design Review missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "缺少 MQ 和 DB 专项设计",
     "material": "评审材料只有概要设计和详细设计，正文提到 MQ 和新增表，但没有 MQ 设计、DB 设计或不适用说明。",

@@ -2,6 +2,7 @@
   "id": "frontend-design-regression_case",
   "name": "Frontend Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Design regression case 团队规则场景",
     "material": "历史问题再次出现：FE1 页面结构、组件边界、状态管理、路由和交互流程明确 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+    "缺少三轮 prototype review verdict 时必须 blocked"
   ],
   "severity_when_failed": "critical",
   "grader": {

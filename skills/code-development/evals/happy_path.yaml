@@ -2,9 +2,10 @@
   "id": "code-development-happy_path",
   "name": "Code Development happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Development happy path 团队规则场景",
-    "material": "输入材料覆盖 基于设计文档进行最小必要代码变更或生成代码修改计划。，并提供 每个变更映射到设计 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：基于设计文档进行最小必要代码变更或生成代码修改计划。；材料包含 读取 detailed-design.md, implementation-plan.md, interface-contracts.yaml、项目 profile、团队规则目录和 artifact index。，并提供 `code changes` 已生成并可追溯。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "D1",
@@ -32,7 +33,7 @@
       "skill_id": "code-development",
       "mode": "standalone",
       "inputs": {
-        "detailed-design.md": "provided: 输入材料覆盖 基于设计文档进行最小必要代码变更或生成代码修改计划。，并提供 每个变更映射到设计 的证据、产物路径和人工审批状态。"
+        "detailed-design.md": "provided: 正向触发：基于设计文档进行最小必要代码变更或生成代码修改计划。；材料包含 读取 detailed-design.md, implementation-plan.md, interface-contracts.yaml、项目 profile、团队规则目录和 artifact index。，并提供 `code changes` 已生成并可追溯。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

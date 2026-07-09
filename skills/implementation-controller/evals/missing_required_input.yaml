@@ -2,9 +2,10 @@
   "id": "implementation-controller-missing_required_input",
   "name": "Implementation Controller missing required input",
   "case_type": "missing_required_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Implementation Controller missing required input 团队规则场景",
-    "material": "缺少必填输入 approved design artifact，但请求仍要求直接执行 Implementation Controller 并给出通过结论。",
+    "material": "缺少必填输入 approved design artifact，但请求仍要求直接执行 Implementation Controller；应按停止条件处理：缺少 `approved design artifact` 或其来源证据时 waiting_for_input，不得生成正式产物。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",

@@ -2,6 +2,7 @@
   "id": "redis-design-ambiguous_input",
   "name": "Redis Design ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "缓存一致性方案不明确",
     "material": "设计写查询走缓存，修改后清缓存，但没有说明延迟双删、并发更新、旧消息覆盖和回滚策略。",

@@ -2,6 +2,7 @@
   "id": "redis-design-regression_case",
   "name": "Redis Design regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：大批量 key 无抖动",
     "material": "批量导入 20 万个业务配置缓存，所有 key TTL 固定为 24 小时，没有随机抖动和容量估算。",

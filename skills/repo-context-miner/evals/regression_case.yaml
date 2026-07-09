@@ -2,6 +2,7 @@
   "id": "repo-context-miner-regression_case",
   "name": "Repo Context Miner regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Repo Context Miner regression case 团队规则场景",
     "material": "历史问题再次出现：识别 controller/service/domain/mapper/repository 等现有分层结构 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",

@@ -2,6 +2,7 @@
   "id": "database-design-policy_conflict",
   "name": "Database Design policy conflict",
   "case_type": "policy_conflict",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "动态 where 允许无条件查询",
     "material": "查询接口允许所有筛选项为空，后台直接 select * from service_provider_order，并分页后再内存过滤。",

@@ -552,6 +552,25 @@
       "YAPI",
       "YQ"
     ],
+    "product-prototype-design": [
+      "FE",
+      "FW",
+      "QIN",
+      "DG",
+      "RRQ",
+      "YAPI",
+      "YQ"
+    ],
+    "prototype-review-loop": [
+      "FE",
+      "A",
+      "D",
+      "QIN",
+      "DG",
+      "RRQ",
+      "YAPI",
+      "YQ"
+    ],
     "high-level-design": [
       "A",
       "H",
@@ -713,6 +732,16 @@
       "YAPI",
       "YQ"
     ],
+    "assistant-feedback-capture": [
+      "A",
+      "D",
+      "P",
+      "QIN",
+      "DG",
+      "RRQ",
+      "YAPI",
+      "YQ"
+    ],
     "engineering-knowledge-miner": [
       "A",
       "D",
@@ -723,6 +752,21 @@
       "M",
       "DB",
       "QIN",
+      "RRQ",
+      "YAPI",
+      "YQ"
+    ],
+    "skill-evolution-review": [
+      "A",
+      "D",
+      "I",
+      "E",
+      "P",
+      "R",
+      "M",
+      "DB",
+      "QIN",
+      "DG",
       "RRQ",
       "YAPI",
       "YQ"

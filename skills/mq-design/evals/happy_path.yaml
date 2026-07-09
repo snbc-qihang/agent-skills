@@ -2,6 +2,7 @@
   "id": "mq-design-happy_path",
   "name": "MQ Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "会员事件路由设计完整",
     "material": "设计一个服务一个队列，绑定多个 routingKey，消息体 6KB，等级 7，持久化，配置死信队列，消费者按 routingKey 区分处理并提供幂等键。",

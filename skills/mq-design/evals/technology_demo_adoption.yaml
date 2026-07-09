@@ -2,6 +2,7 @@
   "id": "mq-design-technology_demo_adoption",
   "name": "MQ Design technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "MQ Design technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 M1 MQ 仅用于削峰填谷和服务解耦；进程内异步不用 MQ，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

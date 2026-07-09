@@ -2,6 +2,7 @@
   "id": "frontend-design-edge_case",
   "name": "Frontend Design edge case",
   "case_type": "edge_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Design edge case 团队规则场景",
     "material": "输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+    "缺少三轮 prototype review verdict 时必须 blocked"
   ],
   "severity_when_failed": "major",
   "grader": {

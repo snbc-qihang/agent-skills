@@ -2,6 +2,7 @@
   "id": "database-design-ambiguous_input",
   "name": "Database Design ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "多表写入一致性不清",
     "material": "设计一次操作写订单表、结算表、消息表，但没有说明是否同事务、失败补偿和最终一致性。",

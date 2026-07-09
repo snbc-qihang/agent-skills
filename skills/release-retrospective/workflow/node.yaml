@@ -2,7 +2,7 @@
   "node_id": "release-retrospective",
   "stage": "release_retrospective",
   "skill_id": "release-retrospective",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -13,6 +13,7 @@
   "inputs": [
     "release-verification-report.md",
     "code-quality-report.json",
+    "feedback-inbox.json",
     "incident reports",
     "release logs"
   ],
@@ -44,6 +45,7 @@
   ],
   "quality_gates": [
     "问题有证据",
+    "feedback inbox 已消费",
     "行动项有 owner",
     "规范候选状态为 candidate",
     "skill 改进候选明确"

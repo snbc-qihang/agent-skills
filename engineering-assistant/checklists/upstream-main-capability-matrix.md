@@ -2,8 +2,8 @@
 
 ## 当前分支基线
 
-- `main`: `547fa90`（2026-06-22 本地分支头，`feat：eval优化`）
-- `teamwork`: `cd831cf`
+- `main`: `402fe06`（3.1.0 全量 task SOP 与行为 eval 基线）
+- `teamwork`: `7871cb5`（1.0.0.4 团队插件基线）
 - 公共祖先：`23b9745`
 
 ## 适用范围
@@ -20,15 +20,18 @@
 
 ## 当前结论
 
-- `main` 相对公共祖先的当前可见增量，主要集中在 4 个主题：traceability 报告与实现控制面、plugin manifest / publish surface / Hermes 发布、document retention / runtime route / assistant feedback 治理、eval runner / scored eval / distribution regression。
-- 当前 `main` 可见增量未发现 `needs-backport` 项；现阶段以“已覆盖”或“禁止导入”两类结论为主。
-- 结合当前 `teamwork` 源码现状，绝大多数 `main` 最新通用能力已被 `teamwork` 等价吸收或以更强团队版本覆盖；剩余差异主要属于 `do-not-import`，因为会覆盖团队插件身份、团队 profile、团队规则密度或兼容发布策略。
+- `main` 3.1.0 相对 teamwork 当前基线新增 4 个对团队有正向用途的能力：`product-prototype-design`、`prototype-review-loop`、`assistant-feedback-capture`、`skill-evolution-review`。
+- 本轮将上述 4 个能力按 teamwork profile、团队规则源和发布语义团队化迁入，并把既有 21 个 skills 同步升级为短 SOP + 行为 eval 形态。
+- 仍然禁止导入会覆盖 `teamwork-engineering-assistant` 插件身份、削弱 `rrq-yq-team` profile、破坏 compatibility alias、Hermes 限定名或团队发布路径的通用 main 实现。
 - 后续若 `main` 再出现新的通用能力，应先更新本矩阵，再决定是否回收到生成器。
 
 ## Capability Matrix
 
 | domain | upstream capability | status | teamwork handling | why |
 |---|---|---|---|---|
+| task SOP / skill shape | main 3.1 的短 SKILL.md、profile-driven SOP、task_sop_full 行为 eval 和低上下文噪声指标 | `needs-backport` | 本轮迁入到 teamwork 25 个 skills，但保留团队 profile、团队规则密度、preflight、人审和发布语义。 | 这是解决 teamwork skill 模板过长、同构 eval 和上下文噪声的正向能力，不会削弱团队插件身份。 |
+| prototype / frontend product gate | `product-prototype-design` 与 `prototype-review-loop` 原型事实源和三轮评审硬门禁 | `needs-backport` | 本轮团队化迁入，插入 frontend-only、design-only 和 full-feature-development 的前端/web/app 路径。 | 该能力能阻断 demo 感前端、缺少高保真原型和无截图证据直接实现的问题。 |
+| feedback evolution | `assistant-feedback-capture` 与 `skill-evolution-review` 反馈采集、聚类和候选审批闭环 | `needs-backport` | 本轮团队化迁入；允许自动采集和生成候选，但正式 skill/workflow/schema 修改必须人工审批。 | 该能力补齐 teamwork 对用户纠正、工具失败、文档噪声和 skill 演进候选的持续改进闭环。 |
 | manifest / distribution surface | 插件 manifest 的 `metadata_status`、`distribution_notes`、runtime policy pack 和 hooks packaging 校验 | `already-covered-by-teamwork` | 已由 `plugin_manifest()`、`validate_plugin_manifest.py`、`tests/test_plugin_distribution_surface.py` 和 `run_skill_evals.py --mode scored` 覆盖。 | 保留 upstream 的分发表面门禁，同时继续使用 teamwork 的插件身份和占位 metadata 人审策略。 |
 | manifest / distribution surface | 通用 `engineering-assistant` 插件名、展示名、默认提示词和关键词集合 | `do-not-import` | 保留 `teamwork-engineering-assistant`、团队展示名、团队默认提示词、团队关键词和 `rrq-yq-team` profile 入口。 | 直接导入会覆盖 teamwork 插件身份，并削弱团队 profile、团队规则和团队发布语义。 |
 | manifest / distribution surface | personal/local-root 发布布局与 published plugin sync 校验 | `already-covered-by-teamwork` | 已由 `publish_plugin.py`、`.agent/plugins/publish-config.json`、teamwork 路径回归测试和 scored eval 覆盖。 | 保留 teamwork 发布目录、marketplace entry 和 Codex 可识别插件结构。 |

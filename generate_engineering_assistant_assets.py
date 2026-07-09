@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SKILLS_ROOT = "skills"
 PLUGIN_NAME = "teamwork-engineering-assistant"
-PLUGIN_VERSION = "1.0.0.4"
-SKILL_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.1.0.0"
+SKILL_VERSION = "1.1.0"
 PLUGIN_COMPATIBILITY_ALIAS = "engineering-assistant"
 PLUGIN_DISPLAY_NAME = "团队研发助手"
 PLUGIN_MARKETPLACE_NAME = "local-teamwork-engineering"
@@ -33,6 +33,12 @@ EVAL_CASES = [
     "rule_consumption_gap",
     "context_noise_overload",
     "low_quality_automation",
+    "repeated_user_correction_feedback",
+    "prototype_without_visual_evidence",
+    "document_noise_without_delivery",
+    "third_party_tool_failure_feedback",
+    "unapproved_skill_patch_blocked",
+    "low_value_feedback_rejected",
 ]
 
 TEAM_DOC_TARGET_SKILLS = {"high-level-design", "detailed-design", "database-design", "redis-design", "mq-design", "code-development"}
@@ -56,6 +62,27 @@ CODE_REVIEW_QUALITY_DIMENSIONS = [
 CODE_REVIEW_CHECKLIST_STATUSES = ["checked", "not_applicable", "missing", "blocked"]
 
 UPSTREAM_MAIN_INCREMENT_CAPABILITIES = [
+    {
+        "domain": "task SOP / skill shape",
+        "capability": "main 3.1 的短 SKILL.md、profile-driven SOP、task_sop_full 行为 eval 和低上下文噪声指标",
+        "status": "needs-backport",
+        "teamwork_handling": "本轮迁入到 teamwork 25 个 skills，但保留团队 profile、团队规则密度、preflight、人审和发布语义。",
+        "why": "这是解决 teamwork skill 模板过长、同构 eval 和上下文噪声的正向能力，不会削弱团队插件身份。",
+    },
+    {
+        "domain": "prototype / frontend product gate",
+        "capability": "`product-prototype-design` 与 `prototype-review-loop` 原型事实源和三轮评审硬门禁",
+        "status": "needs-backport",
+        "teamwork_handling": "本轮团队化迁入，插入 frontend-only、design-only 和 full-feature-development 的前端/web/app 路径。",
+        "why": "该能力能阻断 demo 感前端、缺少高保真原型和无截图证据直接实现的问题。",
+    },
+    {
+        "domain": "feedback evolution",
+        "capability": "`assistant-feedback-capture` 与 `skill-evolution-review` 反馈采集、聚类和候选审批闭环",
+        "status": "needs-backport",
+        "teamwork_handling": "本轮团队化迁入；允许自动采集和生成候选，但正式 skill/workflow/schema 修改必须人工审批。",
+        "why": "该能力补齐 teamwork 对用户纠正、工具失败、文档噪声和 skill 演进候选的持续改进闭环。",
+    },
     {
         "domain": "manifest / distribution surface",
         "capability": "插件 manifest 的 `metadata_status`、`distribution_notes`、runtime policy pack 和 hooks packaging 校验",
@@ -707,6 +734,8 @@ DESIGN_GOVERNANCE_CONTROL_OUTPUTS = [
 TEAM_RULE_PREFIXES = {
     "requirement-intake": ["A", "H", "QIN"],
     "repo-context-miner": ["A", "H", "D", "I", "E", "P", "R", "M", "DB", "FW", "FE", "QIN"],
+    "product-prototype-design": ["FE", "FW", "QIN", "DG"],
+    "prototype-review-loop": ["FE", "A", "D", "QIN", "DG"],
     "high-level-design": ["A", "H", "FW", "FE", "QIN"],
     "detailed-design": ["D", "I", "E", "P", "FW", "QIN"],
     "redis-design": ["R", "P", "QIN"],
@@ -722,7 +751,9 @@ TEAM_RULE_PREFIXES = {
     "release-readiness": ["DB", "R", "M", "QIN"],
     "release-verification": ["E", "P", "QIN"],
     "release-retrospective": ["A", "D", "P", "QIN"],
+    "assistant-feedback-capture": ["A", "D", "P", "QIN", "DG"],
     "engineering-knowledge-miner": ["A", "D", "I", "E", "P", "R", "M", "DB", "QIN"],
+    "skill-evolution-review": ["A", "D", "I", "E", "P", "R", "M", "DB", "QIN", "DG"],
     "skill-quality-auditor": ["A", "D", "I", "E", "P", "R", "M", "DB", "QIN"],
     "workflow-orchestrator": ["A", "D", "I", "E", "P", "R", "M", "DB", "DG", "QIN"],
     "implementation-controller": ["A", "D", "I", "E", "P", "DB", "R", "M", "FW", "FE", "QIN"],
@@ -741,6 +772,7 @@ HIGH_RISK_SKILLS = {
     "release-readiness",
     "release-verification",
     "engineering-knowledge-miner",
+    "skill-evolution-review",
     "implementation-controller",
 }
 
@@ -1277,6 +1309,48 @@ SKILLS = [
         ],
     },
     {
+        "id": "product-prototype-design",
+        "name": "Product Prototype Design",
+        "type": "stage_skill",
+        "stage": "product_prototype_design",
+        "owner": "产品设计负责人",
+        "description": "Web/App 产品高保真原型、页面信息架构、核心用户流、状态覆盖和视觉验收证据生成时使用；不要用于直接进入代码实现或替代三轮原型评审。",
+        "purpose": "为 web/app 产品研发生成可评审的高保真原型合同、视觉证据和交互状态映射，作为后续设计与实现的硬门禁。",
+        "non_goals": ["不直接生成业务代码", "不跳过浏览器或视觉证据", "不在低保真线框图通过后放行实现"],
+        "inputs": ["requirement-contract.json", "repo-context-report.md", "brand_or_design_system_context", "target_viewports"],
+        "outputs": ["product-prototype-contract.json", "prototype-source.md", "desktop-prototype-screenshot.png", "mobile-prototype-screenshot.png", "interaction-state-map.json", "third-party-capability-ledger.json"],
+        "gates": ["高保真原型存在", "桌面和移动截图存在", "核心用户流完整", "加载/空态/错误态/权限态完整", "第三方能力调用已登记"],
+        "approvals": ["跳过原型门禁", "使用非项目既有设计系统", "核心信息架构变更"],
+        "checks": [
+            "识别 web/app 产品任务；非 web/app 必须写明 prototype gate skip reason",
+            "优先调用 build-web-apps、Browser、Figma 或等价成熟能力，并记录 third-party-capability-ledger.json",
+            "产出页面清单、信息架构、核心用户流、关键状态、桌面/移动视口和可访问性约束",
+            "不得用营销式 demo 页面替代企业级产品工作台、后台管理、流程工具或真实业务界面",
+            "缺少截图、交互状态或能力证据时，prototype gate 必须 blocked",
+        ],
+    },
+    {
+        "id": "prototype-review-loop",
+        "name": "Prototype Review Loop",
+        "type": "stage_skill",
+        "stage": "prototype_review",
+        "owner": "产品/设计评审负责人",
+        "description": "高保真原型三轮 agent 评审、视觉/交互/企业级可用性问题闭环和进入工程设计 gate 判断时使用；不要用于修改业务代码。",
+        "purpose": "对产品原型执行至少三轮 agent 评审，形成可阻断后续设计和实现的 prototype review verdict。",
+        "non_goals": ["不代替人工最终审批", "不修正代码实现", "不放行未闭环的原型 blocker"],
+        "inputs": ["product-prototype-contract.json", "desktop-prototype-screenshot.png", "mobile-prototype-screenshot.png", "interaction-state-map.json"],
+        "outputs": ["prototype-review-report.json", "prototype-review-findings.md", "prototype-gate-decision.json"],
+        "gates": ["至少三轮 agent 评审完成", "所有 blocker 已关闭或进入人工审批", "企业级可用性评分达标", "后续设计输入已冻结"],
+        "approvals": ["少于三轮评审放行", "保留未关闭 blocker", "原型和实现不一致豁免"],
+        "checks": [
+            "轮次 1 检查产品信息架构、用户流和业务完整性",
+            "轮次 2 检查视觉层级、布局密度、企业级可用性、响应式和状态覆盖",
+            "轮次 3 检查可实现性、组件契约、接口依赖、验收证据和与后续设计的冻结输入",
+            "每轮 findings 必须有证据、处理状态、owner 和下一轮验证结论",
+            "未达到 minimum_review_rounds 时不得进入 high-level-design、detailed-design、frontend-design 或 implementation",
+        ],
+    },
+    {
         "id": "high-level-design",
         "name": "High Level Design",
         "type": "stage_skill",
@@ -1673,13 +1747,55 @@ SKILLS = [
         "stage": "release_retrospective",
         "owner": "发布负责人",
         "description": "发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。",
-        "purpose": "复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。",
-        "non_goals": ["不将候选规范直接发布", "不隐藏发布问题", "不替代知识治理审批"],
-        "inputs": ["release-verification-report.md", "code-quality-report.json", "incident reports", "release logs"],
+        "purpose": "复盘发布过程，消费已采集反馈事件，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。",
+        "non_goals": ["不将候选规范直接发布", "不隐藏发布问题", "不替代 assistant-feedback-capture 的全量反馈采集"],
+        "inputs": ["release-verification-report.md", "code-quality-report.json", "feedback-inbox.json", "incident reports", "release logs"],
         "outputs": ["release-retrospective.md", "release-lessons.yaml", "follow-up-actions.md"],
-        "gates": ["问题有证据", "行动项有 owner", "规范候选状态为 candidate", "skill 改进候选明确"],
+        "gates": ["问题有证据", "feedback inbox 已消费", "行动项有 owner", "规范候选状态为 candidate", "skill 改进候选明确"],
         "approvals": ["行动项关闭", "规范候选批准", "高风险复盘结论发布"],
-        "checks": ["发布过程问题", "测试遗漏", "设计遗漏", "代码质量问题", "发布验证问题", "规范改进候选", "skill 改进候选"],
+        "checks": ["发布过程问题", "测试遗漏", "设计遗漏", "代码质量问题", "发布验证问题", "feedback event 证据消费", "规范改进候选", "skill 改进候选"],
+    },
+    {
+        "id": "assistant-feedback-capture",
+        "name": "Assistant Feedback Capture",
+        "type": "cross_cutting_skill",
+        "stage": "feedback_capture",
+        "owner": "workflow owner",
+        "description": "插件或 skill 执行问题、用户纠正、反复返工、评审遗漏、第三方工具失败、上下文漂移和文档噪声采集时使用；不要用于直接修改正式 skill。",
+        "purpose": "把每次 workflow、review、测试、用户纠正和失败重试中的有价值问题转化为可消费 feedback event 和中心反馈 inbox 候选。",
+        "non_goals": ["不直接修改正式 skill", "不把偶发低价值问题升级为规范", "不采集缺少证据的主观评价"],
+        "inputs": ["StageRunResult", "assistant-run-feedback.json", "workflow-trace.json", "user correction summary", "tool logs"],
+        "outputs": ["feedback-event.json", "feedback-inbox-entry.json", "feedback-capture-report.md"],
+        "gates": ["反馈事件有证据路径", "用户纠正优先级已标记", "目标项目与中心仓库落点明确", "事件已标记 consumed_by_evolution_review=false"],
+        "approvals": ["采集敏感内容", "提升为正式规范候选", "修改正式 skill"],
+        "checks": [
+            "识别 skill 执行失败、用户纠正、反复返工、评审遗漏、第三方工具失败、上下文漂移、文档噪声和真实验收失败",
+            "每条事件包含来源任务、触发 skill、现象、用户纠正摘要、证据路径、影响级别、重复次数、建议动作和 regression 候选标记",
+            "目标项目证据写入 artifacts/_control/feedback/，中心候选写入 feedback-inbox/ 或等价生成目录",
+            "同类用户纠正重复次数达到阈值时，必须标记 regression_case_candidate=true",
+            "缺少证据时只能记录 rejected_noise 或 needs_more_evidence，不能进入正式演进候选",
+        ],
+    },
+    {
+        "id": "skill-evolution-review",
+        "name": "Skill Evolution Review",
+        "type": "audit_skill",
+        "stage": "skill_evolution_review",
+        "owner": "skill owner",
+        "description": "周期性消费 feedback inbox、聚类高价值问题、生成 skill patch/eval/治理规则候选并等待人工审批时使用；不要用于未经审批自动发布 skill。",
+        "purpose": "将已采集反馈事件转化为可评审的 skill 改进候选、回归 eval 候选、治理规则候选和拒绝入库原因。",
+        "non_goals": ["不全自动修改正式 skill", "不发布插件版本", "不把低价值噪声写入规范"],
+        "inputs": ["feedback-inbox.json", "feedback-event.json", "engineering-lessons.md", "skill registry"],
+        "outputs": ["skill-evolution-report.md", "skill-evolution-candidates.json", "skill-patch-proposals.json", "regression-case-candidates.yaml", "feedback-rejection-log.json"],
+        "gates": ["每个候选有来源事件", "accept/reject verdict 明确", "重复用户纠正已生成回归候选", "正式 skill 修改需要人工审批"],
+        "approvals": ["应用 skill patch", "新增强制 eval", "修改 workflow 或 quality gate", "发布插件版本"],
+        "checks": [
+            "按 skill、问题类型、严重度、重复次数和证据质量聚类 feedback events",
+            "用户纠正优先级高于 agent 自评；重复纠正达到阈值必须形成 regression case candidate",
+            "输出 accepted_candidate、rejected_noise、needs_more_evidence、merged_with_existing 或 waiting_for_human_review verdict",
+            "skill patch proposal 只作为候选，不得自动修改正式 SKILL.md、contract、workflow 或 schema",
+            "低价值或偶发问题必须写明 reject reason，防止污染规范和上下文",
+        ],
     },
     {
         "id": "engineering-knowledge-miner",
@@ -1804,11 +1920,281 @@ def required_information_request_schema() -> dict:
     }
 
 
+def md_bullets(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items)
+
+
+def template_reference_for_skill(skill_id: str) -> list[str]:
+    template_map = {
+        "high-level-design": ["assets/high-level-design-template.md"],
+        "detailed-design": ["assets/detailed-design-template.md"],
+        "database-design": ["assets/database-oltp-template.md", "assets/database-olap-template.md"],
+        "redis-design": ["assets/redis-design-template.md"],
+        "mq-design": ["assets/mq-design-template.xlsx"],
+    }
+    refs = template_map.get(skill_id, [])
+    if not refs:
+        return []
+    detail = ""
+    if skill_id == "high-level-design":
+        detail = "团队概要设计模板规则必须保留系统逻辑视图、研发视图、核心功能、中间件设计和数据视图。"
+    elif skill_id == "detailed-design":
+        detail = "详细设计必须按章节顺序生成，禁止 sequenceDiagram，必须保留 flowchart、流程设计说明、classDiagram、waiting_for_human_review 规则。"
+    return [
+        f"模板执行协议：先读取 {'、'.join(refs)}，按章节顺序生成，等待输入时停在 waiting_for_input，不得删除团队模板必需章节。{detail}"
+    ]
+
+
+SOP_PROFILES = {
+    "product-prototype-design": {
+        "when": [
+            "Web/App 产品任务缺少可作为实现事实源的高保真原型时。",
+            "进入 frontend-design 或实现前需要冻结页面清单、信息架构、核心流、状态和视口证据时。",
+            "需要调用 build-web-apps、Browser、Figma 或等价设计能力并登记 third-party-capability-ledger 时。",
+        ],
+        "do_not": [
+            "不要把低保真线框图、接口说明或组件清单当成产品原型通过。",
+            "不要直接生成业务代码；本 skill 只产出原型合同和视觉证据。",
+            "不要跳过桌面/移动截图、关键交互状态或第三方能力账本。",
+        ],
+        "steps": [
+            "判定任务是否为 web/app；非 web/app 只输出 skip_reason 和 gate decision。",
+            "读取需求契约、仓库上下文、团队 profile、品牌/组件库约束和目标视口，列出页面、状态和用户流。",
+            "优先委派成熟前端/设计能力生成高保真原型，并记录能力、输入、输出、失败和回退策略。",
+            "生成桌面与移动截图证据，补齐 loading、empty、error、permission、validation、dirty、success 等状态。",
+            "输出 product-prototype-contract、interaction-state-map 和 prototype gate decision；证据缺失时 blocked。",
+        ],
+        "evidence": [
+            "product-prototype-contract.json 指向原型源、页面清单、状态矩阵和冻结输入。",
+            "desktop-prototype-screenshot.png 与 mobile-prototype-screenshot.png 均存在且可追溯。",
+            "third-party-capability-ledger.json 记录 build-web-apps、Browser、Figma 或等价能力调用。",
+        ],
+        "stop": [
+            "缺少高保真原型、桌面/移动截图或交互状态图时 blocked。",
+            "第三方工具失败时记录 ledger 和 feedback event，不得口头放行。",
+        ],
+    },
+    "prototype-review-loop": {
+        "when": [
+            "已有高保真原型，需要至少三轮 agent review 后决定是否进入工程设计或实现时。",
+            "需要关闭视觉、交互、企业级可用性、可实现性和证据链 blocker 时。",
+        ],
+        "do_not": [
+            "不要替代人工最终审批。",
+            "不要在少于三轮 review 或 blocker 未关闭时放行。",
+            "不要修代码；只评审和冻结原型输入。",
+        ],
+        "steps": [
+            "读取 product-prototype-contract、桌面/移动截图和 interaction-state-map。",
+            "第 1 轮评审信息架构、用户流、业务完整性和角色权限。",
+            "第 2 轮评审视觉层级、布局密度、响应式、状态覆盖和企业级可用性。",
+            "第 3 轮评审可实现性、组件契约、接口依赖、验收证据和冻结输入。",
+            "汇总 findings，标记 owner、状态、证据和下一轮验证结论；输出 gate decision。",
+        ],
+        "evidence": [
+            "prototype-review-report.json 至少包含 3 个 review_rounds。",
+            "prototype-gate-decision.json 明确 pass/block/waiting_for_human_review。",
+            "所有 blocker 都有 closed、accepted_risk 或 human_approval_required 状态。",
+        ],
+        "stop": [
+            "review_rounds < 3 时 blocked。",
+            "原型证据缺失或与冻结输入冲突时 blocked。",
+        ],
+    },
+    "frontend-design": {
+        "when": [
+            "高保真原型和三轮 review verdict 已通过，需要转为可实现的前端设计合同时。",
+            "需要明确页面、组件、状态、路由、接口联调和验证策略时。",
+        ],
+        "do_not": [
+            "不要替代 product-prototype-design 或 prototype-review-loop。",
+            "不要在缺少原型截图、interaction-state-map 或 review verdict 时继续。",
+            "不要直接修改后端接口或选择未确认技术栈。",
+        ],
+        "steps": [
+            "先验证 product-prototype-contract、desktop/mobile screenshot、interaction-state-map、prototype-review-report 均可用。",
+            "从 repo_context 读取现有前端技术栈、组件库、目录、路由、状态管理和接口客户端模式。",
+            "把原型冻结输入转成页面结构、组件边界、状态机、接口联调契约和验证矩阵。",
+            "列出必须由 frontend-development 消费的设计事实源，禁止新增未审批的视觉或信息架构变更。",
+            "输出 frontend-design、component-contracts 和 frontend-risk-report；缺证据时 blocked。",
+        ],
+        "evidence": [
+            "frontend-design.md 引用 prototype gate verdict 和关键截图路径。",
+            "component-contracts.yaml 覆盖 loading/empty/error/permission/validation/dirty/success 状态。",
+            "frontend-risk-report.json 标记技术栈、组件库、接口和响应式风险。",
+        ],
+        "stop": [
+            "无 prototype review pass verdict 时不得进入设计。",
+            "技术栈或组件库无法从 repo_context 推导时 waiting_for_input。",
+        ],
+    },
+    "frontend-development": {
+        "when": [
+            "已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时。",
+            "需要把设计事实源映射到代码变更、浏览器证据和前端验证时。",
+        ],
+        "do_not": [
+            "不要凭组件文档或接口文档绕过高保真原型。",
+            "不要发明新的视觉布局、文案、信息架构或组件体系。",
+            "不要只跑构建就声明产品级前端验收通过。",
+        ],
+        "steps": [
+            "读取 frontend-design、component-contracts、interface-contracts、repo_context 和 prototype gate verdict。",
+            "按最小垂直切片实现一个可验证用户流，保持目录结构、组件库、样式系统和状态管理一致。",
+            "为每个 UI 变更写入 design-to-ui mapping，标明来源原型、组件契约和接口字段。",
+            "运行项目既有前端 build/test/lint；能使用 Browser/Playwright 时采集桌面和移动截图、console、核心交互证据。",
+            "能力缺失时只声明 code-level validation，并阻断 frontend_product_acceptance。",
+        ],
+        "evidence": [
+            "design-to-ui-mapping.yaml 每行变更能追溯到原型或 frontend-design。",
+            "frontend-changed-files-report.json 只包含允许范围内文件。",
+            "浏览器/截图/console/viewport/interaction 证据齐全时才可声明产品级通过。",
+        ],
+        "stop": [
+            "缺少 prototype gate pass 或 frontend-design 时 blocked。",
+            "截图、console 或交互证据缺失时不得声称产品级验收完成。",
+        ],
+    },
+    "assistant-feedback-capture": {
+        "when": [
+            "workflow、review、测试、用户纠正、失败重试或第三方工具调用暴露有价值问题时。",
+            "需要把上下文漂移、文档噪声、反复返工和真实验收失败写入 feedback inbox 时。",
+        ],
+        "do_not": [
+            "不要直接修改正式 skill、workflow、schema 或发布版本。",
+            "不要采集无证据的主观偏好作为规范候选。",
+            "不要忽略用户反复纠正；用户纠正优先级高于 agent 自评。",
+        ],
+        "steps": [
+            "从 StageRunResult、workflow trace、user correction summary、tool logs 中抽取事件。",
+            "为每条事件写明 source task/run、triggered skill、symptom、user correction summary、evidence paths、severity、repeat_count 和 recommended action。",
+            "目标项目证据写入 artifacts/_control/feedback/；中心候选写入 feedback-inbox/ 或等价生成目录。",
+            "repeat_count >= 3 的用户纠正标记 regression_case_candidate=true。",
+            "低价值或证据不足事件写 rejected_noise/needs_more_evidence 和 reject_reason。",
+        ],
+        "evidence": [
+            "feedback-event.json 每条事件包含非空 evidence_paths。",
+            "feedback-inbox-entry.json 标记 consumed_by_evolution_review=false。",
+            "第三方工具失败同时进入 capability ledger 和 feedback inbox。",
+        ],
+        "stop": [
+            "证据路径为空时不能生成 accepted candidate。",
+            "涉及敏感内容或正式规范变更时 waiting_for_human_review。",
+        ],
+    },
+    "skill-evolution-review": {
+        "when": [
+            "周期性消费 feedback inbox，需要聚类为 skill patch、eval regression 或治理规则候选时。",
+            "需要判断反馈应 accepted、rejected、merged、needs_more_evidence 或 waiting_for_human_review 时。",
+        ],
+        "do_not": [
+            "不要未经人工审批自动修改正式 SKILL.md、contract、workflow 或 schema。",
+            "不要把低价值偶发反馈写入规范。",
+            "不要把 agent 自评分置于用户反复纠正之上。",
+        ],
+        "steps": [
+            "读取 feedback-inbox、feedback events、engineering lessons 和 skill registry。",
+            "按 skill、问题类型、严重度、repeat_count、证据质量和用户纠正优先级聚类。",
+            "生成 skill-evolution-candidates、skill-patch-proposals、regression-case-candidates 和 feedback-rejection-log。",
+            "repeat_count >= 3 的同类用户纠正必须生成 regression eval candidate。",
+            "所有正式修改保持 candidate 状态，等待人工审批后才可落入生成器或发布版本。",
+        ],
+        "evidence": [
+            "每个候选引用 source event id 和 evidence path。",
+            "每个 rejected_noise 有 reject_reason。",
+            "skill patch proposal human_approval_required=true 且 auto_apply=false。",
+        ],
+        "stop": [
+            "候选缺少来源事件或审批状态时 blocked。",
+            "发现 auto_apply=true 时 blocked。",
+        ],
+    },
+    "workflow-orchestrator": {
+        "when": [
+            "需要选择研发 workflow、串联 stage skills、维护状态机、审批暂停/恢复和产物路由时。",
+            "需要阻断 web/app 未过 prototype gate 或未审批 feedback candidate 的流程时。",
+        ],
+        "do_not": [
+            "不要直接生成某个阶段文档。",
+            "不要绕过子 skill contract、quality gate 或人工审批。",
+            "不要把中间过程文档升级为正式规范。",
+        ],
+        "steps": [
+            "根据任务类型选择 workflow，并验证每个节点 contract、输入、输出和依赖顺序。",
+            "web/app 路径必须在 frontend-design/implementation 前插入 product-prototype-design 和 prototype-review-loop。",
+            "执行节点时只传递 StageRunRequest/StageRunResult 和 artifact index 中的必要证据。",
+            "遇到 missing input、quality gate failed、tool failure 或 approval required 时暂停并写 trace。",
+            "把 feedback capture 贯穿 review、测试、失败重试和用户纠正节点，但不自动应用演进候选。",
+        ],
+        "evidence": [
+            "workflow-trace.json 记录节点状态、输入输出、审批和失败原因。",
+            "artifact-index.json 只登记正式证据和必要运行产物。",
+            "approval-requests.json 明确 pending/approved/rejected。",
+            "validator-summary.json 汇总专项 validator 结果；defect-analysis 记录自审 blocker 根因和修复状态。",
+        ],
+        "stop": [
+            "前置节点 contract 或原型门禁不满足时 blocked。",
+            "正式 skill/workflow/schema 修改没有人工审批时 blocked。",
+        ],
+    },
+}
+
+
+def derived_sop_profile(skill: dict) -> dict:
+    checks = skill["checks"][:5] or skill["gates"][:5]
+    outputs = skill["outputs"][:4]
+    gates = skill["gates"][:4]
+    approvals = skill["approvals"][:3]
+    references = [
+        "contract.yaml、references/stage-guidance.md、scripts/validate_output.py、rrq-yq-team.yaml、team-rule-catalog.yaml、team-standard-sources.yaml：契约、团队 profile/rule/source 和输出校验；语言策略/执行门禁要求未指定输出语言时先询问，preflight_input_state == ready 后才允许 formal_generation，preflight 未通过前不得生成正式阶段产物，不得登记正式阶段产物为已完成；技术/框架选型要求前端技术栈、测试框架、mybatis-plus、JDBC 例外来自 repo_context/profile 或主动询问与评审。",
+    ]
+    references.extend(template_reference_for_skill(skill["id"]))
+    return {
+        "when": [
+            skill["purpose"],
+            skill["description"].split("；", 1)[0].rstrip("。") + "。",
+        ],
+        "do_not": [item if item.endswith("。") else f"{item}。" for item in skill["non_goals"][:3]],
+        "steps": [
+            f"读取 {', '.join(skill['inputs'][:3])}、项目 profile、团队规则目录和 artifact index。",
+            f"执行 {skill['id']} preflight：确认语言、必填信息、风险、审批状态和 `{skill['inputs'][0]}` 证据。",
+            *[item if item.endswith("。") else f"{item}。" for item in checks],
+            f"生成 {', '.join(skill['outputs'][:3])} 和 StageRunResult，并登记 artifact index。",
+        ][:7],
+        "evidence": [
+            *[f"`{item}` 已生成并可追溯。" for item in outputs],
+            *[f"{item} 有证据、假设或 required action。" for item in gates[:2]],
+        ][:6],
+        "stop": [
+            f"缺少 `{skill['inputs'][0]}` 或其来源证据时 waiting_for_input，不得生成正式产物。",
+            f"`{skill['gates'][0] if skill['gates'] else skill['id']}` 失败时 blocked，不得降级为普通建议。",
+            *[f"{item} 需要人工审批或 waiting_for_human_review。" for item in approvals],
+        ][:5],
+        "references": references,
+    }
+
+
+def skill_sop_profile(skill: dict) -> dict:
+    profile = derived_sop_profile(skill)
+    override = SOP_PROFILES.get(skill["id"], {})
+    for key, value in override.items():
+        profile[key] = value
+    if "references" not in profile:
+        profile["references"] = derived_sop_profile(skill)["references"]
+    else:
+        merged = list(profile["references"])
+        for ref in derived_sop_profile(skill)["references"]:
+            if ref not in merged:
+                merged.append(ref)
+        profile["references"] = merged
+    return profile
+
+
 def skill_trigger_description(skill: dict) -> str:
-    if skill["description"].startswith("Use when"):
-        return skill["description"]
-    non_goals = "；".join(skill["non_goals"][:2])
-    return f"Use when the request is about {skill['purpose']}；Do not use when {non_goals}。"
+    profile = skill_sop_profile(skill)
+    positive = profile["when"][0].rstrip("。")
+    negative = profile["do_not"][0].replace("不要", "do not").replace("不", "do not ", 1).rstrip("。")
+    return f"Use when {positive}；Do not use when {negative}。"
 
 
 def risk_level(skill: dict) -> str:
@@ -4789,7 +5175,7 @@ def sequence_has_internal_processing(block, required_terms, outcome_terms):
     has_self_call = False
     for raw in block.splitlines():
         line = raw.strip()
-        match = re.match(r"([A-Za-z0-9_\u4e00-\u9fff]+)\s*(?:-+|=+|-->>|->>|->|-->)\s*([A-Za-z0-9_\u4e00-\u9fff]+)\s*:\s*(.*)", line)
+        match = re.match(r"([A-Za-z0-9_\u4e00-\u9fff]+)\\s*(?:-+|=+|-->>|->>|->|-->)\\s*([A-Za-z0-9_\u4e00-\u9fff]+)\\s*:\\s*(.*)", line)
         if not match:
             continue
         left, right, message = match.group(1), match.group(2), match.group(3)
@@ -5826,9 +6212,107 @@ description: {skill_trigger_description(skill)}
 """
 
 
+def skill_md(skill: dict) -> str:
+    """Generate the active short SOP entrypoint for each teamwork skill."""
+    profile = skill_sop_profile(skill)
+    inputs = [f"`{item}`" for item in skill["inputs"]]
+    return f"""---
+name: {skill['id']}
+description: {skill_trigger_description(skill)}
+---
+
+# When To Use
+{md_bullets(profile['when'])}
+
+# Do Not Use When
+{md_bullets(profile['do_not'])}
+
+# Inputs
+{md_bullets(inputs)}
+
+# Do This
+{md_bullets(profile['steps'])}
+
+# Evidence / Done
+{md_bullets(profile['evidence'])}
+
+# Stop / Escalate
+{md_bullets(profile['stop'])}
+
+# References / Scripts
+{md_bullets(profile['references'])}
+"""
+
+
+SKILL_SPECIFIC_EVAL_SCENARIOS = {
+    "product-prototype-design": {
+        "happy_path": {
+            "title": "产品原型正向触发：web/app 高保真原型证据齐全",
+            "material": "企业管理台新增权限策略页，提供需求契约、仓库前端约束、团队 profile、桌面/移动视口要求，并允许调用 build-web-apps、Browser 或 Figma 生成高保真原型。",
+            "risk_focus": ["高保真原型", "桌面/移动截图", "交互状态", "第三方能力账本"],
+            "expected_gate_decision": "pass",
+        },
+        "policy_conflict": {
+            "title": "原型门禁负触发：要求跳过高保真原型直接实现",
+            "material": "用户要求立刻进入 frontend-development；当前只有接口字段和几句需求，没有高保真原型、截图、interaction-state-map 或能力调用记录。",
+            "risk_focus": ["跳过原型门禁", "demo 感 UI 风险", "无视觉证据"],
+            "expected_gate_decision": "block",
+        },
+    },
+    "prototype-review-loop": {
+        "happy_path": {
+            "title": "三轮原型评审通过",
+            "material": "提供 product-prototype-contract、桌面和移动截图、interaction-state-map；三轮评审分别覆盖信息架构、视觉交互和工程可实现性，所有 blocker 已关闭。",
+            "risk_focus": ["review_rounds", "blocker closure", "gate verdict", "冻结输入"],
+            "expected_gate_decision": "pass",
+        },
+        "policy_conflict": {
+            "title": "评审轮次不足仍要求放行",
+            "material": "只有一轮 agent review，仍要求进入 high-level-design、frontend-design 和 implementation。",
+            "risk_focus": ["少于三轮", "放行风险", "未关闭 blocker"],
+            "expected_gate_decision": "block",
+        },
+    },
+    "assistant-feedback-capture": {
+        "happy_path": {
+            "title": "采集用户反复纠正和工具失败",
+            "material": "同一 frontend-design 偏差被用户三次纠正，同时 build-web-apps 调用失败；有 workflow trace、tool log 和截图证据路径。",
+            "risk_focus": ["用户纠正", "repeat_count", "regression candidate", "capability ledger"],
+            "expected_gate_decision": "pass",
+        },
+        "policy_conflict": {
+            "title": "无证据反馈试图进入演进候选",
+            "material": "只有主观评价“感觉不好”，没有 evidence_paths、source run 或用户纠正摘要，却要求生成 skill patch candidate。",
+            "risk_focus": ["证据缺失", "反馈污染", "候选误生成"],
+            "expected_gate_decision": "block",
+        },
+    },
+    "skill-evolution-review": {
+        "happy_path": {
+            "title": "反馈聚类生成候选并等待审批",
+            "material": "feedback inbox 中有多条带证据事件；按 skill/问题类型/严重度/重复次数聚类，生成 skill patch proposal 和 regression eval candidate，auto_apply=false。",
+            "risk_focus": ["聚类", "审批门禁", "regression eval", "reject reason"],
+            "expected_gate_decision": "pass",
+        },
+        "policy_conflict": {
+            "title": "未经审批自动修改正式 skill",
+            "material": "skill patch proposal 没有人工审批记录，却试图直接修改正式 SKILL.md、contract 或 workflow。",
+            "risk_focus": ["auto_apply", "审批缺失", "正式规范污染"],
+            "expected_gate_decision": "block",
+        },
+    },
+}
+
+
 def default_eval_scenario(skill: dict, case: str) -> dict:
     first_gate = skill["gates"][0] if skill["gates"] else "质量门禁"
     first_check = skill["checks"][0] if skill["checks"] else "团队规范"
+    profile = skill_sop_profile(skill)
+    positive_trigger = profile["when"][0]
+    negative_trigger = profile["do_not"][0]
+    primary_step = profile["steps"][0]
+    primary_evidence = profile["evidence"][0]
+    primary_stop = profile["stop"][0]
     prefixes = TEAM_RULE_PREFIXES.get(skill["id"], ["A", "D"])
     rule_refs = [rule["id"] for rule in TEAM_RULE_CATALOG if any(rule["id"].startswith(prefix) for prefix in prefixes)][:4]
     if not rule_refs:
@@ -5845,12 +6329,18 @@ def default_eval_scenario(skill: dict, case: str) -> dict:
         "rule_consumption_gap": "block",
         "context_noise_overload": "block",
         "low_quality_automation": "block",
+        "repeated_user_correction_feedback": "block",
+        "prototype_without_visual_evidence": "block",
+        "document_noise_without_delivery": "block",
+        "third_party_tool_failure_feedback": "block",
+        "unapproved_skill_patch_blocked": "block",
+        "low_value_feedback_rejected": "pass",
     }
     material_by_case = {
-        "happy_path": f"输入材料覆盖 {skill['purpose']}，并提供 {first_gate} 的证据、产物路径和人工审批状态。",
-        "missing_required_input": f"缺少必填输入 {skill['inputs'][0]}，但请求仍要求直接执行 {skill['name']} 并给出通过结论。",
+        "happy_path": f"正向触发：{positive_trigger}；材料包含 {primary_step}，并提供 {primary_evidence} 的证据、产物路径和审批状态。",
+        "missing_required_input": f"缺少必填输入 {skill['inputs'][0]}，但请求仍要求直接执行 {skill['name']}；应按停止条件处理：{primary_stop}",
         "ambiguous_input": f"输入材料对 {first_check} 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",
-        "policy_conflict": f"输入材料与 {first_check} 冲突，并要求 skill 将风险降级为普通建议后继续流转；材料中没有证据、没有审批，也没有说明对核心链路、数据一致性和发布风险的影响。",
+        "policy_conflict": f"负触发：{negative_trigger}；请求仍要求降级风险并继续流转，且没有证据、审批或核心链路影响说明。",
         "edge_case": f"输入材料明确说明部分专项不适用，并给出证据；需要确认 skill 不过度扩大范围。",
         "regression_case": f"历史问题再次出现：{first_check} 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
         "technology_demo_adoption": f"设计声明使用团队默认框架和 {first_check}，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",
@@ -5858,8 +6348,14 @@ def default_eval_scenario(skill: dict, case: str) -> dict:
         "rule_consumption_gap": "任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。",
         "context_noise_overload": "上下文中混入大量无关历史、长规范和旧任务摘要；当前任务没有最小 task-context.agent.md，也没有说明适用规则包和停止条件。",
         "low_quality_automation": "自动化任务连续执行失败，但没有 bounded repair 次数上限、repair-attempts.json、失败步骤证据或人工暂停条件。",
+        "repeated_user_correction_feedback": "用户已三次纠正同一 skill 输出偏差，反馈事件 repeat_count=3，但没有生成 regression_case_candidate 或 skill evolution candidate。",
+        "prototype_without_visual_evidence": "web/app 产品任务试图直接进入 frontend-design 或 implementation，但缺少高保真原型、桌面/移动截图和三轮 prototype review verdict。",
+        "document_noise_without_delivery": "agent 连续处理大量过程文档，未产生代码、原型、测试、截图或 gate decision 等真实交付证据。",
+        "third_party_tool_failure_feedback": "build-web-apps、Browser、Figma 或 codegraph 调用失败后未写入 third-party-capability-ledger，也没有进入 feedback inbox。",
+        "unapproved_skill_patch_blocked": "feedback 候选提出修改正式 skill 或 workflow，但没有人工审批记录，却试图自动应用到正式生成器或发布包。",
+        "low_value_feedback_rejected": "反馈事件为偶发低价值偏好，证据不足；应记录 rejected_noise 和 reject_reason，不能污染正式规范或 skill。",
     }
-    return {
+    scenario = {
         "title": f"{skill['name']} {case.replace('_', ' ')} 团队规则场景",
         "material": material_by_case[case],
         "rule_refs": rule_refs,
@@ -5867,6 +6363,8 @@ def default_eval_scenario(skill: dict, case: str) -> dict:
         "expected_gate_decision": gate_by_case[case],
         "forbidden_behavior": ["无证据宣称通过", "隐藏缺失输入或待确认事项", "自动批准高风险动作"],
     }
+    scenario.update(SKILL_SPECIFIC_EVAL_SCENARIOS.get(skill["id"], {}).get(case, {}))
+    return scenario
 
 
 def eval_case(skill: dict, case: str) -> dict:
@@ -5910,10 +6408,49 @@ def eval_case(skill: dict, case: str) -> dict:
             "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
             "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
         ])
+    skill_specific_pass_criteria = {
+        "detailed-design": [
+            "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
+            "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
+            "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
+            "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts",
+        ],
+        "high-level-design": [
+            "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
+            "团队概要设计模板规则必须保留系统逻辑视图、研发视图、核心功能、中间件设计和数据视图",
+            "跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且不得包含 flowchart",
+        ],
+        "frontend-design": [
+            "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+            "缺少三轮 prototype review verdict 时必须 blocked",
+        ],
+        "frontend-development": [
+            "frontend-development 必须按原型和 frontend-design 实现，并输出 design-to-ui-mapping.yaml",
+            "缺少浏览器、截图、console 或交互证据时不得声明产品级通过",
+        ],
+        "product-prototype-design": [
+            "web/app 必须生成高保真原型、desktop/mobile screenshot、interaction-state-map 和 third-party-capability-ledger",
+            "缺少视觉证据时不得进入 frontend-design 或 implementation",
+        ],
+        "prototype-review-loop": [
+            "prototype-review-report.json 必须包含至少三轮 review_rounds",
+            "所有 blocker 必须 closed、accepted_risk 或 human_approval_required",
+        ],
+        "assistant-feedback-capture": [
+            "feedback-event.json 必须包含 source task、triggered skill、symptom、user correction summary、evidence_paths 和 repeat_count",
+            "第三方工具失败必须同时进入 capability ledger 和 feedback inbox",
+        ],
+        "skill-evolution-review": [
+            "skill patch proposal 必须 human_approval_required=true 且 auto_apply=false",
+            "低价值反馈必须记录 rejected_noise 和 reject_reason",
+        ],
+    }.get(skill["id"], [])
+    pass_criteria.extend(skill_specific_pass_criteria)
     return {
         "id": f"{skill['id']}-{case}",
         "name": f"{skill['name']} {case.replace('_', ' ')}",
         "case_type": case,
+        "eval_profile": "task_sop_full",
         "scenario": {
             "title": scenario["title"],
             "material": scenario["material"],
@@ -6333,16 +6870,16 @@ def generate_engineering_assistant() -> None:
     base = ROOT / "engineering-assistant"
     workflows = {
         "full-feature-development": [
-            "requirement-intake", "repo-context-miner", "high-level-design", "detailed-design", "redis-design", "mq-design", "database-design",
+            "requirement-intake", "repo-context-miner", "product-prototype-design", "prototype-review-loop", "high-level-design", "detailed-design", "redis-design", "mq-design", "database-design",
             "frontend-design", "design-review", "implementation-controller", "code-development", "frontend-development", "self-test", "code-quality-governor", "code-review", "release-readiness",
-            "release-verification", "release-retrospective", "engineering-knowledge-miner",
+            "release-verification", "assistant-feedback-capture", "release-retrospective", "engineering-knowledge-miner",
         ],
         "contract-driven-development": ["design-review", "implementation-controller", "code-development", "frontend-development", "self-test", "code-quality-governor", "code-review"],
-        "design-only": ["requirement-intake", "repo-context-miner", "high-level-design", "detailed-design", "redis-design", "mq-design", "database-design", "frontend-design", "design-review"],
+        "design-only": ["requirement-intake", "repo-context-miner", "product-prototype-design", "prototype-review-loop", "high-level-design", "detailed-design", "redis-design", "mq-design", "database-design", "frontend-design", "design-review"],
         "coding-only": ["repo-context-miner", "implementation-controller", "code-development", "frontend-development", "self-test", "code-quality-governor", "code-review"],
-        "frontend-only": ["requirement-intake", "repo-context-miner", "frontend-design", "frontend-development", "self-test", "code-quality-governor", "code-review"],
-        "release-only": ["release-readiness", "release-verification", "release-retrospective"],
-        "knowledge-review": ["engineering-knowledge-miner", "skill-quality-auditor"],
+        "frontend-only": ["requirement-intake", "repo-context-miner", "product-prototype-design", "prototype-review-loop", "frontend-design", "frontend-development", "self-test", "code-quality-governor", "code-review", "assistant-feedback-capture"],
+        "release-only": ["release-readiness", "release-verification", "assistant-feedback-capture", "release-retrospective"],
+        "knowledge-review": ["assistant-feedback-capture", "engineering-knowledge-miner", "skill-evolution-review", "skill-quality-auditor"],
     }
     for name, nodes in workflows.items():
         write_text(base / "workflows" / f"{name}.yaml", json.dumps(workflow(name, nodes), ensure_ascii=False, indent=2))
@@ -9823,9 +10360,256 @@ print("CI 产物目录已准备")
     }
     for file_name, body in scripts.items():
         write_text(base / "scripts" / file_name, body)
+    write_text(base / "scripts" / "run_skill_effectiveness_evals.py", """#!/usr/bin/env python3
+import argparse
+import json
+import re
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
+from pathlib import Path
+
+BASELINES = {"baseline_free_codex", "current_engineering_assistant", "curated_tools"}
+CATEGORIES = {
+    "full_stack_minimal_product",
+    "code_drift",
+    "document_noise",
+    "frontend_product_quality",
+    "long_task_recovery",
+    "generator_structure",
+    "schema_strictness",
+    "frontend_delegation",
+    "prototype_gate_quality",
+    "feedback_evolution",
+}
+RECOMMENDATIONS = {"keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"}
+REPORT_FIELDS = {"pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "skill_sop_metrics", "recommendation"}
+DEFAULT_SPEC = Path("effectiveness-evals/evals.json")
+DEFAULT_REPORT = Path("effectiveness-evals/reports/effectiveness-report.json")
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def load_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"{path}: missing file")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{path}: invalid JSON: {exc}")
+
+
+def normalize(text):
+    text = re.sub(r"---.*?---", "", text, count=1, flags=re.S)
+    text = re.sub(r"# References / Scripts\\n.*", "", text, flags=re.S)
+    return " ".join(text.lower().split())
+
+
+def average_similarity(items):
+    if len(items) < 2:
+        return 0.0
+    scores = []
+    for index, left in enumerate(items):
+        for right in items[index + 1:]:
+            scores.append(SequenceMatcher(None, left, right).ratio())
+    return sum(scores) / len(scores)
+
+
+def compute_skill_sop_metrics(skills_root=Path("skills")):
+    docs = {}
+    headings = {}
+    descriptions = {}
+    line_counts = {}
+    for skill_md in sorted(skills_root.glob("*/SKILL.md")):
+        skill_id = skill_md.parent.name
+        text = skill_md.read_text(encoding="utf-8")
+        docs[skill_id] = normalize(text)
+        headings[skill_id] = [match.group(1).strip() for match in re.finditer(r"^#\\s+(.+)$", text, flags=re.M)]
+        descriptions[skill_id] = next((line for line in text.splitlines() if line.startswith("description: ")), "")
+        line_counts[skill_id] = len(text.splitlines())
+    common = sorted(set.intersection(*(set(value) for value in headings.values()))) if headings else []
+    route_ok = [
+        line.startswith("description: Use when ")
+        and "Do not use" in line
+        and "request is about" not in line
+        for line in descriptions.values()
+    ]
+    evidence_ok = [
+        "Evidence / Done" in (skills_root / skill_id / "SKILL.md").read_text(encoding="utf-8")
+        and "Stop / Escalate" in (skills_root / skill_id / "SKILL.md").read_text(encoding="utf-8")
+        for skill_id in docs
+    ]
+    return {
+        "task_sop_skill_count": len(docs),
+        "task_sop_average_similarity": round(average_similarity(list(docs.values())), 3),
+        "global_average_similarity": round(average_similarity(list(docs.values())), 3),
+        "common_heading_count": len(common),
+        "common_headings": common,
+        "description_route_quality": round(sum(route_ok) / len(route_ok), 3) if route_ok else 0,
+        "context_budget": {"max_skill_md_lines": max(line_counts.values()) if line_counts else 0, "pass": all(count <= 120 for count in line_counts.values())},
+        "real_output_evidence": {"task_sop_sections_present": all(evidence_ok), "skills_checked": len(evidence_ok)},
+    }
+
+
+def empty_delta():
+    return {
+        "current_engineering_assistant_vs_baseline_free_codex": None,
+        "current_engineering_assistant_vs_curated_tools": None,
+        "curated_tools_vs_baseline_free_codex": None,
+    }
+
+
+def validate_spec(path):
+    errors = []
+    spec = load_json(path)
+    root = path.parent
+    baseline_ids = {item.get("id") for item in spec.get("baselines", [])}
+    if baseline_ids != BASELINES:
+        errors.append(f"{path}: baselines must be {sorted(BASELINES)}")
+    result_contract = spec.get("result_contract", {})
+    missing_fields = REPORT_FIELDS - set(result_contract.get("required_report_fields", []))
+    if missing_fields:
+        errors.append(f"{path}: result_contract.required_report_fields missing {sorted(missing_fields)}")
+    if set(result_contract.get("recommendation_values", [])) != RECOMMENDATIONS:
+        errors.append(f"{path}: recommendation_values must be {sorted(RECOMMENDATIONS)}")
+    evals = spec.get("evals", [])
+    categories = {item.get("category") for item in evals}
+    if categories != CATEGORIES:
+        errors.append(f"{path}: eval categories must be {sorted(CATEGORIES)}")
+    if len(evals) != len(CATEGORIES):
+        errors.append(f"{path}: expected exactly {len(CATEGORIES)} effectiveness evals")
+    for item in evals:
+        eval_id = item.get("id", "<missing>")
+        if not item.get("prompt") or len(item["prompt"]) < 80:
+            errors.append(f"{eval_id}: prompt must be realistic and at least 80 chars")
+        if set(item.get("baselines", [])) != BASELINES:
+            errors.append(f"{eval_id}: baselines must include all comparison groups")
+        if len(item.get("assertions", [])) < 5:
+            errors.append(f"{eval_id}: assertions must include at least 5 checks")
+        if len(item.get("grading_dimensions", [])) < 5:
+            errors.append(f"{eval_id}: grading_dimensions must include at least 5 dimensions")
+        for rel in item.get("input_files", []):
+            fixture = root / rel
+            if not fixture.exists():
+                errors.append(f"{eval_id}: missing input fixture {rel}")
+                continue
+            payload = load_json(fixture)
+            if payload.get("fixture_id") != eval_id:
+                errors.append(f"{eval_id}: fixture_id mismatch in {rel}")
+    return spec, errors
+
+
+def base_report(mode, spec, status, state, findings):
+    return {
+        "status": status,
+        "mode": mode,
+        "evaluation_state": state,
+        "baselines": [item["id"] for item in spec.get("baselines", [])],
+        "evals": [item["id"] for item in spec.get("evals", [])],
+        "metrics": {"eval_count": len(spec.get("evals", [])), "baseline_count": len(spec.get("baselines", [])), "real_result_count": 0},
+        "pass_rate_delta": empty_delta(),
+        "token_or_time_cost_delta": empty_delta(),
+        "quality_findings": findings,
+        "doc_noise_score": None,
+        "frontend_product_score": None,
+        "skill_sop_metrics": compute_skill_sop_metrics(),
+        "recommendation": "keep_and_slim",
+        "recommendation_reason": "teamwork spec gate validates short SOP, prototype gate, and feedback evolution before real baseline runs are graded",
+        "generated_at": now_iso(),
+    }
+
+
+def write_report(path, report):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Validate and report teamwork skill effectiveness evals.")
+    parser.add_argument("--mode", choices=["spec", "grade", "report"], default="spec")
+    parser.add_argument("--spec", default=str(DEFAULT_SPEC))
+    parser.add_argument("--output", default=str(DEFAULT_REPORT))
+    parser.add_argument("--no-write-report", action="store_true")
+    args = parser.parse_args()
+    spec, errors = validate_spec(Path(args.spec))
+    if errors:
+        report = base_report(args.mode, spec if isinstance(spec, dict) else {}, "block", "blocked", [{"id": "EFFECTIVENESS-SPEC-INVALID", "severity": "blocker", "summary": item} for item in errors])
+    elif args.mode == "spec":
+        report = base_report(args.mode, spec, "pass", "spec_ready", [{"id": "EFFECTIVENESS-SPEC-READY", "severity": "info", "summary": "teamwork effectiveness spec, fixtures, and short-SOP metrics are ready."}])
+    else:
+        report = base_report(args.mode, spec, "waiting_for_input", "waiting_for_results", [{"id": "EFFECTIVENESS-RESULTS-MISSING", "severity": "major", "summary": "缺少真实 baseline/current/curated_tools 运行结果，不能判断插件真实交付收益。"}])
+        if args.mode == "report":
+            report["mode"] = "report"
+    if not args.no_write_report:
+        write_report(Path(args.output), report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if report["status"] == "block":
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
+""")
 
     for folder in ["skill-quality", "workflow", "code-quality", "knowledge-mining"]:
         write_text(base / "evals" / folder / "README.md", f"# {folder}\n\nStore deterministic, LLM judge, and human eval cases for {folder}.")
+
+    effectiveness_categories = [
+        "full_stack_minimal_product",
+        "code_drift",
+        "document_noise",
+        "frontend_product_quality",
+        "long_task_recovery",
+        "generator_structure",
+        "schema_strictness",
+        "frontend_delegation",
+        "prototype_gate_quality",
+        "feedback_evolution",
+    ]
+    effectiveness_root = ROOT / "effectiveness-evals"
+    baselines = [
+        {"id": "baseline_free_codex", "label": "No plugin baseline"},
+        {"id": "current_engineering_assistant", "label": "teamwork-engineering-assistant 1.1.0.0"},
+        {"id": "curated_tools", "label": "Curated third-party skills/tools"},
+    ]
+    eval_items = []
+    for category in effectiveness_categories:
+        eval_id = f"teamwork-{category}"
+        fixture_rel = f"fixtures/{eval_id}.json"
+        eval_items.append({
+            "id": eval_id,
+            "category": category,
+            "prompt": f"Evaluate teamwork-engineering-assistant for {category}: require short task SOP routing, team profile preservation, prototype gates where relevant, evidence-backed delivery, bounded document noise, and feedback evolution candidate approval.",
+            "baselines": [item["id"] for item in baselines],
+            "input_files": [fixture_rel],
+            "assertions": [
+                "skill trigger is specific and has negative boundary",
+                "workflow uses only necessary evidence and avoids long template dumping",
+                "outputs include concrete delivery evidence or explicit blocked reason",
+                "teamwork plugin identity and rrq-yq-team profile are preserved",
+                "high-risk or formal evolution changes require human approval",
+            ],
+            "grading_dimensions": ["routing", "execution_sop", "evidence", "cost", "teamwork_preservation", "failure_handling"],
+        })
+        write_json(effectiveness_root / fixture_rel, {
+            "fixture_id": eval_id,
+            "category": category,
+            "teamwork_plugin": PLUGIN_NAME,
+            "version": PLUGIN_VERSION,
+            "expected_skill_count": len(SKILLS),
+        })
+    write_json(effectiveness_root / "evals.json", {
+        "schema_version": "1.0",
+        "plugin": PLUGIN_NAME,
+        "version": PLUGIN_VERSION,
+        "baselines": baselines,
+        "evals": eval_items,
+        "result_contract": {
+            "required_report_fields": ["pass_rate_delta", "token_or_time_cost_delta", "quality_findings", "doc_noise_score", "frontend_product_score", "skill_sop_metrics", "recommendation"],
+            "recommendation_values": ["keep_and_slim", "split_capabilities", "delegate_to_curated_tools", "retire_skill"],
+        },
+    })
 
     trigger_cases = []
     safety_cases = []
@@ -10045,8 +10829,8 @@ def upstream_main_capability_matrix_doc() -> str:
 
 ## 当前分支基线
 
-- `main`: `547fa90`（2026-06-22 本地分支头，`feat：eval优化`）
-- `teamwork`: `cd831cf`
+- `main`: `402fe06`（3.1.0 全量 task SOP 与行为 eval 基线）
+- `teamwork`: `7871cb5`（1.0.0.4 团队插件基线）
 - 公共祖先：`23b9745`
 
 ## 适用范围
@@ -10063,9 +10847,9 @@ def upstream_main_capability_matrix_doc() -> str:
 
 ## 当前结论
 
-- `main` 相对公共祖先的当前可见增量，主要集中在 4 个主题：traceability 报告与实现控制面、plugin manifest / publish surface / Hermes 发布、document retention / runtime route / assistant feedback 治理、eval runner / scored eval / distribution regression。
-- 当前 `main` 可见增量未发现 `needs-backport` 项；现阶段以“已覆盖”或“禁止导入”两类结论为主。
-- 结合当前 `teamwork` 源码现状，绝大多数 `main` 最新通用能力已被 `teamwork` 等价吸收或以更强团队版本覆盖；剩余差异主要属于 `do-not-import`，因为会覆盖团队插件身份、团队 profile、团队规则密度或兼容发布策略。
+- `main` 3.1.0 相对 teamwork 当前基线新增 4 个对团队有正向用途的能力：`product-prototype-design`、`prototype-review-loop`、`assistant-feedback-capture`、`skill-evolution-review`。
+- 本轮将上述 4 个能力按 teamwork profile、团队规则源和发布语义团队化迁入，并把既有 21 个 skills 同步升级为短 SOP + 行为 eval 形态。
+- 仍然禁止导入会覆盖 `teamwork-engineering-assistant` 插件身份、削弱 `rrq-yq-team` profile、破坏 compatibility alias、Hermes 限定名或团队发布路径的通用 main 实现。
 - 后续若 `main` 再出现新的通用能力，应先更新本矩阵，再决定是否回收到生成器。
 
 ## Capability Matrix
@@ -10180,7 +10964,9 @@ flowchart LR
 标准模板已落地在每个 `contract.yaml`。必填字段包括：`skill_id`、`skill_name`、`version`、`stage`、`type`、`purpose`、`non_goals`、`trigger_description`、`standalone_mode`、`workflow_mode`、`inputs`、`outputs`、`preconditions`、`postconditions`、`dependencies`、`permissions`、`human_approval_required`、`risk_model`、`quality_gates`、`failure_modes`、`eval_cases`、`workflow_interface`、`owner`、`reviewers`、`change_policy`。
 
 # 6. SKILL.md 标准模板
-每个 `SKILL.md` 均包含 front matter，并包含：`Role`、`Scope`、`Non-goals`、`Inputs`、`Preconditions`、`Operating Procedure`、`Output Contract`、`Quality Gates`、`Failure Handling`、`Human Approval Rules`、`Standalone Mode`、`Workflow Mode`、`Review Checklist`、`Prohibited Behavior`、`Examples`、`Eval Guidance`。
+每个 `SKILL.md` 均是短 SOP 入口，只包含 front matter 和 7 个短章节：`When To Use`、`Do Not Use When`、`Inputs`、`Do This`、`Evidence / Done`、`Stop / Escalate`、`References / Scripts`。
+
+治理细则、语言策略、preflight、人工审批、团队模板、团队 rule_id、输出 schema 和确定性校验下沉到 `contract.yaml`、`references/`、`scripts/`、`standards/` 和 validators；`SKILL.md` 不再重复长治理模板。
 
 # 7. 各阶段 Skill 设计
 {skill_sections}

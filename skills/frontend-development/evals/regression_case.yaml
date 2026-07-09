@@ -2,6 +2,7 @@
   "id": "frontend-development-regression_case",
   "name": "Frontend Development regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Development regression case 团队规则场景",
     "material": "历史问题再次出现：执行前必须读取 artifacts/_control/task-context.agent.md、implementation-contract.json、quality-contract.json 和任务规则包 缺少证据却被标记为通过，评审记录只有结论没有输入、风险、审批和 required action，需要防止同类问题再次进入研发流程。",
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-development 必须按原型和 frontend-design 实现，并输出 design-to-ui-mapping.yaml",
+    "缺少浏览器、截图、console 或交互证据时不得声明产品级通过"
   ],
   "severity_when_failed": "critical",
   "grader": {

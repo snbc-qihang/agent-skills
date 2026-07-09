@@ -2,6 +2,7 @@
   "id": "workflow-orchestrator-ambiguous_input",
   "name": "Workflow Orchestrator ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Workflow Orchestrator ambiguous input 团队规则场景",
     "material": "输入材料对 阶段选择 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",

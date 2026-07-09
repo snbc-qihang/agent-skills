@@ -2,9 +2,10 @@
   "id": "frontend-design-happy_path",
   "name": "Frontend Design happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Frontend Design happy path 团队规则场景",
-    "material": "输入材料覆盖 将需求和接口契约转化为可实现的前端设计，明确页面、组件、状态、交互、接口联调和验证策略。，并提供 页面和组件边界明确 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：高保真原型和三轮 review verdict 已通过，需要转为可实现的前端设计合同时。；材料包含 先验证 product-prototype-contract、desktop/mobile screenshot、interaction-state-map、prototype-review-report 均可用。，并提供 frontend-design.md 引用 prototype gate verdict 和关键截图路径。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "I2",
@@ -32,7 +33,7 @@
       "skill_id": "frontend-design",
       "mode": "standalone",
       "inputs": {
-        "requirement-contract.json": "provided: 输入材料覆盖 将需求和接口契约转化为可实现的前端设计，明确页面、组件、状态、交互、接口联调和验证策略。，并提供 页面和组件边界明确 的证据、产物路径和人工审批状态。"
+        "requirement-contract.json": "provided: 正向触发：高保真原型和三轮 review verdict 已通过，需要转为可实现的前端设计合同时。；材料包含 先验证 product-prototype-contract、desktop/mobile screenshot、interaction-state-map、prototype-review-report 均可用。，并提供 frontend-design.md 引用 prototype gate verdict 和关键截图路径。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {
@@ -74,7 +75,9 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批"
+    "策略要求审批时已请求人工审批",
+    "frontend-design 必须引用 product-prototype-contract、prototype-review-report 和桌面/移动截图证据",
+    "缺少三轮 prototype review verdict 时必须 blocked"
   ],
   "severity_when_failed": "major",
   "grader": {

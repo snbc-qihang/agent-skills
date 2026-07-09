@@ -26,7 +26,7 @@ metadata:
   owner: "产品/需求负责人"
   stage: "requirement_intake"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。；Do not use when 不替代产品决策；不生成代码。"
+  trigger_description: "Use when 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约；Do not use when do not 替代产品决策。"
 routing:
   intent_tags:
     - "intake"

@@ -1,0 +1,110 @@
+{
+  "skill_id": "prototype-review-loop",
+  "version": "1.1.0",
+  "stage": "prototype_review",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Prototype Review Loop",
+    "short_description": "对产品原型执行至少三轮 agent 评审，形成可阻断后续设计和实现的 prototype review verdict。",
+    "default_prompt": "使用 prototype-review-loop，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
+    "trigger_description": "Use when 已有高保真原型，需要至少三轮 agent review 后决定是否进入工程设计或实现时；Do not use when do not替代人工最终审批。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user"
+    },
+    "preflight_gate": {
+      "states": [
+        "ready",
+        "waiting_for_input",
+        "waiting_for_human_review",
+        "blocked"
+      ],
+      "formal_generation_entry_condition": "preflight_input_state == ready"
+    }
+  },
+  "inputs": [
+    "product-prototype-contract.json",
+    "desktop-prototype-screenshot.png",
+    "mobile-prototype-screenshot.png",
+    "interaction-state-map.json"
+  ],
+  "outputs": [
+    "prototype-review-report.json",
+    "prototype-review-findings.md",
+    "prototype-gate-decision.json"
+  ],
+  "routing": {
+    "intent_tags": [
+      "agent",
+      "loop",
+      "prototype",
+      "prototype-review-loop",
+      "prototype_review",
+      "review",
+      "stage_skill",
+      "verdict。",
+      "对产品原型执行至少三轮",
+      "形成可阻断后续设计和实现的",
+      "评审"
+    ],
+    "positive_triggers": [
+      "prototype-review-loop",
+      "Prototype Review Loop",
+      "对产品原型执行至少三轮 agent 评审，形成可阻断后续设计和实现的 prototype review verdict。"
+    ],
+    "negative_triggers": [
+      "只解释 Prototype Review Loop 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "product-prototype-contract.json",
+      "desktop-prototype-screenshot.png",
+      "mobile-prototype-screenshot.png",
+      "interaction-state-map.json"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "至少三轮 agent 评审完成",
+      "所有 blocker 已关闭或进入人工审批",
+      "企业级可用性评分达标",
+      "后续设计输入已冻结"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "少于三轮评审放行",
+      "保留未关闭 blocker",
+      "原型和实现不一致豁免"
+    ]
+  },
+  "quality_gates": [
+    "至少三轮 agent 评审完成",
+    "所有 blocker 已关闭或进入人工审批",
+    "企业级可用性评分达标",
+    "后续设计输入已冻结"
+  ],
+  "workflow": {
+    "node_id": "prototype-review-loop",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "skills/prototype-review-loop/SKILL.md",
+    "skills/prototype-review-loop/contract.yaml",
+    "skills/prototype-review-loop/workflow/node.yaml",
+    "skills/prototype-review-loop/agents/openai.yaml"
+  ]
+}

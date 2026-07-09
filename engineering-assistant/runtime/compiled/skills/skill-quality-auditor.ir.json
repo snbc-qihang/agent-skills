@@ -1,13 +1,13 @@
 {
   "skill_id": "skill-quality-auditor",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "skill_quality",
   "type": "audit_skill",
   "prompt_pack": {
     "display_name": "Skill Quality Auditor",
     "short_description": "审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。",
     "default_prompt": "使用 skill-quality-auditor，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；Do not use when 不执行业务研发阶段；不替代 eval 执行。",
+    "trigger_description": "Use when 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库；Do not use when do not 执行业务研发阶段。",
     "language_policy": {
       "supported": [
         "zh-CN",

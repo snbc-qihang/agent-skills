@@ -2,6 +2,7 @@
   "id": "engineering-knowledge-miner-technology_demo_adoption",
   "name": "Engineering Knowledge Miner technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Engineering Knowledge Miner technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 证据收集，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

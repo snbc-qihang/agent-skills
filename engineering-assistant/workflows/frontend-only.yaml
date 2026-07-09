@@ -1,6 +1,6 @@
 {
   "workflow_id": "frontend-only",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "states": [
     "pending",
     "running",
@@ -28,7 +28,7 @@
   "default_entry_mode": "auto_flow",
   "start_node": "requirement-intake",
   "terminal_nodes": [
-    "code-review"
+    "assistant-feedback-capture"
   ],
   "composition_policy": {
     "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
@@ -241,7 +241,7 @@
       "node_id": "requirement-intake",
       "stage": "requirement_intake",
       "skill_id": "requirement-intake",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -333,7 +333,7 @@
       "node_id": "repo-context-miner",
       "stage": "repo_context",
       "skill_id": "repo-context-miner",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -414,7 +414,7 @@
         ]
       },
       "next_nodes": [
-        "frontend-design"
+        "product-prototype-design"
       ],
       "artifact_mapping": {
         "repo-context-report.md": "artifacts/repo-context-miner/repo-context-report.md",
@@ -425,10 +425,10 @@
       }
     },
     {
-      "node_id": "frontend-design",
-      "stage": "frontend_design",
-      "skill_id": "frontend-design",
-      "version": "1.0.1",
+      "node_id": "product-prototype-design",
+      "stage": "product_prototype_design",
+      "skill_id": "product-prototype-design",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -437,6 +437,195 @@
       ],
       "depends_on": [
         "repo-context-miner"
+      ],
+      "inputs": [
+        "requirement-contract.json",
+        "repo-context-report.md",
+        "brand_or_design_system_context",
+        "target_viewports"
+      ],
+      "outputs": [
+        "product-prototype-contract.json",
+        "prototype-source.md",
+        "desktop-prototype-screenshot.png",
+        "mobile-prototype-screenshot.png",
+        "interaction-state-map.json",
+        "third-party-capability-ledger.json"
+      ],
+      "preconditions": [
+        "contract 输入可用",
+        "风险策略已加载",
+        "preflight gate 已执行"
+      ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
+      "postconditions": [
+        "StageRunResult 已输出",
+        "产物已登记索引"
+      ],
+      "quality_gates": [
+        "高保真原型存在",
+        "桌面和移动截图存在",
+        "核心用户流完整",
+        "加载/空态/错误态/权限态完整",
+        "第三方能力调用已登记"
+      ],
+      "approval_policy": {
+        "required_for": [
+          "跳过原型门禁",
+          "使用非项目既有设计系统",
+          "核心信息架构变更"
+        ],
+        "decision": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "retry_policy": {
+        "max_attempts": 1,
+        "retry_on": [
+          "TOOL_UNAVAILABLE",
+          "UNKNOWN_ERROR"
+        ]
+      },
+      "failure_policy": {
+        "block_on": [
+          "QUALITY_GATE_FAILED",
+          "RISK_POLICY_VIOLATION",
+          "STAGE_RESULT_CONTRACT_VIOLATION"
+        ],
+        "pause_on": [
+          "HUMAN_APPROVAL_REQUIRED",
+          "MISSING_REQUIRED_INPUT"
+        ]
+      },
+      "next_nodes": [
+        "prototype-review-loop"
+      ],
+      "artifact_mapping": {
+        "product-prototype-contract.json": "artifacts/product-prototype-design/product-prototype-contract.json",
+        "prototype-source.md": "artifacts/product-prototype-design/prototype-source.md",
+        "desktop-prototype-screenshot.png": "artifacts/product-prototype-design/desktop-prototype-screenshot.png",
+        "mobile-prototype-screenshot.png": "artifacts/product-prototype-design/mobile-prototype-screenshot.png",
+        "interaction-state-map.json": "artifacts/product-prototype-design/interaction-state-map.json",
+        "third-party-capability-ledger.json": "artifacts/product-prototype-design/third-party-capability-ledger.json"
+      }
+    },
+    {
+      "node_id": "prototype-review-loop",
+      "stage": "prototype_review",
+      "skill_id": "prototype-review-loop",
+      "version": "1.1.0",
+      "mode": "standalone|workflow",
+      "entry_modes": [
+        "auto_flow",
+        "from_node",
+        "single_node"
+      ],
+      "depends_on": [
+        "product-prototype-design"
+      ],
+      "inputs": [
+        "product-prototype-contract.json",
+        "desktop-prototype-screenshot.png",
+        "mobile-prototype-screenshot.png",
+        "interaction-state-map.json"
+      ],
+      "outputs": [
+        "prototype-review-report.json",
+        "prototype-review-findings.md",
+        "prototype-gate-decision.json"
+      ],
+      "preconditions": [
+        "contract 输入可用",
+        "风险策略已加载",
+        "preflight gate 已执行"
+      ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
+      "postconditions": [
+        "StageRunResult 已输出",
+        "产物已登记索引"
+      ],
+      "quality_gates": [
+        "至少三轮 agent 评审完成",
+        "所有 blocker 已关闭或进入人工审批",
+        "企业级可用性评分达标",
+        "后续设计输入已冻结"
+      ],
+      "approval_policy": {
+        "required_for": [
+          "少于三轮评审放行",
+          "保留未关闭 blocker",
+          "原型和实现不一致豁免"
+        ],
+        "decision": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "retry_policy": {
+        "max_attempts": 1,
+        "retry_on": [
+          "TOOL_UNAVAILABLE",
+          "UNKNOWN_ERROR"
+        ]
+      },
+      "failure_policy": {
+        "block_on": [
+          "QUALITY_GATE_FAILED",
+          "RISK_POLICY_VIOLATION",
+          "STAGE_RESULT_CONTRACT_VIOLATION"
+        ],
+        "pause_on": [
+          "HUMAN_APPROVAL_REQUIRED",
+          "MISSING_REQUIRED_INPUT"
+        ]
+      },
+      "next_nodes": [
+        "frontend-design"
+      ],
+      "artifact_mapping": {
+        "prototype-review-report.json": "artifacts/prototype-review-loop/prototype-review-report.json",
+        "prototype-review-findings.md": "artifacts/prototype-review-loop/prototype-review-findings.md",
+        "prototype-gate-decision.json": "artifacts/prototype-review-loop/prototype-gate-decision.json"
+      }
+    },
+    {
+      "node_id": "frontend-design",
+      "stage": "frontend_design",
+      "skill_id": "frontend-design",
+      "version": "1.1.0",
+      "mode": "standalone|workflow",
+      "entry_modes": [
+        "auto_flow",
+        "from_node",
+        "single_node"
+      ],
+      "depends_on": [
+        "prototype-review-loop"
       ],
       "inputs": [
         "requirement-contract.json",
@@ -521,7 +710,7 @@
       "node_id": "frontend-development",
       "stage": "frontend_development",
       "skill_id": "frontend-development",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -614,7 +803,7 @@
       "node_id": "self-test",
       "stage": "self_test",
       "skill_id": "self-test",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -709,7 +898,7 @@
       "node_id": "code-quality-governor",
       "stage": "code_quality",
       "skill_id": "code-quality-governor",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -815,7 +1004,7 @@
       "node_id": "code-review",
       "stage": "code_review",
       "skill_id": "code-review",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -897,12 +1086,104 @@
           "MISSING_REQUIRED_INPUT"
         ]
       },
-      "next_nodes": [],
+      "next_nodes": [
+        "assistant-feedback-capture"
+      ],
       "artifact_mapping": {
         "code-review-report.md": "artifacts/code-review/code-review-report.md",
         "code-review-report.html": "artifacts/code-review/code-review-report.html",
         "review-comments.json": "artifacts/code-review/review-comments.json",
         "blocker-list.md": "artifacts/code-review/blocker-list.md"
+      }
+    },
+    {
+      "node_id": "assistant-feedback-capture",
+      "stage": "feedback_capture",
+      "skill_id": "assistant-feedback-capture",
+      "version": "1.1.0",
+      "mode": "standalone|workflow",
+      "entry_modes": [
+        "auto_flow",
+        "from_node",
+        "single_node"
+      ],
+      "depends_on": [
+        "code-review"
+      ],
+      "inputs": [
+        "StageRunResult",
+        "assistant-run-feedback.json",
+        "workflow-trace.json",
+        "user correction summary",
+        "tool logs"
+      ],
+      "outputs": [
+        "feedback-event.json",
+        "feedback-inbox-entry.json",
+        "feedback-capture-report.md"
+      ],
+      "preconditions": [
+        "contract 输入可用",
+        "风险策略已加载",
+        "preflight gate 已执行"
+      ],
+      "preflight_gate": {
+        "state_field": "preflight_input_state",
+        "states": [
+          "ready",
+          "waiting_for_input",
+          "waiting_for_human_review",
+          "blocked"
+        ],
+        "formal_generation_entry_condition": "preflight_input_state == ready",
+        "block_formal_generation_when_not_ready": true,
+        "block_next_nodes_when_not_ready": true
+      },
+      "postconditions": [
+        "StageRunResult 已输出",
+        "产物已登记索引"
+      ],
+      "quality_gates": [
+        "反馈事件有证据路径",
+        "用户纠正优先级已标记",
+        "目标项目与中心仓库落点明确",
+        "事件已标记 consumed_by_evolution_review=false"
+      ],
+      "approval_policy": {
+        "required_for": [
+          "采集敏感内容",
+          "提升为正式规范候选",
+          "修改正式 skill"
+        ],
+        "decision": [
+          "pending",
+          "approved",
+          "rejected"
+        ]
+      },
+      "retry_policy": {
+        "max_attempts": 1,
+        "retry_on": [
+          "TOOL_UNAVAILABLE",
+          "UNKNOWN_ERROR"
+        ]
+      },
+      "failure_policy": {
+        "block_on": [
+          "QUALITY_GATE_FAILED",
+          "RISK_POLICY_VIOLATION",
+          "STAGE_RESULT_CONTRACT_VIOLATION"
+        ],
+        "pause_on": [
+          "HUMAN_APPROVAL_REQUIRED",
+          "MISSING_REQUIRED_INPUT"
+        ]
+      },
+      "next_nodes": [],
+      "artifact_mapping": {
+        "feedback-event.json": "artifacts/assistant-feedback-capture/feedback-event.json",
+        "feedback-inbox-entry.json": "artifacts/assistant-feedback-capture/feedback-inbox-entry.json",
+        "feedback-capture-report.md": "artifacts/assistant-feedback-capture/feedback-capture-report.md"
       }
     }
   ],

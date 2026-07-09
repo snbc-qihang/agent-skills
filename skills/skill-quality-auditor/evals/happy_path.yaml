@@ -2,9 +2,10 @@
   "id": "skill-quality-auditor-happy_path",
   "name": "Skill Quality Auditor happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Skill Quality Auditor happy path 团队规则场景",
-    "material": "输入材料覆盖 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。，并提供 SKILL.md 存在 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；材料包含 读取 skills, engineering-assistant/registry/skills.yaml, skill-contract.schema.json、项目 profile、团队规则目录和 artifact index。，并提供 `skill-quality-report.md` 已生成并可追溯。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "skill-quality-auditor",
       "mode": "standalone",
       "inputs": {
-        "skills": "provided: 输入材料覆盖 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。，并提供 SKILL.md 存在 的证据、产物路径和人工审批状态。"
+        "skills": "provided: 正向触发：审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；材料包含 读取 skills, engineering-assistant/registry/skills.yaml, skill-contract.schema.json、项目 profile、团队规则目录和 artifact index。，并提供 `skill-quality-report.md` 已生成并可追溯。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

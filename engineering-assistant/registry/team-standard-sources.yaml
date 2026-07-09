@@ -1,11 +1,11 @@
 {
-  "source_root": "/Users/sunliming/work/project/personal/agent-skills/inputs",
+  "source_root": "/Users/lingou/slm/project/ai-project/agent-skills/inputs",
   "profile_id": "rrq-yq-team",
   "documents": [
     {
       "id": "rrq-common-tech",
       "title": "人人取----通用技术需求",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/人人取----通用技术需求 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/人人取----通用技术需求 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/238/",
       "topics": [
         "日志",
@@ -20,7 +20,7 @@
     {
       "id": "rrq-yapi-standard",
       "title": "人人取----Yapi使用规范",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/人人取----Yapi使用规范 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/人人取----Yapi使用规范 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/",
       "topics": [
         "YApi",
@@ -34,7 +34,7 @@
     {
       "id": "rrq-redis-standard",
       "title": "人人取----缓存Redis设计规范",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/人人取----缓存Redis设计规范 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/人人取----缓存Redis设计规范 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/135/",
       "topics": [
         "Redis",
@@ -49,7 +49,7 @@
     {
       "id": "rrq-redis-template",
       "title": "Redis详细设计模板",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/Redis详细设计模板 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/Redis详细设计模板 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/497/",
       "topics": [
         "Redis设计文档",
@@ -63,7 +63,7 @@
     {
       "id": "rrq-idempotency",
       "title": "人人取----幂等性方案",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/人人取----幂等性方案 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/人人取----幂等性方案 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/482/",
       "topics": [
         "幂等",
@@ -77,7 +77,7 @@
     {
       "id": "rrq-architecture",
       "title": "人人取----整体架构设计",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/人人取----整体架构设计 - 人人取平台总体设计 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/人人取----整体架构设计 - 人人取平台总体设计 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/doc/134/",
       "topics": [
         "微服务",
@@ -91,7 +91,7 @@
     {
       "id": "yq-overview",
       "title": "萤启运营系统概要设计",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/萤启运营系统概要设计 - 萤启服务商系统 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/project/",
       "topics": [
         "萤启服务商系统",
@@ -105,7 +105,7 @@
     {
       "id": "yq-vems-franchisee",
       "title": "合作加盟服务(vems-franchisee)",
-      "source_path": "/Users/sunliming/work/project/personal/agent-skills/inputs/合作加盟服务(vems-franchisee) - 萤启服务商系统 - 站点标题.html",
+      "source_path": "/Users/lingou/slm/project/ai-project/agent-skills/inputs/合作加盟服务(vems-franchisee) - 萤启服务商系统 - 站点标题.html",
       "source_url": "http://mrdoc.xtjc.net/project/",
       "topics": [
         "vems-franchisee",

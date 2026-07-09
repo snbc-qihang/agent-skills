@@ -2,6 +2,7 @@
   "id": "design-review-regression_case",
   "name": "Design Review regression case",
   "case_type": "regression_case",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "历史常见漏项：没有关键场景却跨系统",
     "material": "设计涉及目标业务系统和目标客户端系统状态同步，但没有关键场景、异常流、补偿和最终一致性说明。",

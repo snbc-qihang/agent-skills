@@ -1,192 +1,47 @@
 ---
 name: database-design
-description: Use when the request is about 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。
+description: Use when 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点；Do not use when do not 执行生产 DDL。
 ---
 
-# 角色
-作为研发助手 workflow 中 `database_design` 阶段的负责人工作。输出必须有证据支撑，并且可被人工评审、CI 和下游 skill 消费。
+# When To Use
+- 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。
+- 数据库设计、表结构、索引、迁移、修复和必要恢复方案设计时使用。
 
-# 范围
-设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。
+# Do Not Use When
+- 不执行生产 DDL。
+- 不做无用途字段和索引。
+- 不省略回滚方案。
 
-# 非目标
-- 不执行生产 DDL
-- 不做无用途字段和索引
-- 不省略回滚方案
-
-# 输入
+# Inputs
 - `detailed-design.md`
 - `database-standard.md`
 - `repo_context`
 - `risk_policy`
 
-# 前置条件
-- 加载适用的团队规范、`engineering-assistant/profiles/rrq-yq-team.yaml`、`engineering-assistant/registry/team-rule-catalog.yaml` 和风险策略。
-- 若目标项目提供更具体的 profile，以目标项目 profile 为准，并记录与团队默认 profile 的冲突。
-- 确认目标范围和运行模式。
-- 正式产物生成前必须先读取用户请求、仓库上下文、profile、上游产物和 artifact index，并完成必须信息梳理。
-- 如果必填输入缺失或关键边界无法确认，必须先主动询问用户；不得跨越未知边界猜测或先生成半成品。
+# Do This
+- 读取 detailed-design.md, database-standard.md, repo_context、项目 profile、团队规则目录和 artifact index。
+- 执行 database-design preflight：确认语言、必填信息、风险、审批状态和 `detailed-design.md` 证据。
+- DB1 MySQL 是事实数据唯一真相来源，Redis/MQ 不作为事实数据最终来源。
+- DB2 数据库设计说明字段用途、索引用途、唯一约束、状态字段、审计字段是否必要。
+- DB3 禁止无条件全表查询，动态 where 至少有有效条件。
+- DB4 写库操作明确事务边界；多表写入说明同事务或最终一致性方案。
+- DB5 删除优先逻辑删除，并说明关联数据校验规则。
 
-# 语言策略
-- 未指定输出语言时，必须先询问用户选择 `zh-CN`（简体中文）或 `en`（English）。
-- 用户确认后，将语言写入 `StageRunRequest.context.language` 和 `StageRunResult.language`。
-- 未确认语言时，不得生成正式文档；状态置为 `waiting_for_input` 并输出 blocking 问题。
+# Evidence / Done
+- `database-design.md` 已生成并可追溯。
+- `schema-change-plan.sql` 已生成并可追溯。
+- `migration-plan.md` 已生成并可追溯。
+- `rollback-plan.md` 已生成并可追溯。
+- database-design.md 使用 OLTP 或 OLAP 团队模板 有证据、假设或 required action。
+- 字段和索引均有查询/约束用途 有证据、假设或 required action。
 
-# 主动询问策略
-- 执行前先检查输入、仓库上下文、上游产物和 profile，区分“可推导信息”和“必须用户确认信息”。
-- 对必须用户确认的信息，输出 `required_information_requests`，每个问题包含 `question`、`reason`、`required`、`priority`、`expected_format` 和可选示例。
-- blocking 问题未回答时，`StageRunResult.status` 必须为 `waiting_for_input`，不得继续生成通过性结论、正式文档或下游节点输入。
-- 进入 `waiting_for_input` 或 `waiting_for_human_review` 时，必须在目标项目 `docs/human-review/` 生成可填写的 HTML 人工审阅包；页面必须支持填写每个待确认项并复制或下载结构化答案 JSON；agent 不得把 HTML 作为事实输入源。
-- HTML 审阅包只用于人工填写；用户答案必须写回 `StageRunRequest.context`、artifact index 或可机读 MD/JSON/YAML 后，才能继续正式产物生成。
-- 一次只询问完成本阶段所需的最小问题集，优先级按 `critical`、`major`、`minor` 排序。
-- 用户补充后，将答案写回 `StageRunRequest.context` 或 artifact index，并保留来源。
+# Stop / Escalate
+- 缺少 `detailed-design.md` 或其来源证据时 waiting_for_input，不得生成正式产物。
+- `database-design.md 使用 OLTP 或 OLAP 团队模板` 失败时 blocked，不得降级为普通建议。
+- DDL 需要人工审批或 waiting_for_human_review。
+- 数据订正 需要人工审批或 waiting_for_human_review。
+- 删除字段 需要人工审批或 waiting_for_human_review。
 
-# 技术/框架选型
-- 编码、详细设计、评审和仓库上下文分析必须识别现有技术栈与技术/框架选型。
-- 选型范围包括后端框架、持久化框架、前端技术栈、组件库、中间件、测试框架、构建工具、可观测性和部署方式。
-- 未能从设计、repo_context 或项目 profile 确认技术选型时，必须主动询问用户。
-- Java/Spring 后端持久化默认建议 `mybatis-plus`；生成直接 `JDBC` 代码前必须有明确项目约束或评审批准。
-- 任何技术替换、绕过现有 mapper/repository 模式、前端技术栈/组件库变更、测试框架或构建工具替换都必须进入 `required_information_requests` 或人工评审。
-
-# 执行门禁
-- preflight 阶段必须先完成语言确认、上下文读取和必须信息检查；preflight 未通过前不得生成正式阶段 Markdown/Excel/JSON 产物。
-- 若存在 blocking `required_information_requests`，必须暂停在 `waiting_for_input`。
-- 暂停等待人工输入或审批时，`StageRunResult.artifacts` 只登记补充信息请求、HTML 审阅包和恢复点，不得登记正式阶段产物为已完成；HTML 必须通过 `validate_stage_run_result.py` 的可填写/可导出检查。
-- 生成正式 Markdown 文档时必须包含 `document_number`、`document_status`、`retention_policy`、`owner` 和 `source_artifacts`。
-- 输出 `StageRunResult` 后必须运行 `engineering-assistant/scripts/validate_stage_run_result.py`；校验失败视为阶段节点未遵守契约，workflow 必须 `blocked`。
-
-# Preflight 运行门闩
-- 每次运行必须先输出并维护 `preflight_input_state`，取值只能是 `ready, waiting_for_input, waiting_for_human_review, blocked`。
-- 只有 `preflight_input_state == ready` 时才能进入 `formal_generation`，读取模板、填充正文、写入正式 Markdown/Excel/JSON，并登记正式 artifact。
-- `waiting_for_input` 时只允许登记信息盘点、缺失信息、目标规划、方向确认、`required-information-request.json`、`docs/human-review/<run-id>.html`、`workflow-trace.json` 和 `resume-point.json` 等控制产物；不得写入或登记正式阶段产物。
-- preflight 未 ready 时禁止生成或登记正式设计文档：`high-level-design.md`、`detailed-design.md`、`database-design.md`、`redis-design.md`、`mq-design.xlsx`、`interface-contracts.yaml`、`test-strategy.md`。
-- 用户补充答案必须写回 `StageRunRequest.context`、artifact index 或 MD/JSON/YAML，并保留来源和时间，之后才能把 `preflight_input_state` 置为 `ready`。
-
-
-
-
-
-
-
-# 模板执行协议
-- 只有 `preflight_input_state == ready` 时才能进入 `formal_generation` 读取模板并生成正式 Markdown；存在 blocking 缺失信息时必须先暂停并生成补充信息入口。
-- 生成正式 Markdown 文档前必须先读取对应 template asset；不得凭记忆、通用模板、聊天上下文或 `assets/artifact-template.md` 生成正文。
-- 以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。
-- 只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。
-- 输入材料缺少事实时，保留模板章节并写明“不适用原因”，或进入 `waiting_for_input` 并输出 `required_information_requests`；不得用“待补充/待确认/TODO”通过门禁。
-- 模板文件不存在、无法读取或输出无法通过模板校验时，`StageRunResult.status` 必须为 `blocked` 或 `failed`。
-
-# 对应模板
-- `database-design.md`: 生成前读取 `assets/database-oltp-template.md`；适用范围：MySQL/PostgreSQL 等关系型 OLTP 场景；来源模板：`inputs/关系型(OLTP)详细设计模板.md`。
-- `database-design.md`: 生成前读取 `assets/database-olap-template.md`；适用范围：ClickHouse、物化视图或分析宽表场景；来源模板：`generator canonical template`。
-
-# 团队数据库设计规则
-- 数据库设计必须生成独立 `database-design.md`，不得用主详细设计中的简写字段表替代。
-- OLTP 场景必须以 `assets/database-oltp-template.md` 为唯一正文骨架生成：不得压缩、改写或删除模板章节、固定提示块、标题名称和表格列头；不适用章节也必须保留并写明“不适用原因”。生成流程不得用摘要式数据库设计替代模板正文；如果文档行数、章节集合或固定表格列头明显少于模板，必须视为裁剪模板并 `blocked`。
-- 模板中的固定说明文字、禁止说明、编写要点、示例标题、方言差异提示、编写要求、契约含义、原则说明和“文档结束”等固定文本不得同义改写或删除；只允许填充模板预留的业务内容。
-- 当需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入“强耦合表组模式”，不得生成单表或混合字段池。
-- 强耦合表组模式下，文档标题必须使用 `<业务对象>表组 关系型（OLTP）详细设计`；`设计对象` 必须写成 `强耦合表组：表1、表2、表3...`；`文档定位` 必须明确对象类型，例如 `主表 + 明细表 + 规则表 + 领取主表 + 领取明细表`。
-- 强耦合表组模式下必须生成 `### 2.4 强耦合表组说明`，列头固定为 `成员表 | 角色 | 与主表关系 | 同事务要求 | 备注`；`### 3.1 表的业务职责` 必须按表列出业务职责和唯一事实来源。
-- 强耦合表组模式下 `### 4.2 字段定义（按表展开）` 必须为每张表生成独立子章节，例如 `#### 4.2.1 表名`；字段表列头必须包含 `字段 | 类型 | 必填 | 默认值 | 索引 | 敏感级别 | 说明`。
-- 强耦合表组模式下 `### 4.3 索引设计` 必须逐表列出索引，列头固定为 `表 | 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注`；索引必须能归属到具体表。
-- 强耦合表组模式下 `schema-change-plan.sql` 必须为设计对象中每张成员表生成 `CREATE TABLE`，唯一键和普通索引必须与 `database-design.md` 的索引设计一致，禁止只生成单表或承载全部字段的混合表。
-- 强耦合表组模式下 `migration-plan.md` 必须说明表组同批创建、同批校验、逐表索引 explain 和表组关系校验；`rollback-plan.md` 必须说明应用发布后不得只删除或回滚表组中的单张事实表；`database-risk-report.json` 必须覆盖生产 DDL 审批、表组同批创建审批、容量/QPS、枚举口径和幂等键口径。
-- ClickHouse、物化视图或分析宽表使用 `assets/database-olap-template.md`。
-- 过程中缺少库名、实例、版本、负责人、字段口径、索引用途、QPS/容量、审批状态、敏感级别等事实时，必须主动输出 `required_information_requests` 询问用户，状态置为 `waiting_for_input`；除非用户明确允许，不得推测。
-- `succeeded`、`approved` 或 `final` 输出不得包含 `{占位符}`、`待补充`、`待确认`、`未知`、`TODO/TBD` 等未决标记。
-- 禁止无用途字段和索引、没有 WHERE 的 UPDATE/DELETE、业务代码物理删除在线事实行，除非专项审批。
-- Redis/MQ/文件系统不得作为事实数据来源。
-- 未确认库名、实例、字符集、索引名时，不得标记为 `approved` 或 `final`。
-
-
-# 操作流程
-1. 将请求规范化为 `StageRunRequest`。
-2. 读取用户请求、仓库上下文、profile、上游产物和 artifact index，记录不可用来源。
-3. 区分可自动推导信息与必须用户确认信息；如存在 blocking 缺失项，输出 `required_information_requests`，生成 `docs/human-review/` HTML，状态置为 `waiting_for_input` 后暂停。
-4. 仅当 blocking 信息已补齐并写回 `StageRunRequest.context` 或 artifact index 后，基于来源证据执行以下检查。
-- DB1 MySQL 是事实数据唯一真相来源，Redis/MQ 不作为事实数据最终来源
-- DB2 数据库设计说明字段用途、索引用途、唯一约束、状态字段、审计字段是否必要
-- DB3 禁止无条件全表查询，动态 where 至少有有效条件
-- DB4 写库操作明确事务边界；多表写入说明同事务或最终一致性方案
-- DB5 删除优先逻辑删除，并说明关联数据校验规则
-- DB6 数据迁移、DDL、订正需要迁移步骤、修复规则、必要恢复方案和审批点；这些内容保留在数据库专项设计，不进入主详细设计发布/灰度章节
-- DB7 OLTP 数据库设计必须覆盖文档信息、变更记录、术语定义、参考文档、文档定位、设计对象类型、业务语义与生命周期、状态机、物理结构设计、字段定义和敏感级别、索引设计、约束与数据库对象、字段可变性矩阵、数据量与性能设计、CRUD 契约设计、强制前置条件、禁止操作清单、批量操作与数据修复规则、事务一致性与并发控制、安全与审计设计、人工审批点
-- DB8 ClickHouse、物化视图或分析宽表必须使用 OLAP 模板，覆盖数据分层、字段级血缘、MergeTree 引擎选型、ORDER BY、PARTITION BY、TTL、物化视图关系、刷新策略、上下游影响
-- DB9 禁止无用途字段和索引，禁止没有 WHERE 的 UPDATE/DELETE，禁止业务代码物理删除在线事实行，除非专项审批
-- DB10 未确认库名、实例、字符集、索引名时，不得标记为 approved/final
-- DB11 关系型 OLTP 输出必须保持 `assets/database-oltp-template.md` 的章节顺序、标题名称和表格列头；不适用章节必须保留并写明不适用原因
-- DB12 缺少库名、实例、版本、负责人、字段口径、索引用途、QPS/容量、审批状态、敏感级别等事实时，必须进入 waiting_for_input 并输出 required_information_requests；除非用户明确允许，不得推测
-- DB13 需求、详细设计、repo_context 或业务对象中出现两个及以上事实对象、主明细对象、配置+规则+记录对象、主表+参数表+大字段表、领取主记录+领取明细等结构时，必须进入强耦合表组模式，不得生成单表或混合字段池
-- DB14 强耦合表组模式下，标题、设计对象、文档定位、2.4 表组说明、3.1 逐表职责、4.2 逐表字段、4.3 逐表索引、CRUD 参与表、事务一致性、迁移、回滚、风险报告和 DDL 的表集合必须一致
-5. 确认 `preflight_input_state == ready` 后进入 `formal_generation`；按模板执行协议读取对应 `assets/*-template.md`，复制模板骨架后逐节填充输入事实，再生成全部声明产物。
-6. 评估质量门禁，并给出 `pass`、`warn`、`block` 或 `require_human_review`。
-7. 输出包含 trace、artifacts、findings、required_information_requests 和 required actions 的 `StageRunResult`。
-
-# 输出契约
-在 `artifacts/database-design/` 下生成以下产物：
-- `database-design.md`
-- `schema-change-plan.sql`
-- `migration-plan.md`
-- `rollback-plan.md`
-- `database-risk-report.json`
-
-# 文档治理
-- `artifacts/<skill_id>/` 下的输出默认是本次 run artifact，不自动等同正式留存文档。
-- 需要正式留存的文档必须满足 `DG1-DG6`：具备唯一编号、状态、留存策略、owner、来源证据和审批状态。
-- `draft`、`reviewing`、`blocked`、`waiting_for_input`、任务过程摘要、缺失输入清单和临时评审意见不得作为正式文档沉淀。
-- 只有 `document_status=approved|final` 且 `retention_policy=persist` 的文档可进入正式文档目录；否则只保留在 workflow trace 或 run artifact 中。
-
-
-# 质量门禁
-- database-design.md 使用 OLTP 或 OLAP 团队模板
-- 字段和索引均有查询/约束用途
-- 迁移步骤可回滚
-- 容量和查询模式已评估
-- 生产变更审批明确
-- 未确认库名/实例/字符集/索引名时不得 final
-
-# 失败处理
-- `MISSING_REQUIRED_INPUT`：输出缺失信息产物，状态置为 `waiting_for_input`。
-- `INVALID_OUTPUT_SCHEMA`：重新生成不合规产物并再次运行校验。
-- `QUALITY_GATE_FAILED`：状态置为 `blocked`，并列出 required actions。
-- `HUMAN_APPROVAL_REQUIRED`：创建审批请求，暂停在 `waiting_for_human_review`。
-
-# 人工审批规则
-- DDL
-- 数据订正
-- 删除字段
-- 删除索引
-- 生产库变更
-- 影响核心链路的索引调整
-- 物理删除在线事实行
-
-# 独立运行模式
-当用户只要求执行本阶段时，直接运行该 skill。生成完整产物集和门禁决策，不调用无关阶段。
-
-# Workflow 编排模式
-通过 `StageRunRequest` 接收上游产物，保留产物血缘，并向 `workflow-orchestrator` 返回 `StageRunResult`。
-
-# 评审检查清单
-- 每个结论都有证据或已记录假设。
-- 每个输出路径都已进入 artifact index。
-- 每个阻断问题都已形成 finding。
-- 每个高风险动作都有人工审批记录。
-- 输出可通过 `output.schema.json` 校验。
-- `StageRunResult` 可通过 `validate_stage_run_result.py` 校验。
-
-# 禁止行为
-- 不得在无证据时宣称门禁通过。
-- 不得隐藏缺失输入。
-- 不得自动批准高风险动作。
-- 不得用主观判断替代确定性检查。
-- 不得变更生产系统。
-
-# 示例
-独立运行："使用 `database-design` 基于当前设计文档生成本阶段产物。"
-
-编排运行：`workflow-orchestrator` 将包含上游产物的节点 `database-design` 发送给本 skill，并等待 `StageRunResult`。
-
-
-
-# Eval 指引
-运行 `evals/` 下的 eval cases。关键 regression cases 必须通过后才允许发布该 skill 版本。
+# References / Scripts
+- contract.yaml、references/stage-guidance.md、scripts/validate_output.py、rrq-yq-team.yaml、team-rule-catalog.yaml、team-standard-sources.yaml：契约、团队 profile/rule/source 和输出校验；语言策略/执行门禁要求未指定输出语言时先询问，preflight_input_state == ready 后才允许 formal_generation，preflight 未通过前不得生成正式阶段产物，不得登记正式阶段产物为已完成；技术/框架选型要求前端技术栈、测试框架、mybatis-plus、JDBC 例外来自 repo_context/profile 或主动询问与评审。
+- 模板执行协议：先读取 assets/database-oltp-template.md、assets/database-olap-template.md，按章节顺序生成，等待输入时停在 waiting_for_input，不得删除团队模板必需章节。

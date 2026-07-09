@@ -1,11 +1,11 @@
 # 研发助手 Skills 工程体系落地方案
 
 # 1. 执行摘要
-当前插件版本：`1.0.0.4`。
+当前插件版本：`1.1.0.0`。
 
 目标是把需求、设计、研发、自测、质量门禁、代码走查、发布、复盘和知识沉淀转化为可独立运行、可编排、可校验、可审计、可版本化治理的团队研发助手插件。本版本不再把插件定位为“文档生成器”，而是定位为“可循环的设计治理工作流”：信息收集完成判定 -> 目标规划与缺口识别 -> 用户追问/方向确认 -> ready 后正式生成设计文档 -> 自我评审 -> 有边界的自动修复 -> 人工评审 -> 反馈分类 -> 增量修正 -> 规范候选沉淀 -> TL 统一治理。
 
-当前落地内容包括仓库结构、`21` 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准、检查清单、设计治理状态机、preflight 生成闸门、自审修复边界、人审反馈循环和 TL 规范候选包。
+当前落地内容包括仓库结构、`25` 个 skill、统一 contract、output schema、eval cases、workflow node、workflow 样例、CI 样例、标准、检查清单、设计治理状态机、preflight 生成闸门、自审修复边界、人审反馈循环和 TL 规范候选包。
 
 边界：当前未接入真实组织系统、真实 CI/CD 平台和真实审批工具，默认以文件化 contract、GitHub Actions 样例和人工审批对象作为第一版落地接口。插件不得维护单次需求的具体业务事实；具体业务事实只能进入目标项目 artifact 或脱敏 eval/regression case。待组织确认项见本文件末尾。
 
@@ -76,6 +76,8 @@ flowchart LR
 |---|---|---|---|---|---|---|---|---|---|
 | requirement-intake | stage_skill | 需求准入、需求边界确认、验收标准检查、进入设计前风险判断时使用；不要用于直接生成概要设计或代码实现。 | organization_context, current_process | requirement-intake-report.md, requirement-contract.json, missing-information-list.md | 是 | 是 | 业务目标存在; 验收标准存在 | 高风险需求; 跨系统重大依赖 | 产品/需求负责人 |
 | repo-context-miner | stage_skill | 现有项目代码上下文梳理、模块边界识别、可复用能力识别、影响范围分析时使用；不要用于直接修改代码或替代设计评审。 | repository_path, requirement-contract.json | repo-context-report.md, module-map.yaml, impact-scope.yaml | 是 | 是 | 仓库路径可访问; 模块边界有证据 | 读取敏感配置; 跨仓库分析 | 架构师/资深开发 |
+| product-prototype-design | stage_skill | Web/App 产品高保真原型、页面信息架构、核心用户流、状态覆盖和视觉验收证据生成时使用；不要用于直接进入代码实现或替代三轮原型评审。 | requirement-contract.json, repo-context-report.md | product-prototype-contract.json, prototype-source.md, desktop-prototype-screenshot.png | 是 | 是 | 高保真原型存在; 桌面和移动截图存在 | 跳过原型门禁; 使用非项目既有设计系统 | 产品设计负责人 |
+| prototype-review-loop | stage_skill | 高保真原型三轮 agent 评审、视觉/交互/企业级可用性问题闭环和进入工程设计 gate 判断时使用；不要用于修改业务代码。 | product-prototype-contract.json, desktop-prototype-screenshot.png | prototype-review-report.json, prototype-review-findings.md, prototype-gate-decision.json | 是 | 是 | 至少三轮 agent 评审完成; 所有 blocker 已关闭或进入人工审批 | 少于三轮评审放行; 保留未关闭 blocker | 产品/设计评审负责人 |
 | high-level-design | stage_skill | 概要设计、系统上下文、模块边界、核心流程和架构风险分析时使用；不要用于直接编写类方法级详细设计。 | requirement-contract.json, team_standards | high-level-design.md, architecture-decision-record.md, module-boundary.yaml | 是 | 是 | 需求契约已准入; 模块边界明确 | 高风险架构决策; 跨域边界调整 | 架构师 |
 | detailed-design | stage_skill | 详细设计、接口契约、实现任务拆解、测试策略和回滚策略设计时使用；不要用于替代数据库、Redis、MQ 专项设计。 | high-level-design.md, architecture-decision-record.md | detailed-design.md, implementation-plan.md, interface-contracts.yaml | 是 | 是 | 主详细设计只保留功能实现主线; 专项设计独立成文并在主文档引用 | 核心链路事务边界变化; 高并发路径设计 | 后端开发 |
 | redis-design | stage_skill | Redis 设计、缓存 key 注册、TTL、数据结构、缓存一致性和 Redis 风险评估时使用；不要用于数据库或 MQ 设计。 | detailed-design.md, redis-standard.md | redis-design.md, redis-key-registry.yaml, cache-consistency-plan.md | 是 | 是 | redis-design.md 使用团队 Redis 模板; key 命名合规 | Redis key 批量删除; 核心链路缓存策略变化 | 架构师 |
@@ -91,7 +93,9 @@ flowchart LR
 | code-review | stage_skill | 代码走查、人工评审辅助、语义缺陷定位和 blocker 清单整理时使用；不要用于替代确定性 CI 检查。 | code-quality-report.json, static-analysis-report.json | code-review-report.md, code-review-report.html, review-comments.json | 是 | 是 | blocker 清单为空; 所有问题有证据 | blocker 关闭; 高风险人工豁免 | 研发负责人 |
 | release-readiness | stage_skill | 发布准备、发布条件判断、回滚方案、灰度策略、监控和值班审批检查时使用；不要用于发布后验证。 | code-quality-report.json, code-review-report.md | release-plan.md, release-checklist.md, rollback-plan.md | 是 | 是 | 发布窗口明确; 回滚方案存在 | 生产发布; 生产配置变更 | 发布负责人 |
 | release-verification | stage_skill | 发布后验证、生产检查、监控指标、异常列表和回滚条件判断时使用；不要用于发布前准备。 | release-plan.md, release-checklist.md | release-verification-report.md, production-checks.json, anomaly-list.md | 是 | 是 | 核心功能验证通过; 错误率/延迟未触发阈值 | 回滚操作; 生产验证豁免 | SRE |
-| release-retrospective | stage_skill | 发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。 | release-verification-report.md, code-quality-report.json | release-retrospective.md, release-lessons.yaml, follow-up-actions.md | 是 | 是 | 问题有证据; 行动项有 owner | 行动项关闭; 规范候选批准 | 发布负责人 |
+| release-retrospective | stage_skill | 发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。 | release-verification-report.md, code-quality-report.json | release-retrospective.md, release-lessons.yaml, follow-up-actions.md | 是 | 是 | 问题有证据; feedback inbox 已消费 | 行动项关闭; 规范候选批准 | 发布负责人 |
+| assistant-feedback-capture | cross_cutting_skill | 插件或 skill 执行问题、用户纠正、反复返工、评审遗漏、第三方工具失败、上下文漂移和文档噪声采集时使用；不要用于直接修改正式 skill。 | StageRunResult, assistant-run-feedback.json | feedback-event.json, feedback-inbox-entry.json, feedback-capture-report.md | 是 | 是 | 反馈事件有证据路径; 用户纠正优先级已标记 | 采集敏感内容; 提升为正式规范候选 | workflow owner |
+| skill-evolution-review | audit_skill | 周期性消费 feedback inbox、聚类高价值问题、生成 skill patch/eval/治理规则候选并等待人工审批时使用；不要用于未经审批自动发布 skill。 | feedback-inbox.json, feedback-event.json | skill-evolution-report.md, skill-evolution-candidates.json, skill-patch-proposals.json | 是 | 是 | 每个候选有来源事件; accept/reject verdict 明确 | 应用 skill patch; 新增强制 eval | skill owner |
 | engineering-knowledge-miner | cross_cutting_skill | 研发经验总结、规范沉淀、评审问题归纳、事故复盘反哺、skill 规范更新建议时使用；不要用于直接执行代码质量检查或未经审批修改强制规范。 | design reports, code quality reports | engineering-lessons.md, rule-candidates.yaml, standard-patch-suggestions.md | 是 | 是 | 每条经验有来源证据; 规则默认 candidate | 修改正式团队规范; rule_candidate 标记为 approved | 规范 owner |
 | skill-quality-auditor | audit_skill | 检查人工编写或 Agent 生成的 Codex Skills 质量、契约完整性、触发描述、eval 覆盖、workflow 兼容性时使用；不要用于执行业务研发阶段。 | skills, engineering-assistant/registry/skills.yaml | skill-quality-report.md, skill-quality-report.json, skill-fix-suggestions.md | 是 | 是 | SKILL.md 存在; description 清楚 | 高风险 skill 入库; 修改高风险质量门禁 | skill owner |
 | workflow-orchestrator | workflow_skill | 研发流程编排、阶段选择、skills 串联执行、状态流转、人工审批和产物路由时使用；不要用于直接生成某个阶段文档。 | workflow.yaml, stage node registry | workflow-trace.json, workflow-summary.md, approval-requests.json | 是 | 是 | 节点 contract 匹配; 信息收集完成或已暂停追问 | 人工审批网关; 跳过阻断节点 | workflow owner |
@@ -100,7 +104,9 @@ flowchart LR
 标准模板已落地在每个 `contract.yaml`。必填字段包括：`skill_id`、`skill_name`、`version`、`stage`、`type`、`purpose`、`non_goals`、`trigger_description`、`standalone_mode`、`workflow_mode`、`inputs`、`outputs`、`preconditions`、`postconditions`、`dependencies`、`permissions`、`human_approval_required`、`risk_model`、`quality_gates`、`failure_modes`、`eval_cases`、`workflow_interface`、`owner`、`reviewers`、`change_policy`。
 
 # 6. SKILL.md 标准模板
-每个 `SKILL.md` 均包含 front matter，并包含：`Role`、`Scope`、`Non-goals`、`Inputs`、`Preconditions`、`Operating Procedure`、`Output Contract`、`Quality Gates`、`Failure Handling`、`Human Approval Rules`、`Standalone Mode`、`Workflow Mode`、`Review Checklist`、`Prohibited Behavior`、`Examples`、`Eval Guidance`。
+每个 `SKILL.md` 均是短 SOP 入口，只包含 front matter 和 7 个短章节：`When To Use`、`Do Not Use When`、`Inputs`、`Do This`、`Evidence / Done`、`Stop / Escalate`、`References / Scripts`。
+
+治理细则、语言策略、preflight、人工审批、团队模板、团队 rule_id、输出 schema 和确定性校验下沉到 `contract.yaml`、`references/`、`scripts/`、`standards/` 和 validators；`SKILL.md` 不再重复长治理模板。
 
 # 7. 各阶段 Skill 设计
 ## requirement-intake
@@ -132,6 +138,36 @@ flowchart LR
 - output schema 样例：见 `skills/repo-context-miner/output.schema.json`。
 - eval cases 样例：见 `skills/repo-context-miner/evals/`。
 - workflow node 样例：见 `skills/repo-context-miner/workflow/node.yaml`。
+
+## product-prototype-design
+- 设计摘要：为 web/app 产品研发生成可评审的高保真原型合同、视觉证据和交互状态映射，作为后续设计与实现的硬门禁。
+- description：Web/App 产品高保真原型、页面信息架构、核心用户流、状态覆盖和视觉验收证据生成时使用；不要用于直接进入代码实现或替代三轮原型评审。
+- 输入：requirement-contract.json, repo-context-report.md, brand_or_design_system_context, target_viewports
+- 输出：product-prototype-contract.json, prototype-source.md, desktop-prototype-screenshot.png, mobile-prototype-screenshot.png, interaction-state-map.json, third-party-capability-ledger.json
+- 质量门禁：高保真原型存在; 桌面和移动截图存在; 核心用户流完整; 加载/空态/错误态/权限态完整; 第三方能力调用已登记
+- 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
+- 人工审批规则：跳过原型门禁; 使用非项目既有设计系统; 核心信息架构变更
+- 目录结构：`skills/product-prototype-design/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
+- SKILL.md 样例：见 `skills/product-prototype-design/SKILL.md`。
+- contract.yaml 样例：见 `skills/product-prototype-design/contract.yaml`。
+- output schema 样例：见 `skills/product-prototype-design/output.schema.json`。
+- eval cases 样例：见 `skills/product-prototype-design/evals/`。
+- workflow node 样例：见 `skills/product-prototype-design/workflow/node.yaml`。
+
+## prototype-review-loop
+- 设计摘要：对产品原型执行至少三轮 agent 评审，形成可阻断后续设计和实现的 prototype review verdict。
+- description：高保真原型三轮 agent 评审、视觉/交互/企业级可用性问题闭环和进入工程设计 gate 判断时使用；不要用于修改业务代码。
+- 输入：product-prototype-contract.json, desktop-prototype-screenshot.png, mobile-prototype-screenshot.png, interaction-state-map.json
+- 输出：prototype-review-report.json, prototype-review-findings.md, prototype-gate-decision.json
+- 质量门禁：至少三轮 agent 评审完成; 所有 blocker 已关闭或进入人工审批; 企业级可用性评分达标; 后续设计输入已冻结
+- 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
+- 人工审批规则：少于三轮评审放行; 保留未关闭 blocker; 原型和实现不一致豁免
+- 目录结构：`skills/prototype-review-loop/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
+- SKILL.md 样例：见 `skills/prototype-review-loop/SKILL.md`。
+- contract.yaml 样例：见 `skills/prototype-review-loop/contract.yaml`。
+- output schema 样例：见 `skills/prototype-review-loop/output.schema.json`。
+- eval cases 样例：见 `skills/prototype-review-loop/evals/`。
+- workflow node 样例：见 `skills/prototype-review-loop/workflow/node.yaml`。
 
 ## high-level-design
 - 设计摘要：从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。
@@ -359,11 +395,11 @@ flowchart LR
 - workflow node 样例：见 `skills/release-verification/workflow/node.yaml`。
 
 ## release-retrospective
-- 设计摘要：复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。
+- 设计摘要：复盘发布过程，消费已采集反馈事件，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。
 - description：发布复盘、发布问题归纳、规范候选、skill 改进候选和后续行动整理时使用；不要用于发布审批。
-- 输入：release-verification-report.md, code-quality-report.json, incident reports, release logs
+- 输入：release-verification-report.md, code-quality-report.json, feedback-inbox.json, incident reports, release logs
 - 输出：release-retrospective.md, release-lessons.yaml, follow-up-actions.md
-- 质量门禁：问题有证据; 行动项有 owner; 规范候选状态为 candidate; skill 改进候选明确
+- 质量门禁：问题有证据; feedback inbox 已消费; 行动项有 owner; 规范候选状态为 candidate; skill 改进候选明确
 - 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
 - 人工审批规则：行动项关闭; 规范候选批准; 高风险复盘结论发布
 - 目录结构：`skills/release-retrospective/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
@@ -372,6 +408,36 @@ flowchart LR
 - output schema 样例：见 `skills/release-retrospective/output.schema.json`。
 - eval cases 样例：见 `skills/release-retrospective/evals/`。
 - workflow node 样例：见 `skills/release-retrospective/workflow/node.yaml`。
+
+## assistant-feedback-capture
+- 设计摘要：把每次 workflow、review、测试、用户纠正和失败重试中的有价值问题转化为可消费 feedback event 和中心反馈 inbox 候选。
+- description：插件或 skill 执行问题、用户纠正、反复返工、评审遗漏、第三方工具失败、上下文漂移和文档噪声采集时使用；不要用于直接修改正式 skill。
+- 输入：StageRunResult, assistant-run-feedback.json, workflow-trace.json, user correction summary, tool logs
+- 输出：feedback-event.json, feedback-inbox-entry.json, feedback-capture-report.md
+- 质量门禁：反馈事件有证据路径; 用户纠正优先级已标记; 目标项目与中心仓库落点明确; 事件已标记 consumed_by_evolution_review=false
+- 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
+- 人工审批规则：采集敏感内容; 提升为正式规范候选; 修改正式 skill
+- 目录结构：`skills/assistant-feedback-capture/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
+- SKILL.md 样例：见 `skills/assistant-feedback-capture/SKILL.md`。
+- contract.yaml 样例：见 `skills/assistant-feedback-capture/contract.yaml`。
+- output schema 样例：见 `skills/assistant-feedback-capture/output.schema.json`。
+- eval cases 样例：见 `skills/assistant-feedback-capture/evals/`。
+- workflow node 样例：见 `skills/assistant-feedback-capture/workflow/node.yaml`。
+
+## skill-evolution-review
+- 设计摘要：将已采集反馈事件转化为可评审的 skill 改进候选、回归 eval 候选、治理规则候选和拒绝入库原因。
+- description：周期性消费 feedback inbox、聚类高价值问题、生成 skill patch/eval/治理规则候选并等待人工审批时使用；不要用于未经审批自动发布 skill。
+- 输入：feedback-inbox.json, feedback-event.json, engineering-lessons.md, skill registry
+- 输出：skill-evolution-report.md, skill-evolution-candidates.json, skill-patch-proposals.json, regression-case-candidates.yaml, feedback-rejection-log.json
+- 质量门禁：每个候选有来源事件; accept/reject verdict 明确; 重复用户纠正已生成回归候选; 正式 skill 修改需要人工审批
+- 失败处理：缺输入进入 `waiting_for_input`；schema 失败进入 `failed`；门禁失败进入 `blocked`；高风险进入 `waiting_for_human_review`。
+- 人工审批规则：应用 skill patch; 新增强制 eval; 修改 workflow 或 quality gate; 发布插件版本
+- 目录结构：`skills/skill-evolution-review/SKILL.md`、`contract.yaml`、`output.schema.json`、`scripts/validate_output.py`、`evals/*.yaml`、`workflow/node.yaml`。
+- SKILL.md 样例：见 `skills/skill-evolution-review/SKILL.md`。
+- contract.yaml 样例：见 `skills/skill-evolution-review/contract.yaml`。
+- output schema 样例：见 `skills/skill-evolution-review/output.schema.json`。
+- eval cases 样例：见 `skills/skill-evolution-review/evals/`。
+- workflow node 样例：见 `skills/skill-evolution-review/workflow/node.yaml`。
 
 ## engineering-knowledge-miner
 - 设计摘要：从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。

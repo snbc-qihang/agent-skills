@@ -1,13 +1,13 @@
 {
   "skill_id": "workflow-orchestrator",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "workflow_orchestration",
   "type": "workflow_skill",
   "prompt_pack": {
     "display_name": "Workflow Orchestrator",
     "short_description": "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。",
     "default_prompt": "使用 workflow-orchestrator，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when the request is about 支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。；Do not use when 不直接生成阶段文档；不绕过子 skill contract。",
+    "trigger_description": "Use when 需要选择研发 workflow、串联 stage skills、维护状态机、审批暂停/恢复和产物路由时；Do not use when do not直接生成某个阶段文档。",
     "language_policy": {
       "supported": [
         "zh-CN",

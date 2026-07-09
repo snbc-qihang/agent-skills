@@ -1,13 +1,13 @@
 {
   "skill_id": "mq-design",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "stage": "mq_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "MQ Design",
     "short_description": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
     "default_prompt": "使用 mq-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 xlsx template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
+    "trigger_description": "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。",
     "language_policy": {
       "supported": [
         "zh-CN",

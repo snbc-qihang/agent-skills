@@ -1,0 +1,7 @@
+{
+  "fixture_id": "teamwork-feedback_evolution",
+  "category": "feedback_evolution",
+  "teamwork_plugin": "teamwork-engineering-assistant",
+  "version": "1.1.0.0",
+  "expected_skill_count": 25
+}

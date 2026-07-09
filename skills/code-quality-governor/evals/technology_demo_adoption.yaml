@@ -2,6 +2,7 @@
   "id": "code-quality-governor-technology_demo_adoption",
   "name": "Code Quality Governor technology demo adoption",
   "case_type": "technology_demo_adoption",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Code Quality Governor technology demo adoption 团队规则场景",
     "material": "设计声明使用团队默认框架和 执行前必须读取 artifacts/_control/quality-contract.json、control-health-report.json、technology-adoption-report.json 和任务规则包，但实现证据只有 demo 级样例，没有 required technology indicators，也出现直接 JDBC 或绕过 mapper/repository 的迹象。",

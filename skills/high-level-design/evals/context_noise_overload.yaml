@@ -2,6 +2,7 @@
   "id": "high-level-design-context_noise_overload",
   "name": "High Level Design context noise overload",
   "case_type": "context_noise_overload",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "High Level Design context noise overload 团队规则场景",
     "material": "上下文中混入大量无关历史、长规范和旧任务摘要；当前任务没有最小 task-context.agent.md，也没有说明适用规则包和停止条件。",
@@ -77,7 +78,10 @@
     "策略要求审批时已请求人工审批",
     "生成正式 Markdown 文档前必须先读取对应 assets template",
     "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input"
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+    "high-level-design.md 必须按 assets/high-level-design-template.md 生成",
+    "团队概要设计模板规则必须保留系统逻辑视图、研发视图、核心功能、中间件设计和数据视图",
+    "跨服务核心场景必须包含 Mermaid sequenceDiagram 服务间时序图，且不得包含 flowchart"
   ],
   "severity_when_failed": "major",
   "grader": {

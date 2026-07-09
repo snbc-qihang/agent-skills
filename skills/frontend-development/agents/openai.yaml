@@ -26,7 +26,7 @@ metadata:
   owner: "前端开发"
   stage: "frontend_development"
   type: "stage_skill"
-  trigger_description: "Use when the request is about 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。；Do not use when 不修改无关页面；不绕过前端设计。"
+  trigger_description: "Use when 已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时；Do not use when do not凭组件文档或接口文档绕过高保真原型。"
 routing:
   intent_tags:
     - "development"

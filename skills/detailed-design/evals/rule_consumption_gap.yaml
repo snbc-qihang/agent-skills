@@ -2,6 +2,7 @@
   "id": "detailed-design-rule_consumption_gap",
   "name": "Detailed Design rule consumption gap",
   "case_type": "rule_consumption_gap",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Detailed Design rule consumption gap 团队规则场景",
     "material": "任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。",
@@ -77,7 +78,11 @@
     "策略要求审批时已请求人工审批",
     "生成正式 Markdown 文档前必须先读取对应 assets template",
     "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input"
+    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
+    "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
+    "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
+    "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
+    "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts"
   ],
   "severity_when_failed": "major",
   "grader": {

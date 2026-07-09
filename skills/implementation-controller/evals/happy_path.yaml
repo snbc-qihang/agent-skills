@@ -2,9 +2,10 @@
   "id": "implementation-controller-happy_path",
   "name": "Implementation Controller happy path",
   "case_type": "happy_path",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Implementation Controller happy path 团队规则场景",
-    "material": "输入材料覆盖 把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。，并提供 设计合同已编译 的证据、产物路径和人工审批状态。",
+    "material": "正向触发：把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。；材料包含 读取 approved design artifact, target project root, project profile、项目 profile、团队规则目录和 artifact index。，并提供 `current-task.json` 已生成并可追溯。 的证据、产物路径和审批状态。",
     "system_scope": "目标业务系统 + 目标客户端系统",
     "team_rule_refs": [
       "A1",
@@ -32,7 +33,7 @@
       "skill_id": "implementation-controller",
       "mode": "standalone",
       "inputs": {
-        "approved design artifact": "provided: 输入材料覆盖 把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。，并提供 设计合同已编译 的证据、产物路径和人工审批状态。"
+        "approved design artifact": "provided: 正向触发：把已审批设计转换为机器可读实现合同和质量合同，并控制代码实现、验证、修复和最终人工审阅。；材料包含 读取 approved design artifact, target project root, project profile、项目 profile、团队规则目录和 artifact index。，并提供 `current-task.json` 已生成并可追溯。 的证据、产物路径和审批状态。"
       },
       "artifacts": {},
       "context": {

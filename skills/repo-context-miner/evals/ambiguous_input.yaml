@@ -2,6 +2,7 @@
   "id": "repo-context-miner-ambiguous_input",
   "name": "Repo Context Miner ambiguous input",
   "case_type": "ambiguous_input",
+  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Repo Context Miner ambiguous input 团队规则场景",
     "material": "输入材料对 识别 controller/service/domain/mapper/repository 等现有分层结构 表述含糊，存在待确认事项，但没有 owner、截止时间或审批记录。",
