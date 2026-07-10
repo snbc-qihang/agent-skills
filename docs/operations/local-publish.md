@@ -24,6 +24,21 @@ python3 scripts/publish_local.py --platform all --yes
 
 实际发布读取 `config/local-publish-policy.json`，要求目标平台已启用、版本与 catalog 一致，并且命令显式提供 `--yes`。
 
+## 平台 CLI 发现
+
+发布脚本按以下顺序查找平台注册命令：
+
+1. `CODEX_CLI` 或 `HERMES_CLI` 指定的可执行文件。
+2. 当前终端的 `PATH`。
+3. macOS 标准应用目录中的 Codex App 内置 CLI，包括 `ChatGPT.app` 和 `Codex.app`。
+
+因此，从 macOS 系统 Terminal 执行时不需要手工把 App 的 `Contents/Resources` 加入 `PATH`。如果 App 或 CLI 位于自定义位置，使用环境变量显式指定：
+
+```bash
+CODEX_CLI="/自定义路径/codex" python3 scripts/publish_local.py --platform codex --yes
+HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform hermes --yes
+```
+
 ### Codex
 
 1. 构建带唯一 cachebuster 的 Codex 包。

@@ -158,10 +158,43 @@ def _roll_back(target: Path, backup: Path | None, stamp: str) -> Path | None:
     return failed
 
 
+def _bundled_cli_candidates(command: str) -> list[Path]:
+    if command != "codex" or sys.platform != "darwin":
+        return []
+    return [
+        Path("/Applications/ChatGPT.app/Contents/Resources/codex"),
+        Path("/Applications/Codex.app/Contents/Resources/codex"),
+        Path.home() / "Applications/ChatGPT.app/Contents/Resources/codex",
+        Path.home() / "Applications/Codex.app/Contents/Resources/codex",
+    ]
+
+
+def _resolve_platform_cli(command: str, environment: dict[str, str] | None = None) -> str:
+    environment = dict(os.environ) if environment is None else environment
+    override_name = f"{command.upper()}_CLI"
+    override = environment.get(override_name)
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate.resolve())
+        raise ValidationFailure(f"{override_name} 指向的文件不存在或不可执行：{candidate}")
+
+    executable = shutil.which(command, path=environment.get("PATH"))
+    if executable is not None:
+        return executable
+
+    for candidate in _bundled_cli_candidates(command):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate.resolve())
+
+    raise ValidationFailure(
+        f"找不到平台 CLI：{command}。请将其加入 PATH，或通过 {override_name} 指定可执行文件"
+    )
+
+
 def _run_registration(command: list[str], environment: dict[str, str] | None = None) -> dict:
-    executable = shutil.which(command[0])
-    if executable is None:
-        raise ValidationFailure(f"找不到平台 CLI：{command[0]}")
+    environment = dict(os.environ) if environment is None else environment
+    executable = _resolve_platform_cli(command[0], environment)
     completed = subprocess.run(
         [executable, *command[1:]],
         text=True,

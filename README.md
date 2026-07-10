@@ -276,6 +276,13 @@ python3 scripts/publish_local.py --platform all --yes
 - Codex：安装到 `~/plugins/engineering-assistant`，维护 personal marketplace 并刷新 Codex 缓存。
 - Hermes：安装到 `~/.hermes/plugins/engineering-assistant`，调用 `hermes plugins enable engineering-assistant`。
 
+平台 CLI 按“显式环境变量 → `PATH` → macOS App 内置路径”的顺序发现。Codex App 安装在标准目录时，无需额外配置；自定义位置可以显式指定：
+
+```bash
+CODEX_CLI="/自定义路径/codex" python3 scripts/publish_local.py --platform codex --yes
+HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform hermes --yes
+```
+
 详细说明见 [本机发布](docs/operations/local-publish.md)。
 
 ## 版本规则

@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,7 @@ from engineering_assistant.compiler import build_package, verify_package  # noqa
 from engineering_assistant.local_publish import (  # noqa: E402
     _load_policy,
     _publish_one,
+    _resolve_platform_cli,
     _roll_back,
     _swap_in,
     _update_personal_marketplace,
@@ -22,6 +24,26 @@ from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
+    def test_platform_cli_prefers_explicit_executable_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / "codex-custom"
+            executable.write_text("#!/bin/sh\n", encoding="utf-8")
+            executable.chmod(0o755)
+            resolved = _resolve_platform_cli("codex", {"PATH": "", "CODEX_CLI": str(executable)})
+            self.assertEqual(str(executable.resolve()), resolved)
+
+    def test_codex_cli_falls_back_to_macos_app_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / "codex"
+            executable.write_text("#!/bin/sh\n", encoding="utf-8")
+            executable.chmod(0o755)
+            with mock.patch(
+                "engineering_assistant.local_publish._bundled_cli_candidates",
+                return_value=[executable],
+            ):
+                resolved = _resolve_platform_cli("codex", {"PATH": ""})
+            self.assertEqual(str(executable.resolve()), resolved)
+
     def test_codex_cachebuster_is_built_before_package_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "codex"
