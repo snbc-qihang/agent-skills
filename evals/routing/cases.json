@@ -1,0 +1,187 @@
+{
+  "schema_version": "1.0",
+  "groups": [
+    {
+      "task_kind": "explain",
+      "requests": [
+        {"language": "zh-CN", "request": "只解释 code-review skill 的用途，不执行评审。"},
+        {"language": "zh-CN", "request": "介绍一下 wayfinder 能力，但不要创建任何产物。"},
+        {"language": "zh-CN", "request": "只说明发布流程如何工作，不执行发布。"},
+        {"language": "zh-CN", "request": "解释领域模型 skill 解决什么问题。"},
+        {"language": "en", "request": "Explain what the code review skill does; do not execute it."},
+        {"language": "en", "request": "Explain how the release flow works without running it."},
+        {"language": "en", "request": "Tell me what the wayfinder capability does."},
+        {"language": "en", "request": "Explain the prototype skill without creating an artifact."}
+      ]
+    },
+    {
+      "task_kind": "context",
+      "requests": [
+        {"language": "zh-CN", "request": "梳理当前仓库的模块边界和调用链。"},
+        {"language": "zh-CN", "request": "从控制器开始追踪这个接口的完整调用链。"},
+        {"language": "zh-CN", "request": "分析这次字段变更在代码中的影响范围。"},
+        {"language": "zh-CN", "request": "提取当前服务的代码上下文和外部依赖。"},
+        {"language": "en", "request": "Map the repository modules and external boundaries."},
+        {"language": "en", "request": "Trace the call path from this endpoint to its downstream client."},
+        {"language": "en", "request": "Determine the impact scope of changing this response field."},
+        {"language": "en", "request": "Collect repository context for the payment module."}
+      ]
+    },
+    {
+      "task_kind": "research",
+      "requests": [
+        {"language": "zh-CN", "request": "调研这个开源项目的核心范式和适用边界。"},
+        {"language": "zh-CN", "request": "研究三个消息队列项目的可靠性设计。"},
+        {"language": "zh-CN", "request": "查阅官方文档确认这个 API 的当前约束。"},
+        {"language": "zh-CN", "request": "调研相关标准并给出有来源的结论。"},
+        {"language": "en", "request": "Research the upstream project using primary sources."},
+        {"language": "en", "request": "Compare the library options against their official documentation."},
+        {"language": "en", "request": "Research how this standard handles compatibility."},
+        {"language": "en", "request": "Find primary sources for the framework lifecycle claims."}
+      ]
+    },
+    {
+      "task_kind": "decide",
+      "requests": [
+        {"language": "zh-CN", "request": "梳理这个方案里真正需要我决定的事项。"},
+        {"language": "zh-CN", "request": "列出当前仍然待决策的范围取舍。"},
+        {"language": "zh-CN", "request": "帮我在两个交付边界之间做选择并说明代价。"},
+        {"language": "zh-CN", "request": "还有哪些关键选择需要我决定？"},
+        {"language": "en", "request": "Run a decision interview for the unresolved product choices."},
+        {"language": "en", "request": "Show which decisions still belong to me."},
+        {"language": "en", "request": "Help me choose the trade-off between the two scope options."},
+        {"language": "en", "request": "Identify which decision blocks the next step."}
+      ]
+    },
+    {
+      "task_kind": "model",
+      "requests": [
+        {"language": "zh-CN", "request": "建立订单履约领域模型并明确聚合边界。"},
+        {"language": "zh-CN", "request": "统一产品文档和代码中的业务术语。"},
+        {"language": "zh-CN", "request": "梳理会员权益的领域模型和不变量。"},
+        {"language": "zh-CN", "request": "解决门店、商户和组织三个术语的歧义。"},
+        {"language": "en", "request": "Build a domain model for order fulfillment."},
+        {"language": "en", "request": "Create ubiquitous language for memberships and benefits."},
+        {"language": "en", "request": "Resolve inconsistent domain terminology across code and docs."},
+        {"language": "en", "request": "Model the lifecycle and invariants of a reservation."}
+      ]
+    },
+    {
+      "task_kind": "shape",
+      "requests": [
+        {"language": "zh-CN", "request": "对这项需求做准入检查并补齐验收标准。"},
+        {"language": "zh-CN", "request": "澄清这个需求的目标、范围和非目标。"},
+        {"language": "zh-CN", "request": "把模糊想法整理为可评审的验收标准。"},
+        {"language": "zh-CN", "request": "明确功能范围、依赖和成功条件。"},
+        {"language": "en", "request": "Shape this feature request into a decision-complete contract."},
+        {"language": "en", "request": "Clarify the requirement, scope, non-goals, and risks."},
+        {"language": "en", "request": "Define acceptance criteria for this feature request."},
+        {"language": "en", "request": "Shape the request before any implementation work begins."}
+      ]
+    },
+    {
+      "task_kind": "prototype",
+      "requests": [
+        {"language": "zh-CN", "request": "做一个可丢弃的交互原型比较两种筛选方式。"},
+        {"language": "zh-CN", "request": "用原型验证批量操作是否容易误触。"},
+        {"language": "zh-CN", "request": "制作两个页面原型让评审人直接比较。"},
+        {"language": "zh-CN", "request": "构造状态原型验证异常流程。"},
+        {"language": "en", "request": "Build a throwaway prototype for the uncertain interaction."},
+        {"language": "en", "request": "Prototype two interaction variants in the existing app shell."},
+        {"language": "en", "request": "Create a state explorer prototype for the transition rules."},
+        {"language": "en", "request": "Use a prototype to answer whether inline editing is viable."}
+      ]
+    },
+    {
+      "task_kind": "design",
+      "requests": [
+        {"language": "zh-CN", "request": "为库存预占改造输出概要设计。"},
+        {"language": "zh-CN", "request": "基于现有代码生成可实现的详细设计。"},
+        {"language": "zh-CN", "request": "设计模块边界、接口和异常流程。"},
+        {"language": "zh-CN", "request": "给出这次系统改造的架构方案。"},
+        {"language": "en", "request": "Create an architecture design for the inventory reservation change."},
+        {"language": "en", "request": "Produce a detailed design for this bounded refactor."},
+        {"language": "en", "request": "Design the module interface and failure flow."},
+        {"language": "en", "request": "Design the system boundaries for the new payment path."}
+      ]
+    },
+    {
+      "task_kind": "implement",
+      "requests": [
+        {"language": "zh-CN", "request": "实现已经评审通过的订单查询功能。"},
+        {"language": "zh-CN", "request": "开发这个页面并接入现有接口。"},
+        {"language": "zh-CN", "request": "修改代码修复已确认的边界条件。"},
+        {"language": "zh-CN", "request": "实现接口后创建提交并推送。"},
+        {"language": "en", "request": "Implement the accepted endpoint behavior."},
+        {"language": "en", "request": "Build the feature as one vertical slice."},
+        {"language": "en", "request": "Change the code to support the new response field."},
+        {"language": "en", "request": "Implement the fix in production and push the branch."}
+      ]
+    },
+    {
+      "task_kind": "diagnose",
+      "requests": [
+        {"language": "zh-CN", "request": "定位这个偶发 bug 的真正原因。"},
+        {"language": "zh-CN", "request": "排查支付回调重复处理的问题。"},
+        {"language": "zh-CN", "request": "分析这次性能回退并找到瓶颈。"},
+        {"language": "zh-CN", "request": "排查测试环境偶发超时故障。"},
+        {"language": "en", "request": "Debug the intermittent checkout failure."},
+        {"language": "en", "request": "Diagnose the root cause of duplicate message consumption."},
+        {"language": "en", "request": "Investigate this performance regression."},
+        {"language": "en", "request": "Find the root cause of the flaky timeout."}
+      ]
+    },
+    {
+      "task_kind": "review",
+      "requests": [
+        {"language": "zh-CN", "request": "评审这个分支的代码改动。"},
+        {"language": "zh-CN", "request": "对已冻结的 diff 做代码评审。"},
+        {"language": "zh-CN", "request": "评审这份设计方案能否进入研发。"},
+        {"language": "zh-CN", "request": "按照规范和需求两个维度评审代码。"},
+        {"language": "en", "request": "Review this pull request against the specification."},
+        {"language": "en", "request": "Review the fixed branch diff for correctness risks."},
+        {"language": "en", "request": "Review the design before implementation begins."},
+        {"language": "en", "request": "Perform a code review on this PR."}
+      ]
+    },
+    {
+      "task_kind": "release",
+      "requests": [
+        {"language": "zh-CN", "request": "准备本次上线的发布清单和回滚方案。"},
+        {"language": "zh-CN", "request": "检查灰度发布是否具备执行条件。"},
+        {"language": "zh-CN", "request": "执行生产发布前的就绪检查。"},
+        {"language": "zh-CN", "request": "验证线上版本并准备必要的回滚。"},
+        {"language": "en", "request": "Prepare the release readiness and rollback plan."},
+        {"language": "en", "request": "Verify whether the rollout is ready to execute."},
+        {"language": "en", "request": "Plan the production deployment and monitoring."},
+        {"language": "en", "request": "Validate the release outcome using production evidence."}
+      ]
+    },
+    {
+      "task_kind": "evolve",
+      "requests": [
+        {"language": "zh-CN", "request": "根据失败案例改进这个 skill。"},
+        {"language": "zh-CN", "request": "复盘研发助手为何选择了错误流程。"},
+        {"language": "zh-CN", "request": "演进 agent 的审批规则并增加回归案例。"},
+        {"language": "zh-CN", "request": "把重复反馈沉淀为可评审的 skill 改进。"},
+        {"language": "en", "request": "Evolve the skill using this evidenced failure."},
+        {"language": "en", "request": "Improve the agent routing behavior and add a regression case."},
+        {"language": "en", "request": "Run a retrospective on the assistant failure."},
+        {"language": "en", "request": "Evolve the agent policy from verified feedback."}
+      ]
+    },
+    {
+      "task_kind": "wayfind",
+      "requests": [
+        {"language": "zh-CN", "request": "为这个长期任务建立目标、当前前沿和待决策地图。"},
+        {"language": "zh-CN", "request": "这个工作会跨多会话，请先建立路线图。"},
+        {"language": "zh-CN", "request": "梳理大型重构的当前前沿，不要预设未知任务。"},
+        {"language": "zh-CN", "request": "管理这个长期任务的决策和恢复点。"},
+        {"language": "en", "request": "Create a wayfinder for this multi-session effort."},
+        {"language": "en", "request": "Map the current frontier of this long-running migration."},
+        {"language": "en", "request": "Build a roadmap without planning beyond the evidence frontier."},
+        {"language": "en", "request": "Track decisions and recovery points for this multi-session task."}
+      ]
+    }
+  ]
+}

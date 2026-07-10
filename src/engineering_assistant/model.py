@@ -1,0 +1,181 @@
+"""Core data models for the engineering-assistant protocol."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
+
+
+def _clean(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _clean(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clean(item) for item in value]
+    return value
+
+
+class Serializable:
+    def to_dict(self) -> Dict[str, Any]:
+        return _clean(asdict(self))
+
+
+@dataclass(frozen=True)
+class ContextPointer(Serializable):
+    when: str
+    path: str
+    purpose: str
+
+
+@dataclass(frozen=True)
+class CompletionCriterion(Serializable):
+    id: str
+    description: str
+    evidence_kinds: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SkillSpec(Serializable):
+    id: str
+    version: str
+    invocation_mode: str
+    description: Optional[str]
+    leading_words: List[str]
+    capabilities: List[str]
+    inputs: List[str]
+    completion_criteria: List[CompletionCriterion]
+    context_pointers: List[ContextPointer]
+    policy_refs: List[str]
+    risk_class: str
+    source_path: str
+
+
+@dataclass(frozen=True)
+class FlowNode(Serializable):
+    id: str
+    capability: str
+    depends_on: List[str]
+    when: str
+    completion_criteria: List[str]
+    policy_refs: List[str]
+
+
+@dataclass(frozen=True)
+class FlowSpec(Serializable):
+    id: str
+    version: str
+    entry_conditions: List[str]
+    nodes: List[FlowNode]
+    terminal_conditions: List[str]
+    policy_refs: List[str]
+
+
+@dataclass(frozen=True)
+class PolicyRule(Serializable):
+    id: str
+    condition: str
+    effect: str
+    severity: str
+
+
+@dataclass(frozen=True)
+class PolicySpec(Serializable):
+    id: str
+    version: str
+    policy_class: str
+    immutable: bool
+    applies_when: List[str]
+    rules: List[PolicyRule]
+    required_evidence: List[str]
+    on_violation: str
+
+
+@dataclass(frozen=True)
+class RouteIntent(Serializable):
+    task_kind: str
+    requested_outcome: str
+    scope: List[str]
+    risk_signals: List[str]
+    requested_external_actions: List[str]
+    confidence: float
+    evidence: List[str]
+
+
+@dataclass(frozen=True)
+class RouteDecision(Serializable):
+    decision: str
+    flow_id: Optional[str]
+    skill_ids: List[str]
+    policy_refs: List[str]
+    evidence_level: str
+    persistence_mode: str
+    approval_required: List[str]
+    reason: str
+
+
+@dataclass(frozen=True)
+class EvidenceRef(Serializable):
+    id: str
+    kind: str
+    uri: str
+    producer: str
+    observed_at: str
+    trust_level: str
+    scope: str
+    digest: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CriterionResult(Serializable):
+    criterion_id: str
+    passed: bool
+    evidence_ids: List[str]
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class Finding(Serializable):
+    id: str
+    severity: str
+    summary: str
+    evidence_ids: List[str]
+
+
+@dataclass(frozen=True)
+class StepResult(Serializable):
+    run_id: str
+    node_id: str
+    status: str
+    criteria_results: List[CriterionResult]
+    outputs: List[str]
+    findings: List[Finding]
+    open_questions: List[str]
+    requested_transition: str
+
+
+@dataclass(frozen=True)
+class GateDecision(Serializable):
+    decision: str
+    evaluated_policies: List[str]
+    missing_evidence: List[str]
+    reason: str
+    next_node: Optional[str] = None
+
+
+@dataclass
+class RunState(Serializable):
+    run_id: str
+    task_id: str
+    flow_id: str
+    status: str
+    current_node: Optional[str]
+    completed_nodes: List[str]
+    skipped_nodes: List[str]
+    context_refs: List[str]
+    evidence_refs: List[str]
+    open_questions: List[str]
+    required_approvals: List[str]
+    approvals: List[str]
+    approval_expiries: Dict[str, str]
+    transition_history: List[Dict[str, Any]]
+    next_actions: List[str]
+    revision: int = 0

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["decision", "evaluated_policies", "missing_evidence", "reason", "next_node"],
+  "properties": {
+    "decision": {"enum": ["continue", "pause_for_input", "pause_for_approval", "retry", "block", "complete", "cancel"]},
+    "evaluated_policies": {"type": "array", "items": {"type": "string"}},
+    "missing_evidence": {"type": "array", "items": {"type": "string"}},
+    "reason": {"type": "string", "minLength": 1},
+    "next_node": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

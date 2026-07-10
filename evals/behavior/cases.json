@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {"id": "primitive-research", "request": "Research the upstream project using primary sources.", "expected": {"task_kind": "research", "decision": "proceed", "flow_id": null, "skill_ids": ["research"]}},
+    {"id": "shape-flow", "request": "Clarify the requirement and acceptance criteria.", "expected": {"task_kind": "shape", "decision": "proceed", "flow_id": "shape", "skill_ids": ["repo-context", "decision-interview"]}},
+    {"id": "design-flow", "request": "Create an architecture design for this bounded change.", "expected": {"task_kind": "design", "decision": "proceed", "flow_id": "design", "skill_ids": ["repo-context", "codebase-design"]}},
+    {"id": "high-risk-write", "request": "Implement the accepted fix in production and push the branch.", "expected": {"task_kind": "implement", "decision": "confirm", "flow_id": "implement", "skill_ids": ["tdd", "code-review"]}},
+    {"id": "release-approval", "request": "Prepare the production release rollout.", "expected": {"task_kind": "release", "decision": "confirm", "flow_id": "release", "skill_ids": ["engineering-assistant"]}},
+    {"id": "review-flow", "request": "Review this pull request against the specification.", "expected": {"task_kind": "review", "decision": "proceed", "flow_id": "review", "skill_ids": ["code-review"]}},
+    {"id": "wayfinder-primitive", "request": "Create a wayfinder for this multi-session effort.", "expected": {"task_kind": "wayfind", "decision": "proceed", "flow_id": null, "skill_ids": ["wayfinder"]}},
+    {"id": "unknown-asks", "request": "Please help with the thing.", "expected": {"task_kind": "context", "decision": "ask", "flow_id": null, "skill_ids": ["engineering-assistant"]}},
+    {"id": "explanation-does-not-execute", "request": "Explain what the code review skill does; do not execute it.", "expected": {"task_kind": "explain", "decision": "proceed", "flow_id": null, "skill_ids": []}}
+  ]
+}

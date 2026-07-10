@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "scenarios": [
+    {"id": "approval-pause-and-resume", "runner": "approval-resume"},
+    {"id": "persist-evidence-and-resume", "runner": "evidence-resume"},
+    {"id": "failed-step-remains-retryable", "runner": "retry"},
+    {"id": "blocking-step-stops-run", "runner": "block"}
+  ]
+}

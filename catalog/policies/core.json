@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0.0-rc.1",
+  "policies": [
+    {
+      "id": "safety-core",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "safety",
+      "immutable": true,
+      "applies_when": ["always"],
+      "rules": [
+        {"id": "SAFE-001", "condition": "请求动作涉及生产、破坏性历史修改、凭证、安全或不可逆操作", "effect": "没有范围明确的审批时阻断", "severity": "blocker"},
+        {"id": "SAFE-002", "condition": "无法获取所需证据", "effect": "缩小结论范围或阻断；不得伪造证据", "severity": "blocker"},
+        {"id": "SAFE-003", "condition": "请求中只隐含发布、推送、提交或外部消息动作", "effect": "要求单独且明确的授权", "severity": "blocker"}
+      ],
+      "required_evidence": ["approval", "external_state"],
+      "on_violation": "block"
+    },
+    {
+      "id": "risk-approval",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "risk",
+      "immutable": false,
+      "applies_when": ["任务包含写入、发布、安全、跨系统或外部动作"],
+      "rules": [
+        {"id": "RISK-001", "condition": "动作会改变版本库跟踪状态", "effect": "把写入限制在批准任务内，并保留无关变更", "severity": "major"},
+        {"id": "RISK-002", "condition": "动作会降低现有安全或质量门禁", "effect": "要求可追踪的人工豁免", "severity": "blocker"},
+        {"id": "RISK-003", "condition": "任务跨越仓库边界", "effect": "单独记录边界和授权", "severity": "major"}
+      ],
+      "required_evidence": ["approval", "source"],
+      "on_violation": "confirm"
+    },
+    {
+      "id": "evidence-quality",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "evidence",
+      "immutable": false,
+      "applies_when": ["生成结论、状态转换或完成声明"],
+      "rules": [
+        {"id": "EVID-001", "condition": "声明依赖仓库行为", "effect": "引用源码路径、命令或运行时证据", "severity": "major"},
+        {"id": "EVID-002", "condition": "结果来自模拟", "effect": "标记为 simulation，并从产品效果汇总中排除", "severity": "blocker"},
+        {"id": "EVID-003", "condition": "证据已过期或只支持更小范围", "effect": "刷新证据或缩小结论范围", "severity": "major"}
+      ],
+      "required_evidence": ["source", "test", "build", "browser", "ci", "review"],
+      "on_violation": "block"
+    },
+    {
+      "id": "document-governance",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "document",
+      "immutable": false,
+      "applies_when": ["任务创建或提升文档"],
+      "rules": [
+        {"id": "DOC-001", "condition": "产物属于运行证据、临时摘要或人工评审包", "effect": "保留在正式项目记录之外", "severity": "major"},
+        {"id": "DOC-002", "condition": "文档准备提升为最终项目记录", "effect": "要求负责人、状态、来源和审批", "severity": "major"},
+        {"id": "DOC-003", "condition": "交接说明或地图重复现有事实源", "effect": "使用上下文指针替代复制细节", "severity": "minor"}
+      ],
+      "required_evidence": ["review", "approval"],
+      "on_violation": "block"
+    },
+    {
+      "id": "scope-control",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "risk",
+      "immutable": false,
+      "applies_when": ["任务设计或修改代码"],
+      "rules": [
+        {"id": "SCOPE-001", "condition": "工作超出已接受结果", "effect": "记录为范围外事项或请求审批", "severity": "major"},
+        {"id": "SCOPE-002", "condition": "实现新增抽象，但没有真实调用方或变化", "effect": "删除推测性通用设计", "severity": "major"},
+        {"id": "SCOPE-003", "condition": "变更可以通过更小的纵向切片交付", "effect": "选择具有可观察反馈的最小端到端切片", "severity": "minor"}
+      ],
+      "required_evidence": ["source", "test", "review"],
+      "on_violation": "block"
+    },
+    {
+      "id": "frontend-product",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "capability",
+      "immutable": false,
+      "applies_when": ["任务交付 Web 或应用用户界面"],
+      "rules": [
+        {"id": "FE-001", "condition": "声明前端已达到产品级完成", "effect": "要求浏览器或等价的真实渲染交互证据", "severity": "blocker"},
+        {"id": "FE-002", "condition": "存在加载、空、错误、权限或校验状态", "effect": "使每个适用状态可观察", "severity": "major"},
+        {"id": "FE-003", "condition": "已有设计系统或前端技术栈", "effect": "除非变更获得明确批准，否则必须复用", "severity": "major"}
+      ],
+      "required_evidence": ["browser", "test", "build"],
+      "on_violation": "block"
+    },
+    {
+      "id": "release-safety",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "safety",
+      "immutable": true,
+      "applies_when": ["任务包含发布、生产验证或回滚"],
+      "rules": [
+        {"id": "REL-001", "condition": "请求执行发布动作", "effect": "要求明确的发布审批、窗口、负责人和回滚方案", "severity": "blocker"},
+        {"id": "REL-002", "condition": "无法获得生产状态", "effect": "不得宣称已发布或已完成生产验证", "severity": "blocker"}
+      ],
+      "required_evidence": ["approval", "ci", "external_state"],
+      "on_violation": "block"
+    },
+    {
+      "id": "feedback-evolution",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "evidence",
+      "immutable": false,
+      "applies_when": ["反馈可能改变 rule、skill、flow 或 eval"],
+      "rules": [
+        {"id": "EVOL-001", "condition": "反馈没有来源证据", "effect": "记录为未验证，不得改变正式行为", "severity": "major"},
+        {"id": "EVOL-002", "condition": "提出 skill 或 policy 变更", "effect": "应用前要求回归案例和人工审批", "severity": "blocker"},
+        {"id": "EVOL-003", "condition": "反馈与现有候选项重复", "effect": "合并来源，不得创建另一个事实源", "severity": "minor"}
+      ],
+      "required_evidence": ["source", "review", "approval"],
+      "on_violation": "block"
+    },
+    {
+      "id": "team-standards",
+      "version": "1.0.0.0-rc.1",
+      "policy_class": "team",
+      "immutable": false,
+      "applies_when": ["项目 profile 指定了团队规范"],
+      "rules": [
+        {"id": "TEAM-001", "condition": "存在仓库或团队规范", "effect": "在通用指导前应用，并引用规则来源", "severity": "major"},
+        {"id": "TEAM-002", "condition": "必需技术选型未知", "effect": "替换前先从仓库调查或询问用户", "severity": "major"}
+      ],
+      "required_evidence": ["source", "review"],
+      "on_violation": "ask"
+    }
+  ]
+}

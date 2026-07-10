@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {"id": "design-state-after-context", "runner": "evidence-resume", "expected_next_node": "prototype"}
+  ]
+}

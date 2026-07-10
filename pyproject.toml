@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "engineering-assistant-kernel"
+version = "1.0.0rc1"
+description = "engineering-assistant skill 套件的平台无关运行内核。"
+authors = [
+  {name = "sunliming625@gmail.com", email = "sunliming625@gmail.com"}
+]
+requires-python = ">=3.9"
+dependencies = [
+  "jsonschema>=4.21,<5"
+]
+
+[project.scripts]
+ea = "engineering_assistant.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

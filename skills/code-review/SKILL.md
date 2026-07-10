@@ -1,39 +1,20 @@
 ---
 name: code-review
-description: Use when 质量报告和变更文件已具备，需要做语义代码评审、定位缺陷和整理 blocker 清单时；Do not use when do not替代 code-quality-governor。
+description: 针对固定 diff，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request 或开发中的变更。
 ---
 
-# When To Use
-- 质量报告和变更文件已具备，需要做语义代码评审、定位缺陷和整理 blocker 清单时。
-- 需要把静态分析、设计映射和人工评审 finding 汇总为可执行修复建议时。
+# 代码评审
 
-# Do Not Use When
-- 不要替代 code-quality-governor。
-- 不要输出无证据建议。
-- 不要忽略测试缺口。
+先冻结比较点，再沿仓库规范和预期行为两个独立轴进行评审。
 
-# Inputs
-- `code-quality-report.json`
-- `changed-files-report.json`
-- `implementation-summary.md`
-- `repo_context`
+## 操作流程
 
-# Do This
-- 读取 code-quality-report、changed-files、implementation-summary、repo context 和 rule-consumption-report。
-- 按正确性、边界、异常、安全、性能、复杂度、重复、可测试性和团队规范逐项评审。
-- 每个 finding 必须包含证据位置、影响、级别、建议、owner 和是否阻断。
-- 输出 code-review-report、HTML、review-comments 和 blocker-list。
+1. 确认 base、head、diff 范围、需求说明和测试证据。
+2. 检查规范和确定性工具失败，但不重复抄写工具输出。
+3. 根据需求说明检查行为、边界情况、数据和失败路径。
+4. 只报告可执行的问题，并包含证据、影响、级别和位置。
+5. 把两个评审轴合并为门禁，明确保留不确定性。
 
-# Evidence / Done
-- review-comments.json 中每条评论有文件/符号/规则或测试证据。
-- blocker-list.md 为空才允许评审通过。
-- HTML 报告引用稳定 JSON id，避免人工阅览件反向污染事实源。
+只有仓库规范缺失或不完整时才读取 [references/smell-baseline.md](references/smell-baseline.md)。
 
-# Stop / Escalate
-- 缺少 changed-files 或 code-quality-report 时 waiting_for_input。
-- blocker 未关闭或高风险人工豁免未审批时 blocked 或 waiting_for_human_review。
-
-# References / Scripts
-- contract.yaml：输入、输出、审批和质量门禁的机器契约。
-- references/stage-guidance.md
-- scripts/validate_output.py
+未检查固定 diff 前，不得仅凭摘要批准。

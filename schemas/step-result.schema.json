@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["run_id", "node_id", "status", "criteria_results", "outputs", "findings", "open_questions", "requested_transition"],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "node_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["completed", "skipped", "waiting", "blocked", "failed"]},
+    "criteria_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["criterion_id", "passed", "evidence_ids", "detail"],
+        "properties": {
+          "criterion_id": {"type": "string"},
+          "passed": {"type": "boolean"},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}},
+          "detail": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "outputs": {"type": "array", "items": {"type": "string"}},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "summary", "evidence_ids"],
+        "properties": {
+          "id": {"type": "string"},
+          "severity": {"enum": ["info", "minor", "major", "blocker"]},
+          "summary": {"type": "string"},
+          "evidence_ids": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "open_questions": {"type": "array", "items": {"type": "string"}},
+    "requested_transition": {"enum": ["continue", "pause_for_input", "pause_for_approval", "retry", "block", "complete", "cancel"]}
+  },
+  "additionalProperties": false
+}

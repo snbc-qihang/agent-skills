@@ -28,10 +28,14 @@ env/
 tmp/
 temp/
 
-# Runtime artifacts
-engineering-assistant/artifacts/*
-!engineering-assistant/artifacts/README.md
-/plugins/
+# Runtime, build and distribution artifacts
+.run-artifacts/
+dist/
+build/
+*.egg-info/
+.codegraph/daemon.pid
+.codegraph/*.db
+.codegraph/*.db-*
 
 # Local environment files
 .env

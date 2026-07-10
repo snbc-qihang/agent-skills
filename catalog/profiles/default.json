@@ -1,0 +1,10 @@
+{
+  "id": "default",
+  "version": "1.0.0.0-rc.1",
+  "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards"],
+  "store": {
+    "run_root": ".run-artifacts/engineering-assistant",
+    "formal_document_roots": ["docs/architecture", "docs/design", "docs/decisions", "docs/release"]
+  },
+  "adapter_preferences": ["codex", "hermes"]
+}

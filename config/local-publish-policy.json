@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "id": "local-publish",
+  "enabled": true,
+  "canonical_version": "1.0.0.0-rc.1",
+  "platforms": ["codex", "hermes"],
+  "requires_explicit_yes": true,
+  "stable_release_allowed": false,
+  "product_repository_changes_allowed": false
+}
