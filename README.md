@@ -19,6 +19,52 @@
 
 目标是让执行过程可预测，而不是把输出固定成模板。Agent 负责语义判断和工程工作，运行时负责确定性状态与安全边界。
 
+## 快速开始
+
+### 普通用户
+
+已经安装插件时，不需要执行 `pip install` 或手动维护 `ea` 状态机，直接在 Codex App 或 Hermes 中用自然语言描述任务即可。例如：
+
+```text
+请先梳理当前仓库上下文，再给出最小充分的实现方案。
+基于代码证据诊断这个问题，说明根因、影响和验证结果。
+评审当前变更是否同时符合仓库规范和原始需求。
+```
+
+Codex 可以根据 skill 的名称和描述自动选择能力，也可以通过 `$repo-context`、`$diagnosing-bugs`、`$code-review` 等名称显式调用。Hermes 可以通过自然语言选择 skill，也可以使用限定名：
+
+```bash
+hermes --skills engineering-assistant:repo-context
+```
+
+### 从仓库安装到本机
+
+先执行无副作用预演，再显式确认本机发布：
+
+```bash
+python3 scripts/publish_local.py --platform codex --dry-run
+python3 scripts/publish_local.py --platform codex --yes
+
+python3 scripts/publish_local.py --platform hermes --dry-run
+python3 scripts/publish_local.py --platform hermes --yes
+```
+
+同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)。
+
+### 当前平台集成边界
+
+当前发布包会自动注册 11 个公开 skill，但还没有把 `ea` Runtime 注册为 Codex/Hermes 的 MCP 工具、Hook 或平台工具。因此必须区分两种能力：
+
+| 能力 | 当前行为 |
+| --- | --- |
+| 发现并选择公开 skill | 平台可根据任务隐式选择，也支持用户显式指定 |
+| 加载 `SKILL.md` 和按需参考资料 | 选择 skill 后由平台完成 |
+| `ea route/start/next/complete/approve` | 不会因选择 skill 而自动执行 |
+| `RunState` 持久化、DAG 推进和 Runtime 门禁 | 仅在集成方显式调用 Runtime 时生效 |
+| `ea validate/eval/build/verify-package/canary-validate` | 由开发者、CI 或发布维护者执行 |
+
+所以，当前默认产品体验是“平台自动选择 skill，Agent 按 skill 工作”；Runtime kernel 已可独立调用和测试，但尚未成为 Codex/Hermes 的自动任务控制面。聊天中的“同意”也不会自动转换为 `ea approve`。在平台 adapter 完成 Runtime 工具接入前，不得把仅执行 skill 提示描述成已经运行了状态机、证据门禁或恢复机制。
+
 ## 核心设计
 
 - 单一事实源：skill、flow、policy、pack 和 profile 的机器定义只存在于 `catalog/`。
@@ -111,8 +157,12 @@ Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → s
 ## 运行机制
 
 ```mermaid
-flowchart LR
-    U["用户请求"] --> I["RouteIntent"]
+flowchart TB
+    U["用户请求"] --> A["平台 Agent"]
+    A --> K["自动发现并加载 Skill"]
+    K --> W["Agent 按 Skill 执行工程工作"]
+
+    A -. "需平台显式接入，当前不会自动调用" .-> I["RouteIntent"]
     I --> R["确定性 Router"]
     R --> D["RouteDecision"]
     D --> E["RuntimeEngine"]
@@ -141,15 +191,22 @@ flowchart LR
 - `GateDecision`：推进、等待输入、等待审批、重试或阻断。
 - `EvidenceRef`：源码、测试、CI、浏览器或外部状态证据。
 
-## CLI
+## Runtime 集成与开发者 CLI
 
-安装开发包：
+`ea` 是 Runtime、调试、评测和发布接口，不是普通 Codex App/Hermes 用户的日常操作界面。仅在开发仓库、直接调试内核或编写平台集成时安装开发包：
 
 ```bash
 python3 -m pip install -e .
 ```
 
-主要命令：
+命令分为两组：
+
+| 分组 | 命令 | 用途 |
+| --- | --- | --- |
+| Runtime 控制面 | `route`、`start`、`next`、`complete`、`approve` | 供平台 adapter、自动化集成和内核调试调用 |
+| 研发与发布 | `validate`、`eval`、`build`、`verify-package`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
+
+完整命令语义：
 
 ```text
 ea route             RouteIntent -> RouteDecision
@@ -164,7 +221,7 @@ ea verify-package    校验包文件摘要
 ea canary-validate   校验真实产品 canary 结果
 ```
 
-自然语言到 `RouteIntent` 的理解由平台 agent 完成；核心 Router 只消费结构化输入，避免把模型分类结果伪装成确定性规则。
+自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，避免把模型分类结果伪装成确定性规则。发布包内会包含独立的 `engineering-assistant/bin/ea` 启动器，但当前 Codex/Hermes adapter 只注册 skill，不会自动调用该启动器。
 
 ## 开发与验证
 
