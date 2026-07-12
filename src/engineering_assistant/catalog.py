@@ -12,12 +12,14 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
 from .model import (
+    CapabilityProviderSpec,
     CompletionCriterion,
     ContextPointer,
     FlowNode,
     FlowSpec,
     PolicyRule,
     PolicySpec,
+    ProviderSource,
     SkillSpec,
 )
 from .validation import ValidationFailure, load_json, validate_many
@@ -39,6 +41,10 @@ class ProjectProfile:
     version: str
     policy_refs: tuple[str, ...]
     store: Mapping[str, Any]
+    evidence_broker: Mapping[str, Any]
+    approval_broker: Mapping[str, Any]
+    investigation_policy: Mapping[str, Any]
+    evidence_policy: Mapping[str, Any]
     adapter_preferences: tuple[str, ...]
 
 
@@ -62,12 +68,20 @@ class Catalog:
     capabilities: Mapping[str, Capability]
     packs: Mapping[str, Pack]
     profiles: Mapping[str, ProjectProfile]
+    providers: Mapping[str, CapabilityProviderSpec]
 
     def skill_for_capability(self, capability_id: str) -> SkillSpec | None:
         capability = self.capabilities.get(capability_id)
         if capability is None or capability.kind != "primitive":
             return None
         return self.skills.get(capability.owner)
+
+    def provider_for_capability(self, capability_id: str) -> CapabilityProviderSpec | None:
+        candidates = [
+            provider for provider in self.providers.values()
+            if capability_id in provider.capability_ids
+        ]
+        return max(candidates, key=lambda item: item.priority) if candidates else None
 
 
 def _unique_by_id(items: Iterable[Mapping[str, Any]], label: str) -> Dict[str, Mapping[str, Any]]:
@@ -149,6 +163,26 @@ def _policy_spec(data: Mapping[str, Any]) -> PolicySpec:
     )
 
 
+def _provider_spec(data: Mapping[str, Any]) -> CapabilityProviderSpec:
+    source = data.get("source")
+    return CapabilityProviderSpec(
+        id=data["id"],
+        version=data["version"],
+        mode=data["mode"],
+        capability_ids=list(data["capability_ids"]),
+        input_schema_ref=data["input_schema_ref"],
+        output_schema_ref=data["output_schema_ref"],
+        risk_class=data["risk_class"],
+        network_policy=data["network_policy"],
+        timeout_seconds=data["timeout_seconds"],
+        evidence_contract=list(data["evidence_contract"]),
+        failure_action=data["failure_action"],
+        fallback_provider_id=data.get("fallback_provider_id"),
+        source=ProviderSource(**source) if source is not None else None,
+        priority=data.get("priority", 0),
+    )
+
+
 def _validate_skill_source(root: Path, skill: SkillSpec) -> None:
     source_root = (root / skill.source_path).resolve()
     if not (source_root / "SKILL.md").is_file():
@@ -193,17 +227,24 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     capability_doc = load_json(root / "catalog/capabilities/registry.json")
     pack_doc = load_json(root / "catalog/packs/core.json")
     profile_doc = load_json(root / "catalog/profiles/default.json")
+    provider_doc = load_json(root / "catalog/providers/core.json")
 
     skill_data = _unique_by_id(skill_doc.get("skills", []), "skills")
     flow_data = _unique_by_id(flow_doc.get("flows", []), "flows")
     policy_data = _unique_by_id(policy_doc.get("policies", []), "policies")
     capability_data = _unique_by_id(capability_doc.get("capabilities", []), "capabilities")
     pack_data = _unique_by_id(pack_doc.get("packs", []), "packs")
+    provider_data = _unique_by_id(provider_doc.get("providers", []), "providers")
 
     validate_many(skill_data.values(), load_json(schemas / "skill-spec.schema.json"), "skills")
     validate_many(flow_data.values(), load_json(schemas / "flow-spec.schema.json"), "flows")
     validate_many(policy_data.values(), load_json(schemas / "policy-spec.schema.json"), "policies")
     validate_many(pack_data.values(), load_json(schemas / "pack-spec.schema.json"), "packs")
+    validate_many(
+        provider_data.values(),
+        load_json(schemas / "capability-provider-spec.schema.json"),
+        "providers",
+    )
 
     versions = {
         skill_doc.get("version"),
@@ -212,6 +253,7 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         capability_doc.get("version"),
         pack_doc.get("version"),
         profile_doc.get("version"),
+        provider_doc.get("version"),
     }
     if len(versions) != 1 or None in versions:
         raise ValidationFailure(f"catalog component versions do not agree: {sorted(str(item) for item in versions)}")
@@ -240,10 +282,47 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         version=profile_doc["version"],
         policy_refs=tuple(profile_doc["policy_refs"]),
         store=profile_doc["store"],
+        evidence_broker=profile_doc["evidence_broker"],
+        approval_broker=profile_doc["approval_broker"],
+        investigation_policy=profile_doc["investigation_policy"],
+        evidence_policy=profile_doc["evidence_policy"],
         adapter_preferences=tuple(profile_doc["adapter_preferences"]),
     )
+    for broker_name, broker in (
+        ("evidence_broker", profile.evidence_broker),
+        ("approval_broker", profile.approval_broker),
+    ):
+        required = ("enabled", "id", "introspection_url", "timeout_seconds")
+        if not isinstance(broker.get("enabled"), bool) or any(key not in broker for key in required):
+            raise ValidationFailure(f"profile {broker_name} is incomplete")
+        if broker["enabled"] and not str(broker["introspection_url"]).startswith("https://"):
+            raise ValidationFailure(f"profile {broker_name} requires an HTTPS introspection URL")
+    if not isinstance(profile.approval_broker.get("audience"), str) or not profile.approval_broker[
+        "audience"
+    ].strip():
+        raise ValidationFailure("profile approval_broker requires a non-empty audience")
+    investigation_mode = profile.investigation_policy.get("default_mode")
+    if investigation_mode not in {"auto_readonly", "suggest_then_run", "guided", "disabled"}:
+        raise ValidationFailure("profile investigation_policy has an invalid default_mode")
+    auto_readonly = profile.investigation_policy.get("auto_readonly", {})
+    if not isinstance(auto_readonly.get("enabled"), bool):
+        raise ValidationFailure("profile auto_readonly policy requires enabled")
+    max_evidence_age = profile.evidence_policy.get("max_age_seconds")
+    max_future_skew = profile.evidence_policy.get("max_future_skew_seconds")
+    if not isinstance(max_evidence_age, int) or max_evidence_age <= 0:
+        raise ValidationFailure("profile evidence_policy requires positive max_age_seconds")
+    if not isinstance(max_future_skew, int) or max_future_skew < 0:
+        raise ValidationFailure(
+            "profile evidence_policy requires non-negative max_future_skew_seconds"
+        )
+    providers = {
+        item_id: _provider_spec(item) for item_id, item in provider_data.items()
+    }
 
-    versioned = [*skills.values(), *flows.values(), *policies.values(), *packs.values(), profile]
+    versioned = [
+        *skills.values(), *flows.values(), *policies.values(), *packs.values(),
+        *providers.values(), profile,
+    ]
     mismatched = sorted(item.id for item in versioned if item.version != version)
     if mismatched:
         raise ValidationFailure(f"catalog entries have mismatched versions: {', '.join(mismatched)}")
@@ -274,6 +353,40 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         _assert_acyclic(flow)
 
     _assert_refs(profile.policy_refs, policies, f"profile {profile.id} policies")
+    for provider in providers.values():
+        _assert_refs(
+            provider.capability_ids,
+            capabilities,
+            f"provider {provider.id} capabilities",
+        )
+        if provider.fallback_provider_id is not None:
+            _assert_refs(
+                [provider.fallback_provider_id],
+                providers,
+                f"provider {provider.id} fallback",
+            )
+            if provider.fallback_provider_id == provider.id:
+                raise ValidationFailure(f"provider {provider.id}: fallback cannot reference itself")
+        for contract_ref in (provider.input_schema_ref, provider.output_schema_ref):
+            relative = Path(contract_ref)
+            if relative.is_absolute() or ".." in relative.parts or not (root / relative).is_file():
+                raise ValidationFailure(
+                    f"provider {provider.id}: invalid schema reference {contract_ref}"
+                )
+    for capability_id in capabilities:
+        candidates = [
+            provider for provider in providers.values()
+            if capability_id in provider.capability_ids
+        ]
+        if not candidates:
+            continue
+        highest = max(provider.priority for provider in candidates)
+        selected = sorted(provider.id for provider in candidates if provider.priority == highest)
+        if len(selected) != 1:
+            raise ValidationFailure(
+                f"capability {capability_id}: ambiguous highest priority providers: "
+                + ", ".join(selected)
+            )
     for pack in packs.values():
         _assert_refs(pack.capabilities, capabilities, f"pack {pack.id} capabilities")
         _assert_refs(pack.policy_refs, policies, f"pack {pack.id} policies")
@@ -309,4 +422,5 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         capabilities=capabilities,
         packs=packs,
         profiles={profile.id: profile},
+        providers=providers,
     )

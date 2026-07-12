@@ -1,10 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["run_id", "task_id", "flow_id", "status", "current_node", "completed_nodes", "skipped_nodes", "context_refs", "evidence_refs", "open_questions", "required_approvals", "approvals", "approval_expiries", "transition_history", "next_actions", "revision"],
+  "required": ["run_id", "task_id", "profile_id", "flow_id", "status", "current_node", "completed_nodes", "skipped_nodes", "context_refs", "evidence_refs", "open_questions", "required_approvals", "approvals", "approval_expiries", "approval_records", "transition_history", "next_actions", "revision"],
   "properties": {
     "run_id": {"type": "string", "minLength": 1},
     "task_id": {"type": "string", "minLength": 1},
+    "profile_id": {"type": "string", "minLength": 1},
     "flow_id": {"type": "string", "minLength": 1},
     "status": {"enum": ["initialized", "running", "waiting_for_input", "waiting_for_approval", "blocked", "cancelled", "completed"]},
     "current_node": {"type": ["string", "null"]},
@@ -16,6 +17,28 @@
     "required_approvals": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "approvals": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "approval_expiries": {"type": "object", "additionalProperties": {"type": "string", "format": "date-time"}},
+    "approval_records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["grant_id", "broker_id", "audience", "action", "run_id", "run_revision", "approval_id", "scope", "issued_at", "expires_at", "actor_ref", "nonce"],
+        "properties": {
+          "grant_id": {"type": "string", "minLength": 1},
+          "broker_id": {"type": "string", "minLength": 1},
+          "audience": {"type": "string", "minLength": 1},
+          "action": {"const": "run.approve"},
+          "run_id": {"type": "string", "minLength": 1},
+          "run_revision": {"type": "integer", "minimum": 0},
+          "approval_id": {"type": "string", "minLength": 1},
+          "scope": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "issued_at": {"type": "string", "format": "date-time"},
+          "expires_at": {"type": "string", "format": "date-time"},
+          "actor_ref": {"type": "string", "minLength": 1},
+          "nonce": {"type": "string", "minLength": 16}
+        },
+        "additionalProperties": false
+      }
+    },
     "transition_history": {"type": "array", "items": {"type": "object"}},
     "next_actions": {"type": "array", "items": {"type": "string"}},
     "revision": {"type": "integer", "minimum": 0}

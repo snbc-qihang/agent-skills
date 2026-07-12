@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from .catalog import Catalog
-from .model import FlowNode, GateDecision, RouteDecision, RunState, StepResult
+from .evidence import EvidenceStore
+from .governance import QualityGate, QualityStore
+from .model import (
+    FlowNode,
+    GateDecision,
+    QualitySnapshot,
+    RouteIntent,
+    RunApprovalGrant,
+    RunState,
+    StepResult,
+)
+from .router import route_intent
+from .trust import TrustVerifier, parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
 
@@ -24,18 +36,15 @@ class RuntimeEngine:
     def start(
         self,
         task_id: str,
-        decision: RouteDecision,
+        intent: RouteIntent,
         *,
+        profile_id: str = "default",
         run_id: str | None = None,
         context_refs: list[str] | None = None,
-        approvals: list[str] | None = None,
-        approval_ttl_seconds: int = 3600,
     ) -> RunState:
-        validate_instance(
-            decision.to_dict(),
-            load_json(self.catalog.root / "schemas/route-decision.schema.json"),
-            "route-decision",
-        )
+        if profile_id not in self.catalog.profiles:
+            raise ValidationFailure(f"unknown profile {profile_id}")
+        decision = route_intent(intent, self.catalog, profile_id=profile_id)
         if not decision.flow_id:
             raise ValidationFailure("only a flow route creates persisted run state")
         if decision.flow_id not in self.catalog.flows:
@@ -48,16 +57,14 @@ class RuntimeEngine:
             )
         if decision.decision in {"ask", "block"}:
             raise ValidationFailure(f"cannot start a run from route decision {decision.decision}")
-        approvals = list(dict.fromkeys(approvals or []))
-        if approval_ttl_seconds <= 0:
-            raise ValidationFailure("approval_ttl_seconds must be positive")
-        expiry = (datetime.now(timezone.utc) + timedelta(seconds=approval_ttl_seconds)).isoformat()
+        approvals: list[str] = []
         required = list(decision.approval_required)
         missing = [item for item in required if item not in approvals]
         status = "waiting_for_approval" if missing else "initialized"
         state = RunState(
             run_id=run_id or f"run-{uuid4().hex[:16]}",
             task_id=task_id,
+            profile_id=profile_id,
             flow_id=decision.flow_id,
             status=status,
             current_node=None,
@@ -68,7 +75,8 @@ class RuntimeEngine:
             open_questions=[],
             required_approvals=required,
             approvals=approvals,
-            approval_expiries={item: expiry for item in approvals},
+            approval_expiries={},
+            approval_records=[],
             transition_history=[],
             next_actions=[f"obtain approval: {item}" for item in missing],
             revision=0,
@@ -77,21 +85,52 @@ class RuntimeEngine:
         self._validate_state(state)
         return state
 
-    def grant_approval(self, state: RunState, approval_id: str, *, ttl_seconds: int = 3600) -> GateDecision:
+    def apply_approval(
+        self,
+        state: RunState,
+        grant: RunApprovalGrant,
+        *,
+        verifier: TrustVerifier | None,
+        expected_broker_id: str,
+        expected_audience: str,
+    ) -> GateDecision:
         self._assert_not_terminal(state)
-        if ttl_seconds <= 0:
-            raise ValidationFailure("approval ttl must be positive")
-        if approval_id not in state.required_approvals:
-            raise ValidationFailure(f"approval {approval_id} is not required by this run")
-        if approval_id not in state.approvals:
-            state.approvals.append(approval_id)
-        state.approval_expiries[approval_id] = (
-            datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
-        ).isoformat()
+        validate_instance(
+            grant.to_dict(),
+            load_json(self.catalog.root / "schemas/run-approval-grant.schema.json"),
+            "run-approval-grant",
+        )
+        if verifier is None or not verifier.verify_run_approval(grant):
+            raise ValidationFailure("run approval requires a valid external broker grant")
+        if grant.broker_id != expected_broker_id:
+            raise ValidationFailure("run approval grant has the wrong broker")
+        if grant.audience != expected_audience:
+            raise ValidationFailure("run approval grant has the wrong audience")
+        if grant.run_id != state.run_id or grant.run_revision != state.revision:
+            raise ValidationFailure("run approval grant targets a different or stale run")
+        now = datetime.now(timezone.utc)
+        if parse_time(grant.issued_at) > now or parse_time(grant.expires_at) <= now:
+            raise ValidationFailure("run approval grant is not currently valid")
+        if grant.approval_id not in state.required_approvals:
+            raise ValidationFailure(
+                f"approval {grant.approval_id} is not required by this run"
+            )
+        required_scope = {
+            f"flow:{state.flow_id}",
+            f"approval:{grant.approval_id}",
+        }
+        if not required_scope.issubset(grant.scope):
+            raise ValidationFailure("run approval grant has insufficient scope")
+        if grant.approval_id not in state.approvals:
+            state.approvals.append(grant.approval_id)
+        state.approval_expiries[grant.approval_id] = grant.expires_at
+        approval_record = grant.to_dict()
+        approval_record.pop("token", None)
+        state.approval_records.append(approval_record)
         missing = self._missing_approvals(state)
         state.next_actions = [f"obtain approval: {item}" for item in missing]
         state.status = "waiting_for_approval" if missing else "initialized"
-        self._record(state, "approval", state.status, approval_id)
+        self._record(state, "approval", state.status, grant.grant_id)
         decision = "pause_for_approval" if missing else "continue"
         gate = GateDecision(decision, [], missing, "Approval recorded.", None)
         self._validate_gate(gate)
@@ -146,7 +185,8 @@ class RuntimeEngine:
         state: RunState,
         result: StepResult,
         *,
-        available_evidence: set[str],
+        evidence_store: EvidenceStore,
+        evidence_max_age_seconds: int | None = None,
     ) -> GateDecision:
         self._assert_not_terminal(state)
         validate_instance(
@@ -166,9 +206,46 @@ class RuntimeEngine:
             for finding in result.findings
             for evidence_id in finding.evidence_ids
         }
-        unknown_evidence = sorted(referenced - available_evidence)
-        if unknown_evidence:
-            raise ValidationFailure(f"step references unregistered evidence: {', '.join(unknown_evidence)}")
+        criterion_evidence_ids = {
+            evidence_id
+            for criterion in result.criteria_results
+            for evidence_id in criterion.evidence_ids
+        }
+        evidence = {}
+        for evidence_id in referenced:
+            try:
+                item = evidence_store.get(state.run_id, evidence_id)
+            except FileNotFoundError as exc:
+                raise ValidationFailure(
+                    f"step references unregistered evidence: {evidence_id}"
+                ) from exc
+            if item.trust_level not in {"observed", "verified"}:
+                raise ValidationFailure(
+                    f"step evidence {evidence_id} must be observed or verified"
+                )
+            evidence[evidence_id] = item
+        profile_evidence = self.catalog.profiles[state.profile_id].evidence_policy
+        fixed_max_age = int(profile_evidence["max_age_seconds"])
+        if evidence_max_age_seconds is not None and evidence_max_age_seconds <= 0:
+            raise ValidationFailure("evidence_max_age_seconds must be positive")
+        effective_max_age = (
+            min(fixed_max_age, evidence_max_age_seconds)
+            if evidence_max_age_seconds is not None
+            else fixed_max_age
+        )
+        max_future_skew = int(profile_evidence["max_future_skew_seconds"])
+        now = datetime.now(timezone.utc)
+        stale_or_future = []
+        for evidence_id, item in evidence.items():
+            age = (now - parse_time(item.observed_at)).total_seconds()
+            if age > effective_max_age or age < -max_future_skew:
+                stale_or_future.append(evidence_id)
+        if stale_or_future:
+            raise ValidationFailure(
+                "step references stale or future evidence: "
+                + ", ".join(sorted(stale_or_future))
+            )
+
         state.evidence_refs = list(dict.fromkeys(state.evidence_refs + sorted(referenced)))
         state.open_questions = list(result.open_questions)
 
@@ -205,6 +282,21 @@ class RuntimeEngine:
         blocker = next((finding for finding in result.findings if finding.severity == "blocker"), None)
         if blocker:
             return self._terminal_gate(state, "blocked", "block", node, blocker.summary)
+        if state.flow_id == "implement" and node.id == "quality":
+            quality_snapshot = QualityStore(
+                evidence_store.state_store, evidence_store
+            ).latest_valid(
+                state.run_id,
+                node.id,
+                current_state_revision=state.revision,
+            )
+            quality_gate = self._evaluate_quality_snapshot(
+                state,
+                node,
+                quality_snapshot,
+            )
+            if quality_gate is not None:
+                return quality_gate
         expected = set(criterion_ids(node))
         actual = {item.criterion_id for item in result.criteria_results}
         missing_criteria = sorted(expected - actual)
@@ -213,6 +305,18 @@ class RuntimeEngine:
             item.criterion_id for item in result.criteria_results if item.passed and not item.evidence_ids
         )
         missing = missing_criteria + failed_criteria + no_evidence
+        if node.evidence_kinds or node.evidence_scope_tags:
+            allowed_kinds = set(node.evidence_kinds)
+            for criterion in result.criteria_results:
+                if not criterion.passed:
+                    continue
+                items = [evidence[item] for item in criterion.evidence_ids]
+                if not any(
+                    (not allowed_kinds or item.kind in allowed_kinds)
+                    and set(node.evidence_scope_tags).issubset(item.scope_tags)
+                    for item in items
+                ):
+                    missing.append(f"{criterion.criterion_id}:evidence-contract")
         if missing:
             state.status = "running"
             state.next_actions = [f"satisfy criterion: {item}" for item in missing]
@@ -220,8 +324,71 @@ class RuntimeEngine:
             gate = GateDecision("retry", list(node.policy_refs), missing, "Completion criteria are not evidenced.", node.id)
             self._validate_gate(gate)
             return gate
+        referenced_kinds = {
+            evidence[evidence_id].kind for evidence_id in criterion_evidence_ids
+        }
+        if not self._missing_approvals(state) and state.required_approvals:
+            referenced_kinds.add("approval")
+        missing_policy_evidence = []
+        for policy_id in node.policy_refs:
+            required_kinds = set(self.catalog.policies[policy_id].required_evidence)
+            if required_kinds and not referenced_kinds.intersection(required_kinds):
+                missing_policy_evidence.append(
+                    f"{policy_id}:one-of({','.join(sorted(required_kinds))})"
+                )
+        if missing_policy_evidence:
+            state.status = "running"
+            state.next_actions = [
+                f"provide policy evidence: {item}" for item in missing_policy_evidence
+            ]
+            self._record(
+                state,
+                "retry",
+                "running",
+                "Node policy evidence requirements are not satisfied.",
+            )
+            gate = GateDecision(
+                "retry",
+                list(node.policy_refs),
+                missing_policy_evidence,
+                "Node policy evidence requirements are not satisfied.",
+                node.id,
+            )
+            self._validate_gate(gate)
+            return gate
         state.completed_nodes.append(node.id)
         return self._advance_after_resolution(state, node, "Step completion criteria passed with registered evidence.")
+
+    def _evaluate_quality_snapshot(
+        self,
+        state: RunState,
+        node: FlowNode,
+        snapshot: QualitySnapshot | None,
+    ) -> GateDecision | None:
+        if snapshot is None:
+            missing = ["quality-snapshot"]
+            reason = "A persisted quality snapshot is required for this node."
+        elif snapshot.run_id != state.run_id or snapshot.node_id != node.id:
+            raise ValidationFailure("quality snapshot does not match the active run and node")
+        elif snapshot.state_revision != state.revision:
+            raise ValidationFailure("quality snapshot targets a stale run revision")
+        else:
+            validate_instance(
+                snapshot.to_dict(),
+                load_json(self.catalog.root / "schemas/quality-snapshot.schema.json"),
+                "quality-snapshot",
+            )
+            assessment = QualityGate.evaluate(snapshot)
+            if assessment.decision == "pass":
+                return None
+            missing = list(assessment.reasons)
+            reason = "Quality snapshot requires repair before the node can complete."
+        state.status = "running"
+        state.next_actions = [f"repair quality: {item}" for item in missing]
+        self._record(state, "retry", "running", reason)
+        gate = GateDecision("retry", list(node.policy_refs), missing, reason, node.id)
+        self._validate_gate(gate)
+        return gate
 
     def node_payload(self, state: RunState) -> dict | None:
         if not state.current_node:

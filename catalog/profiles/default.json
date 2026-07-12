@@ -6,5 +6,31 @@
     "run_root": ".run-artifacts/engineering-assistant",
     "formal_document_roots": ["docs/architecture", "docs/design", "docs/decisions", "docs/release"]
   },
+  "evidence_broker": {
+    "enabled": false,
+    "id": "platform-evidence-broker",
+    "introspection_url": "https://broker.invalid/v1/evidence/introspect",
+    "timeout_seconds": 5
+  },
+  "approval_broker": {
+    "enabled": false,
+    "id": "platform-approval-broker",
+    "audience": "engineering-assistant",
+    "introspection_url": "https://broker.invalid/v1/approval/introspect",
+    "timeout_seconds": 5
+  },
+  "investigation_policy": {
+    "default_mode": "suggest_then_run",
+    "auto_readonly": {
+      "enabled": false,
+      "authorization_id": "default-no-auto-authorization",
+      "allowed_source_scope": [],
+      "max_cost": "low"
+    }
+  },
+  "evidence_policy": {
+    "max_age_seconds": 3600,
+    "max_future_skew_seconds": 300
+  },
   "adapter_preferences": ["codex", "hermes"]
 }

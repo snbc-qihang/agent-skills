@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 
 from .adapters import CodexAdapter, HermesAdapter
-from .catalog import Catalog, load_catalog
+from .catalog import load_catalog
 from .validation import ValidationFailure
 
 
@@ -74,6 +74,7 @@ def build_package(
         "flow_count": len(catalog.flows),
         "pack_count": len(catalog.packs),
         "policy_count": len(catalog.policies),
+        "provider_count": len(catalog.providers),
         "payload_digest": f"sha256:{payload_digest}",
         "payload_files": payload_files,
     }
@@ -104,7 +105,11 @@ def verify_package(package_root: Path | str) -> dict:
 def _copy_tree(source: Path, target: Path) -> None:
     if not source.is_dir():
         raise ValidationFailure(f"missing compiler input {source}")
-    shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    shutil.copytree(
+        source,
+        target,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
+    )
 
 
 def _file_digests(root: Path, exclude: set[str] | None = None) -> dict[str, str]:

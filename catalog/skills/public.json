@@ -199,8 +199,8 @@
       "id": "code-review",
       "version": "1.0.0.0-rc.1",
       "invocation_mode": "model",
-      "description": "针对固定 diff，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request 或开发中的变更。",
-      "leading_words": ["固定比较点", "规范轴", "需求轴"],
+      "description": "针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更。",
+      "leading_words": ["固定比较点", "阶段审计", "自动门禁", "规范轴", "需求轴"],
       "capabilities": ["code-review"],
       "inputs": ["fixed-point", "diff", "standards", "specification"],
       "completion_criteria": [

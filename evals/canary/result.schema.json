@@ -1,17 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["simulation", "product_repository", "baseline_ref", "candidate_ref", "quality_delta_points", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "evidence_refs"],
+  "required": ["simulation", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "quality_delta_points", "token_reduction_ratio", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "evidence_refs"],
   "properties": {
     "simulation": {"const": false},
     "product_repository": {"type": "string", "minLength": 1},
     "baseline_ref": {"type": "string", "minLength": 1},
     "candidate_ref": {"type": "string", "minLength": 1},
+    "baseline_execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "candidate_execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "quality_delta_points": {"type": "number"},
+    "token_reduction_ratio": {"type": "number"},
     "cost_reduction_ratio": {"type": "number"},
     "document_noise_reduction_ratio": {"type": "number"},
     "safety_violations": {"type": "integer", "minimum": 0},
-    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+    "evidence_refs": {"type": "array", "minItems": 10, "maxItems": 128, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
   },
   "additionalProperties": false
 }

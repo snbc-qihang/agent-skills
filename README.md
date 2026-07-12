@@ -53,21 +53,23 @@ python3 scripts/publish_local.py --platform hermes --yes
 
 ### 当前平台集成边界
 
-当前发布包会自动注册 11 个公开 skill，但还没有把 `ea` Runtime 注册为 Codex/Hermes 的 MCP 工具、Hook 或平台工具。因此必须区分两种能力：
+当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。两个 adapter 也会注册共享的反馈采集器：Codex 使用 `Stop` 与 `UserPromptSubmit`，Hermes 使用 `post_llm_call`。
 
 | 能力 | 当前行为 |
 | --- | --- |
 | 发现并选择公开 skill | 平台可根据任务隐式选择，也支持用户显式指定 |
 | 加载 `SKILL.md` 和按需参考资料 | 选择 skill 后由平台完成 |
-| `ea route/start/next/complete/approve` | 不会因选择 skill 而自动执行 |
-| `RunState` 持久化、DAG 推进和 Runtime 门禁 | 仅在集成方显式调用 Runtime 时生效 |
-| `ea validate/eval/build/verify-package/canary-validate` | 由开发者、CI 或发布维护者执行 |
+| `route/start/next/complete` | 平台可作为工具调用；`start` 接收 intent 并在服务端重算路由，选择 skill 本身不会隐式启动状态机 |
+| 人工审批与调研选择 | 只接受 profile 固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
+| `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
+| Hook 反馈采集 | 每轮记录无原文 capture 元数据；只把阻断、失败、返工、人工纠正和范围追加提升为 `FeedbackEvent` |
+| `ea validate/artifact-validate/eval/build/verify-package/canary-validate` | 由开发者、CI 或发布维护者执行 |
 
-所以，当前默认产品体验是“平台自动选择 skill，Agent 按 skill 工作”；Runtime kernel 已可独立调用和测试，但尚未成为 Codex/Hermes 的自动任务控制面。聊天中的“同意”也不会自动转换为 `ea approve`。在平台 adapter 完成 Runtime 工具接入前，不得把仅执行 skill 提示描述成已经运行了状态机、证据门禁或恢复机制。
+所以，当前产品体验是“平台选择 skill，必要时调用 Runtime 工具进入受治理运行，并由生命周期 Hook 采集反馈候选”。只有出现实际 Runtime 工具调用和落盘状态，才能声称状态机、证据门禁或恢复机制已运行。聊天中的“同意”不会自动转换为签名 grant。Codex 的插件 Hook 在用户审查并信任当前定义前会被跳过。
 
 ## 核心设计
 
-- 单一事实源：skill、flow、policy、pack 和 profile 的机器定义只存在于 `catalog/`。
+- 单一事实源：skill、flow、policy、pack、provider 和 profile 的机器定义只存在于 `catalog/`。
 - 渐进加载：公开 skill 只加载当前分支需要的 `references/` 和 pack，避免上下文膨胀。
 - 可验证完成：flow 节点通过 `StepResult`、完成条件和 `EvidenceRef` 判断是否推进。
 - 确定性门禁：高风险动作、审批、证据时效和状态转换由 runtime 执行。
@@ -79,7 +81,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 
 ```text
 agent-skills/
-├── catalog/                    # Skill、Flow、Policy、Pack、Capability、Profile
+├── catalog/                    # Skill、Flow、Policy、Pack、Capability、Provider、Profile
 ├── skills/                     # 11 个公开 skill 及按需 references
 ├── packs/                      # 9 个专业能力与策略包
 ├── schemas/                    # 核心协议 JSON Schema
@@ -102,6 +104,7 @@ agent-skills/
 | Flow 节点和依赖 | `catalog/flows/` |
 | 安全、审批和证据规则 | `catalog/policies/` |
 | 专业领域能力 | `catalog/packs/` 与 `packs/` |
+| 能力提供方及供应链约束 | `catalog/providers/` |
 | 公共数据协议 | `schemas/` 与 `model.py` |
 | 路由和状态转换 | `router.py`、`engine.py`、`state_store.py` |
 | 平台输出 | `adapters/codex.py`、`adapters/hermes.py` |
@@ -154,6 +157,12 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 
 Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → skill → task override。降低安全等级必须有明确授权，不可豁免规则不能被 override。
 
+### 外部 UI/UX Provider
+
+前端审美、反模板化规则和评审方法融合进原生 `frontend-product` pack；可执行设计知识不复制进核心，而是通过固定来源 Provider 调用。当前 `ui-ux-pro-max` Provider 固定到 MIT 许可的 revision `3da52ff1cab1be91848072ec1be5f493d730fd5f` 及 bundle 摘要，只为 `frontend-design` 和 `product-prototype-review` 提供只读建议。
+
+`engineering_assistant_provider_invoke` 可接收外部 bundle 路径；宿主也可通过 `ENGINEERING_ASSISTANT_UI_UX_PRO_MAX_ROOT` 固定受信路径。执行器拒绝 symlink、pyc、特殊文件、超深/超量目录和超限体积，把普通文件复制到私有快照并对快照验证摘要，再从快照执行。子进程不使用 shell、不传 HOME/代理环境、不使用 `--persist`；macOS 沙箱以 `deny default` 为基线，只放行系统运行时、固定 Python 运行时、私有快照与工作目录读取，禁止网络、fork、额外 exec 和工作目录外写入，并限制时间、进程组和输出文件；没有等价最小权限沙箱的平台安全回退原生能力。bundle 缺失、被篡改、超时或执行失败时返回 `fallback` 与明确的原生执行指令。完整 invocation claim 与结果分别不可变审计到当前 run 的 `providers/`，同 ID 不同输入会冲突，同请求并发只允许 first writer 执行；first writer 崩溃且执行租约到期后，仅一个 CAS 接管者可以恢复。Provider 输出固定标记为 `untrusted_advisory`，不是 `observed` evidence，不能直接完成节点或绕过质量门禁。
+
 ## 运行机制
 
 ```mermaid
@@ -162,7 +171,7 @@ flowchart TB
     A --> K["自动发现并加载 Skill"]
     K --> W["Agent 按 Skill 执行工程工作"]
 
-    A -. "需平台显式接入，当前不会自动调用" .-> I["RouteIntent"]
+    A -. "平台选择调用 Runtime 工具" .-> I["RouteIntent"]
     I --> R["确定性 Router"]
     R --> D["RouteDecision"]
     D --> E["RuntimeEngine"]
@@ -172,6 +181,8 @@ flowchart TB
     S --> X["StepResult + EvidenceRef"]
     X --> E
     E --> P["RunState 持久化"]
+    W --> F["生命周期 Hook"]
+    F --> C["FeedbackCapture + FeedbackEvent"]
 ```
 
 默认运行状态写入目标项目：
@@ -180,16 +191,28 @@ flowchart TB
 .run-artifacts/engineering-assistant/
 ```
 
+反馈 capture 和候选事件分别写入该目录下的 `feedback/captures/` 与 `feedback/events/`。默认只保存内容摘要、长度、脱敏计数和最多 512 字符的脱敏信号片段，不读取不稳定的 transcript 格式。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：
+
+- `candidates`：默认模式，保存 capture 并提升有效反馈候选。
+- `metadata`：只保存 capture 元数据。
+- `disabled`：关闭反馈写入。
+
 核心协议包括：
 
 - `SkillSpec`：公开 skill 的触发、能力、完成条件和上下文指针。
 - `RouteIntent` / `RouteDecision`：结构化意图和确定性路由结果。
 - `FlowSpec`：节点、依赖、条件和完成标准。
 - `PolicySpec`：规则、优先级、可覆盖性和违规动作。
-- `RunState`：运行状态、当前节点、revision、审批和阻断信息。
+- `RunState`：绑定 profile 的运行状态、当前节点、revision、审批和阻断信息。
 - `StepResult`：节点执行结果和逐项完成条件。
 - `GateDecision`：推进、等待输入、等待审批、重试或阻断。
 - `EvidenceRef`：源码、测试、CI、浏览器或外部状态证据。
+- `CapabilityProviderSpec`：能力提供方、执行模式、固定来源、风险、网络和失败策略。
+- `FeedbackEvent`：问题、阻断、人工修正和可复用候选的结构化反馈。
+- `FeedbackCapture`：每轮 Hook 是否执行、内容摘要、脱敏计数和候选事件引用。
+- `QualitySnapshot`：正确性、复杂度、冗余、性能、架构和测试质量的证据快照。
+- `InvestigationRequest`：Agent 主动调研的问题、模式、成本、停止条件和证据要求。
+- `InvestigationRecord`：调研的人工选择引用、状态迁移、结果证据和 revision。
 
 ## Runtime 集成与开发者 CLI
 
@@ -203,8 +226,8 @@ python3 -m pip install -e .
 
 | 分组 | 命令 | 用途 |
 | --- | --- | --- |
-| Runtime 控制面 | `route`、`start`、`next`、`complete`、`approve` | 供平台 adapter、自动化集成和内核调试调用 |
-| 研发与发布 | `validate`、`eval`、`build`、`verify-package`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
+| Runtime 控制面 | `route`、`start`、`next`、`complete`、`quality-submit`、`evidence-import`、`investigation-*`、`mcp-serve` | 供平台 adapter、受信执行器和内核调试调用 |
+| 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
 
 完整命令语义：
 
@@ -212,16 +235,33 @@ python3 -m pip install -e .
 ea route             RouteIntent -> RouteDecision
 ea start             创建并持久化 RunState
 ea next              计算下一节点和 GateDecision
-ea complete          提交 StepResult 和 EvidenceRef
-ea approve           授予有时效的人工审批
+ea complete          提交 StepResult 和模型 evidence claim
+ea approval-import   导入绑定 run、revision 和 scope 的外部审批 grant
+ea quality-submit    提交六维代码质量快照
+ea evidence-import   导入由宿主执行器签发的证据
+ea investigation-propose  创建主动调研提议
+ea investigation-list     查看调研队列
+ea investigation-approval-import  导入外部审批 broker 的签名选择
+ea investigation-start    启动已批准调研
+ea investigation-finish   以已登记证据结束调研
+ea mcp-serve         以 MCP stdio 暴露含受治理 Provider 调用的受限 Runtime 工具
 ea validate          校验 catalog、schema、引用和作者源
+ea artifact-validate 使用当前 Runtime schema 校验 step-result、quality-snapshot 等 artifact
 ea eval              执行真实核心评测
 ea build             构建 Codex 或 Hermes 包
 ea verify-package    校验包文件摘要
-ea canary-validate   校验真实产品 canary 结果
+ea canary-validate   通过外部 evidence broker 校验真实产品 canary 结果
 ```
 
-自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，避免把模型分类结果伪装成确定性规则。发布包内会包含独立的 `engineering-assistant/bin/ea` 启动器，但当前 Codex/Hermes adapter 只注册 skill，不会自动调用该启动器。
+自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，`start` 必须在服务端重新计算决策，不能接受调用方构造的 `RouteDecision`。Codex MCP 与 Hermes 工具注册都调用同一个 `RuntimeTools`，不会形成并行路由器；模型工具集合不包含审批、自由文本决定或可信证据导入，后续调用必须使用 RunState 已绑定的 profile。
+
+实现流的强制 `quality` 节点只有在六个质量维度全部为 `pass`、没有 medium 以上 finding、没有未关闭修复项且每个判断引用宿主签发的兼容证据时才能完成。质量快照绑定 run revision、候选源码证据摘要和一小时新鲜度；候选内容改变后旧快照自动失效。模型提交的证据输入固定降级为 `claimed`，不能自行设置 `observed` 或 `verified`。
+
+主动调研的最终模式来自 profile 预授权或外部审批 broker，而不是模型建议。`disabled` 直接拒绝；`auto_readonly` 仅在 profile 已授权的资料范围和成本内自动运行；`suggest_then_run` 使用一次 broker grant；`guided` 每次只批准一个资料范围，完成后若仍有资料源则重新进入 proposed。通用高风险审批同样只接受绑定 run、revision、flow、approval、actor 和有效期的 opaque grant。可信证据 receipt 与审批 token 必须由 profile 固定的 HTTPS introspection endpoint 验证，发布包不含签发器或私钥；未配置 broker 时保持等待，不回退到自由文本放行。
+
+本地 artifact 防护面向静态路径逃逸、意外覆盖和协作进程并发，不把同一 OS 用户下的任意代码执行视为可由 JSON 存储层抵御的攻击。生产环境必须由平台沙箱限制 Agent 对插件、profile 和 `.run-artifacts` 的直接篡改，并由外部 broker/Provider 对真正的外部动作再次验签；未具备这些宿主条件时只能声明 Runtime 协议门禁，不能声明安全隔离。
+
+阶段完成默认由子 Agent 分别进行需求/架构评审和代码质量/安全评审，主 Agent 自动修复并复验。只有生产、发布、提交/推送、破坏性变更、安全降级、范围扩张、不可逆产品决策或证据充分后仍无法消除的评审冲突才请求人工判断。
 
 ## 开发与验证
 
@@ -301,8 +341,10 @@ MAJOR.MINOR.PATCH.BUILD[-PRERELEASE]
 - `--dry-run` 不写入插件目录、marketplace 或平台配置。
 - `--yes` 只允许本机预发布；当前策略禁止稳定版发布和产品仓库修改。
 - 发布脚本始终保留直接回滚目录，不静默删除旧插件。
-- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。
+- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。Canary 至少包含 5 组 workload 摘要一致的 baseline/candidate，result 固定声明两侧 execution config 摘要且配对环境摘要必须一致；每条 observation 由 profile 配置的外部 evidence broker 完整验签，并校验本地证据根内 artifact 摘要。token 降幅与实际美元成本降幅分开计算。默认 profile 未配置 broker，因此会安全拒绝 canary 结果。
 - 失败门禁不能用文字说明替代，必须修复或保持阻断。
+- 反馈 Hook 默认不阻断任务、不自动继续 Stop，也不自动修改正式 skill、flow、policy 或 eval。
+- Hook 不保存原始 transcript、session id 或 turn id；检测到凭证和邮箱时先脱敏，并拒绝通过符号链接把反馈写出项目目录。
 
 ## 文档
 

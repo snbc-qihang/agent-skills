@@ -47,6 +47,7 @@ class CodexAdapter:
                 "email": "sunliming625@gmail.com",
             },
             "skills": "./skills/",
+            "mcpServers": "./.mcp.json",
             "interface": {
                 "displayName": "工程助手",
                 "shortDescription": "基于证据、状态和审批门禁执行工程任务。",
@@ -63,6 +64,59 @@ class CodexAdapter:
         }
         manifest_path = manifest_dir / "plugin.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        mcp_path = package_root / ".mcp.json"
+        mcp_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "engineering-assistant": {
+                            "command": "./engineering-assistant/bin/ea",
+                            "args": ["mcp-serve"],
+                            "cwd": ".",
+                        }
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        hooks_dir = package_root / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        hook_command = "python3 ${PLUGIN_ROOT}/hooks/feedback_capture.py"
+        hook_command_windows = 'py -3 "%PLUGIN_ROOT%\\hooks\\feedback_capture.py"'
+        hook_handler = {
+            "type": "command",
+            "command": hook_command,
+            "commandWindows": hook_command_windows,
+            "timeout": 10,
+        }
+        hooks_path = hooks_dir / "hooks.json"
+        hooks_path.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "Stop": [{"hooks": [hook_handler]}],
+                        "UserPromptSubmit": [{"hooks": [hook_handler]}],
+                    }
+                },
+                ensure_ascii=False,
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        hook_script = hooks_dir / "feedback_capture.py"
+        hook_script.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "root = Path(__file__).resolve().parents[1]\n"
+            "sys.path.insert(0, str(root / 'engineering-assistant/runtime'))\n"
+            "from engineering_assistant.feedback import run_codex_hook\n"
+            "raise SystemExit(run_codex_hook(schema_root=root / 'engineering-assistant/schemas'))\n",
+            encoding="utf-8",
+        )
+        hook_script.chmod(0o755)
         for skill in catalog.skills.values():
             metadata_dir = package_root / "skills" / skill.id / "agents"
             metadata_dir.mkdir(parents=True, exist_ok=True)
@@ -79,4 +133,4 @@ class CodexAdapter:
                 f"  default_prompt: {json.dumps(default_prompt, ensure_ascii=False)}\n"
             )
             (metadata_dir / "openai.yaml").write_text(content, encoding="utf-8")
-        return [manifest_path]
+        return [manifest_path, mcp_path, hooks_path, hook_script]

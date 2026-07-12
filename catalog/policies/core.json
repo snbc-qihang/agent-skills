@@ -26,7 +26,7 @@
         {"id": "RISK-002", "condition": "动作会降低现有安全或质量门禁", "effect": "要求可追踪的人工豁免", "severity": "blocker"},
         {"id": "RISK-003", "condition": "任务跨越仓库边界", "effect": "单独记录边界和授权", "severity": "major"}
       ],
-      "required_evidence": ["approval", "source"],
+      "required_evidence": ["approval", "source", "review"],
       "on_violation": "confirm"
     },
     {

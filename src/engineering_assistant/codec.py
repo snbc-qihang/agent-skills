@@ -5,14 +5,93 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .model import (
+    CapabilityProviderSpec,
     CriterionResult,
     EvidenceRef,
+    FeedbackEvent,
+    FeedbackCapture,
     Finding,
+    InvestigationRecord,
+    InvestigationDecisionGrant,
+    InvestigationRequest,
+    InvestigationTransition,
+    ProviderSource,
+    ProviderInvocation,
+    ProviderResult,
+    QualityDimension,
+    QualitySnapshot,
     RouteDecision,
     RouteIntent,
+    RunApprovalGrant,
     RunState,
     StepResult,
 )
+
+
+def capability_provider_spec_from_dict(data: Mapping[str, Any]) -> CapabilityProviderSpec:
+    source = data.get("source")
+    return CapabilityProviderSpec(
+        **{key: value for key, value in data.items() if key != "source"},
+        source=ProviderSource(**source) if source is not None else None,
+    )
+
+
+def provider_invocation_from_dict(data: Mapping[str, Any]) -> ProviderInvocation:
+    return ProviderInvocation(**data)
+
+
+def provider_result_from_dict(data: Mapping[str, Any]) -> ProviderResult:
+    return ProviderResult(**data)
+
+
+def feedback_event_from_dict(data: Mapping[str, Any]) -> FeedbackEvent:
+    return FeedbackEvent(**data)
+
+
+def feedback_capture_from_dict(data: Mapping[str, Any]) -> FeedbackCapture:
+    return FeedbackCapture(**data)
+
+
+def quality_snapshot_from_dict(data: Mapping[str, Any]) -> QualitySnapshot:
+    return QualitySnapshot(
+        id=data["id"],
+        run_id=data["run_id"],
+        node_id=data["node_id"],
+        state_revision=data["state_revision"],
+        base_ref=data["base_ref"],
+        candidate_ref=data["candidate_ref"],
+        candidate_evidence_id=data["candidate_evidence_id"],
+        dimensions=[QualityDimension(**item) for item in data["dimensions"]],
+        findings=[Finding(**item) for item in data["findings"]],
+        required_repairs=list(data["required_repairs"]),
+        evidence_refs=list(data["evidence_refs"]),
+        observed_at=data["observed_at"],
+    )
+
+
+def investigation_request_from_dict(data: Mapping[str, Any]) -> InvestigationRequest:
+    return InvestigationRequest(**data)
+
+
+def investigation_record_from_dict(data: Mapping[str, Any]) -> InvestigationRecord:
+    return InvestigationRecord(
+        request=investigation_request_from_dict(data["request"]),
+        decision_ref=data.get("decision_ref"),
+        evidence_refs=list(data["evidence_refs"]),
+        remaining_source_scope=list(data["remaining_source_scope"]),
+        current_source_scope=list(data["current_source_scope"]),
+        transition_history=[InvestigationTransition(**item) for item in data["transition_history"]],
+        updated_at=data["updated_at"],
+        revision=data["revision"],
+    )
+
+
+def investigation_decision_grant_from_dict(data: Mapping[str, Any]) -> InvestigationDecisionGrant:
+    return InvestigationDecisionGrant(**data)
+
+
+def run_approval_grant_from_dict(data: Mapping[str, Any]) -> RunApprovalGrant:
+    return RunApprovalGrant(**data)
 
 
 def route_intent_from_dict(data: Mapping[str, Any]) -> RouteIntent:
@@ -44,6 +123,7 @@ def run_state_from_dict(data: Mapping[str, Any]) -> RunState:
     return RunState(
         run_id=data["run_id"],
         task_id=data["task_id"],
+        profile_id=data["profile_id"],
         flow_id=data["flow_id"],
         status=data["status"],
         current_node=data.get("current_node"),
@@ -55,6 +135,7 @@ def run_state_from_dict(data: Mapping[str, Any]) -> RunState:
         required_approvals=list(data["required_approvals"]),
         approvals=list(data["approvals"]),
         approval_expiries=dict(data["approval_expiries"]),
+        approval_records=list(data["approval_records"]),
         transition_history=list(data["transition_history"]),
         next_actions=list(data["next_actions"]),
         revision=data["revision"],

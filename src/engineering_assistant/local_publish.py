@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,9 @@ from .validation import ValidationFailure
 
 PLUGIN_NAME = "engineering-assistant"
 DEFAULT_POLICY = "config/local-publish-policy.json"
+CODEX_CACHE_MARKETPLACE = "personal"
+MAX_PRESERVED_CODEX_CACHE_VERSIONS = 8
+RUNTIME_CACHE_IGNORES = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
 
 
 def _stamp() -> str:
@@ -122,6 +126,16 @@ def _update_personal_marketplace(path: Path) -> tuple[bytes | None, bool]:
     return previous, True
 
 
+def _marketplace_contains_plugin(payload: bytes | None) -> bool:
+    if payload is None:
+        return False
+    try:
+        marketplace = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return any(plugin.get("name") == PLUGIN_NAME for plugin in marketplace.get("plugins", []))
+
+
 def _restore_file(path: Path, previous: bytes | None) -> None:
     if previous is None:
         path.unlink(missing_ok=True)
@@ -217,6 +231,104 @@ def _target_for(platform: str, codex_home: Path, hermes_home: Path) -> Path:
     return hermes_home / "plugins" / PLUGIN_NAME
 
 
+def _codex_cache_root(codex_home: Path) -> Path:
+    return codex_home / "plugins/cache" / CODEX_CACHE_MARKETPLACE / PLUGIN_NAME
+
+
+def _package_version(package_root: Path) -> str | None:
+    if package_root.is_symlink():
+        return None
+    manifest = package_root / ".codex-plugin/plugin.json"
+    if not manifest.is_file():
+        return None
+    try:
+        return str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _copy_clean_package(source: Path, destination: Path) -> None:
+    if source.is_symlink():
+        raise ValidationFailure(f"拒绝从符号链接恢复插件 cache：{source}")
+    try:
+        shutil.copytree(source, destination, ignore=RUNTIME_CACHE_IGNORES)
+        verify_package(destination)
+    except Exception:
+        if destination.exists():
+            shutil.rmtree(destination)
+        raise
+
+
+def _snapshot_codex_caches(codex_home: Path, snapshot_root: Path) -> list[str]:
+    cache_root = _codex_cache_root(codex_home)
+    versions: list[str] = []
+    if not cache_root.is_dir():
+        return versions
+    valid_candidates = (
+        source
+        for source in cache_root.iterdir()
+        if source.is_dir()
+        and not source.is_symlink()
+        and _package_version(source) == source.name
+    )
+    candidates = sorted(
+        valid_candidates,
+        key=lambda source: source.stat().st_mtime_ns,
+        reverse=True,
+    )[:MAX_PRESERVED_CODEX_CACHE_VERSIONS]
+    for source in sorted(candidates):
+        snapshot = snapshot_root / source.name
+        _copy_clean_package(source, snapshot)
+        versions.append(source.name)
+    return versions
+
+
+def _restore_codex_cache_snapshots(codex_home: Path, snapshot_root: Path) -> list[str]:
+    cache_root = _codex_cache_root(codex_home)
+    restored: list[str] = []
+    if not snapshot_root.is_dir():
+        return restored
+    cache_root.mkdir(parents=True, exist_ok=True)
+    for source in sorted(snapshot_root.iterdir()):
+        if not source.is_dir() or _package_version(source) != source.name:
+            continue
+        destination = cache_root / source.name
+        if destination.exists():
+            if destination.is_symlink():
+                raise ValidationFailure(f"拒绝覆盖符号链接 cache：{destination}")
+            continue
+        temporary = Path(tempfile.mkdtemp(prefix=f".{source.name}.restore-", dir=cache_root))
+        temporary.rmdir()
+        _copy_clean_package(source, temporary)
+        os.replace(temporary, destination)
+        restored.append(source.name)
+    return restored
+
+
+def _repair_codex_cache_version(codex_home: Path, target: Path, version: str) -> Path:
+    if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]*", version):
+        raise ValidationFailure(f"非法 Codex 插件版本：{version}")
+    destination = _codex_cache_root(codex_home) / version
+    if destination.is_dir():
+        with tempfile.TemporaryDirectory(prefix=f".{PLUGIN_NAME}-cache-verify-") as temporary:
+            clean = Path(temporary) / version
+            _copy_clean_package(destination, clean)
+        return destination
+    if destination.exists():
+        raise ValidationFailure(f"Codex cache 目标不是目录：{destination}")
+
+    candidates = [target, *sorted(target.parent.glob(f".{target.name}.backup-*"), reverse=True)]
+    source = next((candidate for candidate in candidates if _package_version(candidate) == version), None)
+    if source is None:
+        raise ValidationFailure(f"没有找到版本 {version} 的已校验本机发布包或备份")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{version}.repair-", dir=destination.parent))
+    temporary.rmdir()
+    _copy_clean_package(source, temporary)
+    os.replace(temporary, destination)
+    return destination
+
+
 def _publish_one(
     repository_root: Path,
     platform: str,
@@ -236,6 +348,9 @@ def _publish_one(
         target.parent.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-{platform}-stage-", dir=target.parent))
     staging.rmdir()
+    cache_snapshot: Path | None = None
+    preserved_cache_versions: list[str] = []
+    restored_cache_versions: list[str] = []
     try:
         build = build_package(
             repository_root,
@@ -257,20 +372,39 @@ def _publish_one(
         marketplace_path = codex_home.parent / ".agents/plugins/marketplace.json"
         marketplace_previous = None
         marketplace_changed = False
+        registration_attempted = False
+        if platform == "codex":
+            cache_snapshot = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-cache-snapshot-"))
+            preserved_cache_versions = _snapshot_codex_caches(codex_home, cache_snapshot)
         backup = _swap_in(staging, target, stamp)
         try:
             if platform == "codex":
                 marketplace_previous, marketplace_changed = _update_personal_marketplace(marketplace_path)
+                registration_attempted = True
                 registration = register(["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"])
+                restored_cache_versions = _restore_codex_cache_snapshots(codex_home, cache_snapshot)
             else:
                 environment = dict(os.environ)
                 environment["HERMES_HOME"] = str(hermes_home)
                 registration = register(["hermes", "plugins", "enable", PLUGIN_NAME], environment)
             installed = verify_package(target)
-        except Exception:
+        except Exception as original_error:
             if platform == "codex" and marketplace_changed:
                 _restore_file(marketplace_path, marketplace_previous)
             _roll_back(target, backup, stamp)
+            if platform == "codex" and cache_snapshot is not None:
+                try:
+                    if registration_attempted:
+                        if backup is not None and _marketplace_contains_plugin(marketplace_previous):
+                            register(["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"])
+                        else:
+                            register(["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"])
+                    _restore_codex_cache_snapshots(codex_home, cache_snapshot)
+                except Exception as compensation_error:
+                    raise ValidationFailure(
+                        "Codex 发布失败且注册补偿未完成："
+                        f"publish={original_error}; compensation={compensation_error}"
+                    ) from compensation_error
             raise
         return {
             "status": "published",
@@ -282,10 +416,14 @@ def _publish_one(
             "payload_digest": installed["payload_digest"],
             "skill_count": installed["skill_count"],
             "registration": registration,
+            "preserved_cache_versions": preserved_cache_versions,
+            "restored_cache_versions": restored_cache_versions,
         }
     finally:
         if staging.exists():
             shutil.rmtree(staging)
+        if cache_snapshot is not None and cache_snapshot.exists():
+            shutil.rmtree(cache_snapshot)
 
 
 def _installed_platform_version(target: Path, platform: str) -> str:
@@ -340,6 +478,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--policy", default=DEFAULT_POLICY)
     parser.add_argument("--codex-home", default=str(Path.home() / ".codex"))
     parser.add_argument("--hermes-home", default=str(Path.home() / ".hermes"))
+    parser.add_argument(
+        "--repair-cache-version",
+        help="从当前发布包或发布备份恢复仍被活跃 Codex 任务引用的插件 cache 版本。",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true", help="只验证和构建，不写入本机插件目录。")
     mode.add_argument("--yes", action="store_true", help="确认执行本机发布、备份和平台注册。")
@@ -354,6 +496,26 @@ def main(argv: list[str] | None = None) -> int:
     if not policy.is_absolute():
         policy = repository_root / policy
     try:
+        if args.repair_cache_version:
+            if not args.yes or platforms != ["codex"]:
+                raise ValidationFailure("修复 Codex cache 必须使用 --platform codex --yes")
+            codex_home = Path(args.codex_home).expanduser().resolve()
+            _load_policy(policy, ["codex"])
+            target = _target_for("codex", codex_home, Path(args.hermes_home).expanduser().resolve())
+            repaired = _repair_codex_cache_version(codex_home, target, args.repair_cache_version)
+            print(
+                json.dumps(
+                    {
+                        "status": "repaired",
+                        "platform": "codex",
+                        "plugin_version": args.repair_cache_version,
+                        "cache_path": str(repaired),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 0
         result = publish_local(
             repository_root,
             platforms,

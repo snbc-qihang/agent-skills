@@ -16,7 +16,7 @@ SIGNATURES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("explain", (r"只解释", r"解释.*(?:skill|流程|能力)", r"介绍.*(?:skill|流程|能力)", r"不执行", r"explain.*(?:skill|flow|capability)", r"what .* does", r"how .* works", r"do not execute")),
     ("release", (r"发布", r"上线", r"回滚", r"灰度", r"rollout", r"release", r"deploy to production", r"production deployment")),
     ("diagnose", (r"定位.*(?:bug|故障|问题)", r"排查", r"性能.*(?:回退|下降|变慢)", r"debug", r"diagnos", r"root cause", r"performance regression")),
-    ("review", (r"代码评审", r"设计评审", r"评审.*(?:diff|分支|方案|代码)", r"review.*(?:diff|branch|pull request|design|code)", r"\bpr\b")),
+    ("review", (r"代码评审", r"设计评审", r"自动评审", r"阶段.*(?:审计|评审|门禁|blocker)", r"评审.*(?:diff|分支|方案|代码)", r"stage.*(?:audit|review|gate|blocker)", r"review.*(?:diff|branch|pull request|design|code)", r"\bpr\b")),
     ("evolve", (r"改进.*(?:skill|agent|流程)", r"(?:skill|agent).*改进", r"演进.*(?:skill|agent)", r"复盘.*(?:skill|agent|助手)", r"evolve.*(?:skill|agent)", r"improve.*(?:skill|agent)", r"retrospective.*assistant")),
     ("wayfind", (r"长期任务", r"多会话", r"路线图", r"当前前沿", r"multi-session", r"long-running", r"wayfind", r"current frontier", r"roadmap", r"evidence frontier")),
     ("research", (r"调研", r"研究.*(?:开源|项目|技术|标准)", r"官方文档", r"research", r"compare.*(?:library|project|standard)", r"primary sources")),

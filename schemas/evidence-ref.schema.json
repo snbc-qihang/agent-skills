@@ -10,7 +10,10 @@
     "observed_at": {"type": "string", "format": "date-time"},
     "trust_level": {"enum": ["claimed", "observed", "verified"]},
     "scope": {"type": "string", "minLength": 1},
-    "digest": {"type": ["string", "null"]}
+    "scope_tags": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "subject_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "digest": {"type": ["string", "null"]},
+    "attestation": {"type": ["string", "null"], "minLength": 16}
   },
   "additionalProperties": false
 }

@@ -59,9 +59,9 @@
       "version": "1.0.0.0-rc.1",
       "entry_conditions": ["已有实现和评审证据", "明确的发布范围已获批准"],
       "nodes": [
-        {"id": "readiness", "capability": "release-readiness", "depends_on": [], "when": "always", "completion_criteria": ["范围、风险、窗口、负责人、回滚和审批均已完备"], "policy_refs": ["release-safety"]},
-        {"id": "verification", "capability": "release-verification", "depends_on": ["readiness"], "when": "发布动作已获得单独执行审批", "completion_criteria": ["生产或灰度证据支持所声明状态"], "policy_refs": ["release-safety", "evidence-quality"]},
-        {"id": "retrospective", "capability": "release-retrospective", "depends_on": ["verification"], "when": "发布或回滚已经完成", "completion_criteria": ["问题、原因和后续候选事项都有负责人"], "policy_refs": ["feedback-evolution", "document-governance"]}
+        {"id": "readiness", "capability": "release-readiness", "depends_on": [], "when": "always", "completion_criteria": ["范围、风险、窗口、负责人、回滚和审批均已完备"], "policy_refs": ["release-safety"], "evidence_kinds": ["source", "review", "ci"], "evidence_scope_tags": ["flow:release"]},
+        {"id": "verification", "capability": "release-verification", "depends_on": ["readiness"], "when": "发布动作已获得单独执行审批", "completion_criteria": ["生产或灰度证据支持所声明状态"], "policy_refs": ["release-safety", "evidence-quality"], "evidence_kinds": ["ci", "external_state"], "evidence_scope_tags": ["flow:release"]},
+        {"id": "retrospective", "capability": "release-retrospective", "depends_on": ["verification"], "when": "发布或回滚已经完成", "completion_criteria": ["问题、原因和后续候选事项都有负责人"], "policy_refs": ["feedback-evolution", "document-governance"], "evidence_kinds": ["source", "review"], "evidence_scope_tags": ["flow:release"]}
       ],
       "terminal_conditions": ["已记录发布证据或阻断决定"],
       "policy_refs": ["safety-core", "release-safety", "risk-approval"]

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/investigation-record.schema.json",
+  "type": "object",
+  "required": ["request", "decision_ref", "evidence_refs", "remaining_source_scope", "current_source_scope", "transition_history", "updated_at", "revision"],
+  "properties": {
+    "request": {"type": "object"},
+    "decision_ref": {"type": ["string", "null"], "minLength": 1},
+    "evidence_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "remaining_source_scope": {"type": "array", "uniqueItems": true, "items": {"enum": ["official_docs", "source_repository", "standards", "issues", "internal_repository", "runtime_evidence"]}},
+    "current_source_scope": {"type": "array", "uniqueItems": true, "items": {"enum": ["official_docs", "source_repository", "standards", "issues", "internal_repository", "runtime_evidence"]}},
+    "transition_history": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["from_status", "to_status", "action", "decision_ref", "observed_at"],
+        "properties": {
+          "from_status": {"type": "string"},
+          "to_status": {"enum": ["proposed", "approved", "running", "completed", "declined", "blocked"]},
+          "action": {"enum": ["propose", "approve", "decline", "start", "complete", "block", "advance_step"]},
+          "decision_ref": {"type": ["string", "null"], "minLength": 1},
+          "observed_at": {"type": "string", "format": "date-time"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "updated_at": {"type": "string", "format": "date-time"},
+    "revision": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}

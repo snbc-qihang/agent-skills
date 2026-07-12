@@ -138,10 +138,12 @@
         {"language": "zh-CN", "request": "对已冻结的 diff 做代码评审。"},
         {"language": "zh-CN", "request": "评审这份设计方案能否进入研发。"},
         {"language": "zh-CN", "request": "按照规范和需求两个维度评审代码。"},
+        {"language": "zh-CN", "request": "恢复阶段状态并审计自动评审门禁和 blocker。"},
         {"language": "en", "request": "Review this pull request against the specification."},
         {"language": "en", "request": "Review the fixed branch diff for correctness risks."},
         {"language": "en", "request": "Review the design before implementation begins."},
-        {"language": "en", "request": "Perform a code review on this PR."}
+        {"language": "en", "request": "Perform a code review on this PR."},
+        {"language": "en", "request": "Audit the stage gate and decide whether automated review can pass."}
       ]
     },
     {

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/quality-snapshot.schema.json",
+  "type": "object",
+  "required": ["id", "run_id", "node_id", "state_revision", "base_ref", "candidate_ref", "candidate_evidence_id", "dimensions", "findings", "required_repairs", "evidence_refs", "observed_at"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "node_id": {"type": "string", "minLength": 1},
+    "state_revision": {"type": "integer", "minimum": 0},
+    "base_ref": {"type": "string", "minLength": 1},
+    "candidate_ref": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "candidate_evidence_id": {"type": "string", "minLength": 1},
+    "dimensions": {
+      "type": "array", "minItems": 1, "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "delta", "summary", "evidence_ids"],
+        "properties": {
+          "id": {"enum": ["correctness", "complexity", "redundancy", "performance", "architecture", "test_quality"]},
+          "status": {"enum": ["pass", "warn", "fail", "not_evaluated"]},
+          "delta": {"type": "integer", "minimum": -2, "maximum": 2},
+          "summary": {"type": "string", "minLength": 1},
+          "evidence_ids": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "summary", "evidence_ids"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["info", "low", "medium", "high", "blocker"]},
+          "summary": {"type": "string", "minLength": 1},
+          "evidence_ids": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "required_repairs": {"type": "array", "maxItems": 100, "items": {"type": "string", "minLength": 1}},
+    "evidence_refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "observed_at": {"type": "string", "format": "date-time"}
+  },
+  "additionalProperties": false
+}
