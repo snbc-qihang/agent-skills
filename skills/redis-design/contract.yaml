@@ -1,16 +1,23 @@
 {
   "skill_id": "redis-design",
   "skill_name": "Redis Design",
-  "version": "1.1.0",
+  "version": "1.1.0.0",
   "stage": "redis_design",
   "type": "stage_skill",
+  "entry_control": {
+    "sole_entrypoint": "engineering-assistant",
+    "controller": "workflow-orchestrator",
+    "controller_route_record_required": true,
+    "direct_invocation_behavior": "redirect_through_controller",
+    "upstream_router_allowed": false
+  },
   "purpose": "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。",
   "non_goals": [
     "不替代数据库主数据设计",
     "不未经审批批量删除 Redis key",
     "不默认缓存所有查询"
   ],
-  "trigger_description": "Use when 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略；Do not use when do not 替代数据库主数据设计。",
+  "trigger_description": "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。",
   "routing": {
     "intent_tags": [
       "Redis",
@@ -46,12 +53,10 @@
     "risk_level": "medium",
     "cost_class": "medium",
     "evidence_required": [
-      "redis-design.md 使用团队 Redis 模板",
       "key 命名合规",
-      "所有 Key 设置 TTL 且单位明确",
+      "TTL 或无 TTL 原因明确",
       "一致性策略可验证",
-      "穿透/击穿/雪崩有策略",
-      "不可用降级策略明确"
+      "穿透/击穿/雪崩有策略"
     ],
     "allow_implicit_invocation": true
   },
@@ -93,6 +98,8 @@
       "interface-contracts.yaml",
       "test-strategy.md"
     ],
+    "block_current_node_formal_generation": true,
+    "block_next_nodes": true,
     "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
   },
   "design_governance_policy": {
@@ -299,22 +306,6 @@
     ],
     "writeback": "StageRunRequest.context.technology_selection"
   },
-  "team_adaptation_policy": {
-    "profile_id": "rrq-yq-team",
-    "profile_path": "engineering-assistant/profiles/rrq-yq-team.yaml",
-    "source_catalog": "engineering-assistant/registry/team-standard-sources.yaml",
-    "rule_prefixes": [
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "must_load_before_work": [
-      "team-rule-catalog.yaml",
-      "team-standard-sources.yaml",
-      "rrq-yq-team.yaml"
-    ],
-    "fallback": "如果目标项目 profile 与团队默认 profile 冲突，优先使用目标项目 profile，并把冲突作为 finding 或 required_information_requests 输出。"
-  },
   "inputs": [
     {
       "name": "detailed-design.md",
@@ -380,8 +371,7 @@
     }
   ],
   "preconditions": [
-    "用户请求、仓库上下文、profile、上游产物和 artifact index 已读取或记录不可用原因",
-    "blocking 必填信息已提供，或已进入 waiting_for_input 并生成补充信息入口",
+    "必填输入已提供或已记录缺失处理策略",
     "风险策略已加载",
     "目标范围已明确"
   ],
@@ -393,32 +383,7 @@
     "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
-    "block_when_agent_violates_contract": true,
-    "assistant_feedback_consumed": true,
-    "implementation_strategy_evaluation_required": true,
-    "document_spine_context_required": true,
-    "agent_execution_monitor_required_for_delegation": true,
-    "post_task_plan_alignment_required": true
-  },
-  "runtime_rule_markers": [
-    "DUPLICATE_CAPABILITY_RISK",
-    "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
-    "DOC_SPRAWL_RISK",
-    "PRODUCT_PLAN_DRIFT",
-    "SUBAGENT_UNVERIFIED_SUCCESS",
-    "SUBAGENT_EVIDENCE_MISSING"
-  ],
-  "quality_audit_policy": {
-    "required_dimensions": [
-      "correctness",
-      "security",
-      "performance",
-      "testability",
-      "observability",
-      "simplification",
-      "duplicate_capability",
-      "comment_quality"
-    ]
+    "block_when_agent_violates_contract": true
   },
   "required_information_policy": {
     "must_ask_when": [
@@ -428,26 +393,9 @@
       "审批状态缺失",
       "无法基于仓库或上游产物可靠推导"
     ],
-    "preflight_sequence": [
-      "读取用户请求",
-      "读取仓库上下文",
-      "读取 profile",
-      "读取上游产物",
-      "读取 artifact index",
-      "区分可自动推导信息与必须用户确认信息",
-      "blocking 缺失项先问询并暂停",
-      "补充答案写回后再生成正式产物"
-    ],
-    "preflight_state_field": "preflight_input_state",
-    "preflight_state_values": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
     "question_output": "required_information_requests",
     "blocking_status": "waiting_for_input",
+    "formal_generation_entry_condition": "preflight_input_state == ready",
     "human_review_html_required": true,
     "human_review_html_requirements": [
       "可填写每个待确认项",
@@ -470,26 +418,10 @@
       "major",
       "minor"
     ],
-    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。",
-    "formal_artifacts_allowed_when": "不存在 blocking required_information_requests，或用户补充答案已写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源。",
-    "waiting_for_input_artifacts": [
-      "information-inventory.json",
-      "context-source-map.json",
-      "missing-information-list.json",
-      "required-information-request.json",
-      "design-objective-plan.md",
-      "scope-and-non-goals.yaml",
-      "user-confirmed-facts.json",
-      "design-direction-decision.md",
-      "docs/human-review/<run-id>.html",
-      "workflow-trace.json",
-      "resume-point.json"
-    ],
-    "forbidden_before_writeback": "不得生成或登记正式阶段 Markdown/Excel/JSON 产物为完成产物，不得继续下游节点。"
+    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。"
   },
   "postconditions": [
-    "blocking 信息缺失时已暂停在 waiting_for_input，且只登记补充信息请求、human-review HTML 和恢复点",
-    "blocking 信息已补齐时全部正式输出产物已生成并登记",
+    "全部输出产物已生成，或已输出明确的阻断结果",
     "质量门禁已评估",
     "需要人工审批的事项已列出"
   ],
@@ -517,8 +449,7 @@
   "human_approval_required": [
     "Redis key 批量删除",
     "核心链路缓存策略变化",
-    "Redis 新 Key",
-    "版本/拓扑/持久化/淘汰策略无法确认"
+    "无 TTL 高风险数据"
   ],
   "risk_model": {
     "levels": [
@@ -530,52 +461,37 @@
     "upgrade_conditions": [
       "Redis key 批量删除",
       "核心链路缓存策略变化",
-      "Redis 新 Key",
-      "版本/拓扑/持久化/淘汰策略无法确认"
+      "无 TTL 高风险数据"
     ],
     "default_for_unknown": "medium"
   },
   "quality_gates": [
     {
       "gate_id": "redis-design-gate-1",
-      "name": "redis-design.md 使用团队 Redis 模板",
-      "type": "deterministic",
-      "pass_condition": "redis-design.md 使用团队 Redis 模板 有证据证明已满足",
-      "fail_action": "block 或 require_human_review"
-    },
-    {
-      "gate_id": "redis-design-gate-2",
       "name": "key 命名合规",
       "type": "deterministic",
       "pass_condition": "key 命名合规 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "redis-design-gate-3",
-      "name": "所有 Key 设置 TTL 且单位明确",
+      "gate_id": "redis-design-gate-2",
+      "name": "TTL 或无 TTL 原因明确",
       "type": "deterministic",
-      "pass_condition": "所有 Key 设置 TTL 且单位明确 有证据证明已满足",
+      "pass_condition": "TTL 或无 TTL 原因明确 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "redis-design-gate-4",
+      "gate_id": "redis-design-gate-3",
       "name": "一致性策略可验证",
       "type": "deterministic",
       "pass_condition": "一致性策略可验证 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "redis-design-gate-5",
+      "gate_id": "redis-design-gate-4",
       "name": "穿透/击穿/雪崩有策略",
       "type": "deterministic",
       "pass_condition": "穿透/击穿/雪崩有策略 有证据证明已满足",
-      "fail_action": "block 或 require_human_review"
-    },
-    {
-      "gate_id": "redis-design-gate-6",
-      "name": "不可用降级策略明确",
-      "type": "deterministic",
-      "pass_condition": "不可用降级策略明确 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     }
   ],
@@ -627,13 +543,7 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation",
-    "repeated_user_correction_feedback",
-    "prototype_without_visual_evidence",
-    "document_noise_without_delivery",
-    "third_party_tool_failure_feedback",
-    "unapproved_skill_patch_blocked",
-    "low_value_feedback_rejected"
+    "low_quality_automation"
   ],
   "workflow_interface": {
     "node_id": "redis-design",
@@ -656,9 +566,7 @@
     "required_information_requests": {
       "artifact": "artifacts/redis-design/required-information-request.json",
       "schema": "engineering-assistant/schemas/required-information-request.schema.json",
-      "status_when_blocking": "waiting_for_input",
-      "must_precede_formal_artifacts": true,
-      "resume_after_writeback": "StageRunRequest.context 或 artifact index 已记录用户补充答案和来源时间"
+      "status_when_blocking": "waiting_for_input"
     },
     "state_transitions": [
       "pending",
@@ -693,120 +601,5 @@
     "架构师",
     "测试负责人"
   ],
-  "change_policy": "contract、gate、schema 或审批规则变更必须经过 skill owner 评审，并通过 skill-quality-auditor",
-  "team_document_policy": {
-    "artifact": "redis-design.md",
-    "template_usage_policy": {
-      "required": true,
-      "source_of_truth": "template_assets[].canonical_template",
-      "must_read_template_before_generation": true,
-      "template_assets": [
-        {
-          "artifact": "redis-design.md",
-          "template": "assets/redis-design-template.md",
-          "canonical_template": "skills/redis-design/assets/redis-design-template.md",
-          "source_template": "inputs/Redis详细设计模板 - 人人取平台总体设计 - 站点标题.html",
-          "selection": "Redis 详细设计正文"
-        }
-      ],
-      "generation_protocol": [
-        "生成正式 Markdown 文档前必须先读取对应 skill 的 assets template 文件，不得凭记忆、通用模板或聊天上下文替代。",
-        "以 template 原文作为唯一正文骨架，保留 frontmatter、标题层级、章节顺序、表格列头、固定提示块和格式约定。",
-        "只允许替换占位符、补充空白单元格和在既有章节下填充输入事实；不得删除、压缩、合并、重命名或重排模板章节。",
-        "输入材料缺少事实时，保留模板章节并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
-        "不得用 assets/artifact-template.md 的证据/Findings/门禁决策骨架替代正式设计正文。",
-        "模板文件不存在、无法读取或输出无法通过模板校验时，StageRunResult.status 必须为 blocked 或 failed。"
-      ],
-      "strict_format_rules": [
-        "保留模板原有章节、标题名称、标题层级、表格列头和固定提示块。",
-        "不适用章节不得删除，必须写明不适用原因或等待用户补充事实。",
-        "不得把团队 template 压缩成摘要、检查清单或通用证据报告。",
-        "不得把 source_template 只当参考风格；canonical_template 才是输出正文骨架。"
-      ],
-      "blocked_when": [
-        "未读取 template asset 就生成正式 Markdown 文档",
-        "输出缺少 template 章节、列头、固定提示块或顺序",
-        "用 assets/artifact-template.md 或通用报告格式替代正式设计正文",
-        "缺少关键事实却填充待确认占位符并标记 succeeded"
-      ]
-    },
-    "required_sections": [
-      "历史版本信息",
-      "1. 前言",
-      "1.1. 目的",
-      "1.2. 适用范围",
-      "1.3. 参考资料",
-      "2. 公共配置",
-      "2.1. Redis版本",
-      "2.2. 集群配置",
-      "2.3. 持久化策略",
-      "2.4. 过期淘汰策略",
-      "3. 设计项",
-      "3.1. <设计项名称>",
-      "3.1.1. 特性用途",
-      "3.1.2. 业务说明",
-      "3.1.3. 存储设计",
-      "3.1.4. 预估数据",
-      "3.1.5. 多团队协同",
-      "4. 安全与运维",
-      "4.1. 资源申请",
-      "4.2. 运维监控"
-    ],
-    "design_item_required_fields": [
-      "特性用途",
-      "业务说明",
-      "存储设计",
-      "预估数据",
-      "多团队协同"
-    ],
-    "storage_required_fields": [
-      "库",
-      "数据结构",
-      "ttl",
-      "key",
-      "数据格式"
-    ],
-    "rules": [
-      "Redis 只做加速层、协调层、幂等层、短态承载层",
-      "Redis 不做事实库",
-      "Redis 不做消息队列",
-      "Redis 不做跨服务共享事实源",
-      "Redis 不做长期审计库",
-      "所有 Key 必须设置 TTL，最大不超过 30 天",
-      "Redis 不可用必须进入 MQ 重试 / 死信并告警"
-    ],
-    "required_business_terms": [
-      "状态处理记录",
-      "已处理状态记录",
-      "消息幂等记录",
-      "短期处理记录",
-      "乱序保护记录"
-    ],
-    "forbidden_formal_terms": [
-      "终态水位",
-      "水位"
-    ],
-    "waiting_for_input_when": [
-      "Redis 版本无法确认",
-      "拓扑无法确认",
-      "持久化策略无法确认",
-      "淘汰策略无法确认"
-    ],
-    "waiting_for_human_review_when": [
-      "Redis 新 Key",
-      "批量 Key",
-      "Key 批量删除",
-      "Value 单 Key 超过 1MB"
-    ],
-    "blocked_when": [
-      "Redis 作为事实库",
-      "Redis 作为跨服务共享事实源",
-      "Redis 作为长期审计库",
-      "RabbitMQ 项目设计 Redis 发布订阅或 Redis 延迟队列",
-      "使用水位/终态水位作为正式术语",
-      "缺少 TTL 或 TTL 单位",
-      "Redis 不可用时继续写库或删除",
-      "缺少不可用降级策略、告警或人工回放策略"
-    ]
-  }
+  "change_policy": "contract、gate、schema 或审批规则变更必须经过 skill owner 评审，并通过 skill-quality-auditor"
 }

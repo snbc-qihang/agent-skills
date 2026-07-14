@@ -1,0 +1,173 @@
+{
+  "schema_version": "2.0",
+  "version": "1.1.0.0",
+  "policy": {
+    "sole_entrypoint": "engineering-assistant",
+    "controller": "workflow-orchestrator",
+    "selection_mode": "natural_language_capability_routing",
+    "execute_selected_subgraph_only": true,
+    "max_skipped_candidates": 3,
+    "parallelize_independent_ready_nodes": true,
+    "completion_barrier_required": true,
+    "routing_requires_user_confirmation": false,
+    "high_risk_action_approval_preserved": true,
+    "complex_risk_levels": ["L2_SHARED", "L3_CRITICAL"]
+  },
+  "skills": [
+    {
+      "skill_id": "requirement-intake",
+      "primary_phrases": ["需求澄清", "需求分析", "梳理需求", "需求论证", "可行性论证", "新功能需求", "产品需求"],
+      "secondary_phrases": ["验收标准", "目标用户", "成功标准", "范围", "非目标", "为什么要做", "可行性"],
+      "prerequisites": [],
+      "output_consumers": ["high-level-design", "frontend-design", "workflow-orchestrator"]
+    },
+    {
+      "skill_id": "repo-context-miner",
+      "primary_phrases": ["分析仓库", "代码上下文", "影响范围", "调用链", "模块地图", "仓库分析"],
+      "secondary_phrases": ["现有实现", "代码证据", "复用能力", "调用方", "消费者", "repo context"],
+      "prerequisites": [],
+      "output_consumers": ["high-level-design", "detailed-design", "implementation-controller", "code-review"]
+    },
+    {
+      "skill_id": "high-level-design",
+      "primary_phrases": ["概要设计", "架构设计", "系统设计", "架构边界", "技术架构"],
+      "secondary_phrases": ["数据流", "异常流", "系统边界", "跨模块设计", "跨服务设计"],
+      "prerequisites": ["requirement-intake", "repo-context-miner"],
+      "output_consumers": ["detailed-design", "design-review"]
+    },
+    {
+      "skill_id": "detailed-design",
+      "primary_phrases": ["详细设计", "接口契约", "实现设计", "任务拆解", "技术方案"],
+      "secondary_phrases": ["类设计", "方法设计", "状态机", "事务边界", "测试策略"],
+      "prerequisites": ["high-level-design"],
+      "output_consumers": ["redis-design", "mq-design", "database-design", "frontend-design", "design-review", "implementation-controller"]
+    },
+    {
+      "skill_id": "redis-design",
+      "primary_phrases": ["redis", "缓存设计", "缓存方案", "缓存一致性", "缓存key", "缓存 key"],
+      "secondary_phrases": ["ttl", "缓存降级", "缓存穿透", "缓存击穿", "缓存雪崩"],
+      "prerequisites": ["detailed-design"],
+      "output_consumers": ["design-review", "implementation-controller"]
+    },
+    {
+      "skill_id": "mq-design",
+      "primary_phrases": ["mq", "消息设计", "消息队列", "异步消息", "topic", "死信", "消息回放"],
+      "secondary_phrases": ["生产者", "消费者", "幂等消费", "消息重试", "顺序消息"],
+      "prerequisites": ["detailed-design"],
+      "output_consumers": ["design-review", "implementation-controller"]
+    },
+    {
+      "skill_id": "database-design",
+      "primary_phrases": ["数据库设计", "数据库", "表结构", "ddl", "索引设计", "数据库迁移", "sql设计", "sql 设计"],
+      "secondary_phrases": ["字段", "索引", "分库分表", "数据回填", "数据迁移", "慢sql", "慢 sql"],
+      "prerequisites": ["detailed-design"],
+      "output_consumers": ["design-review", "implementation-controller"]
+    },
+    {
+      "skill_id": "design-review",
+      "primary_phrases": ["设计评审", "评审设计", "方案评审", "架构评审"],
+      "secondary_phrases": ["能否进入开发", "设计是否可行", "设计缺陷", "设计门禁"],
+      "prerequisites": ["repo-context-miner"],
+      "output_consumers": ["implementation-controller", "workflow-orchestrator"]
+    },
+    {
+      "skill_id": "frontend-design",
+      "primary_phrases": ["前端设计", "页面设计", "组件设计", "交互设计", "ui设计", "ui 设计"],
+      "secondary_phrases": ["页面状态", "响应式", "接口联调", "组件边界", "前端状态管理"],
+      "prerequisites": ["requirement-intake", "repo-context-miner"],
+      "output_consumers": ["design-review", "frontend-development"]
+    },
+    {
+      "skill_id": "implementation-controller",
+      "primary_phrases": ["实现控制", "编码资格", "实现合同", "控制开发范围"],
+      "secondary_phrases": ["修复轮次", "质量合同", "任务切片", "编码门禁"],
+      "prerequisites": ["repo-context-miner"],
+      "output_consumers": ["code-development", "frontend-development", "self-test"]
+    },
+    {
+      "skill_id": "code-development",
+      "primary_phrases": ["修改后端代码", "实现后端", "开发后端", "修复后端", "代码实现", "修复bug", "修复 bug", "编写代码"],
+      "secondary_phrases": ["后端", "java", "spring", "service", "controller", "接口实现", "bug", "修复", "开发", "实现"],
+      "prerequisites": ["repo-context-miner", "implementation-controller"],
+      "output_consumers": ["self-test", "code-quality-governor", "code-review"]
+    },
+    {
+      "skill_id": "frontend-development",
+      "primary_phrases": ["修改前端", "实现前端", "开发页面", "修改页面", "前端开发", "修复页面", "实现ui", "实现 ui"],
+      "secondary_phrases": ["前端", "页面", "组件", "vue", "react", "uni-app", "样式", "交互"],
+      "prerequisites": ["repo-context-miner", "implementation-controller"],
+      "output_consumers": ["self-test", "code-quality-governor", "code-review"]
+    },
+    {
+      "skill_id": "self-test",
+      "primary_phrases": ["执行测试", "运行测试", "自测", "测试验证", "端到端测试", "全流程测试"],
+      "secondary_phrases": ["单元测试", "集成测试", "e2e", "回归测试", "测试失败", "验证功能"],
+      "prerequisites": ["repo-context-miner"],
+      "output_consumers": ["code-quality-governor", "code-review", "release-readiness"]
+    },
+    {
+      "skill_id": "code-quality-governor",
+      "primary_phrases": ["代码质量", "质量门禁", "安全审计", "性能审计", "静态分析", "质量检查"],
+      "secondary_phrases": ["安全", "性能", "复杂度", "重复代码", "代码堆积", "lint", "sonar"],
+      "prerequisites": ["repo-context-miner"],
+      "output_consumers": ["code-review", "release-readiness", "workflow-orchestrator"]
+    },
+    {
+      "skill_id": "code-review",
+      "primary_phrases": ["代码评审", "代码审查", "评审代码", "review代码", "review code", "pr评审", "pr review"],
+      "secondary_phrases": ["diff评审", "变更评审", "review", "阻断问题", "合并前检查"],
+      "prerequisites": ["repo-context-miner"],
+      "output_consumers": ["release-readiness", "workflow-orchestrator"]
+    },
+    {
+      "skill_id": "release-readiness",
+      "primary_phrases": ["准备发布", "准备上线", "发布准备", "上线准备", "发布计划", "回滚方案", "能否发布"],
+      "secondary_phrases": ["发布", "上线", "部署", "灰度", "回滚", "发布窗口"],
+      "prerequisites": ["self-test", "code-quality-governor", "code-review"],
+      "output_consumers": ["release-verification"]
+    },
+    {
+      "skill_id": "release-verification",
+      "primary_phrases": ["发布后验证", "上线后验证", "生产验证", "线上验证", "验证发布结果"],
+      "secondary_phrases": ["监控验证", "线上指标", "生产日志", "回滚条件"],
+      "prerequisites": ["release-readiness"],
+      "output_consumers": ["release-retrospective"]
+    },
+    {
+      "skill_id": "release-retrospective",
+      "primary_phrases": ["发布复盘", "上线复盘", "事故复盘", "复盘发布", "发布总结"],
+      "secondary_phrases": ["遗漏", "行动项", "改进候选", "经验沉淀"],
+      "prerequisites": ["release-verification"],
+      "output_consumers": ["engineering-knowledge-miner", "self-evolution-controller"]
+    },
+    {
+      "skill_id": "engineering-knowledge-miner",
+      "primary_phrases": ["沉淀工程经验", "提炼规范", "规范候选", "经验提炼", "知识沉淀"],
+      "secondary_phrases": ["检查清单候选", "eval候选", "skill反哺", "工程教训"],
+      "prerequisites": [],
+      "output_consumers": ["skill-quality-auditor", "self-evolution-controller"]
+    },
+    {
+      "skill_id": "skill-quality-auditor",
+      "primary_phrases": ["审计skill", "审计 skill", "skill质量", "skill 质量", "skill评审", "skill 评审"],
+      "secondary_phrases": ["skill入库", "prompt质量", "eval覆盖", "skill契约"],
+      "prerequisites": [],
+      "output_consumers": ["self-evolution-controller", "workflow-orchestrator"]
+    },
+    {
+      "skill_id": "self-evolution-controller",
+      "primary_phrases": ["研发助手", "自我进化", "自悟修复", "吞噬skill", "吞噬 skill", "合并skill", "合并 skill", "研发助手重复犯错"],
+      "secondary_phrases": ["能力审计", "规则缺陷", "skill能力", "skill 能力", "反偷懒", "修a破坏b", "修 a 破坏 b"],
+      "prerequisites": ["skill-quality-auditor"],
+      "output_consumers": ["workflow-orchestrator", "assistant-run-feedback"]
+    },
+    {
+      "skill_id": "workflow-orchestrator",
+      "primary_phrases": ["全流程", "研发流程", "继续任务", "恢复任务", "工作流", "workflow"],
+      "secondary_phrases": ["阶段选择", "暂停恢复", "并行处理", "多窗口", "流程编排"],
+      "prerequisites": [],
+      "output_consumers": ["assistant-run-feedback"],
+      "controller_only": true
+    }
+  ]
+}

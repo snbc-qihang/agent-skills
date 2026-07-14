@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "risk_level": "L2_SHARED",
+  "clarity": {
+    "objective": "parallelize two independent implementation slices",
+    "target_user": "development team",
+    "success_criteria": ["both slices complete without write conflict"],
+    "constraints": ["shared API must remain stable"],
+    "non_goals": ["no production release"],
+    "remaining_material_ambiguity": false,
+    "questions_asked": 1
+  },
+  "evidence": {
+    "architecture_and_code": ["module owners identified"],
+    "dependencies_and_reuse": ["shared contract owner identified"],
+    "data_and_external_systems": ["no external mutation"],
+    "risks_and_rollback": ["write scopes are isolated after contract freeze"],
+    "tests": ["per-slice tests planned"],
+    "cost": ["two-worker bounded batch"]
+  },
+  "candidates": [{"id": "parallel-after-contract", "summary": "freeze contract then parallelize", "evidence_refs": ["dependency-dag"]}],
+  "selected_path": {"candidate_id": "parallel-after-contract"},
+  "rejected_alternatives": [],
+  "verdict": "executable_after_conditions",
+  "conditions": ["shared API contract is frozen by its single owner"],
+  "next_action": "resume after contract validation"
+}

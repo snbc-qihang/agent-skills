@@ -2,12 +2,12 @@
   "profile_id": "your-project-profile",
   "display_name": "项目名称",
   "system_scope": [
-    "人人取/萤启目标业务系统",
+    "目标业务系统",
     "目标客户端系统"
   ],
-  "service_code_policy": "填写本项目系统编码、服务编码和错误码归属规则；萤启服务商系统参考 FRCH/TMGE/TCER/FRME/FRST。",
-  "interface_doc_tool": "YApi 或本项目确认的接口文档平台。",
-  "redis_runtime": "填写本项目 Redis 版本、拓扑、持久化、淘汰策略、库、key 命名和运维监控。",
+  "service_code_policy": "填写本项目系统编码、服务编码和错误码归属规则。",
+  "interface_doc_tool": "填写本项目接口文档平台。",
+  "redis_runtime": "填写本项目 Redis 版本、拓扑、持久化和淘汰策略。",
   "backend_frameworks": {
     "web": "填写 Spring MVC/Spring Boot 等后端框架",
     "persistence": "mybatis-plus",
@@ -18,5 +18,5 @@
     "component_library": "填写组件库",
     "state_management": "填写状态管理方案"
   },
-  "usage": "复制本模板创建项目 profile。项目 profile 优先级高于 rrq-yq-team 默认 profile；冲突必须记录为 finding 或 required_information_requests。"
+  "usage": "复制本模板创建项目 profile。仅在用户明确指定 profile 时注入；通用 skill 和默认输出不得硬编码项目名。"
 }

@@ -1,0 +1,21 @@
+{
+  "run_id": "overlay-test-positive-skill-instruction-shape-present",
+  "task_summary": "用户要求按 skill 写法修复研发助手规则缺陷，候选规则包含触发、正向动作、完成检查和 gate。",
+  "assistant_context": {
+    "assistant_rule_or_capability_audit": true,
+    "explicit_project_code_change_requested": false
+  },
+  "skill_instruction_review": {
+    "description_is_trigger_only": true,
+    "positive_target_behavior_present": true,
+    "completion_checks_present": true,
+    "gate_only_or_prohibition_first": false,
+    "instruction_shape": {
+      "trigger": "When the user reports Engineering Assistant rule defects or asks to revise a skill.",
+      "do": "Classify the task as assistant audit/self-healing, keep edits inside assistant skill roots, and explain the target behavior first.",
+      "checks": "Record assistant_rule_or_capability_audit, explicit_project_code_change_requested, allowed_edit_roots, and target_repo_edits.",
+      "gate": "ASSISTANT_AUDIT_TARGET_REPO_EDIT_FORBIDDEN only when target repo edits occur without explicit project-code request."
+    }
+  },
+  "gates": []
+}

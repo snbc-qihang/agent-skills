@@ -1,0 +1,9 @@
+{
+  "overall_status": "pass",
+  "route": "legacy_runtime_bugfix",
+  "capability_feedback": {
+    "ledger_present": true,
+    "health_checked": true,
+    "called_outputs_consumed": true
+  }
+}

@@ -2,7 +2,7 @@
   "node_id": "code-development",
   "stage": "code_development",
   "skill_id": "code-development",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -11,6 +11,10 @@
   ],
   "depends_on": [],
   "inputs": [
+    "coding-eligibility.json",
+    "code-design-decision.json",
+    "design-contract.json",
+    "implementation-contract.json",
     "detailed-design.md",
     "implementation-plan.md",
     "interface-contracts.yaml",
@@ -21,35 +25,25 @@
     "implementation-summary.md",
     "design-to-code-mapping.yaml",
     "changed-files-report.json",
-    "traceability-matrix.json"
+    "traceability-matrix.json",
+    "business-code-pileup-check.json"
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
+    "编码资格与代码设计决策已验证",
     "每个变更映射到设计",
     "无无关模块修改",
     "高风险文件已标记",
     "测试命令已列出",
-    "需求-设计-代码追踪矩阵已刷新"
+    "需求-设计-代码追踪矩阵已刷新",
+    "业务代码堆积检查已完成且无阻断信号"
   ],
   "approval_policy": {
     "required_for": [
@@ -87,6 +81,7 @@
     "implementation-summary.md": "artifacts/code-development/implementation-summary.md",
     "design-to-code-mapping.yaml": "artifacts/code-development/design-to-code-mapping.yaml",
     "changed-files-report.json": "artifacts/code-development/changed-files-report.json",
-    "traceability-matrix.json": "artifacts/code-development/traceability-matrix.json"
+    "traceability-matrix.json": "artifacts/code-development/traceability-matrix.json",
+    "business-code-pileup-check.json": "artifacts/code-development/business-code-pileup-check.json"
   }
 }

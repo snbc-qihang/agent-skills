@@ -1,0 +1,5 @@
+{
+  "run_id": "overlay-test-materialized-business-data-source-metadata-internal-allowed",
+  "target_repo_write_allowed": false,
+  "persistence_mode": "ephemeral"
+}

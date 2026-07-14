@@ -1,0 +1,14 @@
+{
+  "run_id": "overlay-test-materialized-business-data-source-metadata-internal-allowed",
+  "route_tier": "standard",
+  "task_kind": "audit",
+  "evidence_level": "standard",
+  "persistence_mode": "ephemeral",
+  "route_reason": "Source metadata is kept internally for reconciliation while customer-facing business behavior uses the current system business model.",
+  "trigger_signals": [
+    "系统内部必须保留来源",
+    "客户侧不需要知道来源"
+  ],
+  "explicit_user_request": true,
+  "capability_decisions": []
+}

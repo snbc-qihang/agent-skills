@@ -13,18 +13,6 @@
       ]
     },
     {
-      "role": "产品设计负责人",
-      "skills": [
-        "product-prototype-design"
-      ]
-    },
-    {
-      "role": "产品/设计评审负责人",
-      "skills": [
-        "prototype-review-loop"
-      ]
-    },
-    {
       "role": "架构师",
       "skills": [
         "high-level-design",
@@ -145,20 +133,6 @@
       ]
     },
     {
-      "role": "workflow owner",
-      "skills": [
-        "assistant-feedback-capture",
-        "workflow-orchestrator"
-      ]
-    },
-    {
-      "role": "skill owner",
-      "skills": [
-        "skill-evolution-review",
-        "skill-quality-auditor"
-      ]
-    },
-    {
       "role": "规范 owner",
       "skills": [
         "engineering-knowledge-miner"
@@ -167,14 +141,12 @@
     {
       "role": "skill owner",
       "skills": [
-        "skill-evolution-review",
         "skill-quality-auditor"
       ]
     },
     {
       "role": "workflow owner",
       "skills": [
-        "assistant-feedback-capture",
         "workflow-orchestrator"
       ]
     }

@@ -1,6 +1,2 @@
 approval_policy = "untrusted"
 sandbox_mode = "workspace-write"
-allow_login_shell = false
-
-[sandbox_workspace_write]
-network_access = false

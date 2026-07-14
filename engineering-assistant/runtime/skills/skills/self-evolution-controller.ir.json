@@ -1,0 +1,136 @@
+{
+  "skill_id": "self-evolution-controller",
+  "version": "1.1.0.0",
+  "stage": "self_evolution",
+  "type": "cross_cutting_skill",
+  "prompt_pack": {
+    "display_name": "Self Evolution Controller",
+    "short_description": "让研发助手基于真实失败证据进行自悟修复，生成 skill/eval/门禁补丁并验证。",
+    "default_prompt": "使用 self-evolution-controller，先读取失败证据和源事实，归因研发助手自身问题，生成 skill/eval 补丁候选、验证报告和回滚方案；高风险变更进入人工审阅。",
+    "trigger_description": "Use when the request is about 研发助手自悟修复、自我进化、反偷懒治理、重复问题归因、skill/eval/门禁补丁生成和验证。；Do not use when 不直接修改业务项目代码；不绕过人工审批发布高风险规则。",
+    "language_policy": {
+      "when_unspecified": "ask_user",
+      "supported": [
+        "zh-CN",
+        "en"
+      ]
+    }
+  },
+  "inputs": [
+    "user_feedback",
+    "workflow-trace.json",
+    "code-quality-report.json",
+    "code-review-report",
+    "CI logs",
+    "test failure logs",
+    "PR comments",
+    "incident reports",
+    "git diff/log",
+    "existing skills/contracts/evals"
+  ],
+  "outputs": [
+    {
+      "name": "self-evolution-evidence-pack.json"
+    },
+    {
+      "name": "self-evolution-root-cause.md"
+    },
+    {
+      "name": "skill-gap-report.json"
+    },
+    {
+      "name": "skill-patch-proposal.md"
+    },
+    {
+      "name": "skill-patch-proposal.diff"
+    },
+    {
+      "name": "affected-skills.json"
+    },
+    {
+      "name": "regression-case-candidates.yaml"
+    },
+    {
+      "name": "merge-safety-checklist.md"
+    },
+    {
+      "name": "self-evolution-validation-report.json"
+    },
+    {
+      "name": "rollback-plan.md"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "self-evolution",
+      "self_evolution",
+      "自悟修复",
+      "自我进化",
+      "偷懒",
+      "反偷懒",
+      "重复问题",
+      "修A破坏B",
+      "git合并丢代码",
+      "skill修复",
+      "eval回归"
+    ],
+    "positive_triggers": [
+      "self-evolution-controller",
+      "研发助手自悟修复",
+      "研发助手自我进化",
+      "修复研发助手偷懒",
+      "Git 合并丢代码治理"
+    ],
+    "negative_triggers": [
+      "只解释 Self Evolution Controller 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "user_feedback",
+      "workflow traces or logs",
+      "existing skills/contracts/evals"
+    ],
+    "conflicts_with": [],
+    "risk_level": "high",
+    "cost_class": "high",
+    "evidence_required": [
+      "每个结论有来源证据",
+      "每个补丁有 eval 候选或验证命令",
+      "runtime compile 通过",
+      "高风险变更进入人工审批"
+    ],
+    "allow_implicit_invocation": false
+  },
+  "risk": {
+    "risk_level": "high",
+    "allow_implicit_invocation": false,
+    "human_approval_required": [
+      "修改高风险 skill",
+      "修改自动流转或审批策略",
+      "删除或弱化质量门禁",
+      "发布自我进化补丁"
+    ]
+  },
+  "quality_gates": [
+    "每个结论都有来源证据",
+    "每个 skill 补丁都有对应 eval 候选或验证命令",
+    "高风险 skill 变更必须人工审批",
+    "编译 runtime 必须通过",
+    "不得降低现有质量门禁"
+  ],
+  "workflow": {
+    "node_id": "self-evolution-controller",
+    "entry_modes": [
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/self-evolution-controller/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/self-evolution-controller/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/self-evolution-controller/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/self-evolution-controller/agents/openai.yaml"
+  ]
+}

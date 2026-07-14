@@ -1,41 +1,87 @@
 {
   "skill_id": "mq-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "mq_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "MQ Design",
     "short_description": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
-    "default_prompt": "使用 mq-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 xlsx template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。",
+    "default_prompt": "使用 mq-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "detailed-design.md",
-    "mq-standard.md",
-    "repo_context",
-    "risk_policy"
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "mq-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "mq-design.xlsx",
-    "mq-topic-contract.yaml",
-    "message-schema.json",
-    "mq-risk-report.json"
+    {
+      "name": "mq-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/mq-design/mq-design.md",
+      "schema": "output.schema.json#mq-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "mq-topic-contract.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/mq-design/mq-topic-contract.yaml",
+      "schema": "output.schema.json#mq-topic-contract.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "message-schema.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/mq-design/message-schema.json",
+      "schema": "output.schema.json#message-schema.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "mq-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/mq-design/mq-risk-report.json",
+      "schema": "output.schema.json#mq-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -72,12 +118,9 @@
     "risk_level": "medium",
     "cost_class": "medium",
     "evidence_required": [
-      "mq-design.xlsx 使用团队 MQ Excel 模板",
-      "生产者表完整",
-      "消费者表完整",
       "消息 schema 完整",
       "幂等策略明确",
-      "重试/死信/回放策略明确",
+      "重试/死信策略明确",
       "监控告警明确"
     ],
     "allow_implicit_invocation": true
@@ -87,21 +130,39 @@
     "allow_implicit_invocation": true,
     "human_approval_required": [
       "MQ topic 删除或重命名",
-      "MQ 新队列或 topic",
       "核心消息链路变化",
-      "生产消息回放",
-      "消息体超过 10KB",
-      "非仲裁队列"
+      "生产消息回放"
     ]
   },
   "quality_gates": [
-    "mq-design.xlsx 使用团队 MQ Excel 模板",
-    "生产者表完整",
-    "消费者表完整",
-    "消息 schema 完整",
-    "幂等策略明确",
-    "重试/死信/回放策略明确",
-    "监控告警明确"
+    {
+      "gate_id": "mq-design-gate-1",
+      "name": "消息 schema 完整",
+      "type": "deterministic",
+      "pass_condition": "消息 schema 完整 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "mq-design-gate-2",
+      "name": "幂等策略明确",
+      "type": "deterministic",
+      "pass_condition": "幂等策略明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "mq-design-gate-3",
+      "name": "重试/死信策略明确",
+      "type": "deterministic",
+      "pass_condition": "重试/死信策略明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "mq-design-gate-4",
+      "name": "监控告警明确",
+      "type": "deterministic",
+      "pass_condition": "监控告警明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "mq-design",

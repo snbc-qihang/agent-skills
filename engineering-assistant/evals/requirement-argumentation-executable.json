@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "risk_level": "L3_CRITICAL",
+  "clarity": {
+    "objective": "在不修改业务项目的前提下升级研发助手路由和论证能力",
+    "target_user": "本机研发助手使用者",
+    "success_criteria": ["自然语言路由覆盖 22 个 Skill", "并行调度有完成屏障"],
+    "constraints": ["研发助手是唯一入口", "不写业务仓库"],
+    "non_goals": ["不安装上游 router 和 persona"],
+    "why_now": "旧路由无法从自然语言选择能力",
+    "remaining_material_ambiguity": false,
+    "questions_asked": 0
+  },
+  "evidence": {
+    "architecture_and_code": ["route_skill.py and workflow registry inspected"],
+    "dependencies_and_reuse": ["existing 22 Skill owners reused"],
+    "data_and_external_systems": ["no business data or production system mutation"],
+    "risks_and_rollback": ["pre-upgrade backup exists"],
+    "tests": ["routing, workflow, contract, and behavior validators"],
+    "cost": ["local-only bounded upgrade"]
+  },
+  "candidates": [
+    {"id": "native-absorption", "summary": "absorb into existing owners", "evidence_refs": ["overlap-matrix"]},
+    {"id": "parallel-upstream-router", "summary": "install upstream router", "evidence_refs": ["sole-entrypoint-policy"]}
+  ],
+  "selected_path": {"candidate_id": "native-absorption", "protected_invariants": ["sole entrypoint", "sole gate owner"]},
+  "rejected_alternatives": [{"candidate_id": "parallel-upstream-router", "reason": "competes with the sole controller"}],
+  "verdict": "executable",
+  "conditions": [],
+  "next_action": "run the selected local upgrade and acceptance suite"
+}

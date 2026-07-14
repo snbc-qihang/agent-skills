@@ -3,6 +3,7 @@ import argparse
 import json
 import shutil
 from pathlib import Path
+from typing import Optional
 
 try:
     import yaml
@@ -10,6 +11,7 @@ except Exception:  # pragma: no cover - Hermes installs include PyYAML; creation
     yaml = None
 
 DEFAULT_CONFIG = Path(".agent/plugins/publish-config.json")
+PLUGIN_VERSION = "1.0.0.1"
 
 
 def load_config(path: Path) -> dict:
@@ -45,8 +47,14 @@ def read_codex_manifest(repo_root: Path) -> dict:
     return json.loads(manifest.read_text(encoding="utf-8"))
 
 
+def load_marketplace(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def plugin_entry(config: dict) -> dict:
-    plugin_name = config.get("plugin_name", "teamwork-engineering-assistant")
+    plugin_name = config.get("plugin_name", "engineering-assistant")
     return {
         "name": plugin_name,
         "source": {
@@ -58,40 +66,26 @@ def plugin_entry(config: dict) -> dict:
     }
 
 
-def load_marketplace(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"invalid marketplace json: {path}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise SystemExit(f"marketplace must be a JSON object: {path}")
-    return data
-
-
-def upsert_plugin_entry(existing_plugins, entry: dict) -> list:
-    plugins = existing_plugins if isinstance(existing_plugins, list) else []
+def upsert_plugin_entry(existing_plugins: list[dict], new_plugin: dict) -> list[dict]:
     updated = []
     replaced = False
-    for item in plugins:
-        if isinstance(item, dict) and item.get("name") == entry["name"]:
-            updated.append(entry)
+    for plugin in existing_plugins:
+        if plugin.get("name") == new_plugin["name"]:
+            updated.append(new_plugin)
             replaced = True
         else:
-            updated.append(item)
+            updated.append(plugin)
     if not replaced:
-        updated.append(entry)
+        updated.append(new_plugin)
     return updated
 
 
-def marketplace_payload(config: dict, existing=None) -> dict:
-    payload = dict(existing or {})
+def marketplace_payload(config: dict, existing_marketplace: Optional[dict] = None) -> dict:
+    existing_marketplace = existing_marketplace or {}
     return {
-        **payload,
-        "name": payload.get("name") or config.get("name", "local-teamwork-engineering"),
-        "interface": payload.get("interface") if isinstance(payload.get("interface"), dict) else config.get("interface", {"displayName": "Local Teamwork Engineering Plugins"}),
-        "plugins": upsert_plugin_entry(payload.get("plugins"), plugin_entry(config)),
+        "name": existing_marketplace.get("name", config.get("name", "local-engineering")),
+        "interface": existing_marketplace.get("interface", config.get("interface", {"displayName": "Local Engineering Plugins"})),
+        "plugins": upsert_plugin_entry(existing_marketplace.get("plugins", []), plugin_entry(config)),
     }
 
 
@@ -104,11 +98,11 @@ def apply_layout(config: dict, layout: str) -> dict:
         resolved["interface"] = {"displayName": "Personal"}
         resolved["publish_root"] = "~"
         resolved["marketplace_path"] = "~/.agents/plugins/marketplace.json"
-        resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'teamwork-engineering-assistant')}"
+        resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'engineering-assistant')}"
         return resolved
     if layout == "hermes":
         resolved["publish_root"] = resolved.get("hermes_publish_root", "~/.hermes")
-        resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'teamwork-engineering-assistant')}"
+        resolved["plugin_relative_path"] = f"plugins/{resolved.get('plugin_name', 'engineering-assistant')}"
         return resolved
     raise SystemExit(f"unsupported publish layout: {layout}")
 
@@ -118,7 +112,7 @@ def hermes_plugin_yaml(plugin_name: str, manifest: dict) -> str:
     author_name = author.get("name", "") if isinstance(author, dict) else str(author)
     payload = {
         "name": plugin_name,
-        "version": str(manifest.get("version", "1.0.0")),
+        "version": str(manifest.get("version", PLUGIN_VERSION)),
         "description": manifest.get("description", ""),
         "author": author_name,
         "kind": "standalone",
@@ -130,7 +124,7 @@ def hermes_plugin_yaml(plugin_name: str, manifest: dict) -> str:
 
 
 def hermes_entrypoint() -> str:
-    return '''# Hermes adapter for the teamwork-engineering-assistant skill bundle.
+    return '''# Hermes adapter for the engineering-assistant skill bundle.
 
 from __future__ import annotations
 
@@ -200,7 +194,7 @@ def enable_hermes_plugin(hermes_home: Path, plugin_name: str) -> bool:
 
 
 def publish_hermes(repo_root: Path, config: dict, publish_root=None, enable=False) -> dict:
-    plugin_name = config.get("plugin_name", "teamwork-engineering-assistant")
+    plugin_name = config.get("plugin_name", "engineering-assistant")
     publish_root = publish_root or expand(config["publish_root"])
     plugin_relative = Path(config.get("plugin_relative_path", f"plugins/{plugin_name}"))
     plugin_root = publish_root / plugin_relative
@@ -232,8 +226,8 @@ def publish_hermes(repo_root: Path, config: dict, publish_root=None, enable=Fals
 
 
 def publish_codex(repo_root: Path, config: dict, publish_root=None, marketplace_path=None, layout="local-root") -> dict:
-    plugin_name = config.get("plugin_name", "teamwork-engineering-assistant")
-    compatibility_alias = config.get("compatibility_alias")
+    config = apply_layout(config, layout)
+    plugin_name = config.get("plugin_name", "engineering-assistant")
     publish_root_override = publish_root is not None
     publish_root = publish_root or expand(config["publish_root"])
     if marketplace_path is None:
@@ -257,16 +251,8 @@ def publish_codex(repo_root: Path, config: dict, publish_root=None, marketplace_
     copy_tree(skills, plugin_root / "skills")
     copy_tree(runtime, plugin_root / "engineering-assistant")
 
-    existing_marketplace = load_marketplace(marketplace_path)
-    existing_plugin_names = {item.get("name") for item in existing_marketplace.get("plugins", []) if isinstance(item, dict)}
-    if layout == "personal" and compatibility_alias and compatibility_alias != plugin_name and compatibility_alias not in existing_plugin_names:
-        alias_root = publish_root / "plugins" / compatibility_alias
-        if alias_root != plugin_root:
-            if alias_root.exists():
-                shutil.rmtree(alias_root)
-            shutil.copytree(plugin_root, alias_root)
-
     marketplace_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_marketplace = load_marketplace(marketplace_path)
     marketplace_path.write_text(json.dumps(marketplace_payload(config, existing_marketplace), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     legacy_marketplace = publish_root / "marketplace.json"
     if legacy_marketplace != marketplace_path and legacy_marketplace.exists():
@@ -290,7 +276,7 @@ def publish(repo_root: Path, config: dict, publish_root=None, marketplace_path=N
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Publish teamwork-engineering-assistant as a Codex or Hermes local plugin.")
+    parser = argparse.ArgumentParser(description="Publish engineering-assistant as a Codex or Hermes local plugin.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
     parser.add_argument("--layout", choices=["local-root", "personal", "hermes"], default="local-root", help="local-root uses configured Codex publish_root; personal writes the canonical Codex personal marketplace; hermes writes a Hermes directory plugin.")
     parser.add_argument("--publish-root")

@@ -1,0 +1,37 @@
+{
+  "run_id": "overlay-test-assistant-feedback",
+  "overall_status": "pass",
+  "feedback_owner": "codex_agent",
+  "agent_review_required": true,
+  "human_review_required": false,
+  "route": {
+    "task_kind": "audit",
+    "evidence_level": "standard",
+    "persistence_mode": "ephemeral"
+  },
+  "capability_feedback": {
+    "decisions_present": true,
+    "ledger_present": true,
+    "health_checked": true,
+    "called_outputs_consumed": true,
+    "missing_required_capability_feedback": []
+  },
+  "artifact_feedback": {
+    "persistence_policy_present": true,
+    "artifact_budget_status": "pass",
+    "target_repo_pollution_risk": false
+  },
+  "rule_violations": [],
+  "darwin_self_healing": {
+    "required": false,
+    "reason": "",
+    "status": "not_needed"
+  },
+  "assistant_response_contract": {
+    "must_read_feedback_before_final_response": true,
+    "must_report_overall_status": true,
+    "must_report_blockers": true,
+    "must_not_ask_user_to_audit_artifacts": true
+  },
+  "summary": "Codex owns the feedback review."
+}

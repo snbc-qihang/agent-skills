@@ -34,31 +34,11 @@ def existing_text(root: Path, *candidates: str) -> tuple[str, str]:
     return "", ""
 
 def mapping_from_text(text: str) -> dict:
-    result = {"requirement_refs": [], "design_refs": [], "changed_files": [], "tests": [], "entries": []}
-    current = {}
-    key_aliases = {
-        "requirement": "requirement_item",
-        "design": "design_section",
-        "code": "code_path",
-        "file": "code_path",
-        "test": "verification_evidence",
-        "source": "source_id",
-    }
-    traceability_keys = {"source_id", "source_type", "source_path_or_url", "prototype_page_or_section", "requirement_item", "design_section", "code_path", "verification_evidence", "consistency_status"}
+    result = {"requirement_refs": [], "design_refs": [], "changed_files": [], "tests": []}
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
-            if current:
-                result["entries"].append(current)
-                current = {}
             continue
-        normalized = line[2:].strip() if line.startswith("- ") else line
-        key_match = re.match(r"([A-Za-z_][A-Za-z0-9_ -]*)\s*:\s*(.+)$", normalized)
-        if key_match:
-            key = key_match.group(1).strip().replace("-", "_").replace(" ", "_")
-            key = key_aliases.get(key, key)
-            if key in traceability_keys:
-                current[key] = key_match.group(2).strip().strip("`")
         result["requirement_refs"].extend(REQ_RE.findall(line))
         for token in re.split(r"[,，\s]+", line):
             token = token.strip().strip("`'\"[](){}，,.;；:")
@@ -69,8 +49,6 @@ def mapping_from_text(text: str) -> dict:
                     result["changed_files"].append(token)
         if any(word in line.lower() for word in ["design", "详细设计", "概要设计", "section", "章节"]):
             result["design_refs"].append(line[:240])
-    if current:
-        result["entries"].append(current)
     return {key: unique(value) for key, value in result.items()}
 
 def rows_from_contracts(design: dict, implementation: dict, quality: dict, changed_report: dict, validation: dict, mapping: dict) -> list[dict]:
@@ -80,36 +58,23 @@ def rows_from_contracts(design: dict, implementation: dict, quality: dict, chang
     validation_findings = validation.get("findings") or []
     rows = []
     explicit_req_ids = mapping.get("requirement_refs") or []
-    entries = mapping.get("entries") or []
-    row_count = max(len(seeds), len(entries), 1)
-    for index in range(1, min(row_count, 40) + 1):
-        item = seeds[index - 1] if index <= len(seeds) else entries[index - 1].get("requirement_item", "Mapped implementation item")
-        entry = entries[index - 1] if index <= len(entries) else {}
+    for index, item in enumerate(seeds[:40], start=1):
         req_id = explicit_req_ids[index - 1] if index <= len(explicit_req_ids) else f"REQ-{index:03d}"
-        row_files = unique([entry.get("code_path", "")] + changed_files)
+        row_files = changed_files
         gaps = []
         if not row_files:
             gaps.append("尚未登记 changed-files-report.json 或 design-to-code-mapping.yaml")
-        for required_field in ["source_id", "source_type", "source_path_or_url", "design_section", "code_path", "verification_evidence"]:
-            if not entry.get(required_field):
-                gaps.append(f"design-to-code-mapping.yaml 未提供 {required_field}")
+        if not mapping.get("requirement_refs"):
+            gaps.append("design-to-code-mapping.yaml 未提供逐需求稳定编号映射")
         if validation_status != "pass":
             gaps.append("design-to-code-validation.json 未通过或尚未生成")
         rows.append({
-            "source_id": entry.get("source_id") or req_id,
-            "source_type": entry.get("source_type", ""),
-            "source_path_or_url": entry.get("source_path_or_url", ""),
-            "prototype_page_or_section": entry.get("prototype_page_or_section", ""),
             "requirement_id": req_id,
-            "requirement": entry.get("requirement_item") or item,
-            "requirement_item": entry.get("requirement_item") or item,
-            "design_section": entry.get("design_section", ""),
-            "design_refs": unique([entry.get("design_section", ""), design.get("source_design", "")] + mapping.get("design_refs", [])),
+            "requirement": item,
+            "design_refs": unique([design.get("source_design", "")] + mapping.get("design_refs", [])),
             "implementation_targets": implementation.get("allowed_modules", []),
-            "code_path": entry.get("code_path", ""),
             "changed_files": row_files,
-            "verification_evidence": entry.get("verification_evidence", ""),
-            "tests": unique([entry.get("verification_evidence", "")] + (implementation.get("required_tests") or []) + mapping.get("tests", [])),
+            "tests": unique((implementation.get("required_tests") or []) + mapping.get("tests", [])),
             "validation_status": validation_status,
             "validation_findings": validation_findings,
             "evidence": {
@@ -129,7 +94,6 @@ def render_html(matrix: dict) -> str:
     summary = matrix.get("summary", {})
     table = []
     for row in rows:
-        source = "<br>".join(esc(item) for item in [row.get("source_id"), row.get("source_type"), row.get("source_path_or_url"), row.get("prototype_page_or_section")] if item) or '<span class="muted">未登记</span>'
         design = "<br>".join(esc(item) for item in row.get("design_refs", [])) or '<span class="muted">未登记</span>'
         targets = "<br>".join(esc(item) for item in row.get("implementation_targets", [])) or '<span class="muted">未登记</span>'
         files = "<br>".join(esc(item) for item in row.get("changed_files", [])) or '<span class="muted">待实现</span>'
@@ -138,7 +102,7 @@ def render_html(matrix: dict) -> str:
         table.append(
             "<tr>"
             f"<td><strong>{esc(row.get('requirement_id'))}</strong><div class='sub'>{esc(row.get('requirement'))}</div></td>"
-            f"<td>{source}</td><td>{design}</td><td>{targets}</td><td>{files}</td><td>{tests}</td>"
+            f"<td>{design}</td><td>{targets}</td><td>{files}</td><td>{tests}</td>"
             f"<td><span class='pill'>{esc(row.get('validation_status'))}</span><div class='gap'>{gaps}</div></td>"
             "</tr>"
         )
@@ -174,8 +138,8 @@ def render_html(matrix: dict) -> str:
         f'<div class="metric">已映射代码<strong>{esc(summary.get("rows_with_code", 0))}</strong></div>',
         f'<div class="metric">存在缺口<strong>{esc(summary.get("gap_rows", 0))}</strong></div>',
         "</section>",
-        "<section><h2>追踪矩阵</h2><table><thead><tr><th>需求</th><th>原始规格/原型</th><th>设计依据</th><th>实现目标</th><th>代码文件</th><th>测试/验证</th><th>状态与缺口</th></tr></thead><tbody>",
-        "".join(table) or '<tr><td colspan="7" class="muted">暂无追踪条目</td></tr>',
+        "<section><h2>追踪矩阵</h2><table><thead><tr><th>需求</th><th>设计依据</th><th>实现目标</th><th>代码文件</th><th>测试/验证</th><th>状态与缺口</th></tr></thead><tbody>",
+        "".join(table) or '<tr><td colspan="6" class="muted">暂无追踪条目</td></tr>',
         "</tbody></table></section>",
         f"<section><h2>证据文件</h2><ul>{evidence}</ul></section>",
         "</main></body></html>",

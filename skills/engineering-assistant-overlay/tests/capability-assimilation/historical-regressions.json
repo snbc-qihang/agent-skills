@@ -1,0 +1,207 @@
+{
+  "schema_version": "1.0",
+  "policy": {
+    "expected_case_count": 28,
+    "minimum_overall_pass_rate": 0.8,
+    "require_all_g0": true,
+    "maximum_existing_gate_regressions": 0
+  },
+  "cases": [
+    {
+      "id": "EA-AS-001",
+      "category": "repeated_bug",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260710-install-diagnosing-tdd-design-gap/artifacts/self-evolution-controller/self-evolution-root-cause.md"],
+      "input": {"issue_type": "repeated_bug", "risk_level": "L2", "missing_evidence": ["symptom_history", "hypothesis_ledger", "regression_gate"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_hypothesis_recovery", "fresh_context_doubt_review"], "protected_gate": "REPEATED_FIX_DIAGNOSTIC_RESET_REQUIRED"}
+    },
+    {
+      "id": "EA-AS-002",
+      "category": "repeated_bug",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260711-agent-skills-assimilation/artifacts/capability-assimilation/current-user-feedback-evidence.json"],
+      "input": {"issue_type": "repeated_bug", "risk_level": "L2", "missing_evidence": ["runtime_state_classification"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_hypothesis_recovery", "fresh_context_doubt_review"], "protected_gate": "REPEATED_FIX_RUNTIME_STATE_UNCLASSIFIED"}
+    },
+    {
+      "id": "EA-AS-003",
+      "category": "fix_a_break_b",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260711-agent-skills-assimilation/artifacts/capability-assimilation/current-user-feedback-evidence.json"],
+      "input": {"issue_type": "fix_a_break_b", "risk_level": "L3", "missing_evidence": ["protected_fix_set", "regression_survival_gate"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_hypothesis_recovery", "fresh_context_doubt_review"], "protected_gate": "FIX_CHAIN_REGRESSION_UNCHECKED"}
+    },
+    {
+      "id": "EA-AS-004",
+      "category": "fix_a_break_b",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/tests/run_overlay_checks.sh"],
+      "input": {"issue_type": "fix_a_break_b", "risk_level": "L3", "missing_evidence": []},
+      "expected": {"gate_level": "G0", "decision": "pass", "capabilities": ["bounded_hypothesis_recovery", "fresh_context_doubt_review"], "protected_gate": "FIX_CHAIN_REGRESSION_UNCHECKED"}
+    },
+    {
+      "id": "EA-AS-005",
+      "category": "design_missing",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260710-design-gate-quality-hardening/artifacts/self-evolution-controller/self-evolution-root-cause.md"],
+      "input": {"issue_type": "critical_design", "risk_level": "L3", "missing_evidence": ["approved_design"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["fresh_context_doubt_review"], "protected_gate": "DESIGN_BEFORE_CODE_GATE_MISSING"}
+    },
+    {
+      "id": "EA-AS-006",
+      "category": "stale_technology",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260711-implementation-idiom-quality-audit/artifacts/self-evolution-controller/self-evolution-root-cause.md"],
+      "input": {"issue_type": "stale_technology", "risk_level": "L2", "missing_evidence": ["detected_version", "official_source", "local_reuse_inventory"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["authoritative_source_verification"], "protected_gate": "JAVA_VERSION_FEATURE_DECISION_MISSING"}
+    },
+    {
+      "id": "EA-AS-007",
+      "category": "business_code_pileup",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260710-design-gate-quality-hardening/artifacts/self-evolution-controller/skill-gap-report.json"],
+      "input": {"issue_type": "business_code_pileup", "risk_level": "L2", "missing_evidence": ["business_code_pileup_check", "green_baseline"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["post_green_simplification"], "protected_gate": "BUSINESS_CODE_PILEUP_UNCHECKED"}
+    },
+    {
+      "id": "EA-AS-008",
+      "category": "multi_window",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260710-multi-window-parallel-dispatch/artifacts/self-evolution-controller/self-evolution-root-cause.md"],
+      "input": {"issue_type": "multi_window", "risk_level": "L2", "missing_evidence": ["parallel_ready_set", "completion_barrier"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["context_budgeted_handoff"], "protected_gate": "MULTI_WINDOW_PARALLEL_DISPATCH_SKIPPED"}
+    },
+    {
+      "id": "EA-AS-009",
+      "category": "test_gap",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/projectless/20260710-install-diagnosing-tdd-design-gap/artifacts/self-evolution-controller/self-evolution-root-cause.md"],
+      "input": {"issue_type": "deterministic_test_failure", "risk_level": "L2", "missing_evidence": ["target_test", "preservation_test"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_hypothesis_recovery"], "protected_gate": "CHANGE_VERIFICATION_EVIDENCE_MISSING"}
+    },
+    {
+      "id": "EA-AS-011",
+      "category": "ambiguous_requirement",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/standards/requirement-clarification-and-argumentation-standard.md"],
+      "input": {"issue_type": "ambiguous_requirement", "risk_level": "L2", "missing_evidence": ["objective", "success_criteria"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_intent_clarification"], "protected_gate": "REQUIREMENT_INTENT_AMBIGUOUS"}
+    },
+    {
+      "id": "EA-AS-012",
+      "category": "complex_requirement",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/schemas/requirement-argumentation.schema.json"],
+      "input": {"issue_type": "complex_requirement", "risk_level": "L3", "missing_evidence": ["risks_and_rollback", "tests", "cost"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_intent_clarification", "feasibility_argumentation"], "protected_gate": "FEASIBILITY_EVIDENCE_INCOMPLETE"}
+    },
+    {
+      "id": "EA-AS-013",
+      "category": "non_executable_feasibility",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/scripts/validate_requirement_argumentation.py"],
+      "input": {"issue_type": "non_executable_feasibility", "risk_level": "L3", "missing_evidence": []},
+      "expected": {"gate_level": "G0", "decision": "pass", "capabilities": ["feasibility_argumentation"], "protected_gate": "NON_EXECUTABLE_PATH_CONTINUED"}
+    },
+    {
+      "id": "EA-AS-014",
+      "category": "parallel_ready_set",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/multi-window-coordination.md"],
+      "input": {"issue_type": "parallel_ready_set", "risk_level": "L2", "missing_evidence": []},
+      "expected": {"gate_level": "G1", "decision": "pass", "capabilities": ["context_budgeted_handoff"], "protected_gate": "MULTI_WINDOW_PARALLEL_DISPATCH_SKIPPED"}
+    },
+    {
+      "id": "EA-AS-010",
+      "category": "release_gap",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/run-artifacts/engineering-assistant/bc-service__bc-uni/20260711-p0-cancel-1-observability-implementation/artifacts/code-quality-governor/gate-decision.json"],
+      "input": {"issue_type": "release_gap", "risk_level": "L3", "missing_evidence": ["static_analysis_status", "external_evidence_status", "rollback_or_disable_path"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["observability_release_evidence"], "protected_gate": "EXTERNAL_EVIDENCE_STATUS_UNCLASSIFIED"}
+    },
+    {
+      "id": "EA-AS-015",
+      "category": "low_quality_project_baseline",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "low_quality_project_baseline", "risk_level": "L2", "missing_evidence": ["quality_rule_hierarchy", "quality_verdict"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["independent_quality_constitution"], "protected_gate": "ENGINEERING_QUALITY_FLOOR_BYPASSED"}
+    },
+    {
+      "id": "EA-AS-016",
+      "category": "spec_quality_axis_gap",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "spec_quality_axis_gap", "risk_level": "L1", "missing_evidence": ["spec_verdict", "quality_verdict"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["independent_quality_constitution"], "protected_gate": "ENGINEERING_QUALITY_FLOOR_BYPASSED"}
+    },
+    {
+      "id": "EA-AS-017",
+      "category": "quality_constitution_review",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "quality_constitution_review", "risk_level": "L2", "missing_evidence": []},
+      "expected": {"gate_level": "G1", "decision": "pass", "capabilities": ["independent_quality_constitution"], "protected_gate": "ENGINEERING_QUALITY_FLOOR_BYPASSED"}
+    },
+    {
+      "id": "EA-AS-018",
+      "category": "speculative_abstraction",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "speculative_abstraction", "risk_level": "L2", "missing_evidence": ["current_problem", "simpler_path_comparison", "complexity_evidence"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["evidence_based_complexity_control"], "protected_gate": "OVER_DESIGN_BOUNDARY_UNCHECKED"}
+    },
+    {
+      "id": "EA-AS-019",
+      "category": "evidenced_abstraction",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "evidenced_abstraction", "risk_level": "L2", "missing_evidence": []},
+      "expected": {"gate_level": "G1", "decision": "pass", "capabilities": ["evidence_based_complexity_control"], "protected_gate": "OVER_DESIGN_BOUNDARY_UNCHECKED"}
+    },
+    {
+      "id": "EA-AS-020",
+      "category": "review_yagni",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/engineering-code-quality-constitution.md"],
+      "input": {"issue_type": "review_yagni", "risk_level": "L1", "missing_evidence": ["review_suggestion_verification", "current_problem"]},
+      "expected": {"gate_level": "G1", "decision": "block", "capabilities": ["evidence_based_complexity_control"], "protected_gate": "CHANGE_VERIFICATION_EVIDENCE_MISSING"}
+    },
+    {
+      "id": "EA-AS-021",
+      "category": "complex_plan_deliberation",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/SKILL.md"],
+      "input": {"issue_type": "complex_plan_deliberation", "risk_level": "L3", "missing_evidence": ["single_complete_baseline_proposal", "anonymous_cross_review_wave", "author_response_wave"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "COUNCIL_DELIBERATION_MISSING"}
+    },
+    {
+      "id": "EA-AS-022",
+      "category": "complex_plan_unresolved_blocker",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/scripts/validate_council_run.py"],
+      "input": {"issue_type": "complex_plan_unresolved_blocker", "risk_level": "L3", "missing_evidence": ["zero_unresolved_blocking_findings", "all_auditor_final_proposal_review", "development_gate_status"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "COUNCIL_UNRESOLVED_BLOCKERS"}
+    },
+    {
+      "id": "EA-AS-023",
+      "category": "complex_plan_deliberation_pass",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/tests/test_validate_council_run.py"],
+      "input": {"issue_type": "complex_plan_deliberation_pass", "risk_level": "L3", "missing_evidence": []},
+      "expected": {"gate_level": "G0", "decision": "pass", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "COUNCIL_UNRESOLVED_BLOCKERS"}
+    },
+    {
+      "id": "EA-AS-024",
+      "category": "simple_mechanical_change",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/SKILL.md"],
+      "input": {"issue_type": "simple_mechanical_change", "risk_level": "L0", "missing_evidence": []},
+      "expected": {"gate_level": "G2", "decision": "pass", "capabilities": [], "protected_gate": "DEBATE_MODE_UNBOUNDED"}
+    },
+    {
+      "id": "EA-AS-025",
+      "category": "competing_plan_vote",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/tests/test_validate_council_run.py"],
+      "input": {"issue_type": "competing_plan_vote", "risk_level": "L3", "missing_evidence": ["single_complete_baseline_proposal"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "COUNCIL_DELIBERATION_MISSING"}
+    },
+    {
+      "id": "EA-AS-026",
+      "category": "final_proposal_audit_gap",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/scripts/validate_council_run.py"],
+      "input": {"issue_type": "final_proposal_audit_gap", "risk_level": "L3", "missing_evidence": ["all_auditor_final_proposal_review"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "COUNCIL_DELIBERATION_MISSING"}
+    },
+    {
+      "id": "EA-AS-027",
+      "category": "user_review_pending",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/references/council-contract.md"],
+      "input": {"issue_type": "user_review_pending", "risk_level": "L3", "missing_evidence": ["exact_proposal_user_approval"]},
+      "expected": {"gate_level": "G0", "decision": "block", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "DESIGN_REVIEW_REQUIRED"}
+    },
+    {
+      "id": "EA-AS-028",
+      "category": "user_approved_proposal",
+      "source_artifacts": ["/Users/fengtianyangyang/.codex/skills/engineering-assistant-council-integration/tests/test_validate_council_run.py"],
+      "input": {"issue_type": "user_approved_proposal", "risk_level": "L3", "missing_evidence": []},
+      "expected": {"gate_level": "G0", "decision": "pass", "capabilities": ["bounded_multi_agent_deliberation"], "protected_gate": "DESIGN_REVIEW_REQUIRED"}
+    }
+  ]
+}

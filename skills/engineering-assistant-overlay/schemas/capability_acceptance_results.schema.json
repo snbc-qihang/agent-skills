@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Engineering Assistant Capability Acceptance Results",
+  "type": "object",
+  "required": ["pack_id", "local_version", "case_count", "passed_count", "overall_pass_rate", "g0_case_count", "g0_passed_count", "g0_pass_rate", "existing_gate_regressions", "results"],
+  "properties": {
+    "local_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "case_count": {"type": "integer", "minimum": 1},
+    "passed_count": {"type": "integer", "minimum": 0},
+    "overall_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "g0_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "existing_gate_regressions": {"type": "integer", "minimum": 0},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "gate_level", "decision", "capabilities", "protected_gate", "checks", "passed"],
+        "properties": {
+          "gate_level": {"enum": ["G0", "G1", "G2"]},
+          "decision": {"enum": ["pass", "warn", "block"]},
+          "passed": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

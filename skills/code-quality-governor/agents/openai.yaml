@@ -1,20 +1,12 @@
 display_name: "Code Quality Governor"
 short_description: "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。"
-default_prompt: "使用 code-quality-governor，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后再进入 formal_generation 输出声明产物、findings、required actions 和 gate decision。"
+default_prompt: "使用 code-quality-governor，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: false
   risk_level: "high"
@@ -27,7 +19,7 @@ metadata:
   owner: "研发负责人"
   stage: "code_quality"
   type: "cross_cutting_skill"
-  trigger_description: "Use when 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告；Do not use when do not 以 LLM 判断替代 build/test/lint。"
+  trigger_description: "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。"
 routing:
   intent_tags:
     - "CI/CD"

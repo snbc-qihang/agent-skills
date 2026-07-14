@@ -1,51 +1,21 @@
 {
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "skills": [
     {
-      "skill_id": "requirement-intake",
-      "path": "engineering-assistant/runtime/compiled/skills/requirement-intake.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
+      "skill_id": "code-development",
+      "path": "engineering-assistant/runtime/compiled/skills/code-development.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
     },
     {
-      "skill_id": "repo-context-miner",
-      "path": "engineering-assistant/runtime/compiled/skills/repo-context-miner.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
+      "skill_id": "code-quality-governor",
+      "path": "engineering-assistant/runtime/compiled/skills/code-quality-governor.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
     },
     {
-      "skill_id": "product-prototype-design",
-      "path": "engineering-assistant/runtime/compiled/skills/product-prototype-design.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
-    },
-    {
-      "skill_id": "prototype-review-loop",
-      "path": "engineering-assistant/runtime/compiled/skills/prototype-review-loop.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
-    },
-    {
-      "skill_id": "high-level-design",
-      "path": "engineering-assistant/runtime/compiled/skills/high-level-design.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
-    },
-    {
-      "skill_id": "detailed-design",
-      "path": "engineering-assistant/runtime/compiled/skills/detailed-design.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
-    },
-    {
-      "skill_id": "redis-design",
-      "path": "engineering-assistant/runtime/compiled/skills/redis-design.ir.json",
-      "risk_level": "medium",
-      "allow_implicit_invocation": true
-    },
-    {
-      "skill_id": "mq-design",
-      "path": "engineering-assistant/runtime/compiled/skills/mq-design.ir.json",
+      "skill_id": "code-review",
+      "path": "engineering-assistant/runtime/compiled/skills/code-review.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
@@ -62,20 +32,32 @@
       "allow_implicit_invocation": true
     },
     {
+      "skill_id": "detailed-design",
+      "path": "engineering-assistant/runtime/compiled/skills/detailed-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "engineering-knowledge-miner",
+      "path": "engineering-assistant/runtime/compiled/skills/engineering-knowledge-miner.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
       "skill_id": "frontend-design",
       "path": "engineering-assistant/runtime/compiled/skills/frontend-design.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
     {
-      "skill_id": "code-development",
-      "path": "engineering-assistant/runtime/compiled/skills/code-development.ir.json",
-      "risk_level": "high",
-      "allow_implicit_invocation": false
-    },
-    {
       "skill_id": "frontend-development",
       "path": "engineering-assistant/runtime/compiled/skills/frontend-development.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "high-level-design",
+      "path": "engineering-assistant/runtime/compiled/skills/high-level-design.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
@@ -86,20 +68,14 @@
       "allow_implicit_invocation": false
     },
     {
-      "skill_id": "self-test",
-      "path": "engineering-assistant/runtime/compiled/skills/self-test.ir.json",
+      "skill_id": "mq-design",
+      "path": "engineering-assistant/runtime/compiled/skills/mq-design.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
     {
-      "skill_id": "code-quality-governor",
-      "path": "engineering-assistant/runtime/compiled/skills/code-quality-governor.ir.json",
-      "risk_level": "high",
-      "allow_implicit_invocation": false
-    },
-    {
-      "skill_id": "code-review",
-      "path": "engineering-assistant/runtime/compiled/skills/code-review.ir.json",
+      "skill_id": "redis-design",
+      "path": "engineering-assistant/runtime/compiled/skills/redis-design.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
@@ -110,34 +86,40 @@
       "allow_implicit_invocation": false
     },
     {
-      "skill_id": "release-verification",
-      "path": "engineering-assistant/runtime/compiled/skills/release-verification.ir.json",
-      "risk_level": "high",
-      "allow_implicit_invocation": false
-    },
-    {
       "skill_id": "release-retrospective",
       "path": "engineering-assistant/runtime/compiled/skills/release-retrospective.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
     {
-      "skill_id": "assistant-feedback-capture",
-      "path": "engineering-assistant/runtime/compiled/skills/assistant-feedback-capture.ir.json",
+      "skill_id": "release-verification",
+      "path": "engineering-assistant/runtime/compiled/skills/release-verification.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "repo-context-miner",
+      "path": "engineering-assistant/runtime/compiled/skills/repo-context-miner.ir.json",
       "risk_level": "medium",
       "allow_implicit_invocation": true
     },
     {
-      "skill_id": "skill-evolution-review",
-      "path": "engineering-assistant/runtime/compiled/skills/skill-evolution-review.ir.json",
+      "skill_id": "requirement-intake",
+      "path": "engineering-assistant/runtime/compiled/skills/requirement-intake.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "self-evolution-controller",
+      "path": "engineering-assistant/runtime/compiled/skills/self-evolution-controller.ir.json",
       "risk_level": "high",
       "allow_implicit_invocation": false
     },
     {
-      "skill_id": "engineering-knowledge-miner",
-      "path": "engineering-assistant/runtime/compiled/skills/engineering-knowledge-miner.ir.json",
-      "risk_level": "high",
-      "allow_implicit_invocation": false
+      "skill_id": "self-test",
+      "path": "engineering-assistant/runtime/compiled/skills/self-test.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
     },
     {
       "skill_id": "skill-quality-auditor",

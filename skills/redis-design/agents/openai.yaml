@@ -1,33 +1,24 @@
 display_name: "Redis Design"
 short_description: "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。"
-default_prompt: "使用 redis-design，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 assets template 并按模板骨架逐节填充输入事实。"
+default_prompt: "使用 redis-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: true
   risk_level: "medium"
   human_approval_required:
     - "Redis key 批量删除"
     - "核心链路缓存策略变化"
-    - "Redis 新 Key"
-    - "版本/拓扑/持久化/淘汰策略无法确认"
+    - "无 TTL 高风险数据"
 metadata:
   owner: "架构师"
   stage: "redis_design"
   type: "stage_skill"
-  trigger_description: "Use when 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略；Do not use when do not 替代数据库主数据设计。"
+  trigger_description: "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。"
 routing:
   intent_tags:
     - "Redis"

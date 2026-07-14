@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/engineering-assistant/merge-safety-checklist.schema.json",
+  "title": "Merge Safety Checklist",
+  "type": "object",
+  "required": [
+    "merge_operation",
+    "base_evidence",
+    "ours_evidence",
+    "theirs_evidence",
+    "final_evidence",
+    "deleted_or_overwritten_logic",
+    "verification_plan",
+    "gate_decision"
+  ],
+  "properties": {
+    "merge_operation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_evidence": {
+      "type": "array",
+      "minItems": 1
+    },
+    "ours_evidence": {
+      "type": "array",
+      "minItems": 1
+    },
+    "theirs_evidence": {
+      "type": "array",
+      "minItems": 1
+    },
+    "final_evidence": {
+      "type": "array",
+      "minItems": 1
+    },
+    "deleted_or_overwritten_logic": {
+      "type": "array"
+    },
+    "verification_plan": {
+      "type": "array",
+      "minItems": 1
+    },
+    "gate_decision": {
+      "enum": [
+        "pass",
+        "block",
+        "require_human_review"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,190 @@
+{
+  "skill_id": "database-design",
+  "version": "1.1.0.0",
+  "stage": "database_design",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Database Design",
+    "short_description": "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。",
+    "default_prompt": "使用 database-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "database-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "database-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/database-design.md",
+      "schema": "output.schema.json#database-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "schema-change-plan.sql",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/schema-change-plan.sql",
+      "schema": "output.schema.json#schema-change-plan.sql",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "migration-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/migration-plan.md",
+      "schema": "output.schema.json#migration-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "rollback-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/rollback-plan.md",
+      "schema": "output.schema.json#rollback-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "database-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/database-risk-report.json",
+      "schema": "output.schema.json#database-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "database",
+      "database-design",
+      "database_design",
+      "design",
+      "stage_skill",
+      "并标记生产变更审批点。",
+      "灰度和回滚方案",
+      "索引",
+      "设计数据库表结构",
+      "迁移"
+    ],
+    "positive_triggers": [
+      "database-design",
+      "Database Design",
+      "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。"
+    ],
+    "negative_triggers": [
+      "只解释 Database Design 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "detailed-design.md",
+      "database-standard.md",
+      "repo_context",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "字段和索引均有查询/约束用途",
+      "迁移步骤可回滚",
+      "容量和查询模式已评估",
+      "生产变更审批明确"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "DDL",
+      "数据订正",
+      "删除字段",
+      "删除索引",
+      "生产库变更",
+      "影响核心链路的索引调整"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "database-design-gate-1",
+      "name": "字段和索引均有查询/约束用途",
+      "type": "deterministic",
+      "pass_condition": "字段和索引均有查询/约束用途 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-2",
+      "name": "迁移步骤可回滚",
+      "type": "deterministic",
+      "pass_condition": "迁移步骤可回滚 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-3",
+      "name": "容量和查询模式已评估",
+      "type": "deterministic",
+      "pass_condition": "容量和查询模式已评估 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-4",
+      "name": "生产变更审批明确",
+      "type": "hybrid",
+      "pass_condition": "生产变更审批明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "database-design",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/database-design/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/database-design/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/database-design/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/database-design/agents/openai.yaml"
+  ]
+}

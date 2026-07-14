@@ -1,42 +1,87 @@
 {
   "skill_id": "code-review",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "code_review",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Code Review",
     "short_description": "对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。",
-    "default_prompt": "使用 code-review，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出；Do not use when do not 替代 code-quality-governor。",
+    "default_prompt": "使用 code-review，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 对代码进行人工评审辅助，按问题、证据、影响、级别、建议和阻断状态输出。；Do not use when 不替代 code-quality-governor；不输出无证据建议。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "code-quality-report.json",
-    "static-analysis-report.json",
-    "changed-files-report.json",
-    "implementation-summary.md",
-    "repo_context"
+    {
+      "name": "code-quality-report.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "changed-files-report.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "implementation-summary.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "code-review-report.md",
-    "code-review-report.html",
-    "review-comments.json",
-    "blocker-list.md"
+    {
+      "name": "code-review-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-review/code-review-report.md",
+      "schema": "output.schema.json#code-review-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "code-review-report.html",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-review/code-review-report.html",
+      "schema": "output.schema.json#code-review-report.html",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "review-comments.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-review/review-comments.json",
+      "schema": "output.schema.json#review-comments.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "blocker-list.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-review/blocker-list.md",
+      "schema": "output.schema.json#blocker-list.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -64,7 +109,6 @@
     ],
     "requires": [
       "code-quality-report.json",
-      "static-analysis-report.json",
       "changed-files-report.json",
       "implementation-summary.md",
       "repo_context"
@@ -92,12 +136,48 @@
     ]
   },
   "quality_gates": [
-    "blocker 清单为空",
-    "所有问题有证据",
-    "严重级别一致",
-    "静态分析指标已纳入评审",
-    "富 HTML 人工走查报告已生成",
-    "修复建议可执行"
+    {
+      "gate_id": "code-review-gate-1",
+      "name": "blocker 清单为空",
+      "type": "deterministic",
+      "pass_condition": "blocker 清单为空 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-review-gate-2",
+      "name": "所有问题有证据",
+      "type": "deterministic",
+      "pass_condition": "所有问题有证据 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-review-gate-3",
+      "name": "严重级别一致",
+      "type": "deterministic",
+      "pass_condition": "严重级别一致 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-review-gate-4",
+      "name": "静态分析指标已纳入评审",
+      "type": "deterministic",
+      "pass_condition": "静态分析指标已纳入评审 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-review-gate-5",
+      "name": "富 HTML 人工走查报告已生成",
+      "type": "deterministic",
+      "pass_condition": "富 HTML 人工走查报告已生成 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-review-gate-6",
+      "name": "修复建议可执行",
+      "type": "deterministic",
+      "pass_condition": "修复建议可执行 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "code-review",

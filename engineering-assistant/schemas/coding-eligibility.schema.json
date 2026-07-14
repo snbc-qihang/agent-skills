@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "risk_level",
+    "change_kind",
+    "business_capability_change",
+    "selected_path",
+    "decision",
+    "source_evidence",
+    "design_evidence"
+  ],
+  "properties": {
+    "risk_level": {
+      "enum": [
+        "L0_FAST",
+        "L1_DIRECT",
+        "L2_SHARED",
+        "L3_CRITICAL"
+      ]
+    },
+    "change_kind": {
+      "enum": [
+        "local_only",
+        "local_behavior",
+        "shared_contract",
+        "business_capability",
+        "critical_business_flow"
+      ]
+    },
+    "business_capability_change": {
+      "type": "boolean"
+    },
+    "selected_path": {
+      "enum": [
+        "direct",
+        "compact_design",
+        "formal_design",
+        "design_first"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "allow_code",
+        "route_to_design",
+        "block"
+      ]
+    },
+    "source_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "design_evidence": {
+      "type": "object",
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "missing",
+            "validated",
+            "approved",
+            "final"
+          ]
+        },
+        "compact_design_path": {
+          "type": "string"
+        },
+        "formal_design_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "tdd_evidence": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

@@ -2,7 +2,7 @@
   "node_id": "mq-design",
   "stage": "mq_design",
   "skill_id": "mq-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -17,49 +17,30 @@
     "risk_policy"
   ],
   "outputs": [
-    "mq-design.xlsx",
+    "mq-design.md",
     "mq-topic-contract.yaml",
     "message-schema.json",
     "mq-risk-report.json"
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
-    "mq-design.xlsx 使用团队 MQ Excel 模板",
-    "生产者表完整",
-    "消费者表完整",
     "消息 schema 完整",
     "幂等策略明确",
-    "重试/死信/回放策略明确",
+    "重试/死信策略明确",
     "监控告警明确"
   ],
   "approval_policy": {
     "required_for": [
       "MQ topic 删除或重命名",
-      "MQ 新队列或 topic",
       "核心消息链路变化",
-      "生产消息回放",
-      "消息体超过 10KB",
-      "非仲裁队列"
+      "生产消息回放"
     ],
     "decision": [
       "pending",
@@ -87,7 +68,7 @@
   },
   "next_nodes": [],
   "artifact_mapping": {
-    "mq-design.xlsx": "artifacts/mq-design/mq-design.xlsx",
+    "mq-design.md": "artifacts/mq-design/mq-design.md",
     "mq-topic-contract.yaml": "artifacts/mq-design/mq-topic-contract.yaml",
     "message-schema.json": "artifacts/mq-design/message-schema.json",
     "mq-risk-report.json": "artifacts/mq-design/mq-risk-report.json"

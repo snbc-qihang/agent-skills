@@ -1,0 +1,10 @@
+{
+  "required": ["run_id", "consumptions"],
+  "consumption_required": [
+    "capability",
+    "source_artifact",
+    "consumed_by_phase",
+    "consumed_by_artifact",
+    "consumption_effect"
+  ]
+}

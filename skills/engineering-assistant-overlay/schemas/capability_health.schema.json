@@ -1,0 +1,7 @@
+{
+  "required": ["run_id", "capabilities"],
+  "capability_required": ["capability", "availability", "confidence", "fallback"],
+  "availability_values": ["available", "unavailable", "partial", "unknown"],
+  "index_status_values": ["current", "stale", "missing", "unknown", "not_applicable"],
+  "confidence_values": ["high", "medium", "low", "pending"]
+}

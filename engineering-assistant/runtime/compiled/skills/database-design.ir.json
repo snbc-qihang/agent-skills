@@ -1,42 +1,94 @@
 {
   "skill_id": "database-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "database_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Database Design",
-    "short_description": "设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。",
-    "default_prompt": "使用 database-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点；Do not use when do not 执行生产 DDL。",
+    "short_description": "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。",
+    "default_prompt": "使用 database-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "detailed-design.md",
-    "database-standard.md",
-    "repo_context",
-    "risk_policy"
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "database-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "database-design.md",
-    "schema-change-plan.sql",
-    "migration-plan.md",
-    "rollback-plan.md",
-    "database-risk-report.json"
+    {
+      "name": "database-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/database-design.md",
+      "schema": "output.schema.json#database-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "schema-change-plan.sql",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/schema-change-plan.sql",
+      "schema": "output.schema.json#schema-change-plan.sql",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "migration-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/migration-plan.md",
+      "schema": "output.schema.json#migration-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "rollback-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/rollback-plan.md",
+      "schema": "output.schema.json#rollback-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "database-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/database-design/database-risk-report.json",
+      "schema": "output.schema.json#database-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -45,8 +97,8 @@
       "database_design",
       "design",
       "stage_skill",
-      "修复和必要恢复方案",
       "并标记生产变更审批点。",
+      "灰度和回滚方案",
       "索引",
       "设计数据库表结构",
       "迁移"
@@ -54,7 +106,7 @@
     "positive_triggers": [
       "database-design",
       "Database Design",
-      "设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。"
+      "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。"
     ],
     "negative_triggers": [
       "只解释 Database Design 的用途，不执行任务",
@@ -71,12 +123,10 @@
     "risk_level": "medium",
     "cost_class": "medium",
     "evidence_required": [
-      "database-design.md 使用 OLTP 或 OLAP 团队模板",
       "字段和索引均有查询/约束用途",
       "迁移步骤可回滚",
       "容量和查询模式已评估",
-      "生产变更审批明确",
-      "未确认库名/实例/字符集/索引名时不得 final"
+      "生产变更审批明确"
     ],
     "allow_implicit_invocation": true
   },
@@ -89,17 +139,38 @@
       "删除字段",
       "删除索引",
       "生产库变更",
-      "影响核心链路的索引调整",
-      "物理删除在线事实行"
+      "影响核心链路的索引调整"
     ]
   },
   "quality_gates": [
-    "database-design.md 使用 OLTP 或 OLAP 团队模板",
-    "字段和索引均有查询/约束用途",
-    "迁移步骤可回滚",
-    "容量和查询模式已评估",
-    "生产变更审批明确",
-    "未确认库名/实例/字符集/索引名时不得 final"
+    {
+      "gate_id": "database-design-gate-1",
+      "name": "字段和索引均有查询/约束用途",
+      "type": "deterministic",
+      "pass_condition": "字段和索引均有查询/约束用途 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-2",
+      "name": "迁移步骤可回滚",
+      "type": "deterministic",
+      "pass_condition": "迁移步骤可回滚 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-3",
+      "name": "容量和查询模式已评估",
+      "type": "deterministic",
+      "pass_condition": "容量和查询模式已评估 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "database-design-gate-4",
+      "name": "生产变更审批明确",
+      "type": "hybrid",
+      "pass_condition": "生产变更审批明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "database-design",

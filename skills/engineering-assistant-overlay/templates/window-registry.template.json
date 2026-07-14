@@ -1,0 +1,315 @@
+{
+  "registry_version": 1,
+  "capability_id": "multi_window_coordination",
+  "run_id": "mw-example-001",
+  "project": {
+    "name": "example-project",
+    "repo_path": "/absolute/path/to/repo",
+    "branch": "example-branch",
+    "goal": "example development goal"
+  },
+  "user_required_inputs": {
+    "project_path": "confirmed",
+    "target_branch": "confirmed",
+    "business_goal": "confirmed",
+    "in_scope": "confirmed",
+    "out_of_scope": "confirmed",
+    "acceptance_criteria": "confirmed",
+    "test_environment": "confirmed",
+    "window_creation_authorized": "confirmed",
+    "write_permission": "confirmed",
+    "worktree_allowed": "confirmed"
+  },
+  "window_reuse_policy": {
+    "default": "reuse_registered_window_first",
+    "recreate_only_when": [
+      "thread_not_found",
+      "thread_inaccessible",
+      "host_unavailable_and_handoff_failed",
+      "window_role_or_module_scope_unrecoverable",
+      "user_explicitly_requests_recreate"
+    ],
+    "never_recreate_when": [
+      "window_is_idle",
+      "window_has_old_context_but_same_role_and_module",
+      "window_title_changed_but_threadId_is_valid"
+    ]
+  },
+  "authoritative_input_policy": {
+    "old_window_context_policy": "historical_only",
+    "must_not_reuse_unverified_prior_conclusions": true,
+    "inputs": [
+      "approved_requirements.md",
+      "approved_business-rules.md",
+      "approved_architecture-design.md",
+      "module-task-brief.md",
+      "allowed-files.json",
+      "forbidden-scope.json"
+    ]
+  },
+  "controller_window": {
+    "threadId": "controller-thread-id",
+    "name": "主控窗口",
+    "role": "controller",
+    "responsibilities": [
+      "task decomposition",
+      "window registry maintenance",
+      "dispatch",
+      "status reading",
+      "final summary"
+    ]
+  },
+  "documents": {
+    "required_information_requests": {
+      "path": "artifacts/required-information-requests.json",
+      "status": "approved"
+    },
+    "requirement_doc": {
+      "path": "artifacts/requirements.md",
+      "owner_window": "产品经理窗口",
+      "status": "approved"
+    },
+    "business_doc": {
+      "path": "artifacts/business-rules.md",
+      "owner_window": "产品经理窗口",
+      "reviewer_window": "业务审校窗口",
+      "status": "approved"
+    },
+    "architecture_doc": {
+      "path": "artifacts/architecture-design.md",
+      "owner_window": "架构师窗口",
+      "reviewer_window": "设计审查窗口",
+      "status": "approved"
+    },
+    "api_contract": {
+      "path": "artifacts/api-contract.md",
+      "status": "approved"
+    },
+    "traceability_matrix": {
+      "path": "artifacts/traceability-matrix.json",
+      "status": "approved"
+    }
+  },
+  "module_classification": [
+    {
+      "module_id": "example-backend",
+      "module_type": "backend",
+      "paths": [],
+      "dependencies": [],
+      "risk_level": "medium"
+    }
+  ],
+  "windows": [
+    {
+      "window_key": "example-project:global:product_manager:requirements",
+      "threadId": "pm-thread-id",
+      "name": "产品经理窗口",
+      "role": "product_manager",
+      "project": "example-project",
+      "module_id": "global",
+      "responsibility_key": "requirements",
+      "module_scope": "global",
+      "responsibilities": [
+        "requirements",
+        "business rules",
+        "acceptance criteria"
+      ],
+      "may_edit_code": false,
+      "outputs": [
+        "requirements.md",
+        "business-rules.md",
+        "acceptance-criteria.md"
+      ],
+      "reuse_policy": "reuse_registered_window_first",
+      "last_health_check": {
+        "checked_at": "2026-07-03T00:00:00+08:00",
+        "result": "available"
+      },
+      "replacement": {
+        "replaced": false,
+        "previous_threadId": null,
+        "reason": null
+      },
+      "status": "available"
+    },
+    {
+      "window_key": "example-project:example-backend:backend_developer:implementation",
+      "threadId": "developer-thread-id",
+      "name": "示例后端开发窗口",
+      "role": "backend_developer",
+      "project": "example-project",
+      "module_id": "example-backend",
+      "responsibility_key": "implementation",
+      "module_scope": "example-backend",
+      "responsibilities": [
+        "confirm task",
+        "implement scoped backend changes",
+        "provide developer verification"
+      ],
+      "may_edit_code": true,
+      "isolation": {
+        "mode": "single_writer",
+        "allowed_paths": [],
+        "forbidden_paths": []
+      },
+      "reviewer_window": "示例后端代码审查窗口",
+      "test_window": "模块流程测试窗口",
+      "outputs": [
+        "developer-confirmation.json",
+        "change-summary.md"
+      ],
+      "reuse_policy": "reuse_registered_window_first",
+      "last_health_check": {
+        "checked_at": "2026-07-03T00:00:00+08:00",
+        "result": "available"
+      },
+      "replacement": {
+        "replaced": false,
+        "previous_threadId": null,
+        "reason": null
+      },
+      "status": "available"
+    },
+    {
+      "window_key": "example-project:api:api_tester:api-contract-test",
+      "threadId": "api-tester-thread-id",
+      "name": "接口测试窗口",
+      "role": "api_tester",
+      "project": "example-project",
+      "module_id": "api",
+      "responsibility_key": "api-contract-test",
+      "module_scope": "api",
+      "responsibilities": [
+        "API contract test",
+        "auth and error contract verification",
+        "idempotency and boundary verification"
+      ],
+      "may_edit_code": false,
+      "outputs": [
+        "api-test-report.md"
+      ],
+      "reuse_policy": "reuse_registered_window_first",
+      "last_health_check": {
+        "checked_at": "2026-07-03T00:00:00+08:00",
+        "result": "available"
+      },
+      "replacement": {
+        "replaced": false,
+        "previous_threadId": null,
+        "reason": null
+      },
+      "status": "available"
+    },
+    {
+      "window_key": "example-project:business-flow:module_flow_tester:flow-test",
+      "threadId": "module-flow-tester-thread-id",
+      "name": "模块流程测试窗口",
+      "role": "module_flow_tester",
+      "project": "example-project",
+      "module_id": "business-flow",
+      "responsibility_key": "flow-test",
+      "module_scope": "business-flow",
+      "responsibilities": [
+        "module flow verification",
+        "state and data consistency verification",
+        "side-effect verification"
+      ],
+      "may_edit_code": false,
+      "outputs": [
+        "module-flow-test-report.md"
+      ],
+      "reuse_policy": "reuse_registered_window_first",
+      "last_health_check": {
+        "checked_at": "2026-07-03T00:00:00+08:00",
+        "result": "available"
+      },
+      "replacement": {
+        "replaced": false,
+        "previous_threadId": null,
+        "reason": null
+      },
+      "status": "available"
+    },
+    {
+      "window_key": "example-project:page:page_acceptance_tester:page-acceptance",
+      "threadId": "page-acceptance-tester-thread-id",
+      "name": "页面验收测试窗口",
+      "role": "page_acceptance_tester",
+      "project": "example-project",
+      "module_id": "page",
+      "responsibility_key": "page-acceptance",
+      "module_scope": "page",
+      "responsibilities": [
+        "page acceptance verification",
+        "interaction verification",
+        "responsive behavior verification"
+      ],
+      "may_edit_code": false,
+      "outputs": [
+        "page-acceptance-report.md"
+      ],
+      "reuse_policy": "reuse_registered_window_first",
+      "last_health_check": {
+        "checked_at": "2026-07-03T00:00:00+08:00",
+        "result": "available"
+      },
+      "replacement": {
+        "replaced": false,
+        "previous_threadId": null,
+        "reason": null
+      },
+      "status": "available"
+    }
+  ],
+  "test_windows": [
+    {
+      "role": "api_tester",
+      "name": "接口测试窗口",
+      "window_key": "example-project:api:api_tester:api-contract-test",
+      "output": "api-test-report.md"
+    },
+    {
+      "role": "module_flow_tester",
+      "name": "模块流程测试窗口",
+      "window_key": "example-project:business-flow:module_flow_tester:flow-test",
+      "output": "module-flow-test-report.md"
+    },
+    {
+      "role": "page_acceptance_tester",
+      "name": "页面验收测试窗口",
+      "window_key": "example-project:page:page_acceptance_tester:page-acceptance",
+      "output": "page-acceptance-report.md"
+    }
+  ],
+  "anti_rework_gates": [
+    "REQUIREMENT_FREEZE_REQUIRED",
+    "API_CONTRACT_REQUIRED",
+    "TRACEABILITY_MATRIX_REQUIRED",
+    "DEVELOPER_CONFIRMATION_REQUIRED",
+    "INDEPENDENT_TEST_REQUIRED",
+    "SELF_REVIEW_FORBIDDEN",
+    "REPEATED_FIX_DIAGNOSTIC_RESET_REQUIRED"
+  ],
+  "gates": [
+    "EXPLICIT_WINDOW_CREATION_REQUIRED",
+    "REQUIRED_INFORMATION_REQUESTS_MISSING",
+    "WINDOW_REGISTRY_MISSING",
+    "WINDOW_SCOPE_UNCLASSIFIED",
+    "WINDOW_NAME_MISSING",
+    "BUSINESS_REVIEW_PENDING",
+    "DESIGN_REVIEW_REQUIRED",
+    "REQUIREMENT_FREEZE_REQUIRED",
+    "API_CONTRACT_REQUIRED",
+    "TRACEABILITY_MATRIX_REQUIRED",
+    "DEVELOPER_CONFIRMATION_REQUIRED",
+    "INDEPENDENT_TEST_REQUIRED",
+    "SELF_REVIEW_FORBIDDEN",
+    "MULTI_WINDOW_FILE_CONFLICT_UNCHECKED",
+    "MULTI_WINDOW_PARALLEL_DISPATCH_SKIPPED",
+    "WORKER_WINDOW_OUTPUT_NOT_CONSUMED",
+    "REPEATED_FIX_DIAGNOSTIC_RESET_REQUIRED",
+    "WINDOW_REGISTRY_REUSE_SKIPPED",
+    "WINDOW_REPLACEMENT_NOT_RECORDED",
+    "STALE_WINDOW_CONTEXT_USED_AS_FACT"
+  ]
+}

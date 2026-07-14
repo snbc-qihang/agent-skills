@@ -1,42 +1,94 @@
 {
   "skill_id": "release-readiness",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "release_readiness",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Release Readiness",
     "short_description": "判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。",
-    "default_prompt": "使用 release-readiness，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策；Do not use when do not 执行生产发布。",
+    "default_prompt": "使用 release-readiness，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。；Do not use when 不执行生产发布；不绕过高风险发布审批。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "code-quality-report.json",
-    "code-review-report.md",
-    "release-standard.md",
-    "risk_policy"
+    {
+      "name": "code-quality-report.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "code-review-report.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "release-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "release-plan.md",
-    "release-checklist.md",
-    "rollback-plan.md",
-    "release-risk-report.json",
-    "release-gate-decision.json"
+    {
+      "name": "release-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-plan.md",
+      "schema": "output.schema.json#release-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-checklist.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-checklist.md",
+      "schema": "output.schema.json#release-checklist.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "rollback-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/rollback-plan.md",
+      "schema": "output.schema.json#rollback-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-risk-report.json",
+      "schema": "output.schema.json#release-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-gate-decision.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-gate-decision.json",
+      "schema": "output.schema.json#release-gate-decision.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -90,10 +142,34 @@
     ]
   },
   "quality_gates": [
-    "发布窗口明确",
-    "回滚方案存在",
-    "监控告警存在",
-    "审批状态有效"
+    {
+      "gate_id": "release-readiness-gate-1",
+      "name": "发布窗口明确",
+      "type": "deterministic",
+      "pass_condition": "发布窗口明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-2",
+      "name": "回滚方案存在",
+      "type": "deterministic",
+      "pass_condition": "回滚方案存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-3",
+      "name": "监控告警存在",
+      "type": "deterministic",
+      "pass_condition": "监控告警存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-4",
+      "name": "审批状态有效",
+      "type": "hybrid",
+      "pass_condition": "审批状态有效 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "release-readiness",

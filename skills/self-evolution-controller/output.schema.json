@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Self Evolution Controller 输出 Schema",
+  "type": "object",
+  "required": [
+    "language",
+    "document_metadata",
+    "required_information_requests",
+    "status",
+    "artifacts",
+    "findings",
+    "gate_decision"
+  ],
+  "properties": {
+    "language": {
+      "type": "string"
+    },
+    "document_metadata": {
+      "type": "object"
+    },
+    "required_information_requests": {
+      "type": "array"
+    },
+    "status": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array"
+    },
+    "findings": {
+      "type": "array"
+    },
+    "gate_decision": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

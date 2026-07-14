@@ -1,0 +1,230 @@
+{
+  "capability_id": "multi_window_coordination",
+  "run_id": "mw-example-001",
+  "user_authorized_window_creation": false,
+  "required_information_requests_path": "artifacts/required-information-requests.json",
+  "window_reuse_policy": {
+    "default": "reuse_registered_window_first",
+    "recreate_only_when": [
+      "thread_not_found",
+      "thread_inaccessible",
+      "host_unavailable_and_handoff_failed",
+      "window_role_or_module_scope_unrecoverable",
+      "user_explicitly_requests_recreate"
+    ],
+    "never_recreate_when": [
+      "window_is_idle",
+      "window_has_old_context_but_same_role_and_module",
+      "window_title_changed_but_threadId_is_valid"
+    ]
+  },
+  "registry_reconciliation": {
+    "registry_path": "artifacts/window-registry.json",
+    "ledger_path": "artifacts/window-reconciliation-ledger.json",
+    "lookup_key": "project + module_id + role + responsibility"
+  },
+  "authoritative_input_policy": {
+    "old_window_context_policy": "historical_only",
+    "must_not_reuse_unverified_prior_conclusions": true,
+    "inputs": [
+      "approved_requirements.md",
+      "approved_business-rules.md",
+      "approved_architecture-design.md",
+      "module-task-brief.md",
+      "allowed-files.json",
+      "forbidden-scope.json"
+    ]
+  },
+  "required_inputs": {
+    "project_path": "required",
+    "target_branch": "required",
+    "business_goal": "required",
+    "in_scope": "required",
+    "out_of_scope": "required",
+    "acceptance_criteria": "required",
+    "test_environment": "required",
+    "window_creation_authorized": "required",
+    "write_permission": "required",
+    "worktree_allowed": "required"
+  },
+  "controller_window": {
+    "name": "主控窗口",
+    "role": "controller"
+  },
+  "scheduling_policy": {
+    "mode": "dependency_aware_parallel",
+    "max_parallel_windows": 4,
+    "dispatch_method": "concurrent_tool_batch",
+    "dispatch_barrier": "dispatch_all_ready_before_wait",
+    "completion_barrier": "wait_for_all_dispatched_workers",
+    "serial_only_when": [
+      "dependency_not_satisfied",
+      "overlapping_write_scope_without_isolation",
+      "shared_contract_single_owner",
+      "runtime_concurrency_limit"
+    ]
+  },
+  "document_status_policy": {
+    "allowed_flow": [
+      "draft",
+      "reviewing",
+      "approved"
+    ],
+    "high_risk_development_requires": "approved"
+  },
+  "planned_windows": [
+    {
+      "task_id": "requirements",
+      "depends_on": [],
+      "controller_owned": true,
+      "dispatch_depth": 1,
+      "may_spawn_workers": false,
+      "write_scope": [],
+      "contract_scope": ["requirements-contract"],
+      "window_key": "example-project:global:product_manager:requirements",
+      "name": "产品经理窗口",
+      "role": "product_manager",
+      "project": "example-project",
+      "module_id": "global",
+      "responsibility_key": "requirements",
+      "module_scope": "global",
+      "creation_mode": "create_thread",
+      "may_edit_code": false,
+      "task_brief": "Produce requirements, business rules, acceptance criteria, and open questions.",
+      "expected_outputs": [
+        "requirements.md",
+        "business-rules.md",
+        "acceptance-criteria.md"
+      ]
+    },
+    {
+      "task_id": "architecture",
+      "depends_on": [
+        "requirements"
+      ],
+      "controller_owned": true,
+      "dispatch_depth": 1,
+      "may_spawn_workers": false,
+      "write_scope": [],
+      "contract_scope": ["architecture-contract"],
+      "window_key": "example-project:global:architect:architecture",
+      "name": "架构师窗口",
+      "role": "architect",
+      "project": "example-project",
+      "module_id": "global",
+      "responsibility_key": "architecture",
+      "module_scope": "global",
+      "creation_mode": "create_thread",
+      "may_edit_code": false,
+      "task_brief": "Produce code-evidence-backed technical and architecture design.",
+      "expected_outputs": [
+        "technical-design.md",
+        "architecture-design.md"
+      ]
+    },
+    {
+      "task_id": "api-contract-test",
+      "depends_on": [
+        "architecture"
+      ],
+      "controller_owned": true,
+      "dispatch_depth": 1,
+      "may_spawn_workers": false,
+      "write_scope": [],
+      "contract_scope": [],
+      "window_key": "example-project:api:api_tester:api-contract-test",
+      "name": "接口测试窗口",
+      "role": "api_tester",
+      "project": "example-project",
+      "module_id": "api",
+      "responsibility_key": "api-contract-test",
+      "module_scope": "api",
+      "creation_mode": "create_thread",
+      "may_edit_code": false,
+      "task_brief": "Validate API params, responses, errors, auth, idempotency, paging, sorting, and boundaries against api-contract.md.",
+      "expected_outputs": [
+        "api-test-report.md"
+      ]
+    },
+    {
+      "task_id": "flow-test",
+      "depends_on": [
+        "architecture"
+      ],
+      "controller_owned": true,
+      "dispatch_depth": 1,
+      "may_spawn_workers": false,
+      "write_scope": [],
+      "contract_scope": [],
+      "window_key": "example-project:business-flow:module_flow_tester:flow-test",
+      "name": "模块流程测试窗口",
+      "role": "module_flow_tester",
+      "project": "example-project",
+      "module_id": "business-flow",
+      "responsibility_key": "flow-test",
+      "module_scope": "business-flow",
+      "creation_mode": "create_thread",
+      "may_edit_code": false,
+      "task_brief": "Validate module flow, state changes, data writes, MQ/cache side effects, and business invariants.",
+      "expected_outputs": [
+        "module-flow-test-report.md"
+      ]
+    },
+    {
+      "task_id": "page-acceptance",
+      "depends_on": [
+        "architecture"
+      ],
+      "controller_owned": true,
+      "dispatch_depth": 1,
+      "may_spawn_workers": false,
+      "write_scope": [],
+      "contract_scope": [],
+      "window_key": "example-project:page:page_acceptance_tester:page-acceptance",
+      "name": "页面验收测试窗口",
+      "role": "page_acceptance_tester",
+      "project": "example-project",
+      "module_id": "page",
+      "responsibility_key": "page-acceptance",
+      "module_scope": "page",
+      "creation_mode": "create_thread",
+      "may_edit_code": false,
+      "task_brief": "Validate page display, interactions, form validation, error hints, navigation, and responsive behavior.",
+      "expected_outputs": [
+        "page-acceptance-report.md"
+      ]
+    }
+  ],
+  "parallel_dispatch_batches": [
+    {
+      "batch_id": "parallel_dispatch_batch_1",
+      "ready_task_ids": [
+        "api-contract-test",
+        "flow-test",
+        "page-acceptance"
+      ],
+      "dispatch_method": "concurrent_tool_batch",
+      "dispatch_barrier": "dispatch_all_ready_before_wait"
+    }
+  ],
+  "parallel_dispatch_decision": {
+    "parallel_opportunity_count": 1,
+    "serial_reason": null
+  },
+  "conflict_policy": {
+    "parallel_write_allowed": false,
+    "requires_worktree_for_parallel_writes": true,
+    "single_writer_per_file": true
+  },
+  "required_before_development": [
+    "required information confirmation",
+    "business review",
+    "design review",
+    "requirement freeze",
+    "API contract when interfaces change",
+    "traceability matrix",
+    "developer confirmation",
+    "file ownership or worktree isolation",
+    "independent test windows"
+  ]
+}

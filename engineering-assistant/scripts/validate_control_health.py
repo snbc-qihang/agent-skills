@@ -6,6 +6,9 @@ from control_runtime import ensure_control_dir, now_iso, read_json, update_artif
 REQUIRED_CONTROL_FILES = [
     "current-task.json",
     "artifact-index.json",
+    "coding-eligibility.json",
+    "code-design-decision.json",
+    "design-contract.json",
     "implementation-contract.json",
     "quality-contract.json",
     "task-context.agent.md",
@@ -41,6 +44,9 @@ def main():
             add(findings, "blocker", "missing control artifact", artifact=name)
     implementation = read_json(control / "implementation-contract.json", {})
     quality = read_json(control / "quality-contract.json", {})
+    design_decision = read_json(control / "code-design-decision.json", {})
+    if not design_decision.get("placement_decision") or not design_decision.get("test_seam"):
+        add(findings, "blocker", "invalid code design decision", artifact="code-design-decision.json")
     if not implementation.get("technology_adoption_contract"):
         add(findings, "blocker", "missing technology_adoption_contract", artifact="implementation-contract.json")
     if not quality.get("required_evidence"):

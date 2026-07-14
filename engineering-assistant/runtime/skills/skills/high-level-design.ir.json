@@ -1,0 +1,180 @@
+{
+  "skill_id": "high-level-design",
+  "version": "1.1.0.0",
+  "stage": "high_level_design",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "High Level Design",
+    "short_description": "从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。",
+    "default_prompt": "使用 high-level-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。；Do not use when 不深入代码实现细节；不跳过架构风险。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "requirement-contract.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "team_standards",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "high-level-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/high-level-design/high-level-design.md",
+      "schema": "output.schema.json#high-level-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "architecture-decision-record.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/high-level-design/architecture-decision-record.md",
+      "schema": "output.schema.json#architecture-decision-record.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "module-boundary.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/high-level-design/module-boundary.yaml",
+      "schema": "output.schema.json#module-boundary.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "risk-list.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/high-level-design/risk-list.json",
+      "schema": "output.schema.json#risk-list.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "design",
+      "high",
+      "high-level-design",
+      "high_level_design",
+      "level",
+      "stage_skill",
+      "从需求契约生成概要设计",
+      "异常流和发布影响。",
+      "数据流",
+      "明确架构边界"
+    ],
+    "positive_triggers": [
+      "high-level-design",
+      "High Level Design",
+      "从需求契约生成概要设计，明确架构边界、数据流、异常流和发布影响。"
+    ],
+    "negative_triggers": [
+      "只解释 High Level Design 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "requirement-contract.json",
+      "team_standards",
+      "repo_context",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "需求契约已准入",
+      "模块边界明确",
+      "核心数据流完整",
+      "架构风险有缓解方案"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "高风险架构决策",
+      "跨域边界调整",
+      "核心链路兼容性变化"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "high-level-design-gate-1",
+      "name": "需求契约已准入",
+      "type": "deterministic",
+      "pass_condition": "需求契约已准入 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "high-level-design-gate-2",
+      "name": "模块边界明确",
+      "type": "deterministic",
+      "pass_condition": "模块边界明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "high-level-design-gate-3",
+      "name": "核心数据流完整",
+      "type": "deterministic",
+      "pass_condition": "核心数据流完整 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "high-level-design-gate-4",
+      "name": "架构风险有缓解方案",
+      "type": "deterministic",
+      "pass_condition": "架构风险有缓解方案 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "high-level-design",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/high-level-design/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/high-level-design/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/high-level-design/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/high-level-design/agents/openai.yaml"
+  ]
+}

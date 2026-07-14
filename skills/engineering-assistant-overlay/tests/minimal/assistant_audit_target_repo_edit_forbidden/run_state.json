@@ -1,0 +1,15 @@
+{
+  "run_id": "overlay-test-assistant-audit-target-repo-edit-forbidden",
+  "task_summary": "用户反馈研发助手规则缺陷，但 agent 修改了 bc-service 业务代码。",
+  "assistant_context": {
+    "assistant_rule_or_capability_audit": true,
+    "explicit_project_code_change_requested": false
+  },
+  "target_repo_edits": [
+    {
+      "path": "/Users/fengtianyangyang/workspace/Playground/micro/bc-service/service/order-service/src/main/java/cn/lili/modules/order/order/serviceimpl/TradeServiceImpl.java",
+      "reason": "agent wrongly treated assistant rule feedback as business code fix"
+    }
+  ],
+  "gates": []
+}

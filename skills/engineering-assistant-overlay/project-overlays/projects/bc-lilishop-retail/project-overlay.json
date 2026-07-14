@@ -1,0 +1,76 @@
+{
+  "overlay_layer": "project",
+  "project_slug": "bc-lilishop-retail",
+  "applies_to": {
+    "repositories": [
+      "bc-service",
+      "bc-uni",
+      "sjl-parent",
+      "abk-sync-service"
+    ],
+    "domains": [
+      "b2b2c",
+      "new-retail",
+      "middle-platform-fulfillment",
+      "wallet-payment",
+      "coupon-promotion",
+      "membership",
+      "inventory-store-rider",
+      "external-sync"
+    ],
+    "runtime_profiles": [
+      "local",
+      "test",
+      "pre",
+      "prod-like"
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "BC_RETAIL_DOMAIN_BOUNDARY",
+      "trigger": "Use when a task touches bc-service, bc-uni, sjl-parent, abk-sync-service, Lilishop retail, B2B2C, new retail, middle-platform fulfillment, wallet/payment, coupon/promotion, membership, inventory/store/rider, admin UI, H5, or mini-program behavior.",
+      "do": "Classify the active domain before edits. Shared code must name the rule owner and excluded domains. Do not merge B2B2C, new-retail, ABK/external-sync, coupon, payment, order, fulfillment, inventory, membership, store, rider, admin UI, H5, and mini-program rules into one shared path without an owner map.",
+      "checks": [
+        "domain_boundary",
+        "business_redundancy_boundary",
+        "frontend_backend_responsibility"
+      ],
+      "gate": "DOMAIN_BOUNDARY_UNCLASSIFIED"
+    },
+    {
+      "rule_id": "BC_RETAIL_PAGE_AND_FLOW_PERFORMANCE",
+      "trigger": "Use when a task touches customer-facing product, promotion, cart, checkout, order, coupon, member, store, rider, payment, refund, or user-center APIs/pages, or any path with CPU, memory, or latency symptoms.",
+      "do": "Record API and flow performance budgets: query shape, remote calls, payload size, cache/TTL, pagination, loop bounds, retry bounds, duplicated calculations, synchronous waits, expected latency, and rollback or disable path.",
+      "checks": [
+        "performance_budget",
+        "flow_performance_budget"
+      ],
+      "gate": "API_PERFORMANCE_BUDGET_MISSING"
+    },
+    {
+      "rule_id": "BC_RETAIL_SYNC_USABILITY",
+      "trigger": "Use when synchronized/imported/backfilled data is intended for product, price, stock, coupon, member, order, refund, inventory, store, rider, or downstream retail flows.",
+      "do": "Verify downstream business usability, not only write success. Evidence must show the data can be found and used by the intended page, API, order, coupon, member, inventory, refund, or downstream flow.",
+      "checks": [
+        "sync_usability_evidence"
+      ],
+      "gate": "SYNC_DATA_USABILITY_NOT_VERIFIED"
+    }
+  ],
+  "gates": [
+    "DOMAIN_BOUNDARY_UNCLASSIFIED",
+    "BUSINESS_REDUNDANCY_BOUNDARY_UNCHECKED",
+    "FRONTEND_BACKEND_RESPONSIBILITY_UNCLASSIFIED",
+    "API_PERFORMANCE_BUDGET_MISSING",
+    "FLOW_PERFORMANCE_REGRESSION_UNCHECKED",
+    "SYNC_DATA_USABILITY_NOT_VERIFIED"
+  ],
+  "evidence_sources": [
+    "user repeated-fix and performance reports",
+    "bc retail project window samples",
+    "project-overlays/projects/bc-lilishop-retail/references/l4-entry-real-run-samples.md",
+    "overlay split request 2026-07-03"
+  ],
+  "owner": "user-local-engineering-assistant-overlay",
+  "review_after": "2026-08-03"
+}

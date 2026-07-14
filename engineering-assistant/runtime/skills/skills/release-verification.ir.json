@@ -1,0 +1,172 @@
+{
+  "skill_id": "release-verification",
+  "version": "1.1.0.0",
+  "stage": "release_verification",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Release Verification",
+    "short_description": "发布后验证核心功能、监控、日志、业务指标和回滚条件。",
+    "default_prompt": "使用 release-verification，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 发布后验证核心功能、监控、日志、业务指标和回滚条件。；Do not use when 不执行未审批回滚；不忽略异常。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "release-plan.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "release-checklist.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "observability data",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "release-verification-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-verification/release-verification-report.md",
+      "schema": "output.schema.json#release-verification-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "production-checks.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-verification/production-checks.json",
+      "schema": "output.schema.json#production-checks.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "anomaly-list.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-verification/anomaly-list.md",
+      "schema": "output.schema.json#anomaly-list.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "release",
+      "release-verification",
+      "release_verification",
+      "stage_skill",
+      "verification",
+      "业务指标和回滚条件。",
+      "发布后验证核心功能",
+      "日志",
+      "监控"
+    ],
+    "positive_triggers": [
+      "release-verification",
+      "Release Verification",
+      "发布后验证核心功能、监控、日志、业务指标和回滚条件。"
+    ],
+    "negative_triggers": [
+      "只解释 Release Verification 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "release-plan.md",
+      "release-checklist.md",
+      "observability data",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "high",
+    "cost_class": "high",
+    "evidence_required": [
+      "核心功能验证通过",
+      "错误率/延迟未触发阈值",
+      "业务指标正常",
+      "回滚条件未触发"
+    ],
+    "allow_implicit_invocation": false
+  },
+  "risk": {
+    "risk_level": "high",
+    "allow_implicit_invocation": false,
+    "human_approval_required": [
+      "回滚操作",
+      "生产验证豁免",
+      "延长观察窗口"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "release-verification-gate-1",
+      "name": "核心功能验证通过",
+      "type": "deterministic",
+      "pass_condition": "核心功能验证通过 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-verification-gate-2",
+      "name": "错误率/延迟未触发阈值",
+      "type": "deterministic",
+      "pass_condition": "错误率/延迟未触发阈值 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-verification-gate-3",
+      "name": "业务指标正常",
+      "type": "deterministic",
+      "pass_condition": "业务指标正常 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-verification-gate-4",
+      "name": "回滚条件未触发",
+      "type": "deterministic",
+      "pass_condition": "回滚条件未触发 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "release-verification",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-verification/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-verification/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-verification/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-verification/agents/openai.yaml"
+  ]
+}

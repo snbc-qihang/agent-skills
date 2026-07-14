@@ -1,0 +1,182 @@
+{
+  "skill_id": "redis-design",
+  "version": "1.1.0.0",
+  "stage": "redis_design",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Redis Design",
+    "short_description": "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。",
+    "default_prompt": "使用 redis-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。；Do not use when 不替代数据库主数据设计；不未经审批批量删除 Redis key。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "redis-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "redis-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/redis-design/redis-design.md",
+      "schema": "output.schema.json#redis-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "redis-key-registry.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/redis-design/redis-key-registry.yaml",
+      "schema": "output.schema.json#redis-key-registry.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "cache-consistency-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/redis-design/cache-consistency-plan.md",
+      "schema": "output.schema.json#cache-consistency-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "redis-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/redis-design/redis-risk-report.json",
+      "schema": "output.schema.json#redis-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "Redis",
+      "TTL",
+      "design",
+      "key",
+      "redis",
+      "redis-design",
+      "redis_design",
+      "stage_skill",
+      "value",
+      "一致性",
+      "使用方案",
+      "明确"
+    ],
+    "positive_triggers": [
+      "redis-design",
+      "Redis Design",
+      "设计 Redis 使用方案，明确 key、value、TTL、一致性、降级和回滚策略。"
+    ],
+    "negative_triggers": [
+      "只解释 Redis Design 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "detailed-design.md",
+      "redis-standard.md",
+      "repo_context",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "key 命名合规",
+      "TTL 或无 TTL 原因明确",
+      "一致性策略可验证",
+      "穿透/击穿/雪崩有策略"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "Redis key 批量删除",
+      "核心链路缓存策略变化",
+      "无 TTL 高风险数据"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "redis-design-gate-1",
+      "name": "key 命名合规",
+      "type": "deterministic",
+      "pass_condition": "key 命名合规 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "redis-design-gate-2",
+      "name": "TTL 或无 TTL 原因明确",
+      "type": "deterministic",
+      "pass_condition": "TTL 或无 TTL 原因明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "redis-design-gate-3",
+      "name": "一致性策略可验证",
+      "type": "deterministic",
+      "pass_condition": "一致性策略可验证 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "redis-design-gate-4",
+      "name": "穿透/击穿/雪崩有策略",
+      "type": "deterministic",
+      "pass_condition": "穿透/击穿/雪崩有策略 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "redis-design",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/redis-design/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/redis-design/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/redis-design/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/redis-design/agents/openai.yaml"
+  ]
+}

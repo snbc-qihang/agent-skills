@@ -1,0 +1,137 @@
+{
+  "version": "1.1.0.0",
+  "skills": [
+    {
+      "skill_id": "code-development",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/code-development.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "code-quality-governor",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/code-quality-governor.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "code-review",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/code-review.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "database-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/database-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "design-review",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/design-review.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "detailed-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/detailed-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "engineering-knowledge-miner",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/engineering-knowledge-miner.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "frontend-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/frontend-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "frontend-development",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/frontend-development.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "high-level-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/high-level-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "implementation-controller",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/implementation-controller.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "mq-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/mq-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "redis-design",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/redis-design.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "release-readiness",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/release-readiness.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "release-retrospective",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/release-retrospective.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "release-verification",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/release-verification.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "repo-context-miner",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/repo-context-miner.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "requirement-intake",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/requirement-intake.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "self-evolution-controller",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/self-evolution-controller.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    },
+    {
+      "skill_id": "self-test",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/self-test.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "skill-quality-auditor",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/skill-quality-auditor.ir.json",
+      "risk_level": "medium",
+      "allow_implicit_invocation": true
+    },
+    {
+      "skill_id": "workflow-orchestrator",
+      "path": "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/engineering-assistant/runtime/skills/skills/workflow-orchestrator.ir.json",
+      "risk_level": "high",
+      "allow_implicit_invocation": false
+    }
+  ]
+}

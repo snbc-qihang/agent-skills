@@ -1,0 +1,26 @@
+{
+  "overlay_layer": "module",
+  "project_slug": "example-project",
+  "module_slug": "example-module",
+  "applies_to": {
+    "repositories": [],
+    "packages": [],
+    "apis": [],
+    "pages": [],
+    "jobs": [],
+    "data_sources": []
+  },
+  "rules": [
+    {
+      "rule_id": "MODULE_RULE_ID",
+      "trigger": "",
+      "do": "",
+      "checks": [],
+      "gate": ""
+    }
+  ],
+  "gates": [],
+  "evidence_sources": [],
+  "owner": "",
+  "review_after": ""
+}

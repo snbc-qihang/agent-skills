@@ -1,0 +1,4 @@
+interface:
+  display_name: "研发助手"
+  short_description: "从本地 engineering-assistant 插件缓存加载研发 workflow 总入口。"
+  default_prompt: "使用研发助手处理当前研发任务"

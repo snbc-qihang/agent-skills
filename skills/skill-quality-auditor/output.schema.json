@@ -70,13 +70,8 @@
         },
         "document_status": {
           "enum": [
-            "not_started",
             "draft",
-            "ready_for_self_review",
-            "self_review_failed",
-            "revised",
-            "waiting_for_human_review",
-            "human_review_rejected",
+            "reviewing",
             "approved",
             "final",
             "superseded",
@@ -117,7 +112,7 @@
     },
     "artifacts": {
       "type": "array",
-      "minItems": 0,
+      "minItems": 4,
       "items": {
         "type": "object",
         "required": [

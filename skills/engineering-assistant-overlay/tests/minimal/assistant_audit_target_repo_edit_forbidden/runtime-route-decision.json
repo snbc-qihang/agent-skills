@@ -1,0 +1,15 @@
+{
+  "run_id": "overlay-test-assistant-audit-target-repo-edit-forbidden",
+  "route_tier": "standard",
+  "task_kind": "audit",
+  "evidence_level": "standard",
+  "persistence_mode": "ephemeral",
+  "route_reason": "User is reporting an Engineering Assistant rule/capability defect, not requesting target project implementation.",
+  "trigger_signals": [
+    "研发助手规则缺陷",
+    "不是让你修改代码",
+    "期望研发助手怎么做，实际它做错了什么"
+  ],
+  "explicit_user_request": true,
+  "capability_decisions": []
+}

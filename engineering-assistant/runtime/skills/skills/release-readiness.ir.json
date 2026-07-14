@@ -1,0 +1,189 @@
+{
+  "skill_id": "release-readiness",
+  "version": "1.1.0.0",
+  "stage": "release_readiness",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Release Readiness",
+    "short_description": "判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。",
+    "default_prompt": "使用 release-readiness，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。；Do not use when 不执行生产发布；不绕过高风险发布审批。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "code-quality-report.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "code-review-report.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "release-standard.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "release-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-plan.md",
+      "schema": "output.schema.json#release-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-checklist.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-checklist.md",
+      "schema": "output.schema.json#release-checklist.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "rollback-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/rollback-plan.md",
+      "schema": "output.schema.json#rollback-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-risk-report.json",
+      "schema": "output.schema.json#release-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-gate-decision.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-readiness/release-gate-decision.json",
+      "schema": "output.schema.json#release-gate-decision.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "gate",
+      "readiness",
+      "release",
+      "release-readiness",
+      "release_readiness",
+      "stage_skill",
+      "决策。",
+      "判断是否具备发布条件",
+      "回滚计划和",
+      "并输出发布计划",
+      "检查清单"
+    ],
+    "positive_triggers": [
+      "release-readiness",
+      "Release Readiness",
+      "判断是否具备发布条件，并输出发布计划、检查清单、回滚计划和 gate 决策。"
+    ],
+    "negative_triggers": [
+      "只解释 Release Readiness 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "code-quality-report.json",
+      "code-review-report.md",
+      "release-standard.md",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "high",
+    "cost_class": "high",
+    "evidence_required": [
+      "发布窗口明确",
+      "回滚方案存在",
+      "监控告警存在",
+      "审批状态有效"
+    ],
+    "allow_implicit_invocation": false
+  },
+  "risk": {
+    "risk_level": "high",
+    "allow_implicit_invocation": false,
+    "human_approval_required": [
+      "生产发布",
+      "生产配置变更",
+      "高风险发布",
+      "回滚操作"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "release-readiness-gate-1",
+      "name": "发布窗口明确",
+      "type": "deterministic",
+      "pass_condition": "发布窗口明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-2",
+      "name": "回滚方案存在",
+      "type": "deterministic",
+      "pass_condition": "回滚方案存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-3",
+      "name": "监控告警存在",
+      "type": "deterministic",
+      "pass_condition": "监控告警存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-readiness-gate-4",
+      "name": "审批状态有效",
+      "type": "hybrid",
+      "pass_condition": "审批状态有效 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "release-readiness",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-readiness/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-readiness/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-readiness/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-readiness/agents/openai.yaml"
+  ]
+}

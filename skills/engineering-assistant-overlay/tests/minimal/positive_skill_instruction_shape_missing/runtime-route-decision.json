@@ -1,0 +1,15 @@
+{
+  "run_id": "overlay-test-positive-skill-instruction-shape-missing",
+  "route_tier": "standard",
+  "task_kind": "self_healing",
+  "evidence_level": "standard",
+  "persistence_mode": "ephemeral",
+  "route_reason": "User is asking to improve Engineering Assistant rule behavior.",
+  "trigger_signals": [
+    "研发助手规则缺陷",
+    "写 skill 时别用禁止",
+    "多说应该怎么做"
+  ],
+  "explicit_user_request": true,
+  "capability_decisions": []
+}

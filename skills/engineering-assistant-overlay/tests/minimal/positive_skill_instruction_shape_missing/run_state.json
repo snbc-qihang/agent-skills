@@ -1,0 +1,16 @@
+{
+  "run_id": "overlay-test-positive-skill-instruction-shape-missing",
+  "task_summary": "用户要求按 skill 写法修复研发助手规则缺陷，但候选规则只有禁止和 gate，没有正向执行路径。",
+  "assistant_context": {
+    "assistant_rule_or_capability_audit": true,
+    "explicit_project_code_change_requested": false
+  },
+  "skill_instruction_review": {
+    "description_is_trigger_only": false,
+    "positive_target_behavior_present": false,
+    "completion_checks_present": false,
+    "gate_only_or_prohibition_first": true,
+    "instruction_excerpt": "Do not change target repositories. If changed, mark ASSISTANT_AUDIT_TARGET_REPO_EDIT_FORBIDDEN."
+  },
+  "gates": []
+}

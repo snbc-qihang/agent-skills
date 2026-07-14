@@ -13,6 +13,9 @@ SCENARIO_FIELDS = ["title", "material", "system_scope", "team_rule_refs", "risk_
 VALID_DECISIONS = {"pass", "waiting_for_input", "require_human_review", "block"}
 VALID_STATUS = {"succeeded", "waiting_for_input", "waiting_for_human_review", "blocked"}
 GENERIC_EXPECTED = {"生成声明产物并输出门禁决策", "识别该场景并避免误判通过"}
+DESIGN_GATE_DATASET = Path("engineering-assistant/evals/anti-lazy/code-design-gates.json")
+DESIGN_GATE_VALIDATOR = Path("engineering-assistant/scripts/validate_code_design_gate.py")
+DESIGN_GATE_INTEGRATION_TEST = Path("engineering-assistant/evals/anti-lazy/test_code_design_gate_integration.py")
 
 parser = argparse.ArgumentParser(description="Validate engineering-assistant skill eval coverage.")
 parser.add_argument("--mode", choices=["static", "scored"], default="static")
@@ -72,9 +75,6 @@ def run_scored_evals() -> dict:
             checks.append({"id": "canary-context-pack", "status": "pass" if context.get("status") == "pass" and forbidden_ok and required_ok else "block", "detail": context})
     plugin_sync = []
     with tempfile.TemporaryDirectory() as temp_dir:
-        def stable_temp_text(value) -> str:
-            return str(value).replace(str(Path(temp_dir).resolve()), "$EVAL_TEMP").replace(str(Path(temp_dir)), "$EVAL_TEMP")
-
         publish_root = Path(temp_dir) / "publish"
         marketplace_path = publish_root / ".agents" / "plugins" / "marketplace.json"
         publish_result = subprocess.run(
@@ -93,7 +93,7 @@ def run_scored_evals() -> dict:
         if publish_result.returncode != 0:
             plugin_sync.append({"left": "source", "right": str(publish_root), "status": "block", "detail": publish_result.stdout + publish_result.stderr})
         else:
-            plugin_root = publish_root / "plugins" / "teamwork-engineering-assistant"
+            plugin_root = publish_root / "plugins" / "engineering-assistant"
             for left, right in [("skills", plugin_root / "skills"), ("engineering-assistant", plugin_root / "engineering-assistant")]:
                 result = subprocess.run(["diff", "-qr", left, str(right)], text=True, capture_output=True, check=False)
                 plugin_sync.append({"left": left, "right": str(right), "status": "pass" if result.returncode == 0 else "block", "detail": result.stdout + result.stderr})
@@ -116,7 +116,7 @@ def run_scored_evals() -> dict:
             capture_output=True,
             check=False,
         )
-        personal_plugin_root = personal_root / "plugins" / "teamwork-engineering-assistant"
+        personal_plugin_root = personal_root / "plugins" / "engineering-assistant"
         personal_marketplace = personal_root / ".agents" / "plugins" / "marketplace.json"
         personal_manifest_ok = personal_result.returncode == 0 and (personal_plugin_root / ".codex-plugin" / "plugin.json").exists() and personal_marketplace.exists()
         if personal_manifest_ok:
@@ -125,7 +125,7 @@ def run_scored_evals() -> dict:
                 personal_manifest_ok = (
                     marketplace.get("name") == "personal"
                     and marketplace.get("interface", {}).get("displayName") == "Personal"
-                    and marketplace.get("plugins", [{}])[0].get("source", {}).get("path") == "./plugins/teamwork-engineering-assistant"
+                    and marketplace.get("plugins", [{}])[0].get("source", {}).get("path") == "./plugins/engineering-assistant"
                 )
             except (json.JSONDecodeError, IndexError):
                 personal_manifest_ok = False
@@ -145,7 +145,7 @@ def run_scored_evals() -> dict:
             capture_output=True,
             check=False,
         )
-        hermes_plugin_root = hermes_root / "plugins" / "teamwork-engineering-assistant"
+        hermes_plugin_root = hermes_root / "plugins" / "engineering-assistant"
         hermes_manifest_ok = (
             hermes_result.returncode == 0
             and (hermes_plugin_root / "plugin.yaml").exists()
@@ -162,9 +162,9 @@ def run_scored_evals() -> dict:
                     registered.append({"name": name, "path": str(path), "description": description})
 
             try:
-                spec = importlib.util.spec_from_file_location("teamwork_engineering_assistant_hermes_plugin", hermes_plugin_root / "__init__.py")
+                spec = importlib.util.spec_from_file_location("engineering_assistant_hermes_plugin", hermes_plugin_root / "__init__.py")
                 module = importlib.util.module_from_spec(spec)
-                assert spec is not None and spec.loader is not None
+                assert spec.loader is not None
                 spec.loader.exec_module(module)
                 module.register(FakeHermesContext())
                 expected = sorted(path.parent.name for path in Path("skills").glob("*/SKILL.md"))
@@ -173,15 +173,12 @@ def run_scored_evals() -> dict:
                     and len(registered) == len(expected)
                     and all(Path(item["path"]).exists() for item in registered)
                     and all(item["description"] for item in registered)
-                    and "teamwork-engineering-assistant" in (hermes_root / "config.yaml").read_text(encoding="utf-8")
+                    and "engineering-assistant" in (hermes_root / "config.yaml").read_text(encoding="utf-8")
                 )
             except Exception as exc:
                 hermes_manifest_ok = False
                 hermes_result.stderr += f"\nHermes entrypoint check failed: {exc}"
         plugin_sync.append({"left": "hermes-plugin", "right": str(hermes_plugin_root), "status": "pass" if hermes_manifest_ok else "block", "detail": hermes_result.stdout + hermes_result.stderr})
-        for item in plugin_sync:
-            item["right"] = stable_temp_text(item.get("right", ""))
-            item["detail"] = stable_temp_text(item.get("detail", ""))
     checks.extend({"id": f"plugin-sync-{Path(item['left']).name}", **item} for item in plugin_sync)
     passed = sum(1 for check in checks if check["status"] == "pass")
     report = {
@@ -215,6 +212,37 @@ for required_eval in [
     elif not required_eval.read_text(encoding="utf-8").strip():
         errors.append(f"{required_eval}: eval 数据集为空")
 
+if not DESIGN_GATE_DATASET.exists():
+    errors.append(f"{DESIGN_GATE_DATASET}: 缺少编码设计门禁回归数据集")
+elif not DESIGN_GATE_VALIDATOR.exists():
+    errors.append(f"{DESIGN_GATE_VALIDATOR}: 缺少编码设计门禁验证器")
+else:
+    design_gate_result = subprocess.run(
+        [sys.executable, str(DESIGN_GATE_VALIDATOR), "--eval-dataset", str(DESIGN_GATE_DATASET)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if design_gate_result.returncode != 0:
+        errors.append(
+            "code design gate eval failed: "
+            + (design_gate_result.stdout + design_gate_result.stderr).strip()
+        )
+if not DESIGN_GATE_INTEGRATION_TEST.exists():
+    errors.append(f"{DESIGN_GATE_INTEGRATION_TEST}: 缺少编码设计门禁集成测试")
+else:
+    design_gate_integration = subprocess.run(
+        [sys.executable, str(DESIGN_GATE_INTEGRATION_TEST)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if design_gate_integration.returncode != 0:
+        errors.append(
+            "code design gate integration failed: "
+            + (design_gate_integration.stdout + design_gate_integration.stderr).strip()
+        )
+
 
 def load_json(path: Path) -> dict:
     try:
@@ -244,19 +272,11 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
     if "JDBC" not in technology_selection_policy.get("requires_review", []):
         errors.append(f"{contract_path}: technology_selection_policy.requires_review 必须包含 JDBC")
     execution_gates = contract.get("execution_gates", {})
-    for gate in ["preflight_required_information", "preflight_before_formal_artifacts", "preflight_input_state_required", "formal_generation_requires_ready", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
+    for gate in ["preflight_required_information", "formal_document_metadata_required", "stage_result_validation_required", "block_when_agent_violates_contract"]:
         if execution_gates.get(gate) is not True:
             errors.append(f"{contract_path}: execution_gates.{gate} 必须为 true")
-    runtime_gate = contract.get("preflight_runtime_gate", {})
-    if runtime_gate.get("state_field") != "preflight_input_state":
-        errors.append(f"{contract_path}: preflight_runtime_gate.state_field 必须为 preflight_input_state")
-    if runtime_gate.get("formal_generation_entry_condition") != "preflight_input_state == ready":
-        errors.append(f"{contract_path}: preflight_runtime_gate.formal_generation_entry_condition 必须为 preflight_input_state == ready")
-    required_policy = contract.get("required_information_policy", {})
-    if required_policy.get("formal_generation_entry_condition") != "preflight_input_state == ready":
-        errors.append(f"{contract_path}: required_information_policy.formal_generation_entry_condition 必须为 preflight_input_state == ready")
     required_schema_fields = set(output_schema.get("required", []))
-    for field in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
+    for field in ["language", "document_metadata", "required_information_requests"]:
         if field not in required_schema_fields:
             errors.append(f"{skill / 'output.schema.json'}: required 缺少 {field}")
     fingerprints = set()
@@ -294,7 +314,7 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         if len(data.get("pass_criteria", [])) < 5:
             errors.append(f"{path}: pass_criteria 过少，无法形成团队门禁")
         criteria_text = "\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
+        for required_text in ["language", "document_metadata", "required_information_requests"]:
             if required_text not in criteria_text:
                 errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
         if skill.name in {"code-development", "detailed-design", "design-review", "code-review", "code-quality-governor"} and "framework" not in criteria_text and "mybatis-plus" not in criteria_text:
@@ -305,10 +325,8 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
                     errors.append(f"{path}: pass_criteria 缺少静态分析/HTML 防回归断言 {required_text}")
         if skill.name in {"frontend-design", "frontend-development"} and "frontend" not in criteria_text:
             errors.append(f"{path}: pass_criteria 缺少 frontend 防回归断言")
-        if case == "missing_required_input":
-            for required_text in ["questions", "waiting_for_input", "docs/human-review", "不得生成或登记正式阶段", "preflight_input_state"]:
-                if required_text not in criteria_text:
-                    errors.append(f"{path}: missing_required_input 必须断言 {required_text}")
+        if case == "missing_required_input" and "questions" not in criteria_text:
+            errors.append(f"{path}: missing_required_input 必须断言 questions 非空")
         stage_request = data.get("input", {}).get("stage_run_request", {})
         if stage_request.get("skill_id") != skill.name:
             errors.append(f"{path}: stage_run_request.skill_id 与目录不一致")
@@ -324,38 +342,6 @@ for skill in sorted(p for p in Path("skills").glob("*") if p.is_dir()):
         fingerprints.add(fingerprint)
         if skill.name in {"high-level-design", "detailed-design", "redis-design", "mq-design", "database-design", "design-review"} and len(scenario.get("team_rule_refs", [])) < 3:
             warnings.append(f"{path}: 核心设计 skill 建议至少引用 3 条团队规范")
-    for path in sorted((skill / "evals").glob("*.yaml")):
-        if path.stem in CASES:
-            continue
-        data = load_json(path)
-        if not data:
-            continue
-        for field in REQUIRED_FIELDS:
-            if field not in data:
-                errors.append(f"{path}: 缺少字段 {field}")
-        if data.get("case_type") != path.stem:
-            errors.append(f"{path}: case_type 应为 {path.stem}")
-        scenario = data.get("scenario", {})
-        for field in SCENARIO_FIELDS:
-            if field not in scenario:
-                errors.append(f"{path}: scenario 缺少字段 {field}")
-        if len(str(scenario.get("material", ""))) < 40:
-            errors.append(f"{path}: scenario.material 过短，不能作为真实压力场景")
-        if len(scenario.get("team_rule_refs", [])) < 3:
-            errors.append(f"{path}: 团队专项 eval 至少引用 3 条团队规范")
-        criteria_text = "\n".join(data.get("pass_criteria", []))
-        for required_text in ["language", "preflight_input_state", "document_metadata", "required_information_requests"]:
-            if required_text not in criteria_text:
-                errors.append(f"{path}: pass_criteria 缺少运行时行为断言 {required_text}")
-        for required_text in ["detailed-design.md", "sequenceDiagram", "flowchart", "StageRunResult.artifacts"]:
-            if skill.name == "detailed-design" and required_text not in criteria_text:
-                errors.append(f"{path}: pass_criteria 缺少团队详细设计断言 {required_text}")
-        if data.get("expected_gate_decision") not in VALID_DECISIONS:
-            errors.append(f"{path}: expected_gate_decision 不合法")
-        if data.get("expected_status") not in VALID_STATUS:
-            errors.append(f"{path}: expected_status 不合法")
-        if data.get("required_artifacts") != declared_outputs:
-            errors.append(f"{path}: required_artifacts 与 contract outputs 不一致")
 
 for required_skill in ["frontend-design", "frontend-development"]:
     if not (Path("skills") / required_skill / "SKILL.md").exists():

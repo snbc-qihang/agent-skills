@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-REQUIRED = ["artifacts/_control/current-task.json", "artifacts/_control/design-contract.json", "artifacts/_control/implementation-contract.json", "artifacts/_control/quality-contract.json", "artifacts/_control/task-context.agent.md", "artifacts/_control/artifact-index.json"]
+REQUIRED = ["artifacts/_control/current-task.json", "artifacts/_control/coding-eligibility.json", "artifacts/_control/code-design-decision.json", "artifacts/_control/design-contract.json", "artifacts/_control/implementation-contract.json", "artifacts/_control/quality-contract.json", "artifacts/_control/task-context.agent.md", "artifacts/_control/artifact-index.json"]
 REQUIRED_IMPLEMENTATION_FIELDS = ["allowed_modules", "forbidden_modules", "required_files_or_patterns", "architecture_rules", "required_tests", "done_conditions", "technology_adoption_contract"]
 REQUIRED_EXPECTATION_FIELDS = ["expected_interfaces", "expected_services", "expected_repositories_or_mappers"]
 REQUIRED_QUALITY_FIELDS = ["required_commands", "required_evidence"]
@@ -37,9 +37,13 @@ def main():
     if errors:
         raise SystemExit("\n".join(errors))
     control = root / "artifacts/_control"
+    design_decision = json.loads((control / "code-design-decision.json").read_text(encoding="utf-8"))
     implementation = json.loads((control / "implementation-contract.json").read_text(encoding="utf-8"))
     quality = json.loads((control / "quality-contract.json").read_text(encoding="utf-8"))
     open_questions = json.loads((control / "open-questions.json").read_text(encoding="utf-8")) if (control / "open-questions.json").exists() else {"questions": []}
+    for field in ["changed_fact", "owner_domain", "reuse_evidence", "placement_decision", "protected_behavior", "test_seam", "abstraction_rationale"]:
+        if not has_value(design_decision.get(field)):
+            errors.append(f"code-design-decision.json missing or empty {field}")
     for field in REQUIRED_IMPLEMENTATION_FIELDS:
         if not has_value(implementation.get(field)):
             errors.append(f"implementation-contract.json missing or empty {field}")

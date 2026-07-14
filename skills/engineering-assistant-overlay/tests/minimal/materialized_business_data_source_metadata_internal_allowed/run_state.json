@@ -1,0 +1,24 @@
+{
+  "run_id": "overlay-test-materialized-business-data-source-metadata-internal-allowed",
+  "task_summary": "外部同步/binlog 数据已经落入当前系统业务表，来源字段仅用于内部对账、排障和幂等。",
+  "business_data_context": {
+    "materialized_to_business_tables": true,
+    "current_system_accepts_data": true,
+    "source_metadata_for_internal_use_only": true
+  },
+  "internal_source_metadata": [
+    {
+      "source_system": "ABK",
+      "source_record_id": "external-123",
+      "sync_batch_id": "batch-20260626",
+      "last_synced_at": "2026-06-26T10:18:00+08:00",
+      "used_for": [
+        "reconciliation",
+        "troubleshooting",
+        "idempotency"
+      ]
+    }
+  ],
+  "customer_visible_source_restrictions": [],
+  "gates": []
+}

@@ -1,0 +1,14 @@
+{
+  "run_id": "overlay-test-output-consumption",
+  "consumptions": [
+    {
+      "capability": "codegraph",
+      "source_artifact": "artifacts/codegraph/impact-scope.json",
+      "consumed_by_phase": "verify",
+      "consumed_by_artifact": "assistant-run-feedback.json",
+      "consumption_effect": "Impact scope determined verification summary and pending evidence.",
+      "writeback_target": "run_state.repo_evidence.impact_scope",
+      "confidence": "verified"
+    }
+  ]
+}

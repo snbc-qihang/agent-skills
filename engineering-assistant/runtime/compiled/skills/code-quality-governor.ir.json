@@ -1,46 +1,122 @@
 {
   "skill_id": "code-quality-governor",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "code_quality",
   "type": "cross_cutting_skill",
   "prompt_pack": {
     "display_name": "Code Quality Governor",
     "short_description": "建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。",
-    "default_prompt": "使用 code-quality-governor，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告；Do not use when do not 以 LLM 判断替代 build/test/lint。",
+    "default_prompt": "使用 code-quality-governor，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 建立 Q0-Q4 多层代码质量门禁，输出可被 CI/CD、PR、workflow 消费的结构化质量报告。；Do not use when 不以 LLM 判断替代 build/test/lint；不在测试失败时输出 pass。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "changed-files-report.json",
-    "design-to-code-mapping.yaml",
-    "self-test-report.md",
-    "ci artifacts"
+    {
+      "name": "changed-files-report.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "design-to-code-mapping.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "self-test-report.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "ci artifacts",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "code-quality-report.md",
-    "code-quality-report.html",
-    "code-quality-report.json",
-    "gate-decision.json",
-    "ci-check-summary.md",
-    "static-analysis-report.md",
-    "static-analysis-report.json",
-    "tool-run-summary.json",
-    "improvement-candidates.yaml"
+    {
+      "name": "code-quality-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/code-quality-report.md",
+      "schema": "output.schema.json#code-quality-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "code-quality-report.html",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/code-quality-report.html",
+      "schema": "output.schema.json#code-quality-report.html",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "code-quality-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/code-quality-report.json",
+      "schema": "output.schema.json#code-quality-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "gate-decision.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/gate-decision.json",
+      "schema": "output.schema.json#gate-decision.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "ci-check-summary.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/ci-check-summary.md",
+      "schema": "output.schema.json#ci-check-summary.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "static-analysis-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/static-analysis-report.md",
+      "schema": "output.schema.json#static-analysis-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "static-analysis-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/static-analysis-report.json",
+      "schema": "output.schema.json#static-analysis-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "tool-run-summary.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/tool-run-summary.json",
+      "schema": "output.schema.json#tool-run-summary.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "improvement-candidates.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-quality-governor/improvement-candidates.yaml",
+      "schema": "output.schema.json#improvement-candidates.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -97,12 +173,48 @@
     ]
   },
   "quality_gates": [
-    "Q0 设计一致性",
-    "Q1 确定性工程检查",
-    "Q1.5 Sonar/Qodana/Checkstyle 静态分析",
-    "Q2 语义代码评审",
-    "Q3 风险专项门禁",
-    "Q4 发布前回归门禁"
+    {
+      "gate_id": "code-quality-governor-gate-1",
+      "name": "Q0 设计一致性",
+      "type": "deterministic",
+      "pass_condition": "Q0 设计一致性 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-quality-governor-gate-2",
+      "name": "Q1 确定性工程检查",
+      "type": "deterministic",
+      "pass_condition": "Q1 确定性工程检查 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-quality-governor-gate-3",
+      "name": "Q1.5 Sonar/Qodana/Checkstyle 静态分析",
+      "type": "deterministic",
+      "pass_condition": "Q1.5 Sonar/Qodana/Checkstyle 静态分析 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-quality-governor-gate-4",
+      "name": "Q2 语义代码评审",
+      "type": "deterministic",
+      "pass_condition": "Q2 语义代码评审 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-quality-governor-gate-5",
+      "name": "Q3 风险专项门禁",
+      "type": "deterministic",
+      "pass_condition": "Q3 风险专项门禁 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-quality-governor-gate-6",
+      "name": "Q4 发布前回归门禁",
+      "type": "deterministic",
+      "pass_condition": "Q4 发布前回归门禁 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "code-quality-governor",

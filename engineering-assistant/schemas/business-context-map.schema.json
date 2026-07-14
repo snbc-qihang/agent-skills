@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/engineering-assistant/business-context-map.schema.json",
+  "title": "Business Context Map",
+  "type": "object",
+  "required": [
+    "task_id",
+    "source_evidence",
+    "entry_points",
+    "core_services",
+    "data_layer",
+    "external_or_async_dependencies",
+    "assumptions",
+    "unknowns"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "reason"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lines": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "entry_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "core_services": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "data_layer": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "external_or_async_dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

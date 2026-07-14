@@ -1,47 +1,132 @@
 {
   "skill_id": "engineering-knowledge-miner",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "knowledge_mining",
   "type": "cross_cutting_skill",
   "prompt_pack": {
     "display_name": "Engineering Knowledge Miner",
     "short_description": "从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。",
-    "default_prompt": "使用 engineering-knowledge-miner，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议；Do not use when do not 无证据创建规范。",
+    "default_prompt": "使用 engineering-knowledge-miner，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 从研发流程产物中抽取可复用经验，生成规范候选、检查清单候选、eval 回归样例候选和 skill 反哺建议。；Do not use when 不无证据创建规范；不未经审批修改正式规范。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "design reports",
-    "code quality reports",
-    "review reports",
-    "CI logs",
-    "PR comments",
-    "release reports",
-    "incident reports"
+    {
+      "name": "design reports",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "code quality reports",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "review reports",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "CI logs",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "PR comments",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "release reports",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "incident reports",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "engineering-lessons.md",
-    "rule-candidates.yaml",
-    "standard-patch-suggestions.md",
-    "checklist-patch-suggestions.md",
-    "skill-patch-suggestions.md",
-    "regression-case-candidates.yaml",
-    "knowledge-change-log.md"
+    {
+      "name": "engineering-lessons.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/engineering-lessons.md",
+      "schema": "output.schema.json#engineering-lessons.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "rule-candidates.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/rule-candidates.yaml",
+      "schema": "output.schema.json#rule-candidates.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "standard-patch-suggestions.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/standard-patch-suggestions.md",
+      "schema": "output.schema.json#standard-patch-suggestions.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "checklist-patch-suggestions.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/checklist-patch-suggestions.md",
+      "schema": "output.schema.json#checklist-patch-suggestions.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "skill-patch-suggestions.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/skill-patch-suggestions.md",
+      "schema": "output.schema.json#skill-patch-suggestions.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "regression-case-candidates.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/regression-case-candidates.yaml",
+      "schema": "output.schema.json#regression-case-candidates.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "knowledge-change-log.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/engineering-knowledge-miner/knowledge-change-log.md",
+      "schema": "output.schema.json#knowledge-change-log.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -98,10 +183,34 @@
     ]
   },
   "quality_gates": [
-    "每条经验有来源证据",
-    "规则默认 candidate",
-    "owner 和适用范围明确",
-    "反哺路径明确"
+    {
+      "gate_id": "engineering-knowledge-miner-gate-1",
+      "name": "每条经验有来源证据",
+      "type": "deterministic",
+      "pass_condition": "每条经验有来源证据 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "engineering-knowledge-miner-gate-2",
+      "name": "规则默认 candidate",
+      "type": "deterministic",
+      "pass_condition": "规则默认 candidate 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "engineering-knowledge-miner-gate-3",
+      "name": "owner 和适用范围明确",
+      "type": "deterministic",
+      "pass_condition": "owner 和适用范围明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "engineering-knowledge-miner-gate-4",
+      "name": "反哺路径明确",
+      "type": "deterministic",
+      "pass_condition": "反哺路径明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "engineering-knowledge-miner",

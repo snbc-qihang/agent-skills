@@ -1,0 +1,191 @@
+{
+  "skill_id": "workflow-orchestrator",
+  "version": "1.1.0.0",
+  "stage": "workflow_orchestration",
+  "type": "workflow_skill",
+  "prompt_pack": {
+    "display_name": "Workflow Orchestrator",
+    "short_description": "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。",
+    "default_prompt": "使用 workflow-orchestrator，先确认输出语言和必须补充的信息；进入代码节点前生成并验证 coding-eligibility.json，L2/L3 缺少审批设计时转 full-feature-development，最后输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。；Do not use when 不直接生成阶段文档；不绕过子 skill contract。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "workflow.yaml",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "stage node registry",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "StageRunRequest",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "approval_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "workflow-trace.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/workflow-orchestrator/workflow-trace.json",
+      "schema": "output.schema.json#workflow-trace.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "workflow-summary.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/workflow-orchestrator/workflow-summary.md",
+      "schema": "output.schema.json#workflow-summary.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "approval-requests.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/workflow-orchestrator/approval-requests.json",
+      "schema": "output.schema.json#approval-requests.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "artifact-index.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/workflow-orchestrator/artifact-index.json",
+      "schema": "output.schema.json#artifact-index.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "orchestrator",
+      "trace",
+      "workflow",
+      "workflow-orchestrator",
+      "workflow_orchestration",
+      "workflow_skill",
+      "产物传递和",
+      "全链路",
+      "审批暂停/恢复",
+      "支持阶段选择",
+      "状态机",
+      "记录。"
+    ],
+    "positive_triggers": [
+      "workflow-orchestrator",
+      "Workflow Orchestrator",
+      "支持阶段选择、全链路 workflow、状态机、错误处理、审批暂停/恢复、产物传递和 trace 记录。"
+    ],
+    "negative_triggers": [
+      "只解释 Workflow Orchestrator 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "workflow.yaml",
+      "stage node registry",
+      "StageRunRequest",
+      "approval_context"
+    ],
+    "conflicts_with": [],
+    "risk_level": "high",
+    "cost_class": "high",
+    "evidence_required": [
+      "进入代码节点前编码资格已验证",
+      "节点 contract 匹配",
+      "前置条件满足",
+      "产物 schema 合规",
+      "高风险动作进入审批"
+    ],
+    "allow_implicit_invocation": false
+  },
+  "risk": {
+    "risk_level": "high",
+    "allow_implicit_invocation": false,
+    "human_approval_required": [
+      "人工审批网关",
+      "跳过阻断节点",
+      "恢复 blocked workflow",
+      "高风险动作执行"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "workflow-orchestrator-gate-0",
+      "name": "进入代码节点前编码资格已验证",
+      "type": "deterministic",
+      "pass_condition": "coding-eligibility.json 通过 validate_code_design_gate.py",
+      "fail_action": "route_to full-feature-development 或 block"
+    },
+    {
+      "gate_id": "workflow-orchestrator-gate-1",
+      "name": "节点 contract 匹配",
+      "type": "deterministic",
+      "pass_condition": "节点 contract 匹配 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "workflow-orchestrator-gate-2",
+      "name": "前置条件满足",
+      "type": "deterministic",
+      "pass_condition": "前置条件满足 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "workflow-orchestrator-gate-3",
+      "name": "产物 schema 合规",
+      "type": "deterministic",
+      "pass_condition": "产物 schema 合规 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "workflow-orchestrator-gate-4",
+      "name": "高风险动作进入审批",
+      "type": "hybrid",
+      "pass_condition": "高风险动作进入审批 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "workflow-orchestrator",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/workflow-orchestrator/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/workflow-orchestrator/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/workflow-orchestrator/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/workflow-orchestrator/agents/openai.yaml"
+  ]
+}

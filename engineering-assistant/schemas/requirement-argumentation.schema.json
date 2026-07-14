@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/engineering-assistant/requirement-argumentation.schema.json",
+  "title": "Requirement Argumentation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "risk_level",
+    "clarity",
+    "evidence",
+    "candidates",
+    "selected_path",
+    "rejected_alternatives",
+    "verdict",
+    "conditions",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "risk_level": {"enum": ["L0_FAST", "L1_DIRECT", "L2_SHARED", "L3_CRITICAL"]},
+    "clarity": {
+      "type": "object",
+      "required": ["objective", "target_user", "success_criteria", "constraints", "non_goals", "remaining_material_ambiguity", "questions_asked"],
+      "properties": {
+        "objective": {"type": "string", "minLength": 1},
+        "target_user": {"type": "string", "minLength": 1},
+        "success_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "constraints": {"type": "array", "items": {"type": "string"}},
+        "non_goals": {"type": "array", "items": {"type": "string"}},
+        "why_now": {"type": "string"},
+        "remaining_material_ambiguity": {"type": "boolean"},
+        "questions_asked": {"type": "integer", "minimum": 0, "maximum": 6}
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["architecture_and_code", "dependencies_and_reuse", "data_and_external_systems", "risks_and_rollback", "tests", "cost"],
+      "additionalProperties": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+    },
+    "candidates": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "object", "required": ["id", "summary", "evidence_refs"], "additionalProperties": true},
+    "selected_path": {"type": ["object", "null"]},
+    "rejected_alternatives": {"type": "array", "items": {"type": "object", "required": ["candidate_id", "reason"], "additionalProperties": true},
+    "verdict": {"enum": ["executable", "executable_after_conditions", "not_executable"]},
+    "conditions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "fresh_review": {"type": "object", "additionalProperties": true},
+    "next_action": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": true
+}

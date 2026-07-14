@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "changed_fact",
+    "owner_domain",
+    "reuse_evidence",
+    "placement_decision",
+    "protected_behavior",
+    "test_seam",
+    "abstraction_rationale"
+  ],
+  "properties": {
+    "changed_fact": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner_domain": {
+      "type": "object",
+      "required": [
+        "owner_path",
+        "domain_boundary"
+      ]
+    },
+    "reuse_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "placement_decision": {
+      "type": "object",
+      "required": [
+        "target_module",
+        "target_symbol",
+        "responsibility",
+        "alternatives_rejected"
+      ]
+    },
+    "protected_behavior": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "test_seam": {
+      "type": "object",
+      "required": [
+        "public_interface",
+        "tests"
+      ]
+    },
+    "abstraction_rationale": {
+      "type": "object",
+      "required": [
+        "decision",
+        "rationale"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "reuse_existing",
+            "no_new_abstraction",
+            "new_abstraction"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

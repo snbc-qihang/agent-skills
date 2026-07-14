@@ -1,35 +1,24 @@
 display_name: "MQ Design"
 short_description: "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。"
-default_prompt: "使用 mq-design，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 xlsx template 并按模板工作簿填充输入事实。"
+default_prompt: "使用 mq-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: true
   risk_level: "medium"
   human_approval_required:
     - "MQ topic 删除或重命名"
-    - "MQ 新队列或 topic"
     - "核心消息链路变化"
     - "生产消息回放"
-    - "消息体超过 10KB"
-    - "非仲裁队列"
 metadata:
   owner: "架构师"
   stage: "mq_design"
   type: "stage_skill"
-  trigger_description: "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。"
+  trigger_description: "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。"
 routing:
   intent_tags:
     - "MQ"

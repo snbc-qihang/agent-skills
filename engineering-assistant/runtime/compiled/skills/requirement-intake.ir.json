@@ -1,41 +1,87 @@
 {
   "skill_id": "requirement-intake",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "requirement_intake",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Requirement Intake",
     "short_description": "判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。",
-    "default_prompt": "使用 requirement-intake，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约；Do not use when do not 替代产品决策。",
+    "default_prompt": "使用 requirement-intake，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。；Do not use when 不替代产品决策；不生成代码。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "organization_context",
-    "current_process",
-    "requirement_materials",
-    "risk_policy"
+    {
+      "name": "organization_context",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "current_process",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "requirement_materials",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "requirement-intake-report.md",
-    "requirement-contract.json",
-    "missing-information-list.md",
-    "requirement-risk-assessment.json"
+    {
+      "name": "requirement-intake-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/requirement-intake/requirement-intake-report.md",
+      "schema": "output.schema.json#requirement-intake-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "requirement-contract.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/requirement-intake/requirement-contract.json",
+      "schema": "output.schema.json#requirement-contract.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "missing-information-list.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/requirement-intake/missing-information-list.md",
+      "schema": "output.schema.json#missing-information-list.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "requirement-risk-assessment.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/requirement-intake/requirement-risk-assessment.json",
+      "schema": "output.schema.json#requirement-risk-assessment.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -85,11 +131,41 @@
     ]
   },
   "quality_gates": [
-    "业务目标存在",
-    "验收标准存在",
-    "范围清晰",
-    "高风险事项有 owner",
-    "重大依赖已确认"
+    {
+      "gate_id": "requirement-intake-gate-1",
+      "name": "业务目标存在",
+      "type": "deterministic",
+      "pass_condition": "业务目标存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "requirement-intake-gate-2",
+      "name": "验收标准存在",
+      "type": "deterministic",
+      "pass_condition": "验收标准存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "requirement-intake-gate-3",
+      "name": "范围清晰",
+      "type": "deterministic",
+      "pass_condition": "范围清晰 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "requirement-intake-gate-4",
+      "name": "高风险事项有 owner",
+      "type": "hybrid",
+      "pass_condition": "高风险事项有 owner 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "requirement-intake-gate-5",
+      "name": "重大依赖已确认",
+      "type": "deterministic",
+      "pass_condition": "重大依赖已确认 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "requirement-intake",

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "risk_level": "L3_CRITICAL",
+  "clarity": {
+    "objective": "mutate production data without credentials or rollback",
+    "target_user": "operator",
+    "success_criteria": ["production data changed"],
+    "constraints": ["no credentials", "no approval", "no rollback"],
+    "non_goals": ["no dry run"],
+    "remaining_material_ambiguity": false,
+    "questions_asked": 0
+  },
+  "evidence": {
+    "architecture_and_code": ["production action boundary identified"],
+    "dependencies_and_reuse": ["required operator capability unavailable"],
+    "data_and_external_systems": ["production datastore is external"],
+    "risks_and_rollback": ["rollback path absent"],
+    "tests": ["dry-run environment absent"],
+    "cost": ["unbounded production impact"]
+  },
+  "candidates": [{"id": "direct-production", "summary": "perform direct mutation", "evidence_refs": ["missing-approval"]}],
+  "selected_path": null,
+  "rejected_alternatives": [{"candidate_id": "direct-production", "reason": "approval, credentials, and rollback are missing"}],
+  "verdict": "not_executable",
+  "conditions": ["obtain approval, credentials, dry run, and rollback plan"],
+  "next_action": "stop and propose a dry-run-first alternative"
+}

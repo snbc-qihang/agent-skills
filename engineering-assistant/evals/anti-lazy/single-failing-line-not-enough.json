@@ -1,0 +1,14 @@
+{
+  "id": "single-failing-line-not-enough",
+  "category": "business_context",
+  "given": "Only one failing assertion is shown.",
+  "expected": [
+    "business_context_map.json",
+    "change-impact-matrix.json",
+    "related_tests_or_residual_risk"
+  ],
+  "forbidden": [
+    "patch_only_failing_line",
+    "weaken_assertion_without_contract_evidence"
+  ]
+}

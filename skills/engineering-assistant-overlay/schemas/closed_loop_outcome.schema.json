@@ -1,0 +1,19 @@
+{
+  "required": [
+    "run_id",
+    "feedback_owner",
+    "loop_contract_version",
+    "route",
+    "execution_feedback",
+    "trajectory_distillation",
+    "compression_augmentation",
+    "reinforcement_signal",
+    "external_evidence",
+    "independent_review",
+    "project_memory",
+    "next_run_context"
+  ],
+  "feedback_owner_value": "codex_agent",
+  "score_status_values": ["scored", "pending_metrics"],
+  "external_evidence_values": ["available", "not_configured", "not_checked", "pending_external_connector"]
+}

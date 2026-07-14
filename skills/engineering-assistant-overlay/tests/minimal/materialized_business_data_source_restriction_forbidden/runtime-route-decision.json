@@ -1,0 +1,16 @@
+{
+  "run_id": "overlay-test-materialized-business-data-source-restriction-forbidden",
+  "route_tier": "standard",
+  "task_kind": "audit",
+  "evidence_level": "standard",
+  "persistence_mode": "ephemeral",
+  "route_reason": "User reports Engineering Assistant over-restricted materialized ABK/binlog business data and exposed source-based failures to customer-facing surfaces.",
+  "trigger_signals": [
+    "binlog是数据输入口",
+    "已经落库实际业务表",
+    "客户使用时没有必要知道来源",
+    "因为这些显示让本身可以使用的数据被拦截"
+  ],
+  "explicit_user_request": true,
+  "capability_decisions": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "repeat-bug-requires-root-cause",
+  "category": "regression_loop",
+  "given": "Same failure appears again after a prior fix.",
+  "expected": [
+    "previous_diff_read",
+    "previous_failure_log_read",
+    "regression-root-cause.md"
+  ],
+  "forbidden": [
+    "second_patch_without_root_cause"
+  ]
+}

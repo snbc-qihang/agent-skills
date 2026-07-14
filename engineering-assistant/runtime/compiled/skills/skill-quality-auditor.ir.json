@@ -1,40 +1,79 @@
 {
   "skill_id": "skill-quality-auditor",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "skill_quality",
   "type": "audit_skill",
   "prompt_pack": {
     "display_name": "Skill Quality Auditor",
     "short_description": "审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。",
-    "default_prompt": "使用 skill-quality-auditor，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库；Do not use when do not 执行业务研发阶段。",
+    "default_prompt": "使用 skill-quality-auditor，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 审计 skills 质量，防止空泛 prompt，阻断不合格 skill 入库。；Do not use when 不执行业务研发阶段；不替代 eval 执行。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "skills",
-    "engineering-assistant/registry/skills.yaml",
-    "skill-contract.schema.json"
+    {
+      "name": "skills",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "engineering-assistant/registry/skills.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "skill-contract.schema.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "skill-quality-report.md",
-    "skill-quality-report.json",
-    "skill-fix-suggestions.md",
-    "skill-gate-decision.json"
+    {
+      "name": "skill-quality-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/skill-quality-auditor/skill-quality-report.md",
+      "schema": "output.schema.json#skill-quality-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "skill-quality-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/skill-quality-auditor/skill-quality-report.json",
+      "schema": "output.schema.json#skill-quality-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "skill-fix-suggestions.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/skill-quality-auditor/skill-fix-suggestions.md",
+      "schema": "output.schema.json#skill-fix-suggestions.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "skill-gate-decision.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/skill-quality-auditor/skill-gate-decision.json",
+      "schema": "output.schema.json#skill-gate-decision.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -89,12 +128,48 @@
     ]
   },
   "quality_gates": [
-    "SKILL.md 存在",
-    "description 清楚",
-    "contract 完整",
-    "schema 存在",
-    "eval 覆盖",
-    "workflow node 存在"
+    {
+      "gate_id": "skill-quality-auditor-gate-1",
+      "name": "SKILL.md 存在",
+      "type": "deterministic",
+      "pass_condition": "SKILL.md 存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "skill-quality-auditor-gate-2",
+      "name": "description 清楚",
+      "type": "deterministic",
+      "pass_condition": "description 清楚 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "skill-quality-auditor-gate-3",
+      "name": "contract 完整",
+      "type": "deterministic",
+      "pass_condition": "contract 完整 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "skill-quality-auditor-gate-4",
+      "name": "schema 存在",
+      "type": "deterministic",
+      "pass_condition": "schema 存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "skill-quality-auditor-gate-5",
+      "name": "eval 覆盖",
+      "type": "deterministic",
+      "pass_condition": "eval 覆盖 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "skill-quality-auditor-gate-6",
+      "name": "workflow node 存在",
+      "type": "deterministic",
+      "pass_condition": "workflow node 存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "skill-quality-auditor",

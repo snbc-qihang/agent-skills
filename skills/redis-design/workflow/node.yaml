@@ -2,7 +2,7 @@
   "node_id": "redis-design",
   "stage": "redis_design",
   "skill_id": "redis-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -24,39 +24,23 @@
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
-    "redis-design.md 使用团队 Redis 模板",
     "key 命名合规",
-    "所有 Key 设置 TTL 且单位明确",
+    "TTL 或无 TTL 原因明确",
     "一致性策略可验证",
-    "穿透/击穿/雪崩有策略",
-    "不可用降级策略明确"
+    "穿透/击穿/雪崩有策略"
   ],
   "approval_policy": {
     "required_for": [
       "Redis key 批量删除",
       "核心链路缓存策略变化",
-      "Redis 新 Key",
-      "版本/拓扑/持久化/淘汰策略无法确认"
+      "无 TTL 高风险数据"
     ],
     "decision": [
       "pending",

@@ -2,7 +2,7 @@
   "node_id": "implementation-controller",
   "stage": "implementation_control",
   "skill_id": "implementation-controller",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -11,13 +11,16 @@
   ],
   "depends_on": [],
   "inputs": [
+    "coding-eligibility.json",
     "approved design artifact",
+    "code-design-decision.json",
     "target project root",
     "project profile",
     "changed-files-report.json"
   ],
   "outputs": [
     "current-task.json",
+    "code-design-decision.json",
     "design-contract.json",
     "implementation-contract.json",
     "quality-contract.json",
@@ -33,26 +36,14 @@
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
+    "编码资格和设计证据已通过确定性验证",
     "设计合同已编译",
     "实现范围明确",
     "质量命令非空",
@@ -94,6 +85,7 @@
   "next_nodes": [],
   "artifact_mapping": {
     "current-task.json": "artifacts/implementation-controller/current-task.json",
+    "code-design-decision.json": "artifacts/implementation-controller/code-design-decision.json",
     "design-contract.json": "artifacts/implementation-controller/design-contract.json",
     "implementation-contract.json": "artifacts/implementation-controller/implementation-contract.json",
     "quality-contract.json": "artifacts/implementation-controller/quality-contract.json",

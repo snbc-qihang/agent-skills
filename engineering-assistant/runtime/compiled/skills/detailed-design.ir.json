@@ -1,44 +1,87 @@
 {
   "skill_id": "detailed-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "detailed_design",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Detailed Design",
     "short_description": "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。",
-    "default_prompt": "使用 detailed-design，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 读取 assets template 生成正式产物与 gate decision。",
-    "trigger_description": "Use when 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略；Do not use when do not 批准设计进入研发。",
+    "default_prompt": "使用 detailed-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。；Do not use when 不批准设计进入研发；不直接修改代码。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "high-level-design.md",
-    "architecture-decision-record.md",
-    "module-boundary.yaml",
-    "team_standards"
+    {
+      "name": "high-level-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "architecture-decision-record.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "module-boundary.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "team_standards",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "detailed-design.md",
-    "implementation-plan.md",
-    "interface-contracts.yaml",
-    "test-strategy.md",
-    "database-design.md",
-    "mq-design.xlsx",
-    "redis-design.md"
+    {
+      "name": "detailed-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/detailed-design/detailed-design.md",
+      "schema": "output.schema.json#detailed-design.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "implementation-plan.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/detailed-design/implementation-plan.md",
+      "schema": "output.schema.json#implementation-plan.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "interface-contracts.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/detailed-design/interface-contracts.yaml",
+      "schema": "output.schema.json#interface-contracts.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "test-strategy.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/detailed-design/test-strategy.md",
+      "schema": "output.schema.json#test-strategy.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -71,10 +114,9 @@
     "risk_level": "medium",
     "cost_class": "medium",
     "evidence_required": [
-      "主详细设计只保留功能实现主线",
-      "专项设计独立成文并在主文档引用",
-      "流程使用 flowchart 且紧跟流程设计说明",
-      "DDD/分层/扩展点方案包含 classDiagram",
+      "接口定义完整",
+      "事务边界明确",
+      "幂等策略明确",
       "测试策略覆盖主干和异常路径"
     ],
     "allow_implicit_invocation": true
@@ -85,18 +127,38 @@
     "human_approval_required": [
       "核心链路事务边界变化",
       "高并发路径设计",
-      "权限/认证/鉴权设计",
-      "DDL",
-      "MQ 新队列或 topic",
-      "Redis 新 Key"
+      "权限/认证/鉴权设计"
     ]
   },
   "quality_gates": [
-    "主详细设计只保留功能实现主线",
-    "专项设计独立成文并在主文档引用",
-    "流程使用 flowchart 且紧跟流程设计说明",
-    "DDD/分层/扩展点方案包含 classDiagram",
-    "测试策略覆盖主干和异常路径"
+    {
+      "gate_id": "detailed-design-gate-1",
+      "name": "接口定义完整",
+      "type": "deterministic",
+      "pass_condition": "接口定义完整 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "detailed-design-gate-2",
+      "name": "事务边界明确",
+      "type": "deterministic",
+      "pass_condition": "事务边界明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "detailed-design-gate-3",
+      "name": "幂等策略明确",
+      "type": "deterministic",
+      "pass_condition": "幂等策略明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "detailed-design-gate-4",
+      "name": "测试策略覆盖主干和异常路径",
+      "type": "deterministic",
+      "pass_condition": "测试策略覆盖主干和异常路径 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "detailed-design",

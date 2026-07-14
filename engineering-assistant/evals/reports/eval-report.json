@@ -108,37 +108,37 @@
     {
       "id": "plugin-sync-skills",
       "left": "skills",
-      "right": "$EVAL_TEMP/publish/plugins/teamwork-engineering-assistant/skills",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/plugins/engineering-assistant/skills",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-engineering-assistant",
       "left": "engineering-assistant",
-      "right": "$EVAL_TEMP/publish/plugins/teamwork-engineering-assistant/engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/plugins/engineering-assistant/engineering-assistant",
       "status": "pass",
       "detail": ""
     },
     {
       "id": "plugin-sync-plugin-manifest",
       "left": "plugin-manifest",
-      "right": "$EVAL_TEMP/publish/plugins/teamwork-engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/plugins/engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"$EVAL_TEMP/publish/plugins/teamwork-engineering-assistant\",\n  \"marketplace_path\": \"$EVAL_TEMP/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"$EVAL_TEMP/publish/plugins/teamwork-engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"local-root\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/publish/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     },
     {
       "id": "plugin-sync-personal-marketplace",
       "left": "personal-marketplace",
-      "right": "$EVAL_TEMP/personal/.agents/plugins/marketplace.json",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/personal/.agents/plugins/marketplace.json",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"$EVAL_TEMP/personal/plugins/teamwork-engineering-assistant\",\n  \"marketplace_path\": \"$EVAL_TEMP/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"$EVAL_TEMP/personal/plugins/teamwork-engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"personal\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/personal/plugins/engineering-assistant\",\n  \"marketplace_path\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/personal/.agents/plugins/marketplace.json\",\n  \"plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/personal/plugins/engineering-assistant/.codex-plugin/plugin.json\"\n}\n"
     },
     {
       "id": "plugin-sync-hermes-plugin",
       "left": "hermes-plugin",
-      "right": "$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant",
+      "right": "/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/hermes/plugins/engineering-assistant",
       "status": "pass",
-      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant\",\n  \"hermes_plugin_manifest\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"$EVAL_TEMP/hermes/plugins/teamwork-engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 25\n}\n"
+      "detail": "{\n  \"status\": \"published\",\n  \"layout\": \"hermes\",\n  \"plugin_root\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/hermes/plugins/engineering-assistant\",\n  \"hermes_plugin_manifest\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/hermes/plugins/engineering-assistant/plugin.yaml\",\n  \"hermes_plugin_entrypoint\": \"/private/var/folders/sp/rqwpsl3n1c76pymvvdsssx_00000gn/T/tmph_ghh75z/hermes/plugins/engineering-assistant/__init__.py\",\n  \"hermes_enabled\": true,\n  \"registered_skill_count\": 21\n}\n"
     }
   ]
 }

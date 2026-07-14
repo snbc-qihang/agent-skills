@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Engineering Assistant Absorbed Capabilities Registry",
+  "type": "object",
+  "required": ["pack_id", "local_version", "controller", "gate_owner", "versioning", "source", "router_policy", "capabilities"],
+  "properties": {
+    "pack_id": {"type": "string", "minLength": 1},
+    "local_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "controller": {"const": "engineering-assistant"},
+    "gate_owner": {"const": "engineering-assistant"},
+    "versioning": {
+      "type": "object",
+      "required": ["mode", "upgrade_policy", "upstream_commit_tracking", "automatic_upstream_overwrite"],
+      "properties": {
+        "mode": {"const": "independent"},
+        "upstream_commit_tracking": {"const": false},
+        "automatic_upstream_overwrite": {"const": false}
+      }
+    },
+    "router_policy": {
+      "type": "object",
+      "required": ["sole_entrypoint", "sole_gate_owner", "upstream_router_imported", "upstream_commands_imported"],
+      "properties": {
+        "sole_entrypoint": {"const": "engineering-assistant"},
+        "sole_gate_owner": {"const": "engineering-assistant"},
+        "upstream_router_imported": {"const": false},
+        "upstream_commands_imported": {"const": false}
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["capability_id", "source_skills", "native_owner", "gate_level", "trigger_issue_types", "completion_evidence", "stop_condition", "protected_existing_gates"],
+        "properties": {
+          "gate_level": {"enum": ["G0", "G1", "G2"]}
+        }
+      }
+    }
+  }
+}

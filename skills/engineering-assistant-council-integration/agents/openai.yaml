@@ -1,0 +1,4 @@
+interface:
+  display_name: "研发助手方案审计 Council"
+  short_description: "对主 Agent 的单一完整方案执行并行审计、交叉质疑、修订复核和用户审计门禁"
+  default_prompt: "Use $engineering-assistant-council-integration to audit one complete main-Agent proposal before presenting the final revision to the user."

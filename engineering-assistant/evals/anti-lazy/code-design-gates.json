@@ -1,0 +1,162 @@
+{
+  "version": "1.0",
+  "cases": [
+    {
+      "id": "designless_l2_business_capability_blocks",
+      "eligibility": {
+        "risk_level": "L2_SHARED",
+        "change_kind": "business_capability",
+        "business_capability_change": true,
+        "selected_path": "design_first",
+        "decision": "route_to_design",
+        "source_evidence": [
+          "repo-context-report.md",
+          "module-map.yaml"
+        ],
+        "design_evidence": {
+          "status": "missing"
+        }
+      },
+      "expected": {
+        "pre_code_decision": "block",
+        "gate": "DESIGN_BEFORE_CODE_GATE_MISSING"
+      }
+    },
+    {
+      "id": "l1_local_fix_uses_compact_design",
+      "eligibility": {
+        "risk_level": "L1_DIRECT",
+        "change_kind": "local_behavior",
+        "business_capability_change": false,
+        "selected_path": "compact_design",
+        "decision": "allow_code",
+        "source_evidence": [
+          "src/Formatter.java",
+          "src/FormatterTest.java"
+        ],
+        "design_evidence": {
+          "status": "validated",
+          "compact_design_path": "artifacts/_control/code-design-decision.json"
+        }
+      },
+      "code_design_decision": {
+        "changed_fact": "The formatter preserves an escaped separator in one local branch.",
+        "owner_domain": {
+          "owner_path": "src/Formatter.java",
+          "domain_boundary": "local formatting behavior"
+        },
+        "reuse_evidence": [
+          "Existing Formatter branch and public format method"
+        ],
+        "placement_decision": {
+          "target_module": "src/Formatter.java",
+          "target_symbol": "Formatter.format",
+          "responsibility": "format one input without changing shared parsing",
+          "alternatives_rejected": [
+            "new formatter abstraction is unnecessary for one local behavior"
+          ]
+        },
+        "protected_behavior": [
+          "Unescaped separators retain their current output"
+        ],
+        "test_seam": {
+          "public_interface": "Formatter.format",
+          "tests": [
+            "FormatterTest#preservesEscapedSeparator",
+            "FormatterTest#formatsUnescapedSeparator"
+          ]
+        },
+        "abstraction_rationale": {
+          "decision": "no_new_abstraction",
+          "rationale": "The existing owner already contains the cohesive local rule."
+        }
+      },
+      "expected": {
+        "pre_code_decision": "allow"
+      }
+    },
+    {
+      "id": "business_rule_pileup_requires_revision",
+      "eligibility": {
+        "risk_level": "L3_CRITICAL",
+        "change_kind": "business_capability",
+        "business_capability_change": true,
+        "selected_path": "formal_design",
+        "decision": "allow_code",
+        "source_evidence": [
+          "order-service/src/OrderService.java",
+          "approved/order-capability-design.md"
+        ],
+        "design_evidence": {
+          "status": "approved",
+          "formal_design_path": "approved/order-capability-design.md"
+        }
+      },
+      "business_code_pileup_check": {
+        "business_capability_change": true,
+        "reviewed_files": [
+          "order-service/src/OrderService.java"
+        ],
+        "signals": {
+          "duplicated_business_rule": {
+            "detected": true,
+            "evidence": [
+              "membership eligibility is repeated in OrderService#create and #reprice"
+            ]
+          },
+          "unrelated_rule_concentration": {
+            "detected": true,
+            "evidence": [
+              "coupon, membership, and inventory decisions are added to OrderService#create"
+            ]
+          },
+          "duplicated_state_transition": {
+            "detected": false,
+            "evidence": []
+          },
+          "domain_leakage": {
+            "detected": true,
+            "evidence": [
+              "OrderService decides membership tier ownership without a membership contract"
+            ]
+          }
+        },
+        "placement_outcome": "revise_design",
+        "decision": "block",
+        "rationale": "The diff adds three independent rule owners to one application service method.",
+        "tests": [
+          "OrderApplicationServiceTest",
+          "MembershipEligibilityContractTest"
+        ]
+      },
+      "expected": {
+        "pre_code_decision": "allow",
+        "post_code_decision": "block"
+      }
+    },
+    {
+      "id": "tdd_does_not_replace_architecture_decision",
+      "eligibility": {
+        "risk_level": "L2_SHARED",
+        "change_kind": "business_capability",
+        "business_capability_change": true,
+        "selected_path": "compact_design",
+        "decision": "allow_code",
+        "source_evidence": [
+          "tests/NewSharedCapabilityTest.java"
+        ],
+        "design_evidence": {
+          "status": "missing"
+        },
+        "tdd_evidence": {
+          "red_test": "NewSharedCapabilityTest",
+          "status": "red"
+        }
+      },
+      "expected": {
+        "pre_code_decision": "block",
+        "gate": "DESIGN_BEFORE_CODE_GATE_MISSING"
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+display_name: "Self Evolution Controller"
+short_description: "让研发助手基于真实失败证据进行自悟修复，生成 skill/eval/门禁补丁并验证。"
+default_prompt: "使用 self-evolution-controller，先读取失败证据和源事实，归因研发助手自身问题，生成 skill/eval 补丁候选、验证报告和回滚方案；高风险变更进入人工审阅。"
+language_policy:
+  supported:
+    - "zh-CN"
+    - "en"
+  when_unspecified: "ask_user"
+  question: "请确认输出语言：简体中文还是 English？"
+policy:
+  allow_implicit_invocation: false
+  risk_level: "high"
+  human_approval_required:
+    - "修改高风险 skill"
+    - "修改自动流转或审批策略"
+    - "删除或弱化质量门禁"
+metadata:
+  owner: "规范 owner"
+  stage: "self_evolution"
+  type: "cross_cutting_skill"
+  trigger_description: "Use when the request is about 研发助手自悟修复、自我进化、反偷懒治理、重复问题归因、skill/eval/门禁补丁生成和验证。；Do not use when 不直接修改业务项目代码；不绕过人工审批发布高风险规则。"
+routing:
+  intent_tags:
+    - "self-evolution"
+    - "self_evolution"
+    - "自悟修复"
+    - "自我进化"
+    - "偷懒"
+    - "反偷懒"
+    - "重复问题"
+    - "修A破坏B"
+    - "git合并丢代码"
+  allow_implicit_invocation: false
+  cost_class: "high"

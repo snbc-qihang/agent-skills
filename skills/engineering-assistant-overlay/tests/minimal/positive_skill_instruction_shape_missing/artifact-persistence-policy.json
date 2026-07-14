@@ -1,0 +1,5 @@
+{
+  "run_id": "overlay-test-positive-skill-instruction-shape-missing",
+  "target_repo_write_allowed": false,
+  "persistence_mode": "ephemeral"
+}

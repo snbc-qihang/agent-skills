@@ -1,6 +1,6 @@
 {
   "workflow_id": "knowledge-review",
-  "version": "1.1.0",
+  "version": "1.1.0.0",
   "states": [
     "pending",
     "running",
@@ -26,12 +26,23 @@
     "single_node"
   ],
   "default_entry_mode": "auto_flow",
-  "start_node": "assistant-feedback-capture",
+  "routing_policy": {
+    "mode": "capability_conditioned_dag",
+    "router": "engineering-assistant/scripts/route_skill.py",
+    "signals_registry": "engineering-assistant/registry/skill-routing-signals.json",
+    "execute_selected_subgraph_only": true,
+    "non_selected_node_status": "skipped",
+    "skip_reason_required": true,
+    "parallelize_independent_ready_nodes": true,
+    "completion_barrier_required": true,
+    "legacy_next_nodes": "dependency_hints_only"
+  },
+  "start_node": "engineering-knowledge-miner",
   "terminal_nodes": [
     "skill-quality-auditor"
   ],
   "composition_policy": {
-    "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先执行 preflight gate，preflight_input_state != ready 时暂停，不进入 formal_generation 或 next_nodes。",
+    "auto_flow": "从 start_node 开始，按 next_nodes 自动流转；每个节点先检查 preflight_input_state，非 ready 时暂停并禁止继续 formal_generation 或进入下游节点。",
     "from_node": "从用户指定 start_node 开始继续流转；必须校验该节点存在，并确认所需上游 artifacts 已提供或可从 artifact_index 获取。",
     "single_node": "只执行用户指定 target_node，不自动进入 next_nodes；输出该节点 StageRunResult 和可继续执行的后续节点建议。",
     "custom": "可按任务目标裁剪节点集合，但必须保留节点输入输出契约、失败策略、审批策略和产物路由。"
@@ -45,12 +56,12 @@
       "blocked"
     ],
     "formal_generation_entry_condition": "preflight_input_state == ready",
-    "pause_when": [
+    "formal_generation_blocked_when": [
       "preflight_input_state != ready",
       "存在 blocking required_information_requests",
       "human-review HTML 已生成但补充答案未写回机读事实源"
     ],
-    "allowed_artifacts_when_waiting_for_input": [
+    "waiting_for_input_allowed_artifacts": [
       "information-inventory.json",
       "context-source-map.json",
       "missing-information-list.json",
@@ -63,7 +74,7 @@
       "workflow-trace.json",
       "resume-point.json"
     ],
-    "forbidden_formal_artifacts_when_waiting_for_input": [
+    "waiting_for_input_forbidden_formal_artifacts": [
       "high-level-design.md",
       "detailed-design.md",
       "database-design.md",
@@ -73,7 +84,8 @@
       "test-strategy.md"
     ],
     "block_current_node_formal_generation": true,
-    "block_next_nodes": true
+    "block_next_nodes": true,
+    "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
   },
   "design_governance_policy": {
     "states": [
@@ -236,64 +248,12 @@
       "tl_review_required": true
     }
   },
-  "lean_runtime_router_policy": {
-    "artifact_persistence_policy": {
-      "default_persistence_mode": "ephemeral",
-      "ephemeral_root_scope": "target_project",
-      "run_artifact_root": ".run-artifacts/",
-      "ephemeral_root_template": ".run-artifacts/engineering-assistant/<run_id>/",
-      "docs_promotion_policy": {
-        "target_root": "docs/",
-        "requires_explicit_user_request": true,
-        "requires_delivery_material_confirmation": true
-      }
-    },
-    "evidence_levels": [
-      "inline",
-      "lite",
-      "standard",
-      "formal"
-    ],
-    "persistence_modes": [
-      "inline",
-      "ephemeral",
-      "target_repo",
-      "blocked"
-    ],
-    "required_feedback_artifacts": [
-      "assistant-run-feedback.json"
-    ],
-    "pollution_markers": [
-      "TARGET_REPO_ARTIFACT_POLLUTION",
-      "PROCESS_DOCUMENTATION_POLLUTION"
-    ],
-    "document_spine_policy": {
-      "spine_artifact": "docs/00-index/product-planning-spine.md",
-      "machine_index": "docs/00-index/document-index.json",
-      "active_document_budget": 12,
-      "active_context_rule": "不得因 docs 增长而全量扫读；必须通过 planning spine 和 document index 选择最小上下文。"
-    },
-    "agent_execution_monitor_policy": {
-      "failure_markers": [
-        "SUBAGENT_UNVERIFIED_SUCCESS",
-        "SUBAGENT_EVIDENCE_MISSING"
-      ],
-      "strict_check_rule": "subagent 成功必须有 observed_evidence、independent_verification 和 orchestrator 消费记录。"
-    },
-    "product_plan_alignment_policy": {
-      "required_before_task_close": true,
-      "drift_markers": [
-        "LOCAL_OPTIMUM_ONLY",
-        "PRODUCT_PLAN_DRIFT"
-      ]
-    }
-  },
   "nodes": [
     {
-      "node_id": "assistant-feedback-capture",
-      "stage": "feedback_capture",
-      "skill_id": "assistant-feedback-capture",
-      "version": "1.1.0",
+      "node_id": "engineering-knowledge-miner",
+      "stage": "knowledge_mining",
+      "skill_id": "engineering-knowledge-miner",
+      "version": "1.1.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -301,98 +261,6 @@
         "single_node"
       ],
       "depends_on": [],
-      "inputs": [
-        "StageRunResult",
-        "assistant-run-feedback.json",
-        "workflow-trace.json",
-        "user correction summary",
-        "tool logs"
-      ],
-      "outputs": [
-        "feedback-event.json",
-        "feedback-inbox-entry.json",
-        "feedback-capture-report.md"
-      ],
-      "preconditions": [
-        "contract 输入可用",
-        "风险策略已加载",
-        "preflight gate 已执行"
-      ],
-      "preflight_gate": {
-        "state_field": "preflight_input_state",
-        "states": [
-          "ready",
-          "waiting_for_input",
-          "waiting_for_human_review",
-          "blocked"
-        ],
-        "formal_generation_entry_condition": "preflight_input_state == ready",
-        "block_formal_generation_when_not_ready": true,
-        "block_next_nodes_when_not_ready": true
-      },
-      "postconditions": [
-        "StageRunResult 已输出",
-        "产物已登记索引"
-      ],
-      "quality_gates": [
-        "反馈事件有证据路径",
-        "用户纠正优先级已标记",
-        "目标项目与中心仓库落点明确",
-        "事件已标记 consumed_by_evolution_review=false"
-      ],
-      "approval_policy": {
-        "required_for": [
-          "采集敏感内容",
-          "提升为正式规范候选",
-          "修改正式 skill"
-        ],
-        "decision": [
-          "pending",
-          "approved",
-          "rejected"
-        ]
-      },
-      "retry_policy": {
-        "max_attempts": 1,
-        "retry_on": [
-          "TOOL_UNAVAILABLE",
-          "UNKNOWN_ERROR"
-        ]
-      },
-      "failure_policy": {
-        "block_on": [
-          "QUALITY_GATE_FAILED",
-          "RISK_POLICY_VIOLATION",
-          "STAGE_RESULT_CONTRACT_VIOLATION"
-        ],
-        "pause_on": [
-          "HUMAN_APPROVAL_REQUIRED",
-          "MISSING_REQUIRED_INPUT"
-        ]
-      },
-      "next_nodes": [
-        "engineering-knowledge-miner"
-      ],
-      "artifact_mapping": {
-        "feedback-event.json": "artifacts/assistant-feedback-capture/feedback-event.json",
-        "feedback-inbox-entry.json": "artifacts/assistant-feedback-capture/feedback-inbox-entry.json",
-        "feedback-capture-report.md": "artifacts/assistant-feedback-capture/feedback-capture-report.md"
-      }
-    },
-    {
-      "node_id": "engineering-knowledge-miner",
-      "stage": "knowledge_mining",
-      "skill_id": "engineering-knowledge-miner",
-      "version": "1.1.0",
-      "mode": "standalone|workflow",
-      "entry_modes": [
-        "auto_flow",
-        "from_node",
-        "single_node"
-      ],
-      "depends_on": [
-        "assistant-feedback-capture"
-      ],
       "inputs": [
         "design reports",
         "code quality reports",
@@ -413,21 +281,8 @@
       ],
       "preconditions": [
         "contract 输入可用",
-        "风险策略已加载",
-        "preflight gate 已执行"
+        "风险策略已加载"
       ],
-      "preflight_gate": {
-        "state_field": "preflight_input_state",
-        "states": [
-          "ready",
-          "waiting_for_input",
-          "waiting_for_human_review",
-          "blocked"
-        ],
-        "formal_generation_entry_condition": "preflight_input_state == ready",
-        "block_formal_generation_when_not_ready": true,
-        "block_next_nodes_when_not_ready": true
-      },
       "postconditions": [
         "StageRunResult 已输出",
         "产物已登记索引"
@@ -469,7 +324,7 @@
         ]
       },
       "next_nodes": [
-        "skill-evolution-review"
+        "skill-quality-auditor"
       ],
       "artifact_mapping": {
         "engineering-lessons.md": "artifacts/engineering-knowledge-miner/engineering-lessons.md",
@@ -482,10 +337,10 @@
       }
     },
     {
-      "node_id": "skill-evolution-review",
-      "stage": "skill_evolution_review",
-      "skill_id": "skill-evolution-review",
-      "version": "1.1.0",
+      "node_id": "skill-quality-auditor",
+      "stage": "skill_quality",
+      "skill_id": "skill-quality-auditor",
+      "version": "1.1.0.0",
       "mode": "standalone|workflow",
       "entry_modes": [
         "auto_flow",
@@ -494,102 +349,6 @@
       ],
       "depends_on": [
         "engineering-knowledge-miner"
-      ],
-      "inputs": [
-        "feedback-inbox.json",
-        "feedback-event.json",
-        "engineering-lessons.md",
-        "skill registry"
-      ],
-      "outputs": [
-        "skill-evolution-report.md",
-        "skill-evolution-candidates.json",
-        "skill-patch-proposals.json",
-        "regression-case-candidates.yaml",
-        "feedback-rejection-log.json"
-      ],
-      "preconditions": [
-        "contract 输入可用",
-        "风险策略已加载",
-        "preflight gate 已执行"
-      ],
-      "preflight_gate": {
-        "state_field": "preflight_input_state",
-        "states": [
-          "ready",
-          "waiting_for_input",
-          "waiting_for_human_review",
-          "blocked"
-        ],
-        "formal_generation_entry_condition": "preflight_input_state == ready",
-        "block_formal_generation_when_not_ready": true,
-        "block_next_nodes_when_not_ready": true
-      },
-      "postconditions": [
-        "StageRunResult 已输出",
-        "产物已登记索引"
-      ],
-      "quality_gates": [
-        "每个候选有来源事件",
-        "accept/reject verdict 明确",
-        "重复用户纠正已生成回归候选",
-        "正式 skill 修改需要人工审批"
-      ],
-      "approval_policy": {
-        "required_for": [
-          "应用 skill patch",
-          "新增强制 eval",
-          "修改 workflow 或 quality gate",
-          "发布插件版本"
-        ],
-        "decision": [
-          "pending",
-          "approved",
-          "rejected"
-        ]
-      },
-      "retry_policy": {
-        "max_attempts": 1,
-        "retry_on": [
-          "TOOL_UNAVAILABLE",
-          "UNKNOWN_ERROR"
-        ]
-      },
-      "failure_policy": {
-        "block_on": [
-          "QUALITY_GATE_FAILED",
-          "RISK_POLICY_VIOLATION",
-          "STAGE_RESULT_CONTRACT_VIOLATION"
-        ],
-        "pause_on": [
-          "HUMAN_APPROVAL_REQUIRED",
-          "MISSING_REQUIRED_INPUT"
-        ]
-      },
-      "next_nodes": [
-        "skill-quality-auditor"
-      ],
-      "artifact_mapping": {
-        "skill-evolution-report.md": "artifacts/skill-evolution-review/skill-evolution-report.md",
-        "skill-evolution-candidates.json": "artifacts/skill-evolution-review/skill-evolution-candidates.json",
-        "skill-patch-proposals.json": "artifacts/skill-evolution-review/skill-patch-proposals.json",
-        "regression-case-candidates.yaml": "artifacts/skill-evolution-review/regression-case-candidates.yaml",
-        "feedback-rejection-log.json": "artifacts/skill-evolution-review/feedback-rejection-log.json"
-      }
-    },
-    {
-      "node_id": "skill-quality-auditor",
-      "stage": "skill_quality",
-      "skill_id": "skill-quality-auditor",
-      "version": "1.1.0",
-      "mode": "standalone|workflow",
-      "entry_modes": [
-        "auto_flow",
-        "from_node",
-        "single_node"
-      ],
-      "depends_on": [
-        "skill-evolution-review"
       ],
       "inputs": [
         "skills",
@@ -604,21 +363,8 @@
       ],
       "preconditions": [
         "contract 输入可用",
-        "风险策略已加载",
-        "preflight gate 已执行"
+        "风险策略已加载"
       ],
-      "preflight_gate": {
-        "state_field": "preflight_input_state",
-        "states": [
-          "ready",
-          "waiting_for_input",
-          "waiting_for_human_review",
-          "blocked"
-        ],
-        "formal_generation_entry_condition": "preflight_input_state == ready",
-        "block_formal_generation_when_not_ready": true,
-        "block_next_nodes_when_not_ready": true
-      },
       "postconditions": [
         "StageRunResult 已输出",
         "产物已登记索引"

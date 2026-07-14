@@ -1,0 +1,38 @@
+version: 3
+defaults:
+  backend: subagents
+  external_model_api_enabled: false
+  max_members: 3
+  max_rounds: 2
+  member_write_policy: read_only
+  member_proposal_policy: audit_only_no_competing_proposal
+  dispatch_mode: parallel_ready_set
+  synthesis_method: anonymous_proposal_audit_synthesis
+  deliberation_mode: controller_relayed_proposal_audit
+  review_object: single_baseline_proposal
+  competing_proposals_allowed: false
+  require_all_members_audit_baseline: true
+  require_all_members_cross_review: true
+  require_author_response_to_every_finding: true
+  require_all_members_review_final_proposal: true
+  require_zero_unresolved_blocking_findings_before_user_review: true
+  require_user_review_before_development: true
+  unanimity_required: false
+limits:
+  min_members: 2
+  hard_max_members: 4
+  hard_max_rounds: 2
+  minimum_cross_reviews_per_member: 1
+escalation:
+  second_round_only_when:
+    - material_disagreement
+    - repeated_bug_after_first_council_experiment
+    - critical_release_decision
+  human_review_when:
+    - unresolved_product_decision
+    - deterministic_gate_failed
+    - material_disagreement_without_experiment
+    - two_rounds_exhausted
+privacy:
+  repository_content_external_transfer: deny_by_default
+  require_explicit_approval_for_external_model_api: true

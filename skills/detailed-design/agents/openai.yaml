@@ -1,20 +1,12 @@
 display_name: "Detailed Design"
 short_description: "将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。"
-default_prompt: "使用 detailed-design，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 assets template 并按模板骨架逐节填充输入事实。"
+default_prompt: "使用 detailed-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: true
   risk_level: "medium"
@@ -22,14 +14,11 @@ policy:
     - "核心链路事务边界变化"
     - "高并发路径设计"
     - "权限/认证/鉴权设计"
-    - "DDL"
-    - "MQ 新队列或 topic"
-    - "Redis 新 Key"
 metadata:
   owner: "后端开发"
   stage: "detailed_design"
   type: "stage_skill"
-  trigger_description: "Use when 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略；Do not use when do not 批准设计进入研发。"
+  trigger_description: "Use when the request is about 将概要设计拆解为可实现的详细设计、接口契约、任务清单和测试策略。；Do not use when 不批准设计进入研发；不直接修改代码。"
 routing:
   intent_tags:
     - "design"

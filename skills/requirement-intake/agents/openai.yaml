@@ -1,20 +1,12 @@
 display_name: "Requirement Intake"
 short_description: "判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。"
-default_prompt: "使用 requirement-intake，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后再进入 formal_generation 输出声明产物、findings、required actions 和 gate decision。"
+default_prompt: "使用 requirement-intake，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: true
   risk_level: "medium"
@@ -26,7 +18,7 @@ metadata:
   owner: "产品/需求负责人"
   stage: "requirement_intake"
   type: "stage_skill"
-  trigger_description: "Use when 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约；Do not use when do not 替代产品决策。"
+  trigger_description: "Use when the request is about 判断需求是否具备进入设计阶段的条件，并输出可复用需求契约。；Do not use when 不替代产品决策；不生成代码。"
 routing:
   intent_tags:
     - "intake"

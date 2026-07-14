@@ -1,0 +1,17 @@
+{
+  "run_id": "overlay-test-capability-health",
+  "capabilities": [
+    {
+      "capability": "codegraph",
+      "availability": "available",
+      "index_status": "current",
+      "covered_repositories": [
+        "bc-service"
+      ],
+      "last_index_time": "2026-06-21T00:00:00+08:00",
+      "fallback": "rg + targeted file read",
+      "confidence": "high",
+      "health_notes": []
+    }
+  ]
+}

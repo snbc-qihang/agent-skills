@@ -2,7 +2,6 @@
   "id": "database-design-control_plane_drift",
   "name": "Database Design control plane drift",
   "case_type": "control_plane_drift",
-  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Database Design control plane drift 团队规则场景",
     "material": "任务已进入研发后多轮执行，但 artifacts/_control 中 current-task、artifact-index、quality-contract、implementation-contract 或 task-context.agent.md 与 stage result 状态不一致。",
@@ -14,7 +13,7 @@
       "DB3"
     ],
     "risk_focus": [
-      "database-design.md 使用 OLTP 或 OLAP 团队模板",
+      "字段和索引均有查询/约束用途",
       "DB1 MySQL 是事实数据唯一真相来源，Redis/MQ 不作为事实数据最终来源",
       "证据链",
       "门禁决策"
@@ -59,13 +58,12 @@
   "expected_status": "blocked",
   "pass_criteria": [
     "StageRunResult status 合法",
-    "StageRunResult 必须包含 preflight_input_state，且 formal_generation 入口条件必须是 preflight_input_state == ready",
     "未指定 language 时必须询问用户选择 zh-CN 或 en",
+    "preflight_input_state 必须存在，且 formal generation 仅允许在 preflight_input_state == ready 时发生",
     "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
-    "missing_required_input 场景必须输出非空 required_information_requests.questions",
-    "missing_required_input 场景必须先暂停在 waiting_for_input，并生成 docs/human-review/ 可填写 HTML 审阅包",
-    "blocking 信息补齐并写回 StageRunRequest.context 或 artifact index 前，不得生成或登记正式阶段 Markdown/Excel/JSON 产物",
-    "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
+    "missing_required_input 场景必须输出非空 required_information_requests.questions，并保持 waiting_for_input / preflight_input_state=waiting_for_input",
+    "missing_required_input 场景必须生成 docs/human-review 可填写 HTML，且不得生成或登记正式阶段文档",
+    "阶段节点不遵守 language、preflight_input_state、document_metadata 或 required_information_requests 契约时必须 blocked",
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
     "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",
@@ -75,10 +73,7 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批",
-    "生成正式 Markdown 文档前必须先读取对应 assets template",
-    "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input"
+    "策略要求审批时已请求人工审批"
   ],
   "severity_when_failed": "major",
   "grader": {

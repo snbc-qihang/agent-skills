@@ -1,0 +1,12 @@
+{
+  "id": "fix-a-must-protect-b",
+  "category": "adjacent_business_regression",
+  "given": "Fix A shares fields/state with B.",
+  "expected": [
+    "adjacent_business_in_change_impact_matrix",
+    "protective_regression_command_or_residual_risk"
+  ],
+  "forbidden": [
+    "claim_no_impact_without_evidence"
+  ]
+}

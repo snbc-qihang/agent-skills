@@ -1,0 +1,175 @@
+{
+  "skill_id": "release-retrospective",
+  "version": "1.1.0.0",
+  "stage": "release_retrospective",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Release Retrospective",
+    "short_description": "复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。",
+    "default_prompt": "使用 release-retrospective，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。；Do not use when 不将候选规范直接发布；不隐藏发布问题。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "release-verification-report.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "code-quality-report.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "incident reports",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "release logs",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "release-retrospective.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-retrospective/release-retrospective.md",
+      "schema": "output.schema.json#release-retrospective.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "release-lessons.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-retrospective/release-lessons.yaml",
+      "schema": "output.schema.json#release-lessons.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "follow-up-actions.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/release-retrospective/follow-up-actions.md",
+      "schema": "output.schema.json#follow-up-actions.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "release",
+      "release-retrospective",
+      "release_retrospective",
+      "retrospective",
+      "skill",
+      "stage_skill",
+      "复盘发布过程",
+      "改进候选。",
+      "沉淀发布问题",
+      "测试遗漏",
+      "规范改进候选和",
+      "设计遗漏"
+    ],
+    "positive_triggers": [
+      "release-retrospective",
+      "Release Retrospective",
+      "复盘发布过程，沉淀发布问题、测试遗漏、设计遗漏、规范改进候选和 skill 改进候选。"
+    ],
+    "negative_triggers": [
+      "只解释 Release Retrospective 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "release-verification-report.md",
+      "code-quality-report.json",
+      "incident reports",
+      "release logs"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "问题有证据",
+      "行动项有 owner",
+      "规范候选状态为 candidate",
+      "skill 改进候选明确"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "行动项关闭",
+      "规范候选批准",
+      "高风险复盘结论发布"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "release-retrospective-gate-1",
+      "name": "问题有证据",
+      "type": "deterministic",
+      "pass_condition": "问题有证据 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-retrospective-gate-2",
+      "name": "行动项有 owner",
+      "type": "deterministic",
+      "pass_condition": "行动项有 owner 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-retrospective-gate-3",
+      "name": "规范候选状态为 candidate",
+      "type": "deterministic",
+      "pass_condition": "规范候选状态为 candidate 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "release-retrospective-gate-4",
+      "name": "skill 改进候选明确",
+      "type": "deterministic",
+      "pass_condition": "skill 改进候选明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "release-retrospective",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-retrospective/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-retrospective/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-retrospective/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/release-retrospective/agents/openai.yaml"
+  ]
+}

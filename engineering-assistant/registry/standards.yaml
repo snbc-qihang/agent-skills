@@ -1,12 +1,6 @@
 {
   "standards": [
     {
-      "id": "team-adaptation-standard",
-      "path": "engineering-assistant/standards/team-adaptation-standard.md",
-      "status": "published",
-      "owner": "规范 owner"
-    },
-    {
       "id": "architecture-standard",
       "path": "engineering-assistant/standards/architecture-standard.md",
       "status": "published",
@@ -77,6 +71,12 @@
       "path": "engineering-assistant/standards/required-information-standard.md",
       "status": "published",
       "owner": "规范 owner"
+    },
+    {
+      "id": "requirement-clarification-and-argumentation-standard",
+      "path": "engineering-assistant/standards/requirement-clarification-and-argumentation-standard.md",
+      "status": "published",
+      "owner": "requirement-intake"
     }
   ]
 }

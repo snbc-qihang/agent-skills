@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "business_capability_change",
+    "reviewed_files",
+    "signals",
+    "placement_outcome",
+    "decision",
+    "rationale",
+    "tests"
+  ],
+  "properties": {
+    "business_capability_change": {
+      "type": "boolean"
+    },
+    "reviewed_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "signals": {
+      "type": "object",
+      "required": [
+        "duplicated_business_rule",
+        "unrelated_rule_concentration",
+        "duplicated_state_transition",
+        "domain_leakage"
+      ]
+    },
+    "placement_outcome": {
+      "enum": [
+        "keep_current",
+        "reuse_existing_owner",
+        "revise_design"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "pass",
+        "block"
+      ]
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

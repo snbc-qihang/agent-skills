@@ -1,42 +1,94 @@
 {
   "skill_id": "self-test",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "self_test",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Self Test",
     "short_description": "生成并执行自测方案，输出失败原因、影响范围和阻断判断。",
-    "default_prompt": "使用 self-test，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 生成并执行自测方案，输出失败原因、影响范围和阻断判断；Do not use when do not 伪造测试结果。",
+    "default_prompt": "使用 self-test，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 生成并执行自测方案，输出失败原因、影响范围和阻断判断。；Do not use when 不伪造测试结果；不忽略失败测试。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "implementation-summary.md",
-    "changed-files-report.json",
-    "test-strategy.md",
-    "repo_context"
+    {
+      "name": "implementation-summary.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "changed-files-report.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "test-strategy.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "self-test-report.md",
-    "test-commands.log",
-    "coverage-summary.md",
-    "failed-tests.md",
-    "test-risk-report.json"
+    {
+      "name": "self-test-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/self-test/self-test-report.md",
+      "schema": "output.schema.json#self-test-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "test-commands.log",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/self-test/test-commands.log",
+      "schema": "output.schema.json#test-commands.log",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "coverage-summary.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/self-test/coverage-summary.md",
+      "schema": "output.schema.json#coverage-summary.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "failed-tests.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/self-test/failed-tests.md",
+      "schema": "output.schema.json#failed-tests.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "test-risk-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/self-test/test-risk-report.json",
+      "schema": "output.schema.json#test-risk-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -86,10 +138,34 @@
     ]
   },
   "quality_gates": [
-    "测试命令实际执行",
-    "失败测试明确阻断",
-    "覆盖主干/边界/异常/幂等",
-    "覆盖率变化有解释"
+    {
+      "gate_id": "self-test-gate-1",
+      "name": "测试命令实际执行",
+      "type": "deterministic",
+      "pass_condition": "测试命令实际执行 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "self-test-gate-2",
+      "name": "失败测试明确阻断",
+      "type": "deterministic",
+      "pass_condition": "失败测试明确阻断 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "self-test-gate-3",
+      "name": "覆盖主干/边界/异常/幂等",
+      "type": "deterministic",
+      "pass_condition": "覆盖主干/边界/异常/幂等 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "self-test-gate-4",
+      "name": "覆盖率变化有解释",
+      "type": "deterministic",
+      "pass_condition": "覆盖率变化有解释 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "self-test",

@@ -2,7 +2,7 @@
   "node_id": "database-design",
   "stage": "database_design",
   "skill_id": "database-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -25,32 +25,17 @@
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
-    "database-design.md 使用 OLTP 或 OLAP 团队模板",
     "字段和索引均有查询/约束用途",
     "迁移步骤可回滚",
     "容量和查询模式已评估",
-    "生产变更审批明确",
-    "未确认库名/实例/字符集/索引名时不得 final"
+    "生产变更审批明确"
   ],
   "approval_policy": {
     "required_for": [
@@ -59,8 +44,7 @@
       "删除字段",
       "删除索引",
       "生产库变更",
-      "影响核心链路的索引调整",
-      "物理删除在线事实行"
+      "影响核心链路的索引调整"
     ],
     "decision": [
       "pending",

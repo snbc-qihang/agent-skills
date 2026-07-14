@@ -1,0 +1,94 @@
+{
+  "node_id": "self-evolution-controller",
+  "stage": "self_evolution",
+  "skill_id": "self-evolution-controller",
+  "version": "1.0.0.1",
+  "mode": "standalone|workflow",
+  "entry_modes": [
+    "from_node",
+    "single_node"
+  ],
+  "depends_on": [],
+  "inputs": [
+    "user_feedback",
+    "workflow-trace.json",
+    "code-quality-report.json",
+    "code-review-report",
+    "CI logs",
+    "test failure logs",
+    "PR comments",
+    "incident reports",
+    "git diff/log",
+    "existing skills/contracts/evals"
+  ],
+  "outputs": [
+    "self-evolution-evidence-pack.json",
+    "self-evolution-root-cause.md",
+    "skill-gap-report.json",
+    "skill-patch-proposal.md",
+    "skill-patch-proposal.diff",
+    "affected-skills.json",
+    "regression-case-candidates.yaml",
+    "merge-safety-checklist.md",
+    "self-evolution-validation-report.json",
+    "rollback-plan.md"
+  ],
+  "preconditions": [
+    "问题证据可定位",
+    "研发助手 skills 根目录可访问"
+  ],
+  "postconditions": [
+    "自悟修复候选、验证报告和回滚方案已生成"
+  ],
+  "quality_gates": [
+    "每个结论都有来源证据",
+    "每个 skill 补丁都有对应 eval 候选或验证命令",
+    "高风险 skill 变更必须人工审批",
+    "编译 runtime 必须通过",
+    "不得降低现有质量门禁"
+  ],
+  "approval_policy": {
+    "required_for": [
+      "修改高风险 skill",
+      "修改自动流转或审批策略",
+      "删除或弱化质量门禁",
+      "发布自我进化补丁"
+    ],
+    "decision": [
+      "pending",
+      "approved",
+      "rejected"
+    ]
+  },
+  "retry_policy": {
+    "max_attempts": 1,
+    "retry_on": [
+      "TOOL_UNAVAILABLE",
+      "UNKNOWN_ERROR"
+    ]
+  },
+  "failure_policy": {
+    "block_on": [
+      "QUALITY_GATE_FAILED",
+      "RISK_POLICY_VIOLATION",
+      "STAGE_RESULT_CONTRACT_VIOLATION"
+    ],
+    "pause_on": [
+      "HUMAN_APPROVAL_REQUIRED",
+      "MISSING_REQUIRED_INPUT"
+    ]
+  },
+  "next_nodes": [],
+  "artifact_mapping": {
+    "self-evolution-evidence-pack.json": "artifacts/self-evolution-controller/self-evolution-evidence-pack.json",
+    "self-evolution-root-cause.md": "artifacts/self-evolution-controller/self-evolution-root-cause.md",
+    "skill-gap-report.json": "artifacts/self-evolution-controller/skill-gap-report.json",
+    "skill-patch-proposal.md": "artifacts/self-evolution-controller/skill-patch-proposal.md",
+    "skill-patch-proposal.diff": "artifacts/self-evolution-controller/skill-patch-proposal.diff",
+    "affected-skills.json": "artifacts/self-evolution-controller/affected-skills.json",
+    "regression-case-candidates.yaml": "artifacts/self-evolution-controller/regression-case-candidates.yaml",
+    "merge-safety-checklist.md": "artifacts/self-evolution-controller/merge-safety-checklist.md",
+    "self-evolution-validation-report.json": "artifacts/self-evolution-controller/self-evolution-validation-report.json",
+    "rollback-plan.md": "artifacts/self-evolution-controller/rollback-plan.md"
+  }
+}

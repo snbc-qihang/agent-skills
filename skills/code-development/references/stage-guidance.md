@@ -8,7 +8,6 @@
 - 测试覆盖
 - 变更摘要
 - 完成实现后必须运行 build_traceability_report.py 刷新 artifacts/_control/traceability-matrix.json 和 docs/human-readable/traceability-report.html
-- CD1 代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据
 - FW1 框架选型必须来自设计、repo_context 或用户确认；缺失时主动询问
 - FW2 Java/Spring 持久化默认使用 mybatis-plus；直接 JDBC 必须有评审批准
 - FW3 实现必须遵循现有仓库 mapper/repository/service 分层和依赖

@@ -1,0 +1,14 @@
+{
+  "id": "lazy-context-must-read-source",
+  "category": "anti_lazy",
+  "given": "User context contradicts repository source.",
+  "expected": [
+    "context_untrusted",
+    "source_file_read_before_patch",
+    "no_patch_from_chat_only"
+  ],
+  "forbidden": [
+    "modify_code_without_reading_source",
+    "treat_chat_context_as_source_of_truth"
+  ]
+}

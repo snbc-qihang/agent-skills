@@ -1,41 +1,87 @@
 {
   "skill_id": "frontend-development",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "frontend_development",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Frontend Development",
     "short_description": "基于前端设计和接口契约实施页面、组件、状态和接口联调变更。",
-    "default_prompt": "使用 frontend-development，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 已通过 prototype review 且 frontend-design 已冻结，需要实现页面、组件、状态和联调时；Do not use when do not凭组件文档或接口文档绕过高保真原型。",
+    "default_prompt": "使用 frontend-development，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 基于前端设计和接口契约实施页面、组件、状态和接口联调变更。；Do not use when 不修改无关页面；不绕过前端设计。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "frontend-design.md",
-    "component-contracts.yaml",
-    "interface-contracts.yaml",
-    "repo_context"
+    {
+      "name": "frontend-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "component-contracts.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "interface-contracts.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "code changes",
-    "frontend-implementation-summary.md",
-    "design-to-ui-mapping.yaml",
-    "frontend-changed-files-report.json"
+    {
+      "name": "code changes",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/frontend-development/code changes",
+      "schema": "output.schema.json#code changes",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "frontend-implementation-summary.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/frontend-development/frontend-implementation-summary.md",
+      "schema": "output.schema.json#frontend-implementation-summary.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "design-to-ui-mapping.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/frontend-development/design-to-ui-mapping.yaml",
+      "schema": "output.schema.json#design-to-ui-mapping.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "frontend-changed-files-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/frontend-development/frontend-changed-files-report.json",
+      "schema": "output.schema.json#frontend-changed-files-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -85,10 +131,34 @@
     ]
   },
   "quality_gates": [
-    "每个 UI 变更映射到前端设计",
-    "组件和状态边界符合现有项目",
-    "接口联调风险已标记",
-    "前端验证方式已列出"
+    {
+      "gate_id": "frontend-development-gate-1",
+      "name": "每个 UI 变更映射到前端设计",
+      "type": "deterministic",
+      "pass_condition": "每个 UI 变更映射到前端设计 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "frontend-development-gate-2",
+      "name": "组件和状态边界符合现有项目",
+      "type": "deterministic",
+      "pass_condition": "组件和状态边界符合现有项目 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "frontend-development-gate-3",
+      "name": "接口联调风险已标记",
+      "type": "deterministic",
+      "pass_condition": "接口联调风险已标记 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "frontend-development-gate-4",
+      "name": "前端验证方式已列出",
+      "type": "deterministic",
+      "pass_condition": "前端验证方式已列出 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
   ],
   "workflow": {
     "node_id": "frontend-development",

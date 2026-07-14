@@ -1,0 +1,186 @@
+{
+  "skill_id": "repo-context-miner",
+  "version": "1.1.0.0",
+  "stage": "repo_context",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Repo Context Miner",
+    "short_description": "从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。",
+    "default_prompt": "使用 repo-context-miner，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。；Do not use when 不直接修改代码；不替代业务设计。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "repository_path",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "requirement-contract.json",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "team_standards",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "risk_policy",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "repo-context-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/repo-context-miner/repo-context-report.md",
+      "schema": "output.schema.json#repo-context-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "module-map.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/repo-context-miner/module-map.yaml",
+      "schema": "output.schema.json#module-map.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "impact-scope.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/repo-context-miner/impact-scope.yaml",
+      "schema": "output.schema.json#impact-scope.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "reusable-capabilities.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/repo-context-miner/reusable-capabilities.md",
+      "schema": "output.schema.json#reusable-capabilities.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "repo-risk-list.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/repo-context-miner/repo-risk-list.json",
+      "schema": "output.schema.json#repo-risk-list.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "context",
+      "miner",
+      "repo",
+      "repo-context-miner",
+      "repo_context",
+      "stage_skill",
+      "从现有仓库中提取设计和研发所需的代码上下文",
+      "形成模块地图",
+      "接口/数据/中间件使用清单和影响范围。"
+    ],
+    "positive_triggers": [
+      "repo-context-miner",
+      "Repo Context Miner",
+      "从现有仓库中提取设计和研发所需的代码上下文，形成模块地图、接口/数据/中间件使用清单和影响范围。"
+    ],
+    "negative_triggers": [
+      "只解释 Repo Context Miner 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "repository_path",
+      "requirement-contract.json",
+      "team_standards",
+      "risk_policy"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "仓库路径可访问",
+      "模块边界有证据",
+      "影响范围明确",
+      "可复用能力已登记"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "读取敏感配置",
+      "跨仓库分析",
+      "高风险影响范围确认"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "repo-context-miner-gate-1",
+      "name": "仓库路径可访问",
+      "type": "deterministic",
+      "pass_condition": "仓库路径可访问 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "repo-context-miner-gate-2",
+      "name": "模块边界有证据",
+      "type": "deterministic",
+      "pass_condition": "模块边界有证据 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "repo-context-miner-gate-3",
+      "name": "影响范围明确",
+      "type": "deterministic",
+      "pass_condition": "影响范围明确 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "repo-context-miner-gate-4",
+      "name": "可复用能力已登记",
+      "type": "deterministic",
+      "pass_condition": "可复用能力已登记 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "repo-context-miner",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/repo-context-miner/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/repo-context-miner/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/repo-context-miner/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/repo-context-miner/agents/openai.yaml"
+  ]
+}

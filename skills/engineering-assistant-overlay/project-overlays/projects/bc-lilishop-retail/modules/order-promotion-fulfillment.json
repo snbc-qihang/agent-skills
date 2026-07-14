@@ -1,0 +1,114 @@
+{
+  "overlay_layer": "module",
+  "project_slug": "bc-lilishop-retail",
+  "module_slug": "order-promotion-fulfillment",
+  "applies_to": {
+    "repositories": [
+      "bc-service",
+      "bc-uni",
+      "sjl-parent"
+    ],
+    "packages": [],
+    "apis": [
+      "product detail",
+      "promotion selection",
+      "cart",
+      "checkout",
+      "coupon selection",
+      "order create",
+      "wallet payment",
+      "middle-platform push",
+      "fulfillment status sync",
+      "aftersale refund"
+    ],
+    "pages": [
+      "mini-program product detail",
+      "H5 product detail",
+      "cart",
+      "checkout",
+      "order detail",
+      "aftersale"
+    ],
+    "jobs": [
+      "middle-platform status callback",
+      "order status sync",
+      "inventory sync",
+      "coupon verification"
+    ],
+    "data_sources": [
+      "business DB",
+      "Redis",
+      "ES",
+      "wallet ledger",
+      "middle-platform sales order",
+      "transport task",
+      "aftersale order"
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "ORDER_PROMOTION_SHARED_INVARIANT",
+      "trigger": "Use when product detail price, promotion price, SKU popup price, cart price, checkout price, coupon selection, wallet amount, or order amount is inconsistent or repeatedly fixed.",
+      "do": "Name the shared invariant and map every surface that displays or mutates it: product detail, promotion card, SKU popup, cart, checkout, order create, wallet payment, and refund. Patch the shared implementation point when one exists and preserve known-good sibling surfaces.",
+      "checks": [
+        "shared_invariant",
+        "surface_map",
+        "known_good_preservation",
+        "regression_gate"
+      ],
+      "gate": "REPEATED_FIX_SURFACE_ONLY"
+    },
+    {
+      "rule_id": "ORDER_PROMOTION_CACHE_RUNTIME_GUARD",
+      "trigger": "Use when source code looks fixed but product detail, promotion, cart, checkout, or SKU popup still shows stale prices or stale activity state.",
+      "do": "Classify stale runtime, Redis, ES, frontend bundle, mini-program/H5 page cache, old service process, or DB state before editing code again. Verify active runtime project and served source before claiming the fix is visible.",
+      "checks": [
+        "runtime_state_classification",
+        "active_runtime_project",
+        "cache_or_index_state",
+        "served_source_evidence"
+      ],
+      "gate": "REPEATED_FIX_RUNTIME_STATE_UNCLASSIFIED"
+    },
+    {
+      "rule_id": "ORDER_FULL_E2E_SCENARIO",
+      "trigger": "Use when the scenario is order, payment, fulfillment, cancellation, aftersale, coupon, inventory, middle-platform status sync, store/rider flow, H5 checkout, or mini-program checkout.",
+      "do": "Classify the scenario with the universal E2E workflow. For FULL_E2E, create a scenario contract and matrix covering login, address, cart, checkout, coupon, wallet payment, middle-platform push, sourcing, store preparation, rider acceptance, pickup, delivery, completion, status consistency, wallet/refund ledger, stock, and logs as applicable.",
+      "checks": [
+        "e2e_classification",
+        "scenario_contract",
+        "test_matrix",
+        "failure_progression_gate",
+        "project_flow_memory_candidate"
+      ],
+      "gate": "UNIVERSAL_E2E_TEST_WORKFLOW_MISSING"
+    },
+    {
+      "rule_id": "ORDER_PROMOTION_FRONTEND_BACKEND_BOUNDARY",
+      "trigger": "Use when product/promotion/coupon/order behavior drifts between frontend UI state and backend domain state.",
+      "do": "Backend owns security, persistence, money, state transitions, invariants, and reusable domain facts. Frontend owns display state, selected UI state, tabs, dialogs, labels, local formatting, and non-security presentation filters unless a server-side invariant requires otherwise.",
+      "checks": [
+        "frontend_backend_responsibility"
+      ],
+      "gate": "FRONTEND_BACKEND_RESPONSIBILITY_UNCLASSIFIED"
+    }
+  ],
+  "gates": [
+    "REPEATED_FIX_SURFACE_ONLY",
+    "REGRESSION_PRESERVATION_GATE_MISSING",
+    "REPEATED_FIX_RUNTIME_STATE_UNCLASSIFIED",
+    "UNIVERSAL_E2E_TEST_WORKFLOW_MISSING",
+    "E2E_TEST_CLASSIFIER_SKIPPED",
+    "E2E_SCENARIO_CONTRACT_UNCONFIRMED",
+    "E2E_RUNTIME_CONTINUATION_GATE_MISSING",
+    "PROJECT_FLOW_MEMORY_NOT_RECORDED",
+    "FRONTEND_BACKEND_RESPONSIBILITY_UNCLASSIFIED"
+  ],
+  "evidence_sources": [
+    "user repeated product price and promotion fix samples",
+    "user order full-flow testing design",
+    "overlay split request 2026-07-03"
+  ],
+  "owner": "user-local-engineering-assistant-overlay",
+  "review_after": "2026-08-03"
+}

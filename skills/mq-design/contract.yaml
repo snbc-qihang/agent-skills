@@ -1,16 +1,23 @@
 {
   "skill_id": "mq-design",
   "skill_name": "MQ Design",
-  "version": "1.1.0",
+  "version": "1.1.0.0",
   "stage": "mq_design",
   "type": "stage_skill",
+  "entry_control": {
+    "sole_entrypoint": "engineering-assistant",
+    "controller": "workflow-orchestrator",
+    "controller_route_record_required": true,
+    "direct_invocation_behavior": "redirect_through_controller",
+    "upstream_router_allowed": false
+  },
   "purpose": "设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。",
   "non_goals": [
     "不未经审批删除或重命名 topic",
     "不隐藏重复消费风险",
     "不把不同语义消息混成单一处理流"
   ],
-  "trigger_description": "Use when 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略；Do not use when do not 未经审批删除或重命名 topic。",
+  "trigger_description": "Use when the request is about 设计 MQ 主题、消息体、生产消费链路、幂等、重试、死信和回放策略。；Do not use when 不未经审批删除或重命名 topic；不隐藏重复消费风险。",
   "routing": {
     "intent_tags": [
       "MQ",
@@ -46,12 +53,9 @@
     "risk_level": "medium",
     "cost_class": "medium",
     "evidence_required": [
-      "mq-design.xlsx 使用团队 MQ Excel 模板",
-      "生产者表完整",
-      "消费者表完整",
       "消息 schema 完整",
       "幂等策略明确",
-      "重试/死信/回放策略明确",
+      "重试/死信策略明确",
       "监控告警明确"
     ],
     "allow_implicit_invocation": true
@@ -94,6 +98,8 @@
       "interface-contracts.yaml",
       "test-strategy.md"
     ],
+    "block_current_node_formal_generation": true,
+    "block_next_nodes": true,
     "resume_after_writeback": "StageRunRequest.context、artifact index 或 MD/JSON/YAML 已记录用户补充答案、来源和时间。"
   },
   "design_governance_policy": {
@@ -300,22 +306,6 @@
     ],
     "writeback": "StageRunRequest.context.technology_selection"
   },
-  "team_adaptation_policy": {
-    "profile_id": "rrq-yq-team",
-    "profile_path": "engineering-assistant/profiles/rrq-yq-team.yaml",
-    "source_catalog": "engineering-assistant/registry/team-standard-sources.yaml",
-    "rule_prefixes": [
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "must_load_before_work": [
-      "team-rule-catalog.yaml",
-      "team-standard-sources.yaml",
-      "rrq-yq-team.yaml"
-    ],
-    "fallback": "如果目标项目 profile 与团队默认 profile 冲突，优先使用目标项目 profile，并把冲突作为 finding 或 required_information_requests 输出。"
-  },
   "inputs": [
     {
       "name": "detailed-design.md",
@@ -352,10 +342,10 @@
   ],
   "outputs": [
     {
-      "name": "mq-design.xlsx",
-      "type": "xlsx|artifact",
-      "path": "artifacts/mq-design/mq-design.xlsx",
-      "schema": "output.schema.json#mq-design.xlsx",
+      "name": "mq-design.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/mq-design/mq-design.md",
+      "schema": "output.schema.json#mq-design.md",
       "consumer": "workflow-orchestrator|downstream-stage|human-review"
     },
     {
@@ -381,8 +371,7 @@
     }
   ],
   "preconditions": [
-    "用户请求、仓库上下文、profile、上游产物和 artifact index 已读取或记录不可用原因",
-    "blocking 必填信息已提供，或已进入 waiting_for_input 并生成补充信息入口",
+    "必填输入已提供或已记录缺失处理策略",
     "风险策略已加载",
     "目标范围已明确"
   ],
@@ -394,32 +383,7 @@
     "formal_generation_requires_ready": true,
     "formal_document_metadata_required": true,
     "stage_result_validation_required": true,
-    "block_when_agent_violates_contract": true,
-    "assistant_feedback_consumed": true,
-    "implementation_strategy_evaluation_required": true,
-    "document_spine_context_required": true,
-    "agent_execution_monitor_required_for_delegation": true,
-    "post_task_plan_alignment_required": true
-  },
-  "runtime_rule_markers": [
-    "DUPLICATE_CAPABILITY_RISK",
-    "IMPLEMENTATION_STRATEGY_NOT_EVALUATED",
-    "DOC_SPRAWL_RISK",
-    "PRODUCT_PLAN_DRIFT",
-    "SUBAGENT_UNVERIFIED_SUCCESS",
-    "SUBAGENT_EVIDENCE_MISSING"
-  ],
-  "quality_audit_policy": {
-    "required_dimensions": [
-      "correctness",
-      "security",
-      "performance",
-      "testability",
-      "observability",
-      "simplification",
-      "duplicate_capability",
-      "comment_quality"
-    ]
+    "block_when_agent_violates_contract": true
   },
   "required_information_policy": {
     "must_ask_when": [
@@ -429,26 +393,9 @@
       "审批状态缺失",
       "无法基于仓库或上游产物可靠推导"
     ],
-    "preflight_sequence": [
-      "读取用户请求",
-      "读取仓库上下文",
-      "读取 profile",
-      "读取上游产物",
-      "读取 artifact index",
-      "区分可自动推导信息与必须用户确认信息",
-      "blocking 缺失项先问询并暂停",
-      "补充答案写回后再生成正式产物"
-    ],
-    "preflight_state_field": "preflight_input_state",
-    "preflight_state_values": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
     "question_output": "required_information_requests",
     "blocking_status": "waiting_for_input",
+    "formal_generation_entry_condition": "preflight_input_state == ready",
     "human_review_html_required": true,
     "human_review_html_requirements": [
       "可填写每个待确认项",
@@ -471,26 +418,10 @@
       "major",
       "minor"
     ],
-    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。",
-    "formal_artifacts_allowed_when": "不存在 blocking required_information_requests，或用户补充答案已写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源。",
-    "waiting_for_input_artifacts": [
-      "information-inventory.json",
-      "context-source-map.json",
-      "missing-information-list.json",
-      "required-information-request.json",
-      "design-objective-plan.md",
-      "scope-and-non-goals.yaml",
-      "user-confirmed-facts.json",
-      "design-direction-decision.md",
-      "docs/human-review/<run-id>.html",
-      "workflow-trace.json",
-      "resume-point.json"
-    ],
-    "forbidden_before_writeback": "不得生成或登记正式阶段 Markdown/Excel/JSON 产物为完成产物，不得继续下游节点。"
+    "do_not_ask_when": "信息可从当前仓库、上游产物、明确 profile 或已确认上下文可靠获得时，不重复询问用户。"
   },
   "postconditions": [
-    "blocking 信息缺失时已暂停在 waiting_for_input，且只登记补充信息请求、human-review HTML 和恢复点",
-    "blocking 信息已补齐时全部正式输出产物已生成并登记",
+    "全部输出产物已生成，或已输出明确的阻断结果",
     "质量门禁已评估",
     "需要人工审批的事项已列出"
   ],
@@ -517,11 +448,8 @@
   },
   "human_approval_required": [
     "MQ topic 删除或重命名",
-    "MQ 新队列或 topic",
     "核心消息链路变化",
-    "生产消息回放",
-    "消息体超过 10KB",
-    "非仲裁队列"
+    "生产消息回放"
   ],
   "risk_model": {
     "levels": [
@@ -532,59 +460,35 @@
     ],
     "upgrade_conditions": [
       "MQ topic 删除或重命名",
-      "MQ 新队列或 topic",
       "核心消息链路变化",
-      "生产消息回放",
-      "消息体超过 10KB",
-      "非仲裁队列"
+      "生产消息回放"
     ],
     "default_for_unknown": "medium"
   },
   "quality_gates": [
     {
       "gate_id": "mq-design-gate-1",
-      "name": "mq-design.xlsx 使用团队 MQ Excel 模板",
-      "type": "deterministic",
-      "pass_condition": "mq-design.xlsx 使用团队 MQ Excel 模板 有证据证明已满足",
-      "fail_action": "block 或 require_human_review"
-    },
-    {
-      "gate_id": "mq-design-gate-2",
-      "name": "生产者表完整",
-      "type": "deterministic",
-      "pass_condition": "生产者表完整 有证据证明已满足",
-      "fail_action": "block 或 require_human_review"
-    },
-    {
-      "gate_id": "mq-design-gate-3",
-      "name": "消费者表完整",
-      "type": "deterministic",
-      "pass_condition": "消费者表完整 有证据证明已满足",
-      "fail_action": "block 或 require_human_review"
-    },
-    {
-      "gate_id": "mq-design-gate-4",
       "name": "消息 schema 完整",
       "type": "deterministic",
       "pass_condition": "消息 schema 完整 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "mq-design-gate-5",
+      "gate_id": "mq-design-gate-2",
       "name": "幂等策略明确",
       "type": "deterministic",
       "pass_condition": "幂等策略明确 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "mq-design-gate-6",
-      "name": "重试/死信/回放策略明确",
+      "gate_id": "mq-design-gate-3",
+      "name": "重试/死信策略明确",
       "type": "deterministic",
-      "pass_condition": "重试/死信/回放策略明确 有证据证明已满足",
+      "pass_condition": "重试/死信策略明确 有证据证明已满足",
       "fail_action": "block 或 require_human_review"
     },
     {
-      "gate_id": "mq-design-gate-7",
+      "gate_id": "mq-design-gate-4",
       "name": "监控告警明确",
       "type": "deterministic",
       "pass_condition": "监控告警明确 有证据证明已满足",
@@ -639,13 +543,7 @@
     "control_plane_drift",
     "rule_consumption_gap",
     "context_noise_overload",
-    "low_quality_automation",
-    "repeated_user_correction_feedback",
-    "prototype_without_visual_evidence",
-    "document_noise_without_delivery",
-    "third_party_tool_failure_feedback",
-    "unapproved_skill_patch_blocked",
-    "low_value_feedback_rejected"
+    "low_quality_automation"
   ],
   "workflow_interface": {
     "node_id": "mq-design",
@@ -656,7 +554,7 @@
       "risk_policy"
     ],
     "output_artifacts": [
-      "mq-design.xlsx",
+      "mq-design.md",
       "mq-topic-contract.yaml",
       "message-schema.json",
       "mq-risk-report.json"
@@ -668,9 +566,7 @@
     "required_information_requests": {
       "artifact": "artifacts/mq-design/required-information-request.json",
       "schema": "engineering-assistant/schemas/required-information-request.schema.json",
-      "status_when_blocking": "waiting_for_input",
-      "must_precede_formal_artifacts": true,
-      "resume_after_writeback": "StageRunRequest.context 或 artifact index 已记录用户补充答案和来源时间"
+      "status_when_blocking": "waiting_for_input"
     },
     "state_transitions": [
       "pending",
@@ -705,124 +601,5 @@
     "架构师",
     "测试负责人"
   ],
-  "change_policy": "contract、gate、schema 或审批规则变更必须经过 skill owner 评审，并通过 skill-quality-auditor",
-  "team_document_policy": {
-    "artifact": "mq-design.xlsx",
-    "template_usage_policy": {
-      "required": true,
-      "source_of_truth": "template_assets[].canonical_template",
-      "must_read_template_before_generation": true,
-      "template_assets": [
-        {
-          "artifact": "mq-design.xlsx",
-          "template": "assets/mq-design-template.xlsx",
-          "canonical_template": "skills/mq-design/assets/mq-design-template.xlsx",
-          "source_template": "inputs/xxxMQ设计.xlsx",
-          "selection": "MQ 设计 Excel 工作簿"
-        }
-      ],
-      "generation_protocol": [
-        "生成正式 MQ Excel 文档前必须先读取 `assets/mq-design-template.xlsx`，不得改用 Markdown 或通用报告替代。",
-        "以 xlsx template 文件副本作为唯一工作簿骨架，保留工作表名称、工作表顺序、表格列头、合并单元格、已有单元格样式和格式约定。",
-        "只允许在模板已有单元格范围内补充空白数据单元格；不得新增 sheet、不得删除 sheet、不得追加行列、不得删除或改写模板固定文本、不得修改已有样式或重排模板 sheet。",
-        "输入材料缺少事实时，保留模板列头并写明不适用原因，或进入 waiting_for_input 并输出 required_information_requests。",
-        "不得额外生成 `mq-design.md` 作为正式 MQ 设计正文；Markdown 只能作为 StageRunResult 或过程摘要。",
-        "模板文件不存在、无法读取或输出无法通过 xlsx 模板校验时，StageRunResult.status 必须为 blocked 或 failed。"
-      ],
-      "strict_format_rules": [
-        "保留模板原有章节、标题名称、标题层级、表格列头和固定提示块。",
-        "不适用章节不得删除，必须写明不适用原因或等待用户补充事实。",
-        "不得把团队 template 压缩成摘要、检查清单或通用证据报告。",
-        "不得把 source_template 只当参考风格；canonical_template 才是输出正文骨架。"
-      ],
-      "blocked_when": [
-        "未读取 template asset 就生成正式 MQ Excel 文档",
-        "输出缺少 template 章节、列头、固定提示块或顺序",
-        "用 assets/artifact-template.md 或通用报告格式替代正式设计正文",
-        "缺少关键事实却填充待确认占位符并标记 succeeded"
-      ]
-    },
-    "producer_table_fields": [
-      "业务用途",
-      "场景应用",
-      "业务消息key",
-      "消息类型",
-      "消息体内容",
-      "优先等级",
-      "消息TTL（毫秒）",
-      "持久化",
-      "目的交换机",
-      "路由key",
-      "消息预估大小",
-      "生产服务/模块名称",
-      "软件需求号/bug号",
-      "设计日期",
-      "设计者",
-      "备注"
-    ],
-    "consumer_table_fields": [
-      "队列名称",
-      "业务用途",
-      "场景应用",
-      "单消费节点消费",
-      "队列类型",
-      "优先队列",
-      "是否持久化",
-      "自动删除",
-      "TTL",
-      "消息大小",
-      "绑定的Exchange/routingKey(多个）",
-      "死信队列exchange/routeKey",
-      "消费服务",
-      "消息key",
-      "运维监控",
-      "软件需求号/bug号",
-      "设计日期",
-      "设计者",
-      "备注"
-    ],
-    "producer_required_value_fields": [
-      "业务用途",
-      "场景应用",
-      "业务消息key",
-      "消息类型",
-      "消息体内容",
-      "目的交换机",
-      "路由key",
-      "生产服务/模块名称"
-    ],
-    "consumer_required_value_fields": [
-      "队列名称",
-      "业务用途",
-      "场景应用",
-      "绑定的Exchange/routingKey(多个）",
-      "死信队列exchange/routeKey",
-      "消费服务",
-      "消息key",
-      "运维监控"
-    ],
-    "rules": [
-      "MQ 只用于削峰填谷、异步执行和服务解耦",
-      "进程内异步不默认使用 MQ",
-      "一个服务一个队列，一个队列可绑定多个 Exchange/routingKey",
-      "队列默认建议仲裁队列",
-      "必须设计死信队列",
-      "消息体默认不超过 10KB",
-      "必须定义幂等、重试、死信、回放策略"
-    ],
-    "waiting_for_human_review_when": [
-      "MQ 新队列",
-      "MQ 新 topic",
-      "非仲裁队列",
-      "消息体超过 10KB",
-      "生产消息回放",
-      "删除或重命名 topic/queue"
-    ],
-    "blocked_when": [
-      "缺少生产者表或消费者表",
-      "消息体承载大查询条件、文件内容或敏感明文",
-      "无幂等策略",
-      "无死信队列"
-    ]
-  }
+  "change_policy": "contract、gate、schema 或审批规则变更必须经过 skill owner 评审，并通过 skill-quality-auditor"
 }

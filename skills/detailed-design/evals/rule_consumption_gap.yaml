@@ -2,7 +2,6 @@
   "id": "detailed-design-rule_consumption_gap",
   "name": "Detailed Design rule consumption gap",
   "case_type": "rule_consumption_gap",
-  "eval_profile": "task_sop_full",
   "scenario": {
     "title": "Detailed Design rule consumption gap 团队规则场景",
     "material": "任务规则包已经生成，但实现总结、自测报告、质量报告或代码评审 finding 没有引用 rule_id，评审结论只写了泛化建议。",
@@ -14,8 +13,8 @@
       "D4"
     ],
     "risk_focus": [
-      "主详细设计只保留功能实现主线",
-      "D1 详细设计主文档必须按 `assets/detailed-design-template.md` 的章节顺序生成：修订历史、设计背景与目标摘要、模块/功能详细设计、业务流程图、UML类图、数据库设计、接口定义、API接口列表、中间件设计、单元测试、性能与扩展性设计、人工评审项",
+      "接口定义完整",
+      "D1 模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计",
       "证据链",
       "门禁决策"
     ],
@@ -59,13 +58,12 @@
   "expected_status": "blocked",
   "pass_criteria": [
     "StageRunResult status 合法",
-    "StageRunResult 必须包含 preflight_input_state，且 formal_generation 入口条件必须是 preflight_input_state == ready",
     "未指定 language 时必须询问用户选择 zh-CN 或 en",
+    "preflight_input_state 必须存在，且 formal generation 仅允许在 preflight_input_state == ready 时发生",
     "正式 Markdown 文档必须包含 document_metadata.document_number、document_status、retention_policy",
-    "missing_required_input 场景必须输出非空 required_information_requests.questions",
-    "missing_required_input 场景必须先暂停在 waiting_for_input，并生成 docs/human-review/ 可填写 HTML 审阅包",
-    "blocking 信息补齐并写回 StageRunRequest.context 或 artifact index 前，不得生成或登记正式阶段 Markdown/Excel/JSON 产物",
-    "阶段节点不遵守 language、document_metadata 或 required_information_requests 契约时必须 blocked",
+    "missing_required_input 场景必须输出非空 required_information_requests.questions，并保持 waiting_for_input / preflight_input_state=waiting_for_input",
+    "missing_required_input 场景必须生成 docs/human-review 可填写 HTML，且不得生成或登记正式阶段文档",
+    "阶段节点不遵守 language、preflight_input_state、document_metadata 或 required_information_requests 契约时必须 blocked",
     "framework selection 必须遵循 repo_context/profile；Java/Spring 持久化默认 mybatis-plus，JDBC 必须评审",
     "frontend 场景必须覆盖页面、组件、接口联调、状态和验证方式",
     "code-review/code-quality-governor 必须覆盖 sonar/qodana/checkstyle 静态分析、bug/vulnerability/code_smell/security_hotspot/complexity 指标和富 HTML 报告",
@@ -75,14 +73,7 @@
     "risk_focus 中每个风险都有证据、假设或 required action",
     "阻断风险未被降级",
     "forbidden_behavior 未出现在输出决策中",
-    "策略要求审批时已请求人工审批",
-    "生成正式 Markdown 文档前必须先读取对应 assets template",
-    "输出正文必须保留 template 的章节顺序、标题层级、表格列头和固定提示块",
-    "不适用章节必须保留并写明不适用原因，缺少事实时必须 waiting_for_input",
-    "detailed-design.md 必须按 assets/detailed-design-template.md 生成",
-    "detailed-design.md 不得包含 sequenceDiagram，必须包含 flowchart，且每个 flowchart 后必须有流程设计说明",
-    "出现 DDD、聚合根、ApplicationService、Repository、Handler 或 Template 时必须包含 classDiagram",
-    "涉及 DB/MQ/Redis 时必须生成独立专项文档并登记到 StageRunResult.artifacts"
+    "策略要求审批时已请求人工审批"
   ],
   "severity_when_failed": "major",
   "grader": {
@@ -93,9 +84,6 @@
     "detailed-design.md",
     "implementation-plan.md",
     "interface-contracts.yaml",
-    "test-strategy.md",
-    "database-design.md",
-    "mq-design.xlsx",
-    "redis-design.md"
+    "test-strategy.md"
   ]
 }

@@ -1,0 +1,22 @@
+{
+  "overlay_layer": "project",
+  "project_slug": "example-project",
+  "applies_to": {
+    "repositories": [],
+    "domains": [],
+    "runtime_profiles": []
+  },
+  "rules": [
+    {
+      "rule_id": "PROJECT_RULE_ID",
+      "trigger": "",
+      "do": "",
+      "checks": [],
+      "gate": ""
+    }
+  ],
+  "gates": [],
+  "evidence_sources": [],
+  "owner": "",
+  "review_after": ""
+}

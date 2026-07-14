@@ -1,0 +1,16 @@
+{
+  "run_id": "overlay-test-positive-skill-instruction-shape-present",
+  "route_tier": "standard",
+  "task_kind": "self_healing",
+  "evidence_level": "standard",
+  "persistence_mode": "ephemeral",
+  "route_reason": "User is asking to improve Engineering Assistant rule behavior.",
+  "trigger_signals": [
+    "研发助手规则缺陷",
+    "description = trigger condition",
+    "body gives concrete steps",
+    "checks confirm completion"
+  ],
+  "explicit_user_request": true,
+  "capability_decisions": []
+}

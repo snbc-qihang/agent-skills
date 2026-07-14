@@ -1,0 +1,22 @@
+{
+  "run_id": "overlay-test-materialized-business-data-source-restriction-forbidden",
+  "task_summary": "外部同步/binlog 数据已经落入当前系统业务表，但用户侧因为技术来源被展示错误并拦截使用。",
+  "business_data_context": {
+    "materialized_to_business_tables": true,
+    "current_system_accepts_data": true,
+    "source_metadata_for_internal_use_only": true
+  },
+  "customer_visible_source_restrictions": [
+    {
+      "surface": "mini-program checkout coupon usage",
+      "source_signal": "source_system=ABK, sync_type=binlog",
+      "restriction_type": "user_visible_error_and_usage_block",
+      "user_visible_message": "ABK优惠券核销未启用，同步券不可用",
+      "blocks_current_business_data": true,
+      "business_rule_evidence": false,
+      "external_side_effect_evidence": false,
+      "protective_effect": false
+    }
+  ],
+  "gates": []
+}

@@ -26,6 +26,7 @@ def main():
     py = sys.executable
     if args.mode == "audit-readonly":
         steps = [
+            ("validate_code_design_gate", [py, str(here / "validate_code_design_gate.py"), "--eligibility", str(root / "artifacts/_control/coding-eligibility.json"), "--code-design-decision", str(root / "artifacts/_control/code-design-decision.json")]),
             ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
             ("validate_control_plane_readonly", [py, str(here / "validate_control_plane_readonly.py"), "--root", str(root), "--changed-files-report", args.changed_files_report]),
         ]
@@ -40,11 +41,13 @@ def main():
             raise SystemExit(1)
         return
     steps = [
+        ("validate_code_design_gate", [py, str(here / "validate_code_design_gate.py"), "--eligibility", str(root / "artifacts/_control/coding-eligibility.json"), "--code-design-decision", str(root / "artifacts/_control/code-design-decision.json")]),
         ("validate_contract_control", [py, str(here / "validate_contract_control.py"), str(root)]),
         ("validate_control_health", [py, str(here / "validate_control_health.py"), "--root", str(root), "--task-type", args.task_type]),
         ("collect_changed_files", [py, str(here / "collect_changed_files.py"), "--root", str(root)]),
         ("validate_control_plane_readonly", [py, str(here / "validate_control_plane_readonly.py"), "--root", str(root), "--changed-files-report", args.changed_files_report]),
         ("validate_design_to_code", [py, str(here / "validate_design_to_code.py"), "--root", str(root), "--allow-major"]),
+        ("validate_business_code_pileup", [py, str(here / "validate_code_design_gate.py"), "--eligibility", str(root / "artifacts/_control/coding-eligibility.json"), "--code-design-decision", str(root / "artifacts/_control/code-design-decision.json"), "--pileup-check", str(root / "artifacts/code-development/business-code-pileup-check.json")]),
         ("build_traceability_report", [py, str(here / "build_traceability_report.py"), "--root", str(root)]),
         ("validate_technology_adoption", [py, str(here / "validate_technology_adoption.py"), "--root", str(root)]),
         ("validate_spring_boot_quality", [py, str(here / "validate_spring_boot_quality.py"), "--root", str(root)]),

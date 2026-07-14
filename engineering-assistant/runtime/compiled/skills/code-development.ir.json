@@ -1,42 +1,133 @@
 {
   "skill_id": "code-development",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "stage": "code_development",
   "type": "stage_skill",
   "prompt_pack": {
     "display_name": "Code Development",
     "short_description": "基于设计文档进行最小必要代码变更或生成代码修改计划。",
-    "default_prompt": "使用 code-development，先完成 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成 required_information_requests、human-review HTML 和恢复点，补齐写回后再进入 formal_generation 输出声明产物与 gate decision。",
-    "trigger_description": "Use when 基于设计文档进行最小必要代码变更或生成代码修改计划；Do not use when do not 修改无关模块。",
+    "default_prompt": "使用 code-development，先消费编码资格、代码设计决策和实现合同；按 public seam 垂直实现并保护旧行为，完成后验证业务规则重复、无关规则集中、状态流转重复和领域泄漏，再输出声明产物与 gate decision。",
+    "trigger_description": "Use when the request is about 基于设计文档进行最小必要代码变更或生成代码修改计划。；Do not use when 不修改无关模块；不绕过测试。",
     "language_policy": {
       "supported": [
         "zh-CN",
         "en"
       ],
-      "when_unspecified": "ask_user"
-    },
-    "preflight_gate": {
-      "states": [
-        "ready",
-        "waiting_for_input",
-        "waiting_for_human_review",
-        "blocked"
-      ],
-      "formal_generation_entry_condition": "preflight_input_state == ready"
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
     }
   },
   "inputs": [
-    "detailed-design.md",
-    "implementation-plan.md",
-    "interface-contracts.yaml",
-    "repo_context"
+    {
+      "name": "coding-eligibility.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "workflow|repo",
+      "validation": "必须通过 validate_code_design_gate.py",
+      "missing_strategy": "blocked"
+    },
+    {
+      "name": "code-design-decision.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "workflow|repo",
+      "validation": "必须包含七个设计事实并与当前源码一致",
+      "missing_strategy": "blocked"
+    },
+    {
+      "name": "design-contract.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "workflow|repo",
+      "validation": "必须由 implementation-controller 编译",
+      "missing_strategy": "blocked"
+    },
+    {
+      "name": "implementation-contract.json",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "workflow|repo",
+      "validation": "必须声明模块边界、测试和完成条件",
+      "missing_strategy": "blocked"
+    },
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "implementation-plan.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "interface-contracts.yaml",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "repo_context",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
   ],
   "outputs": [
-    "code changes",
-    "implementation-summary.md",
-    "design-to-code-mapping.yaml",
-    "changed-files-report.json",
-    "traceability-matrix.json"
+    {
+      "name": "code changes",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/code changes",
+      "schema": "output.schema.json#code changes",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "implementation-summary.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/implementation-summary.md",
+      "schema": "output.schema.json#implementation-summary.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "design-to-code-mapping.yaml",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/design-to-code-mapping.yaml",
+      "schema": "output.schema.json#design-to-code-mapping.yaml",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "changed-files-report.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/changed-files-report.json",
+      "schema": "output.schema.json#changed-files-report.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "traceability-matrix.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/traceability-matrix.json",
+      "schema": "output.schema.json#traceability-matrix.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "business-code-pileup-check.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/code-development/business-code-pileup-check.json",
+      "schema": "../../engineering-assistant/schemas/business-code-pileup-check.schema.json",
+      "consumer": "code-quality-governor|code-review|human-review"
+    }
   ],
   "routing": {
     "intent_tags": [
@@ -58,20 +149,23 @@
       "不生成产物"
     ],
     "requires": [
-      "detailed-design.md",
-      "implementation-plan.md",
-      "interface-contracts.yaml",
+      "coding-eligibility.json",
+      "code-design-decision.json",
+      "design-contract.json",
+      "implementation-contract.json",
       "repo_context"
     ],
     "conflicts_with": [],
     "risk_level": "high",
     "cost_class": "high",
     "evidence_required": [
+      "编码资格与代码设计决策已验证",
       "每个变更映射到设计",
       "无无关模块修改",
       "高风险文件已标记",
       "测试命令已列出",
-      "需求-设计-代码追踪矩阵已刷新"
+      "需求-设计-代码追踪矩阵已刷新",
+      "业务代码堆积检查已完成且无阻断信号"
     ],
     "allow_implicit_invocation": false
   },
@@ -85,11 +179,55 @@
     ]
   },
   "quality_gates": [
-    "每个变更映射到设计",
-    "无无关模块修改",
-    "高风险文件已标记",
-    "测试命令已列出",
-    "需求-设计-代码追踪矩阵已刷新"
+    {
+      "gate_id": "code-development-gate-0",
+      "name": "编码资格与代码设计决策已验证",
+      "type": "deterministic",
+      "pass_condition": "validate_code_design_gate.py 返回 allow",
+      "fail_action": "block"
+    },
+    {
+      "gate_id": "code-development-gate-1",
+      "name": "每个变更映射到设计",
+      "type": "deterministic",
+      "pass_condition": "每个变更映射到设计 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-development-gate-2",
+      "name": "无无关模块修改",
+      "type": "deterministic",
+      "pass_condition": "无无关模块修改 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-development-gate-3",
+      "name": "高风险文件已标记",
+      "type": "hybrid",
+      "pass_condition": "高风险文件已标记 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-development-gate-4",
+      "name": "测试命令已列出",
+      "type": "deterministic",
+      "pass_condition": "测试命令已列出 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-development-gate-5",
+      "name": "需求-设计-代码追踪矩阵已刷新",
+      "type": "deterministic",
+      "pass_condition": "需求-设计-代码追踪矩阵已刷新 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "code-development-gate-6",
+      "name": "业务代码堆积检查已完成且无阻断信号",
+      "type": "hybrid",
+      "pass_condition": "最终 diff 无重复业务规则、无关规则集中、重复状态流转或领域泄漏",
+      "fail_action": "返回设计/落点修正并 block"
+    }
   ],
   "workflow": {
     "node_id": "code-development",

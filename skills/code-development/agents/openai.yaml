@@ -1,20 +1,12 @@
 display_name: "Code Development"
 short_description: "基于设计文档进行最小必要代码变更或生成代码修改计划。"
-default_prompt: "使用 code-development，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后再进入 formal_generation 输出声明产物、findings、required actions 和 gate decision。"
+default_prompt: "使用 code-development，先消费编码资格、代码设计决策和实现合同；按 public seam 垂直实现并保护旧行为，完成后验证业务规则重复、无关规则集中、状态流转重复和领域泄漏，再输出声明产物与 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: false
   risk_level: "high"
@@ -26,7 +18,7 @@ metadata:
   owner: "后端开发"
   stage: "code_development"
   type: "stage_skill"
-  trigger_description: "Use when 基于设计文档进行最小必要代码变更或生成代码修改计划；Do not use when do not 修改无关模块。"
+  trigger_description: "Use when the request is about 基于设计文档进行最小必要代码变更或生成代码修改计划。；Do not use when 不修改无关模块；不绕过测试。"
 routing:
   intent_tags:
     - "code"

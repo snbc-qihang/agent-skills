@@ -1,0 +1,59 @@
+{
+  "run_id": "mw-example-001",
+  "scheduling_mode": "dependency_aware_parallel",
+  "batches": [
+    {
+      "batch_id": "parallel_dispatch_batch_1",
+      "ready_task_ids": [
+        "api-contract-test",
+        "flow-test",
+        "page-acceptance"
+      ],
+      "parallel_required": true,
+      "dispatch_method": "concurrent_tool_batch",
+      "all_dispatches_submitted_before_wait": true,
+      "dispatches": [
+        {
+          "task_id": "api-contract-test",
+          "tool": "send_message_to_thread",
+          "tool_call_id": "dispatch-api-contract-test",
+          "controller_owned": true,
+          "dispatch_depth": 1,
+          "accepted": true,
+          "sent_at": "2026-07-10T02:00:00.001+08:00"
+        },
+        {
+          "task_id": "flow-test",
+          "tool": "send_message_to_thread",
+          "tool_call_id": "dispatch-flow-test",
+          "controller_owned": true,
+          "dispatch_depth": 1,
+          "accepted": true,
+          "sent_at": "2026-07-10T02:00:00.002+08:00"
+        },
+        {
+          "task_id": "page-acceptance",
+          "tool": "send_message_to_thread",
+          "tool_call_id": "dispatch-page-acceptance",
+          "controller_owned": true,
+          "dispatch_depth": 1,
+          "accepted": true,
+          "sent_at": "2026-07-10T02:00:00.003+08:00"
+        }
+      ],
+      "first_wait_or_read_at": "2026-07-10T02:00:00.004+08:00",
+      "completion_barrier": "wait_for_all_dispatched_workers",
+      "completed_task_ids": [
+        "api-contract-test",
+        "flow-test",
+        "page-acceptance"
+      ],
+      "consumed_outputs": [
+        {"task_id": "api-contract-test", "output_summary": "API contract checks completed", "output_hash": "sha256:api-contract-test", "consumed_by_controller": true},
+        {"task_id": "flow-test", "output_summary": "Module flow checks completed", "output_hash": "sha256:flow-test", "consumed_by_controller": true},
+        {"task_id": "page-acceptance", "output_summary": "Page acceptance checks completed", "output_hash": "sha256:page-acceptance", "consumed_by_controller": true}
+      ],
+      "status": "completed"
+    }
+  ]
+}

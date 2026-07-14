@@ -89,9 +89,6 @@
     "detailed-design.md",
     "implementation-plan.md",
     "interface-contracts.yaml",
-    "test-strategy.md",
-    "database-design.md",
-    "mq-design.xlsx",
-    "redis-design.md"
+    "test-strategy.md"
   ]
 }

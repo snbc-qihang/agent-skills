@@ -1,0 +1,18 @@
+{
+  "required": [
+    "run_id",
+    "overall_status",
+    "feedback_owner",
+    "agent_review_required",
+    "human_review_required",
+    "route",
+    "capability_feedback",
+    "artifact_feedback",
+    "rule_violations",
+    "darwin_self_healing",
+    "assistant_response_contract",
+    "summary"
+  ],
+  "overall_status_values": ["pass", "warn", "blocked", "pending_evidence"],
+  "feedback_owner_value": "codex_agent"
+}

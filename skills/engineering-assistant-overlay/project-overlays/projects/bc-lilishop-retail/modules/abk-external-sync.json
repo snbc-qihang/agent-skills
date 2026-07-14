@@ -1,0 +1,178 @@
+{
+  "overlay_layer": "module",
+  "project_slug": "bc-lilishop-retail",
+  "module_slug": "abk-external-sync",
+  "applies_to": {
+    "repositories": [
+      "abk-sync-service",
+      "bc-service"
+    ],
+    "packages": [],
+    "apis": [
+      "ABK integration APIs",
+      "coupon sync APIs",
+      "member registration APIs",
+      "member rank change APIs",
+      "sync replay APIs"
+    ],
+    "pages": [
+      "internal sync diagnostics",
+      "admin coupon/member/product views"
+    ],
+    "jobs": [
+      "binlog listener",
+      "full sync",
+      "projection import",
+      "backfill",
+      "scheduler",
+      "MQ consumer"
+    ],
+    "data_sources": [
+      "abk_real_db",
+      "abk_mapping_db",
+      "lilishop_business_db",
+      "runtime_config",
+      "Redis",
+      "ES"
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "ABK_ENVIRONMENT_AND_LAYER_GUARD",
+      "trigger": "Use before calling, mutating, replaying, cleaning, registering, issuing coupon data, changing member rank, or answering where ABK-sourced data is written.",
+      "do": "Separate `abk_real_db`, `abk_mapping_db`, `lilishop_business_db`, and `runtime_config`. Before ABK mutation, verify effective environment from runtime config or request URL. If the user asks for ABK test environment and evidence points to production, stop before mutation.",
+      "checks": [
+        "abk_environment_evidence",
+        "data_source_layer",
+        "runtime_config"
+      ],
+      "gate": "ABK_ENVIRONMENT_GUARD_MISSING"
+    },
+    {
+      "rule_id": "ABK_MUTATION_TARGET_CONFIRMATION",
+      "trigger": "Use before any data mutation, sync replay, cleanup, registration, coupon issuance, or rank change.",
+      "do": "Restate the exact target identity, such as phone, member id, store id, coupon id, batch id, or external record id, and explicitly exclude user-disallowed targets. Do not execute inferred or ambiguous mutations.",
+      "checks": [
+        "mutation_target_identity",
+        "excluded_targets",
+        "latest_user_correction"
+      ],
+      "gate": "MUTATION_TARGET_NOT_CONFIRMED"
+    },
+    {
+      "rule_id": "ABK_MATERIALIZED_DATA_CUSTOMER_BOUNDARY",
+      "trigger": "Use when ABK, binlog, full-sync, projection, import, or raw-mirror data has been converted into accepted Lilishop business tables and affects customer-facing behavior.",
+      "do": "Treat accepted data as current-system business data. Do not expose or block by technical source alone. Keep source metadata internal for reconciliation, idempotency, support diagnostics, rollback, and audit. Customer-visible behavior must be justified by business rule evidence or external side-effect risk.",
+      "checks": [
+        "materialized_to_business_tables",
+        "customer_visible_source_restrictions",
+        "business_rule_evidence",
+        "external_side_effect_evidence",
+        "protective_effect"
+      ],
+      "gate": "CUSTOMER_VISIBLE_SOURCE_RESTRICTION_UNJUSTIFIED"
+    },
+    {
+      "rule_id": "ABK_SYNC_USABILITY",
+      "trigger": "Use when sync/import/backfill results are expected to support product, price, stock, coupon, member, order, refund, inventory, or downstream retail flows.",
+      "do": "Verify the synchronized data can be found and used by the intended page, API, order, coupon, member, inventory, refund, or downstream flow. If it only writes rows but the business cannot use them, mark `sync-written-but-not-usable`.",
+      "checks": [
+        "sync_usability_evidence",
+        "downstream_flow_evidence"
+      ],
+      "gate": "SYNC_DATA_USABILITY_NOT_VERIFIED"
+    },
+    {
+      "rule_id": "ABK_BINLOG_SYNC_BUSINESS_CONTEXT_REQUIRED",
+      "trigger": "Use before modifying or reviewing abk-sync-service binlog listener, full sync, projection, writer, convert, coupon, promotion, order, payment, member, balance, stock, price, points, raw mirror, table policy, or sync completion code.",
+      "do": "Do not start with a code patch. First generate machine-readable `business-context-map.json` and `change-impact-matrix.json`. They must map source table, domain, business key, updated-at column, binlog path, full-sync path, planner decision, writer mode, projection table, compat target, convert task, downstream business usage, current failing tests, and protecting tests. If the target path is missing or ambiguous, stop and record the path conflict before using a sibling repository.",
+      "checks": [
+        "business_context_map_json",
+        "change_impact_matrix_json",
+        "source_table_domain_matrix",
+        "binlog_vs_full_sync_path",
+        "writer_mode_matrix",
+        "projection_convert_contract",
+        "downstream_usability_evidence",
+        "path_conflict_resolution"
+      ],
+      "gate": "ABK_BINLOG_SYNC_CONTEXT_MISSING"
+    },
+    {
+      "rule_id": "ABK_FIX_CHAIN_PROTECTION_REQUIRED",
+      "trigger": "Use when fixing any ABK sync failure after previous ABK order, payment, coupon, promotion, member, member-balance, stock, price, points, binlog, full-sync, writer, or convert fix appears in current git history, run artifacts, CI logs, or user feedback.",
+      "do": "Before editing code, generate `protected-fix-set.json`, `regression-root-cause.md`, and `regression-survival-gate.md`. The protected set must include previously fixed behaviours and sibling domains likely to regress. The survival gate must run the current failing tests plus protected sibling tests before claiming success. If these artifacts are missing, the agent must block instead of applying a single-point patch.",
+      "checks": [
+        "protected_fix_set_json",
+        "regression_root_cause_md",
+        "regression_survival_gate_md",
+        "known_good_preservation",
+        "sibling_domain_tests",
+        "previous_feedback_consumed"
+      ],
+      "gate": "ABK_FIX_CHAIN_REGRESSION_UNCHECKED"
+    },
+    {
+      "rule_id": "ABK_RUN_FEEDBACK_CONSUMPTION_REQUIRED",
+      "trigger": "Use at the start of any ABK-related engineering-assistant run when ~/.codex/run-artifacts/engineering-assistant contains prior ABK, coupon, payment, order, promotion, member, balance, or sync runs.",
+      "do": "Read recent `assistant-run-feedback.json` and `closed-loop-outcome.json` before planning. If historical files do not match the current schemas, normalize them into `normalized-prior-feedback.json` and write `prior-feedback-consumption-report.md` rather than ignoring them. Extract repeated-fix signals, previous protected behaviours, blocked gates, and next-run-context. Missing or unreadable feedback is a warning; unconsumed relevant feedback is a blocker for code edits.",
+      "checks": [
+        "assistant_run_feedback_read",
+        "closed_loop_outcome_read",
+        "normalized_prior_feedback_json",
+        "prior_feedback_consumption_report_md",
+        "repeated_fix_signal_extracted",
+        "next_run_context_consumed"
+      ],
+      "gate": "ABK_PRIOR_FEEDBACK_NOT_CONSUMED"
+    },
+    {
+      "rule_id": "ABK_SOURCE_FACTS_OVERRIDE_CHAT_CONTEXT",
+      "trigger": "Use when chat context, compacted history, prior assistant claims, or user-provided repository paths conflict with filesystem, git, test, CI, runtime config, or source-code facts.",
+      "do": "Treat chat context as a hint only. Re-read source files, tests, git status/diff/log, effective config, and run artifacts. Record verified facts, rejected stale assumptions, and unresolved risks before any conclusion. If the user asked to improve the assistant rather than business code, business repository code edits are prohibited until explicitly requested.",
+      "checks": [
+        "verified_source_facts",
+        "stale_context_rejected",
+        "unresolved_risks_recorded",
+        "user_intent_scope_confirmed",
+        "no_business_code_edit_without_explicit_request"
+      ],
+      "gate": "ABK_SOURCE_FACTS_OR_INTENT_SCOPE_UNVERIFIED"
+    }
+  ],
+  "gates": [
+    "ABK_ENVIRONMENT_GUARD_MISSING",
+    "DATA_SOURCE_LAYER_UNLABELED",
+    "MUTATION_TARGET_NOT_CONFIRMED",
+    "CUSTOMER_VISIBLE_SOURCE_RESTRICTION_UNJUSTIFIED",
+    "SYNC_DATA_USABILITY_NOT_VERIFIED",
+    "ABK_BINLOG_SYNC_CONTEXT_MISSING",
+    "ABK_FIX_CHAIN_REGRESSION_UNCHECKED",
+    "ABK_PRIOR_FEEDBACK_NOT_CONSUMED",
+    "ABK_SOURCE_FACTS_OR_INTENT_SCOPE_UNVERIFIED"
+  ],
+  "required_artifacts_before_code_edit": [
+    "business-context-map.json",
+    "change-impact-matrix.json",
+    "protected-fix-set.json",
+    "regression-root-cause.md",
+    "regression-survival-gate.md",
+    "prior-feedback-consumption-report.md"
+  ],
+  "protected_behavior_seed": [
+    "ORDER invoice/invoiceitem/payment binlog tables must not be treated as raw-mirror-only when business projection is required",
+    "ORDER payment source rows must preserve payment projection and payment-log behaviour across writer modes",
+    "full-sync completion must distinguish event publication from downstream business write completion",
+    "COUPON member-coupon source_type/source_id SQL parameter order must be protected against silent column drift",
+    "PROMOTION aggregate lifecycle must not convert supported or wait-confirm rows to expired without source-date evidence",
+    "raw mirror success is not business sync success"
+  ],
+  "evidence_sources": [
+    "user ABK sync configuration and usability feedback",
+    "overlay split request 2026-07-03",
+    "2026-07-07 abk-sync-service audit: 779 tests, 14 failures across binlog planner, full sync, writer coupon/payment, and promotion aggregate",
+    "user correction: requested assistant self-evolution, not business code edits"
+  ],
+  "owner": "user-local-engineering-assistant-overlay",
+  "review_after": "2026-08-03"
+}

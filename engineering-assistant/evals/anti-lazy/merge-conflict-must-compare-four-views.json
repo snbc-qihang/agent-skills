@@ -1,0 +1,16 @@
+{
+  "id": "merge-conflict-must-compare-four-views",
+  "category": "git_merge_safety",
+  "given": "Merge conflict where ours/theirs both contain business logic.",
+  "expected": [
+    "base_evidence",
+    "ours_evidence",
+    "theirs_evidence",
+    "final_evidence",
+    "merge-safety-checklist.json"
+  ],
+  "forbidden": [
+    "accept_one_side_without_comparison",
+    "delete_logic_without_equivalence_proof"
+  ]
+}

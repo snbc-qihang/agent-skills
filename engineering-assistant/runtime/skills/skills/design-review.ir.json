@@ -1,0 +1,179 @@
+{
+  "skill_id": "design-review",
+  "version": "1.1.0.0",
+  "stage": "design_review",
+  "type": "stage_skill",
+  "prompt_pack": {
+    "display_name": "Design Review",
+    "short_description": "评审设计产物，判断是否可以进入代码研发。",
+    "default_prompt": "使用 design-review，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。",
+    "trigger_description": "Use when the request is about 评审设计产物，判断是否可以进入代码研发。；Do not use when 不代替审批人签字；不修正文档内容。",
+    "language_policy": {
+      "supported": [
+        "zh-CN",
+        "en"
+      ],
+      "when_unspecified": "ask_user",
+      "blocking_status": "waiting_for_input",
+      "question": "请确认输出语言：简体中文还是 English？",
+      "writeback": "StageRunRequest.context.language"
+    }
+  },
+  "inputs": [
+    {
+      "name": "high-level-design.md",
+      "type": "artifact|string|object",
+      "required": true,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "detailed-design.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "database-design.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "redis-design.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    },
+    {
+      "name": "mq-design.md",
+      "type": "artifact|string|object",
+      "required": false,
+      "source": "user|workflow|repo|ci",
+      "validation": "必填输入必须存在，选填输入必须可追溯来源",
+      "missing_strategy": "除非无法定义边界，否则基于明确假设继续；无法定义边界时进入 waiting_for_input"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "design-review-report.md",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/design-review/design-review-report.md",
+      "schema": "output.schema.json#design-review-report.md",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "review-findings.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/design-review/review-findings.json",
+      "schema": "output.schema.json#review-findings.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    },
+    {
+      "name": "design-gate-decision.json",
+      "type": "markdown|json|yaml|code|log|report",
+      "path": "artifacts/design-review/design-gate-decision.json",
+      "schema": "output.schema.json#design-gate-decision.json",
+      "consumer": "workflow-orchestrator|downstream-stage|human-review"
+    }
+  ],
+  "routing": {
+    "intent_tags": [
+      "design",
+      "design-review",
+      "design_review",
+      "review",
+      "stage_skill",
+      "判断是否可以进入代码研发。",
+      "评审设计产物"
+    ],
+    "positive_triggers": [
+      "design-review",
+      "Design Review",
+      "评审设计产物，判断是否可以进入代码研发。"
+    ],
+    "negative_triggers": [
+      "只解释 Design Review 的用途，不执行任务",
+      "只咨询说明",
+      "不生成产物"
+    ],
+    "requires": [
+      "high-level-design.md",
+      "detailed-design.md",
+      "database-design.md",
+      "redis-design.md",
+      "mq-design.md"
+    ],
+    "conflicts_with": [],
+    "risk_level": "medium",
+    "cost_class": "medium",
+    "evidence_required": [
+      "无未关闭 blocker",
+      "关键专项设计齐全",
+      "测试策略存在",
+      "高风险审批齐全"
+    ],
+    "allow_implicit_invocation": true
+  },
+  "risk": {
+    "risk_level": "medium",
+    "allow_implicit_invocation": true,
+    "human_approval_required": [
+      "高风险设计放行",
+      "blocker 关闭确认",
+      "关键设计豁免"
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate_id": "design-review-gate-1",
+      "name": "无未关闭 blocker",
+      "type": "deterministic",
+      "pass_condition": "无未关闭 blocker 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "design-review-gate-2",
+      "name": "关键专项设计齐全",
+      "type": "deterministic",
+      "pass_condition": "关键专项设计齐全 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "design-review-gate-3",
+      "name": "测试策略存在",
+      "type": "deterministic",
+      "pass_condition": "测试策略存在 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    },
+    {
+      "gate_id": "design-review-gate-4",
+      "name": "高风险审批齐全",
+      "type": "hybrid",
+      "pass_condition": "高风险审批齐全 有证据证明已满足",
+      "fail_action": "block 或 require_human_review"
+    }
+  ],
+  "workflow": {
+    "node_id": "design-review",
+    "entry_modes": [
+      "auto_flow",
+      "from_node",
+      "single_node"
+    ],
+    "next_nodes": []
+  },
+  "source_files": [
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/design-review/SKILL.md",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/design-review/contract.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/design-review/workflow/node.yaml",
+    "/Users/fengtianyangyang/.codex/plugins/cache/codex-marketplace-global/engineering-assistant/1.0.0.1/skills/design-review/agents/openai.yaml"
+  ]
+}

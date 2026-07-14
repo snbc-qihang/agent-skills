@@ -1,0 +1,13 @@
+{
+  "version": "1.1.0.0",
+  "compiled_index": "engineering-assistant/runtime/compiled/skill-runtime-index.json",
+  "skill_registry": "engineering-assistant/registry/skills.yaml",
+  "required_checks": [
+    "compiled_index_exists",
+    "registry_skill_has_compiled_ir",
+    "compiled_ir_file_exists",
+    "risk_level_matches_registry",
+    "allow_implicit_invocation_matches_registry"
+  ],
+  "notes": "Local runtime compile policy for validating active plugin compiled skill IR against the skill registry."
+}

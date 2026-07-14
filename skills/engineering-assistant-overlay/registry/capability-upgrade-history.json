@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "pack_id": "ea-agent-skills-delta",
+  "upgrades": [
+    {
+      "local_version": "1.0.0",
+      "date": "2026-07-11",
+      "status": "accepted",
+      "scope": [
+        "generic external capability assimilation gate",
+        "six Engineering Assistant-native delta capabilities",
+        "G0/G1/G2 gate classification",
+        "ten-case historical regression acceptance"
+      ],
+      "source_reference": "https://github.com/addyosmani/agent-skills",
+      "upstream_commit_used_as_version": false,
+      "automatic_update": false,
+      "rollback": "remove pack registry entry and assimilation routing while preserving pre-existing Engineering Assistant gates"
+    },
+    {
+      "local_version": "1.1.0",
+      "date": "2026-07-11",
+      "status": "accepted",
+      "scope": [
+        "MLflow-traced real Codex entrypoint evaluation",
+        "ten-case MLflow GenAI dataset and four scorers",
+        "feedback and closed-loop pair validation",
+        "read-only historical feedback corpus audit",
+        "structured source resolution for critical capabilities",
+        "registry-driven acceptance version"
+      ],
+      "source_reference": "https://github.com/addyosmani/agent-skills",
+      "upstream_commit_used_as_version": false,
+      "automatic_update": false,
+      "mlflow_run_id": "5ef0b48f072848a393cf25f678c66189",
+      "acceptance": "10/10 traced cases; all four aggregate metrics equal 1.0",
+      "rollback": "restore ea-agent-skills-delta 1.0.0 registry and retain the MLflow run as historical evidence"
+    },
+        {
+            "local_version": "1.2.0",
+      "date": "2026-07-11",
+      "status": "accepted",
+      "scope": [
+        "bounded source-first intent clarification owned by requirement-intake",
+        "feasibility argumentation with executable, conditional, and non-executable verdicts",
+        "natural-language routing for all 22 existing Skills",
+        "capability-conditioned dependency DAG with hard-prerequisite completion",
+        "contract-first parallel multi-window ready sets and completion barriers",
+        "behavior-level owner, routing, negative, prerequisite, and output-consumption acceptance"
+      ],
+      "source_reference": "https://github.com/addyosmani/agent-skills",
+      "upstream_commit_used_as_version": false,
+      "automatic_update": false,
+      "acceptance": "14/14 historical regressions, 7/7 behavior checks, 5/5 parallel adversarial rejections, 22/22 Skill routing contracts, Council and full Overlay validation passed",
+            "rollback": "restore the 20260711-before-agent-skills-v1.2.0 active-plugin and durable-overlay backups"
+        },
+        {
+            "local_version": "1.3.0",
+            "date": "2026-07-11",
+            "status": "accepted",
+            "scope": [
+                "Engineering Assistant quality floor above non-conflicting repository conventions",
+                "independent specification and engineering-quality verdicts",
+                "evidence-based abstraction, design-pattern, dependency, and review-suggestion control",
+                "changed-scope smell baseline without fixed metric thresholds",
+                "twenty-case finite capability acceptance"
+            ],
+            "source_reference": [
+                "https://github.com/addyosmani/agent-skills",
+                "https://github.com/mattpocock/skills",
+                "https://github.com/anthropics/claude-plugins-official",
+                "https://github.com/obra/superpowers"
+            ],
+            "upstream_commit_used_as_version": false,
+            "automatic_update": false,
+            "acceptance": "35/35 candidates classified, 20/20 capability cases passed, 9/9 G0 passed, 7/7 existing behavior checks passed, full Overlay suite passed, existing gate regressions 0",
+            "rollback": "restore /Users/fengtianyangyang/.codex/backups/engineering-assistant/20260711-before-code-quality-v1.3.0/engineering-assistant-overlay"
+        },
+        {
+            "local_version": "1.4.0",
+            "date": "2026-07-12",
+            "status": "accepted",
+            "scope": [
+                "core bounded multi-Agent deliberation before complex development",
+                "parallel independent candidate generation followed by anonymous peer review and response waves",
+                "zero unresolved blocker or major reviews before implementation",
+                "no forced unanimity and at most two rounds",
+                "simple-task efficiency skip and unchanged three-artifact Council boundary"
+            ],
+            "source_reference": "https://github.com/addyosmani/agent-skills/blob/main/references/orchestration-patterns.md",
+            "upstream_commit_used_as_version": false,
+            "automatic_update": false,
+            "acceptance": "9/9 Council deliberation cases, 24/24 finite capability cases, 12/12 G0 cases, 7/7 existing behavior checks, full Overlay suite, and zero existing-gate regressions passed",
+            "rollback": "restore /Users/fengtianyangyang/.codex/backups/engineering-assistant/20260712-before-core-deliberation-v1.4.0"
+        },
+        {
+            "local_version": "1.5.0",
+            "date": "2026-07-14",
+            "status": "accepted",
+            "scope": [
+                "one complete main-Agent baseline proposal before Council dispatch",
+                "parallel audit-only members with no competing complete proposals",
+                "anonymous cross-review, challenged-auditor responses, and proposal-owner responses",
+                "one final proposal revision reviewed by every auditor",
+                "mandatory user review of the exact final proposal before development",
+                "unchanged three-artifact boundary and two-round hard limit"
+            ],
+            "source_reference": "user-corrected Engineering Assistant behavior on 2026-07-14",
+            "upstream_commit_used_as_version": false,
+            "automatic_update": false,
+            "acceptance": "13/13 Council proposal-audit cases, 28/28 finite capability cases, 16/16 G0 cases, 7/7 existing behavior checks, 22-Skill runtime contract, full Overlay suite, and zero existing-gate regressions passed",
+            "rollback": "restore /Users/fengtianyangyang/.codex/backups/engineering-assistant/20260714-before-proposal-audit-v1.5.0"
+        }
+  ]
+}

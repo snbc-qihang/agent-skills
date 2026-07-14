@@ -1,20 +1,12 @@
 display_name: "Database Design"
-short_description: "设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点。"
-default_prompt: "使用 database-design，先执行 preflight 信息梳理；preflight_input_state 不是 ready 时仅生成补充信息请求、human-review HTML 和恢复点，ready 后先读取对应 assets template 并按模板骨架逐节填充输入事实。"
+short_description: "设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。"
+default_prompt: "使用 database-design，先确认输出语言和必须补充的信息，再基于输入材料执行本阶段任务，输出声明产物、findings、required actions 和 gate decision。"
 language_policy:
   supported:
     - "zh-CN"
     - "en"
   when_unspecified: "ask_user"
   question: "请确认输出语言：简体中文还是 English？"
-preflight_gate:
-  state_field: "preflight_input_state"
-  states:
-    - "ready"
-    - "waiting_for_input"
-    - "waiting_for_human_review"
-    - "blocked"
-  formal_generation_entry_condition: "preflight_input_state == ready"
 policy:
   allow_implicit_invocation: true
   risk_level: "medium"
@@ -25,12 +17,11 @@ policy:
     - "删除索引"
     - "生产库变更"
     - "影响核心链路的索引调整"
-    - "物理删除在线事实行"
 metadata:
   owner: "DBA"
   stage: "database_design"
   type: "stage_skill"
-  trigger_description: "Use when 设计数据库表结构、索引、迁移、修复和必要恢复方案，并标记生产变更审批点；Do not use when do not 执行生产 DDL。"
+  trigger_description: "Use when the request is about 设计数据库表结构、索引、迁移、灰度和回滚方案，并标记生产变更审批点。；Do not use when 不执行生产 DDL；不做无用途字段和索引。"
 routing:
   intent_tags:
     - "database"
@@ -38,8 +29,8 @@ routing:
     - "database_design"
     - "design"
     - "stage_skill"
-    - "修复和必要恢复方案"
     - "并标记生产变更审批点。"
+    - "灰度和回滚方案"
     - "索引"
     - "设计数据库表结构"
     - "迁移"

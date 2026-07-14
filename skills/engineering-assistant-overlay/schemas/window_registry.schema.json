@@ -1,0 +1,113 @@
+{
+  "required": [
+    "registry_version",
+    "capability_id",
+    "run_id",
+    "project",
+    "user_required_inputs",
+    "window_reuse_policy",
+    "authoritative_input_policy",
+    "controller_window",
+    "windows",
+    "test_windows",
+    "anti_rework_gates",
+    "gates"
+  ],
+  "capability_id": "multi_window_coordination",
+  "controller_required": [
+    "threadId",
+    "name",
+    "role",
+    "responsibilities"
+  ],
+  "window_required": [
+    "window_key",
+    "threadId",
+    "name",
+    "role",
+    "project",
+    "module_id",
+    "responsibility_key",
+    "module_scope",
+    "responsibilities",
+    "may_edit_code",
+    "reuse_policy",
+    "last_health_check",
+    "replacement",
+    "status"
+  ],
+  "window_reuse_policy": {
+    "default": "reuse_registered_window_first",
+    "recreate_only_when": [
+      "thread_not_found",
+      "thread_inaccessible",
+      "host_unavailable_and_handoff_failed",
+      "window_role_or_module_scope_unrecoverable",
+      "user_explicitly_requests_recreate"
+    ],
+    "never_recreate_when": [
+      "window_is_idle",
+      "window_has_old_context_but_same_role_and_module",
+      "window_title_changed_but_threadId_is_valid"
+    ]
+  },
+  "write_window_required": [
+    "isolation",
+    "reviewer_window",
+    "test_window"
+  ],
+  "user_required_inputs": [
+    "project_path",
+    "target_branch",
+    "business_goal",
+    "in_scope",
+    "out_of_scope",
+    "acceptance_criteria",
+    "test_environment",
+    "window_creation_authorized",
+    "write_permission",
+    "worktree_allowed"
+  ],
+  "test_window_roles": [
+    "api_tester",
+    "module_flow_tester",
+    "page_acceptance_tester"
+  ],
+  "anti_rework_gates": [
+    "REQUIREMENT_FREEZE_REQUIRED",
+    "API_CONTRACT_REQUIRED",
+    "TRACEABILITY_MATRIX_REQUIRED",
+    "DEVELOPER_CONFIRMATION_REQUIRED",
+    "INDEPENDENT_TEST_REQUIRED",
+    "SELF_REVIEW_FORBIDDEN",
+    "REPEATED_FIX_DIAGNOSTIC_RESET_REQUIRED"
+  ],
+  "valid_status": [
+    "available",
+    "planned",
+    "running",
+    "blocked",
+    "waiting_for_input",
+    "waiting_for_review",
+    "missing",
+    "inaccessible",
+    "invalid_scope",
+    "completed",
+    "failed"
+  ],
+  "valid_health_results": [
+    "available",
+    "missing",
+    "inaccessible",
+    "invalid_scope",
+    "recreated"
+  ],
+  "banned_user_terms": [
+    "子线程",
+    "隐藏线程",
+    "内部线程",
+    "subthread",
+    "hidden thread",
+    "internal thread"
+  ]
+}

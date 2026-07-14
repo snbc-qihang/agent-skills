@@ -2,7 +2,7 @@
   "node_id": "detailed-design",
   "stage": "detailed_design",
   "skill_id": "detailed-design",
-  "version": "1.1.0",
+  "version": "1.0.0.1",
   "mode": "standalone|workflow",
   "entry_modes": [
     "auto_flow",
@@ -20,47 +20,27 @@
     "detailed-design.md",
     "implementation-plan.md",
     "interface-contracts.yaml",
-    "test-strategy.md",
-    "database-design.md",
-    "mq-design.xlsx",
-    "redis-design.md"
+    "test-strategy.md"
   ],
   "preconditions": [
     "contract 输入可用",
-    "风险策略已加载",
-    "preflight gate 已执行"
+    "风险策略已加载"
   ],
-  "preflight_gate": {
-    "state_field": "preflight_input_state",
-    "states": [
-      "ready",
-      "waiting_for_input",
-      "waiting_for_human_review",
-      "blocked"
-    ],
-    "formal_generation_entry_condition": "preflight_input_state == ready",
-    "block_formal_generation_when_not_ready": true,
-    "block_next_nodes_when_not_ready": true
-  },
   "postconditions": [
     "StageRunResult 已输出",
     "产物已登记索引"
   ],
   "quality_gates": [
-    "主详细设计只保留功能实现主线",
-    "专项设计独立成文并在主文档引用",
-    "流程使用 flowchart 且紧跟流程设计说明",
-    "DDD/分层/扩展点方案包含 classDiagram",
+    "接口定义完整",
+    "事务边界明确",
+    "幂等策略明确",
     "测试策略覆盖主干和异常路径"
   ],
   "approval_policy": {
     "required_for": [
       "核心链路事务边界变化",
       "高并发路径设计",
-      "权限/认证/鉴权设计",
-      "DDL",
-      "MQ 新队列或 topic",
-      "Redis 新 Key"
+      "权限/认证/鉴权设计"
     ],
     "decision": [
       "pending",
@@ -91,9 +71,6 @@
     "detailed-design.md": "artifacts/detailed-design/detailed-design.md",
     "implementation-plan.md": "artifacts/detailed-design/implementation-plan.md",
     "interface-contracts.yaml": "artifacts/detailed-design/interface-contracts.yaml",
-    "test-strategy.md": "artifacts/detailed-design/test-strategy.md",
-    "database-design.md": "artifacts/detailed-design/database-design.md",
-    "mq-design.xlsx": "artifacts/detailed-design/mq-design.xlsx",
-    "redis-design.md": "artifacts/detailed-design/redis-design.md"
+    "test-strategy.md": "artifacts/detailed-design/test-strategy.md"
   }
 }

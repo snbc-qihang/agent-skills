@@ -1,0 +1,49 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "workflow_orchestration",
+      "status": "active",
+      "source_layer": "active_plugin",
+      "routing_entry": "engineering-assistant/registry/workflows.yaml",
+      "runtime_surface": "skills/workflow-orchestrator",
+      "allow_implicit_invocation": false,
+      "notes": "Routes staged workflows and records workflow trace artifacts."
+    },
+    {
+      "capability_id": "stage_skill_routing",
+      "status": "active",
+      "source_layer": "active_plugin",
+      "routing_entry": "engineering-assistant/registry/skills.yaml",
+      "runtime_surface": "engineering-assistant/runtime/compiled/skill-runtime-index.json",
+      "allow_implicit_invocation": true,
+      "notes": "Routes to active runtime skills according to skill registry risk and invocation flags."
+    },
+    {
+      "capability_id": "plugin_distribution_manifest",
+      "status": "waiting_for_human_review",
+      "source_layer": "active_plugin",
+      "routing_entry": ".codex-plugin/plugin.json",
+      "runtime_surface": "engineering-assistant/scripts/validate_plugin_manifest.py",
+      "allow_implicit_invocation": false,
+      "notes": "Local manifest exists, but placeholder metadata prevents external distribution readiness claims."
+    },
+    {
+      "capability_id": "multi_window_coordination",
+      "status": "overlay_active",
+      "source_layer": "durable_overlay",
+      "routing_entry": "/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/multi-window-coordination.md",
+      "runtime_surface": "overlay_reference_and_thread_tools",
+      "allow_implicit_invocation": false,
+      "notes": "Overlay-only capability; requires explicit user authorization to create or fork visible windows."
+    },
+    {
+      "capability_id": "closed_loop_evolution",
+      "status": "overlay_active",
+      "source_layer": "durable_overlay",
+      "routing_entry": "/Users/fengtianyangyang/.codex/skills/engineering-assistant-overlay/references/closed-loop-evolution.md",
+      "runtime_surface": "assistant-run-feedback.json and closed-loop-outcome.json",
+      "allow_implicit_invocation": true,
+      "notes": "Records feedback, closed-loop outcomes, trajectory distillation, compression, and reward-signal evidence."
+    }
+  ]
+}

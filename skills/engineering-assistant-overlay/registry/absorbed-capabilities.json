@@ -1,0 +1,208 @@
+{
+  "schema_version": "1.0",
+  "pack_id": "ea-agent-skills-delta",
+  "local_version": "1.5.0",
+  "status": "active",
+  "controller": "engineering-assistant",
+  "gate_owner": "engineering-assistant",
+  "versioning": {
+    "mode": "independent",
+    "upgrade_policy": "explicit_local_version_upgrade_after_audit",
+    "upstream_commit_tracking": false,
+    "automatic_upstream_overwrite": false
+  },
+  "source": {
+    "name": "addyosmani/agent-skills",
+    "url": "https://github.com/addyosmani/agent-skills",
+    "license": "MIT",
+    "audited_on": "2026-07-11"
+  },
+  "source_inventory": [
+    {
+      "name": "addyosmani/agent-skills",
+      "url": "https://github.com/addyosmani/agent-skills",
+      "license": "MIT",
+      "decision": "selected lifecycle, doubt-driven, and bounded Agent Teams deliberation capabilities adapted"
+    },
+    {
+      "name": "mattpocock/skills",
+      "url": "https://github.com/mattpocock/skills",
+      "license": "MIT",
+      "decision": "code-review deltas adapted; architecture command deferred"
+    },
+    {
+      "name": "anthropics/claude-plugins-official",
+      "url": "https://github.com/anthropics/claude-plugins-official",
+      "license": "Apache-2.0",
+      "decision": "code-simplifier behavior covered by native post-green simplification"
+    },
+    {
+      "name": "obra/superpowers",
+      "url": "https://github.com/obra/superpowers",
+      "license": "MIT",
+      "decision": "review-verification delta adapted; full router rejected"
+    },
+    {
+      "name": "github/awesome-copilot",
+      "url": "https://github.com/github/awesome-copilot",
+      "license": "skill-specific",
+      "decision": "no content copied; full quality playbook rejected"
+    },
+    {
+      "name": "trailofbits/skills",
+      "url": "https://github.com/trailofbits/skills",
+      "license": "CC-BY-SA-4.0",
+      "decision": "deferred; no content copied"
+    },
+    {
+      "name": "microsoft/skills and microsoft/waza",
+      "url": "https://github.com/microsoft/skills",
+      "license": "MIT",
+      "decision": "evaluation approach covered or deferred; no runtime router imported"
+    }
+  ],
+  "acceptance_contract": {
+    "audited_candidate_count": 36,
+    "acceptance_case_count": 28,
+    "behavior_case_count": 7,
+    "minimum_overall_pass_rate": 0.8,
+    "require_all_g0": true,
+    "maximum_existing_gate_regressions": 0
+  },
+  "router_policy": {
+    "sole_entrypoint": "engineering-assistant",
+    "sole_gate_owner": "engineering-assistant",
+    "upstream_router_imported": false,
+    "upstream_commands_imported": false,
+    "upstream_personas_imported": false
+  },
+  "evaluation_evidence": {
+    "framework": "deterministic behavior regression plus Engineering Assistant Council",
+    "tracking_mode": "local_run_artifacts",
+    "experiment_id": "20260714-proposal-audit-v1.5.0-assimilation",
+    "dataset": "engineering-assistant-regression-v1.5",
+    "dataset_size": 28,
+    "run_id": "20260714-proposal-audit-v1.5.0-assimilation",
+    "trace_entrypoint": "historical capability replay, thirteen single-proposal Council validator cases, existing behavior validator, and full overlay suite",
+    "metrics": {
+      "historical_regression_pass_rate": 1.0,
+      "behavior_acceptance_pass_rate": 1.0,
+      "g0_pass_rate": 1.0,
+      "existing_gate_regressions": 0
+    },
+    "prior_mlflow_baseline": {"version": "1.1.0", "run_id": "5ef0b48f072848a393cf25f678c66189"},
+    "scorer_boundary": "v1.5 requires one complete main-Agent proposal, parallel audit-only members, cross-review and responses, all-auditor review of the final revision, and explicit user approval before development; Council never replaces repository tests"
+  },
+  "capabilities": [
+    {
+      "capability_id": "bounded_intent_clarification",
+      "source_skills": ["interview-me"],
+      "native_owner": "requirement-intake",
+      "gate_level": "G0",
+      "trigger_issue_types": ["ambiguous_requirement", "complex_requirement", "mutually_exclusive_interpretations"],
+      "completion_evidence": ["source_first_clarity_map", "single_question_turns", "bounded_stop", "clarified_requirement_contract"],
+      "stop_condition": "clear without final confirmation, or waiting_for_input after at most six questions",
+      "protected_existing_gates": ["REQUIREMENT_INTENT_AMBIGUOUS", "REQUIREMENT_CLARIFICATION_UNBOUNDED"]
+    },
+    {
+      "capability_id": "feasibility_argumentation",
+      "source_skills": ["idea-refine", "spec-driven-development"],
+      "native_owner": "requirement-intake",
+      "gate_level": "G0",
+      "trigger_issue_types": ["complex_requirement", "uncertain_feasibility", "critical_design", "repeated_bug"],
+      "completion_evidence": ["requirement_argumentation", "executable_path", "rejected_alternatives", "risk_rollback_test_cost_evidence"],
+      "stop_condition": "executable verdict routes forward; conditional verdict waits; not_executable stops with alternative",
+      "protected_existing_gates": ["FEASIBILITY_ARGUMENTATION_MISSING", "NON_EXECUTABLE_PATH_CONTINUED"]
+    },
+    {
+      "capability_id": "fresh_context_doubt_review",
+      "source_skills": ["doubt-driven-development"],
+      "native_owner": "engineering-assistant-council-integration",
+      "gate_level": "G0",
+      "trigger_issue_types": ["repeated_bug", "fix_a_break_b", "critical_design", "uncertain_root_cause"],
+      "completion_evidence": ["artifact_contract_packet", "independent_review", "finding_reconciliation", "bounded_stop"],
+      "stop_condition": "two council rounds or three lightweight doubt cycles",
+      "protected_existing_gates": ["COUNCIL_DETERMINISTIC_GATE_OVERRIDE_ATTEMPT", "DEBATE_MODE_UNBOUNDED"]
+    },
+    {
+      "capability_id": "authoritative_source_verification",
+      "source_skills": ["source-driven-development"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G1",
+      "trigger_issue_types": ["stale_technology", "framework_specific_change", "jdk_feature_decision"],
+      "completion_evidence": ["detected_version", "official_source", "local_reuse_inventory", "changed_scope_decision"],
+      "stop_condition": "source and local reuse decision are evidenced",
+      "protected_existing_gates": ["JAVA_VERSION_FEATURE_DECISION_MISSING", "FRAMEWORK_REUSE_NOT_EVALUATED"]
+    },
+    {
+      "capability_id": "bounded_hypothesis_recovery",
+      "source_skills": ["debugging-and-error-recovery"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G0",
+      "trigger_issue_types": ["repeated_bug", "fix_a_break_b", "deterministic_test_failure", "uncertain_root_cause"],
+      "completion_evidence": ["reproduction", "hypothesis_ledger", "falsification_result", "runtime_state_classification", "preservation_test"],
+      "stop_condition": "two failed patch attempts route to Council or human review",
+      "protected_existing_gates": ["REPEATED_FIX_DIAGNOSTIC_RESET_REQUIRED", "FIX_CHAIN_REGRESSION_UNCHECKED"]
+    },
+    {
+      "capability_id": "context_budgeted_handoff",
+      "source_skills": ["context-engineering", "planning-and-task-breakdown"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G1",
+      "trigger_issue_types": ["multi_window", "multi_module", "council_dispatch", "long_running_task"],
+      "completion_evidence": ["scoped_fact_packet", "ownership_boundary", "parallel_ready_set", "completion_barrier", "output_consumption"],
+      "stop_condition": "all ready outputs are consumed or a declared dependency blocks",
+      "protected_existing_gates": ["MULTI_WINDOW_PARALLEL_DISPATCH_SKIPPED", "WORKER_WINDOW_OUTPUT_NOT_CONSUMED"]
+    },
+    {
+      "capability_id": "post_green_simplification",
+      "source_skills": ["code-simplification"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G2",
+      "trigger_issue_types": ["business_code_pileup", "changed_diff_duplication", "custom_infrastructure"],
+      "completion_evidence": ["green_baseline", "simplification_candidate", "protected_behavior", "rerun_result"],
+      "stop_condition": "changed ownership slice is cohesive and preservation tests remain green",
+      "protected_existing_gates": ["BUSINESS_CODE_PILEUP_UNCHECKED", "OVER_DESIGN_BOUNDARY_UNCHECKED"]
+    },
+    {
+      "capability_id": "observability_release_evidence",
+      "source_skills": ["observability-and-instrumentation", "shipping-and-launch"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G1",
+      "trigger_issue_types": ["release_gap", "production_impact", "async_partial_failure", "customer_visible_flow"],
+      "completion_evidence": ["observable_failure_path", "evidence_status", "sensitive_data_check", "rollback_or_disable_path"],
+      "stop_condition": "required local and external release evidence is classified",
+      "protected_existing_gates": ["CHANGE_VERIFICATION_EVIDENCE_MISSING", "EXTERNAL_EVIDENCE_STATUS_UNCLASSIFIED"]
+    },
+    {
+      "capability_id": "independent_quality_constitution",
+      "source_skills": ["code-review-and-quality", "mattpocock/skills:code-review"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G1",
+      "trigger_issue_types": ["low_quality_project_baseline", "spec_quality_axis_gap", "quality_constitution_review"],
+      "completion_evidence": ["quality_rule_hierarchy", "spec_verdict", "quality_verdict", "smell_evidence"],
+      "stop_condition": "the changed ownership slice has independent passing spec and quality verdicts, or a bounded finding remains",
+      "protected_existing_gates": ["ENGINEERING_QUALITY_FLOOR_BYPASSED", "BUSINESS_CODE_PILEUP_UNCHECKED"]
+    },
+    {
+      "capability_id": "evidence_based_complexity_control",
+      "source_skills": ["mattpocock/skills:code-review", "obra/superpowers:receiving-code-review"],
+      "native_owner": "engineering-assistant-overlay",
+      "gate_level": "G1",
+      "trigger_issue_types": ["speculative_abstraction", "evidenced_abstraction", "review_yagni"],
+      "completion_evidence": ["current_problem", "simpler_path_comparison", "complexity_evidence", "ownership_boundary", "test_seam"],
+      "stop_condition": "current evidence justifies the smallest complexity, or the speculative change is rejected or deferred",
+      "protected_existing_gates": ["OVER_DESIGN_BOUNDARY_UNCHECKED", "CHANGE_VERIFICATION_EVIDENCE_MISSING"]
+    },
+    {
+      "capability_id": "bounded_multi_agent_deliberation",
+      "source_skills": ["doubt-driven-development", "addyosmani/agent-skills:orchestration-patterns-agent-teams"],
+      "native_owner": "engineering-assistant-council-integration",
+      "gate_level": "G0",
+      "trigger_issue_types": ["complex_plan_deliberation", "complex_plan_unresolved_blocker", "complex_plan_deliberation_pass", "competing_plan_vote", "final_proposal_audit_gap", "user_review_pending", "user_approved_proposal"],
+      "completion_evidence": ["single_complete_baseline_proposal", "parallel_audit_only_members", "anonymous_cross_review_wave", "reviewer_and_author_response_waves", "all_auditor_final_proposal_review", "zero_unresolved_blocking_findings", "exact_proposal_user_approval", "development_gate_status"],
+      "stop_condition": "present the final proposal only after internal blockers clear; recommend development only after user approval of that exact proposal; otherwise experiment, human review, input, or block after at most two rounds",
+      "protected_existing_gates": ["COUNCIL_PARALLEL_DISPATCH_SKIPPED", "COUNCIL_DETERMINISTIC_GATE_OVERRIDE_ATTEMPT", "DEBATE_MODE_UNBOUNDED", "DESIGN_REVIEW_REQUIRED"]
+    }
+  ]
+}

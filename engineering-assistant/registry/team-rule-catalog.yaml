@@ -33,7 +33,7 @@
     {
       "id": "H1",
       "category": "概要设计",
-      "rule": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图；核心功能下保留关键协作摘要，不生成流程图。"
+      "rule": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图。"
     },
     {
       "id": "H2",
@@ -59,31 +59,6 @@
       "id": "H6",
       "category": "概要设计",
       "rule": "聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰。"
-    },
-    {
-      "id": "H7",
-      "category": "概要设计",
-      "rule": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；核心功能中的 4.1.2 只写关键协作摘要，不得用通用证据/Findings/门禁决策模板替代正文。"
-    },
-    {
-      "id": "H8",
-      "category": "概要设计",
-      "rule": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。"
-    },
-    {
-      "id": "H9",
-      "category": "概要设计",
-      "rule": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。"
-    },
-    {
-      "id": "H10",
-      "category": "概要设计",
-      "rule": "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。"
-    },
-    {
-      "id": "H11",
-      "category": "概要设计",
-      "rule": "概要设计不得生成 Mermaid flowchart；关键协作只允许文字摘要与服务间 sequenceDiagram，研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言。"
     },
     {
       "id": "D1",
@@ -251,31 +226,6 @@
       "rule": "正式文档被替代时必须标记 superseded 或 archived，并记录替代关系。"
     },
     {
-      "id": "DG7",
-      "category": "文档治理",
-      "rule": "preflight_input_state 不是 ready 时只能生成信息盘点、缺失信息、方向确认、人工填写入口、workflow trace 和恢复点等控制产物，不得生成或登记正式设计文档。"
-    },
-    {
-      "id": "DG8",
-      "category": "文档治理",
-      "rule": "人工补充信息必须写回 StageRunRequest.context、artifact index 或可机读 MD/JSON/YAML 事实源；human-review HTML 只作为填写入口，不得反向作为 agent 事实源。"
-    },
-    {
-      "id": "DG9",
-      "category": "文档治理",
-      "rule": "人工评审意见回来后必须先分类为事实补充、方案方向变化、文档缺陷、规范违背或团队规范候选；默认增量修正受影响产物，只有核心方案变化才允许整套重生并标记旧版 superseded。"
-    },
-    {
-      "id": "DG10",
-      "category": "文档治理",
-      "rule": "正式设计文档进入人工评审前必须完成自我评审、确定性 validator 和自动修复；未关闭 blocker 必须保留在 unresolved-review-findings，不得标记 approved/final。"
-    },
-    {
-      "id": "DG11",
-      "category": "文档治理",
-      "rule": "需求迭代中的用户修改、agent 修改、自审问题和人工评审意见只能抽取为规范候选，进入 TL 审核包；未经 TL 批准不得自动写回团队插件、SKILL.md、模板或规则目录。"
-    },
-    {
       "id": "QIN1",
       "category": "信息补全",
       "rule": "必填信息缺失且无法通过仓库或上游产物可靠推导时，skill 必须主动询问用户，不得继续伪造结论。"
@@ -306,16 +256,6 @@
       "rule": "涉及高风险动作、审批、生产变更或跨系统边界的信息缺失时，不允许以假设绕过人工确认。"
     },
     {
-      "id": "QIN7",
-      "category": "信息补全",
-      "rule": "信息收集完成判定必须覆盖需求目标、范围、非目标、涉及系统、数据对象、关键流程、专项涉及项和缺失信息分类；未完成时不得进入 formal_generation。"
-    },
-    {
-      "id": "QIN8",
-      "category": "信息补全",
-      "rule": "设计目标规划必须输出本次设计目标、阶段范围、需要生成的专项文档、已足够生成的信息、blocking 缺失项、可声明假设和需要人工评审的高风险点。"
-    },
-    {
       "id": "D6",
       "category": "详细设计",
       "rule": "涉及租户、认证、鉴权、角色、权限、多租户隔离时，必须生成 IAM/RBAC 专项规范。"
@@ -329,26 +269,6 @@
       "id": "D8",
       "category": "详细设计",
       "rule": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。"
-    },
-    {
-      "id": "D12",
-      "category": "详细设计",
-      "rule": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。"
-    },
-    {
-      "id": "D13",
-      "category": "详细设计",
-      "rule": "详细设计业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。"
-    },
-    {
-      "id": "D14",
-      "category": "详细设计",
-      "rule": "详细设计流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。"
-    },
-    {
-      "id": "CD1",
-      "category": "代码研发",
-      "rule": "代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据。"
     },
     {
       "id": "CQ1",
@@ -419,121 +339,13 @@
       "id": "DG22",
       "category": "文档治理",
       "rule": "审核 finding 必须引用适用 rule_id；没有读取任务规则包的审核结论无效。"
-    },
-    {
-      "id": "RRQ-ARCH1",
-      "category": "人人取架构",
-      "rule": "人人取 SaaS 平台设计默认按微服务架构、事件驱动和领域驱动设计评审；设计必须说明系统边界、业务域划分、事件协作和最终一致性。"
-    },
-    {
-      "id": "RRQ-TECH1",
-      "category": "人人取通用技术",
-      "rule": "核心业务接口需要声明性能目标、调用链压测方式、耗时监控和超时告警；没有性能目标或证据时不得直接放行。"
-    },
-    {
-      "id": "RRQ-TECH2",
-      "category": "人人取通用技术",
-      "rule": "性能优化方案使用缓存、限流、预处理或减少外部依赖时，必须给出缓存命中率、数据库查询频率、外部依赖失败的熔断降级策略。"
-    },
-    {
-      "id": "RRQ-LOG1",
-      "category": "人人取日志",
-      "rule": "团队日志必须包含 traceId、userId、requestId 等上下文；日志级别、采集平台和敏感信息脱敏策略必须明确。"
-    },
-    {
-      "id": "RRQ-SEC1",
-      "category": "人人取安全",
-      "rule": "日志和异常消息禁止输出完整手机号、银行账号、信用卡、邮箱、密码、公钥、私钥、完整签名等敏感信息。"
-    },
-    {
-      "id": "RRQ-OBS1",
-      "category": "人人取监控",
-      "rule": "核心业务必须覆盖关键路径埋点、异常告警、处理日志、TPS、响应时间、异常比率等系统级业务监控。"
-    },
-    {
-      "id": "RRQ-IDEMP1",
-      "category": "人人取幂等",
-      "rule": "支付、订单创建、库存更新、外部回调、MQ 消费、用户表单提交等修改核心数据场景必须进行幂等性设计。"
-    },
-    {
-      "id": "RRQ-IDEMP2",
-      "category": "人人取幂等",
-      "rule": "请求或消息去重可基于全量请求体 hash、关键字段排序 hash、messageId 或业务唯一键；必须说明去重窗口、存储介质、TTL 和重复处理结果。"
-    },
-    {
-      "id": "RRQ-IDEMP3",
-      "category": "人人取幂等",
-      "rule": "MQ 多节点消费存在乱序风险时，必须使用时间戳或版本号只处理最新消息，旧消息丢弃或补偿。"
-    },
-    {
-      "id": "YAPI1",
-      "category": "YApi",
-      "rule": "YApi group 按产品线划分，新增 group 需要架构师确认并评审；Project 命名必须为中文名称 + 英文名称，英文名与 Jenkins 构建名称一致。"
-    },
-    {
-      "id": "YAPI2",
-      "category": "YApi",
-      "rule": "模块名称格式为【资源】【动作】，接口名称格式为【动作】【资源】，必须清晰描述接口用途并符合逻辑视图分层。"
-    },
-    {
-      "id": "YAPI3",
-      "category": "YApi",
-      "rule": "应用层只提供 api/tapi/mapi/console，业务层和平台共享层只提供 service；禁止跨层暴露错误接口类型。"
-    },
-    {
-      "id": "YAPI4",
-      "category": "YApi",
-      "rule": "接口路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi 约定；路径使用小写英文，多个单词用短横线连接。"
-    },
-    {
-      "id": "YAPI5",
-      "category": "YApi",
-      "rule": "请求和响应字段使用小写驼峰，禁止拼音或无意义缩写；响应结构必须包含 header.code、header.message 和 body。"
-    },
-    {
-      "id": "YAPI6",
-      "category": "YApi",
-      "rule": "接口文档必须包含接口用途、适用场景、权限要求、注意事项和错误码；入参和返回参数必须补充注解，必填字段使用 JSR303 约束并写正确错误码。"
-    },
-    {
-      "id": "YQ1",
-      "category": "萤启服务商系统",
-      "rule": "萤启服务商系统异常编码结构为 [系统]-[服务]-[模块]-[错误码]，服务编码必须从 profile 或概要设计读取，例如 FRCH、TMGE、TCER、FRME、FRST。"
-    },
-    {
-      "id": "YQ2",
-      "category": "萤启服务商系统",
-      "rule": "萤启服务商系统错误码段必须按类型划分：1000 业务、2000 参数、3000 数据库、4000 第三方、5000 权限、6000 状态、7000 网络、8000 系统、9000 未知。"
-    },
-    {
-      "id": "YQ3",
-      "category": "萤启服务商系统",
-      "rule": "系统交互流向遵循客户端到网关到系统应用到领域服务；禁止跨系统直接使用 Feign 调用未开放能力。"
-    },
-    {
-      "id": "YQ4",
-      "category": "萤启服务商系统",
-      "rule": "服务商系统涉及 MQ 场景时，必须优先从项目 profile、repo_context 或用户确认中读取已有通用队列、exchange、routingKey、消息 key、消息体、幂等和租户/服务商路由；缺失时主动询问，不得在团队插件中硬编码具体业务队列。"
-    },
-    {
-      "id": "KM1",
-      "category": "知识沉淀",
-      "rule": "单次需求暴露的设计纠偏必须先拆分为团队长期规范、项目事实、本次需求事实、运行状态和 eval/regression 样例；具体业务事实不得进入通用 SKILL.md 或 validator 默认规则。"
-    },
-    {
-      "id": "KM2",
-      "category": "知识沉淀",
-      "rule": "自优化提示词只能作为 prompt-optimization-candidates 或 rule-candidates 提交 TL，必须包含来源、原始修改、归纳规则、适用范围、不适用范围、反例、泛化程度、建议落点和审核状态。"
     }
   ],
   "eval_rule_prefixes": {
     "requirement-intake": [
       "A",
       "H",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "repo-context-miner": [
       "A",
@@ -547,39 +359,14 @@
       "DB",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "product-prototype-design": [
-      "FE",
-      "FW",
-      "QIN",
-      "DG",
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "prototype-review-loop": [
-      "FE",
-      "A",
-      "D",
-      "QIN",
-      "DG",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "high-level-design": [
       "A",
       "H",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "detailed-design": [
       "D",
@@ -587,34 +374,22 @@
       "E",
       "P",
       "FW",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "redis-design": [
       "R",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "mq-design": [
       "M",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "database-design": [
       "DB",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "design-review": [
       "A",
@@ -628,18 +403,12 @@
       "DB",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "frontend-design": [
       "FE",
       "I",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "code-development": [
       "D",
@@ -650,20 +419,14 @@
       "R",
       "M",
       "FW",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "frontend-development": [
       "FE",
       "I",
       "E",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "self-test": [
       "D",
@@ -672,10 +435,7 @@
       "M",
       "DB",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "code-quality-governor": [
       "D",
@@ -687,10 +447,7 @@
       "DB",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "code-review": [
       "I",
@@ -701,46 +458,24 @@
       "M",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "release-readiness": [
       "DB",
       "R",
       "M",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "release-verification": [
       "E",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "release-retrospective": [
       "A",
       "D",
       "P",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "assistant-feedback-capture": [
-      "A",
-      "D",
-      "P",
-      "QIN",
-      "DG",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "engineering-knowledge-miner": [
       "A",
@@ -751,25 +486,7 @@
       "R",
       "M",
       "DB",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
-    ],
-    "skill-evolution-review": [
-      "A",
-      "D",
-      "I",
-      "E",
-      "P",
-      "R",
-      "M",
-      "DB",
-      "QIN",
-      "DG",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "skill-quality-auditor": [
       "A",
@@ -780,10 +497,7 @@
       "R",
       "M",
       "DB",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "workflow-orchestrator": [
       "A",
@@ -795,10 +509,7 @@
       "M",
       "DB",
       "DG",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ],
     "implementation-controller": [
       "A",
@@ -811,10 +522,7 @@
       "M",
       "FW",
       "FE",
-      "QIN",
-      "RRQ",
-      "YAPI",
-      "YQ"
+      "QIN"
     ]
   }
 }

@@ -1,0 +1,25 @@
+{
+  "run_id": "overlay-test-output-consumption",
+  "phase": "context",
+  "generated_from": "specialty_skill_decision.json",
+  "invocations": [
+    {
+      "phase": "context",
+      "capability": "codegraph",
+      "decision": "call",
+      "invocation_status": "called",
+      "reason": "Impact scope is required.",
+      "input_summary": "Query affected symbols.",
+      "output_artifacts": [
+        "artifacts/codegraph/impact-scope.json"
+      ],
+      "writeback": [
+        "run_state.repo_evidence.impact_scope"
+      ],
+      "fallback": "",
+      "pending_evidence": [],
+      "gate_if_missing": "SPECIALTY_SKILL_INVOCATION_MISSING",
+      "gate_if_not_written_back": "SPECIALTY_SKILL_OUTPUT_NOT_WRITTEN_BACK"
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import html
 import json
 import re
 from pathlib import Path
 from control_runtime import checksum, compact_lines, ensure_control_dir, find_file_patterns, now_iso, read_json, update_artifact_index, validate_target_project_root, write_json
+from validate_code_design_gate import evaluate_pre_code, validate_code_design_decision
 
 DEFAULT_FORBIDDEN = [".git/", ".idea/", "node_modules/", "target/", "build/", "dist/", "coverage/"]
 DEFAULT_RULES = [
@@ -220,17 +222,91 @@ def write_traceability_outputs(root: Path, control: Path, matrix: dict) -> None:
     update_artifact_index(root, matrix_path.name, matrix_path, "json", "implementation-controller")
     update_artifact_index(root, html_path.name, html_path, "html", "implementation-controller")
 
+
+def resolve_root_path(root: Path, value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else root / path
+
+
+def formal_design_status(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() in {".json", ".yaml", ".yml"}:
+        try:
+            data = json.loads(text)
+            metadata = data.get("document_metadata", {}) if isinstance(data, dict) else {}
+            status = data.get("document_status") or metadata.get("document_status")
+            if status in {"approved", "final"}:
+                return status
+        except json.JSONDecodeError:
+            pass
+    match = re.search(r"(?:document_status|文档状态)\s*[:=：]\s*[`\"']?(approved|final)", text, re.IGNORECASE)
+    return match.group(1).lower() if match else "missing"
+
+
+def normalize_formal_design_decision(lines: list[str], file_patterns: list[str], expected: dict, required_tests: list[str]) -> dict:
+    target_module = file_patterns[0] if file_patterns else "approved design module boundary"
+    target_symbol = (expected.get("expected_services") or expected.get("expected_interfaces") or ["approved design owner"])[0]
+    reuse = (expected.get("expected_services") or []) + (expected.get("expected_repositories_or_mappers") or [])
+    return {
+        "changed_fact": lines[0] if lines else "Implement the approved design without expanding scope.",
+        "owner_domain": {
+            "owner_path": target_module,
+            "domain_boundary": lines[1] if len(lines) > 1 else "boundary declared by the approved formal design",
+        },
+        "reuse_evidence": reuse[:8] or ["Reuse the owner and framework facilities declared by the approved design."],
+        "placement_decision": {
+            "target_module": target_module,
+            "target_symbol": str(target_symbol),
+            "responsibility": lines[2] if len(lines) > 2 else "Implement only the approved business responsibility.",
+            "alternatives_rejected": ["Locations outside the approved module boundary are rejected."],
+        },
+        "protected_behavior": lines[3:6] or ["Existing behavior outside the approved acceptance criteria remains unchanged."],
+        "test_seam": {
+            "public_interface": str((expected.get("expected_interfaces") or [target_symbol])[0]),
+            "tests": required_tests,
+        },
+        "abstraction_rationale": {
+            "decision": "reuse_existing",
+            "rationale": "Prefer the repository owner and framework patterns declared by the approved design; add an abstraction only when its callers and boundary are explicit.",
+        },
+    }
+
 def main():
     parser = argparse.ArgumentParser(description="Compile an approved design artifact into machine-readable control contracts.")
     parser.add_argument("--root", required=True)
-    parser.add_argument("--design", required=True)
+    parser.add_argument("--eligibility", required=True)
+    parser.add_argument("--design")
+    parser.add_argument("--code-design-decision")
     parser.add_argument("--task-id")
     parser.add_argument("--profile")
     args = parser.parse_args()
     root = validate_target_project_root(Path(args.root))
-    design_path = Path(args.design)
-    if not design_path.is_absolute():
-        design_path = root / design_path
+    eligibility_path = resolve_root_path(root, args.eligibility)
+    eligibility = read_json(eligibility_path, {})
+    compact_path = resolve_root_path(root, args.code_design_decision) if args.code_design_decision else None
+    compact_design = read_json(compact_path, {}) if compact_path else None
+    pre_code = evaluate_pre_code(eligibility, compact_design)
+    if pre_code["decision"] != "allow":
+        raise SystemExit(json.dumps(pre_code, ensure_ascii=False))
+    risk_level = eligibility["risk_level"]
+    if risk_level == "L0_FAST":
+        raise SystemExit("L0_FAST does not require implementation contract compilation")
+    if risk_level == "L1_DIRECT":
+        if compact_path is None:
+            raise SystemExit("L1_DIRECT requires --code-design-decision")
+        declared_compact = eligibility.get("design_evidence", {}).get("compact_design_path")
+        if not declared_compact or resolve_root_path(root, declared_compact).resolve() != compact_path.resolve():
+            raise SystemExit("--code-design-decision must match coding-eligibility.json design_evidence.compact_design_path")
+        design_path = compact_path
+    else:
+        if not args.design:
+            raise SystemExit("L2_SHARED and L3_CRITICAL require --design")
+        design_path = resolve_root_path(root, args.design)
+        declared_design = eligibility.get("design_evidence", {}).get("formal_design_path")
+        if not declared_design or resolve_root_path(root, declared_design).resolve() != design_path.resolve():
+            raise SystemExit("--design must match coding-eligibility.json design_evidence.formal_design_path")
+        if formal_design_status(design_path) not in {"approved", "final"}:
+            raise SystemExit("Formal design file must declare document_status approved or final")
     if design_path.suffix.lower() in {".html", ".htm"}:
         raise SystemExit("HTML artifacts are human-only. Provide the approved MD/JSON/YAML design artifact instead.")
     control = ensure_control_dir(root)
@@ -238,22 +314,88 @@ def main():
     profile = read_json(Path(args.profile), {}) if args.profile else task.get("project_profile", {})
     task_id = args.task_id or task.get("task_id") or design_path.stem
     text = design_path.read_text(encoding="utf-8")
-    lines = compact_lines(text, 32)
-    file_patterns = find_file_patterns(text)
+    if risk_level == "L1_DIRECT":
+        lines = [
+            compact_design["changed_fact"],
+            compact_design["owner_domain"]["domain_boundary"],
+            compact_design["placement_decision"]["responsibility"],
+            *compact_design["protected_behavior"],
+        ]
+        file_patterns = [compact_design["placement_decision"]["target_module"]]
+    else:
+        lines = compact_lines(text, 32)
+        file_patterns = find_file_patterns(text)
     expected = infer_expected_contracts(text, lines, file_patterns)
-    design_contract = {"task_id": task_id, "source_design": str(design_path.relative_to(root)), "source_checksum": checksum(design_path), "generated_at": now_iso(), "goals": lines[:8] or ["Implement the approved design without expanding scope."], "acceptance_criteria": lines[:12], "module_boundaries": {"allowed_from_design": file_patterns, "source": "compiled_from_design_artifact"}, "assumptions": ["The human-approved design is the source of truth for implementation scope."]}
-    implementation_contract = {"task_id": task_id, "allowed_modules": file_patterns, "forbidden_modules": DEFAULT_FORBIDDEN, "required_files_or_patterns": file_patterns, "expected_interfaces": expected["expected_interfaces"], "expected_services": expected["expected_services"], "expected_repositories_or_mappers": expected["expected_repositories_or_mappers"], "technology_adoption_contract": infer_technology_adoption_contract(text, file_patterns, profile), "architecture_rules": DEFAULT_RULES, "required_tests": infer_required_tests(text, file_patterns, profile), "done_conditions": ["No changed file is outside allowed scope unless approved.", "Design-to-code validation passes with no blocker or major findings.", "Technology adoption validation passes.", "Rule consumption validation passes.", "Required quality commands pass; missing commands are blocking.", "Open blocking questions are empty."], "generated_at": now_iso()}
-    quality_contract = {"task_id": task_id, "required_commands": infer_commands(profile, file_patterns), "required_evidence": ["control_health", "design_to_code_mapping", "traceability_matrix", "traceability_report_html", "technology_adoption", "rule_consumption", "quality_commands"], "quality_gates": ["control_health", "design_to_code_mapping", "traceability_matrix", "technology_adoption", "rule_consumption", "architecture_boundary", "build_lint_test", "semantic_review"], "repair_policy": {"max_attempts": 2, "ask_human_only_for": ["approved design conflict", "business decision missing", "high risk approval", "production action", "repair attempts exhausted"]}, "generated_at": now_iso()}
+    required_tests = infer_required_tests(text, file_patterns, profile)
+    if risk_level == "L1_DIRECT":
+        normalized_design = compact_design
+        required_tests = list(dict.fromkeys(compact_design["test_seam"]["tests"] + required_tests))
+    else:
+        normalized_design = normalize_formal_design_decision(lines, file_patterns, expected, required_tests)
+    compact_errors = validate_code_design_decision(normalized_design)
+    if compact_errors:
+        raise SystemExit("Invalid normalized code design decision: " + "; ".join(compact_errors))
+    normalized_design_path = control / "code-design-decision.json"
+    write_json(normalized_design_path, normalized_design)
+    design_contract = {
+        "task_id": task_id,
+        "source_design": str(design_path.relative_to(root)),
+        "source_checksum": checksum(design_path),
+        "design_evidence_mode": "compact" if risk_level == "L1_DIRECT" else "formal",
+        "risk_level": risk_level,
+        "code_design_decision": str(normalized_design_path.relative_to(root)),
+        "generated_at": now_iso(),
+        "goals": lines[:8] or ["Implement the approved design without expanding scope."],
+        "acceptance_criteria": lines[:12],
+        "module_boundaries": {"allowed_from_design": file_patterns, "source": "compiled_from_validated_design_evidence"},
+        "assumptions": ["The validated design evidence is the source of truth for implementation scope."],
+    }
+    architecture_rules = DEFAULT_RULES + [
+        "Place each business decision in its existing owner/domain; controllers and adapters must not accumulate domain rules.",
+        "Reuse repository and framework facilities before adding abstractions or infrastructure.",
+        "Add an abstraction only when callers, responsibility, and boundary are explicit in code-design-decision.json.",
+        "A passing test does not waive design placement or business-code-pileup review.",
+    ]
+    implementation_contract = {
+        "task_id": task_id,
+        "allowed_modules": file_patterns,
+        "forbidden_modules": DEFAULT_FORBIDDEN,
+        "required_files_or_patterns": file_patterns,
+        "expected_interfaces": expected["expected_interfaces"],
+        "expected_services": expected["expected_services"],
+        "expected_repositories_or_mappers": expected["expected_repositories_or_mappers"],
+        "technology_adoption_contract": infer_technology_adoption_contract(text, file_patterns, profile),
+        "architecture_rules": architecture_rules,
+        "required_tests": required_tests,
+        "done_conditions": [
+            "No changed file is outside allowed scope unless approved.",
+            "Design-to-code validation passes with no blocker or major findings.",
+            "Business-code-pileup validation passes for business capability changes.",
+            "Technology adoption validation passes.",
+            "Rule consumption validation passes.",
+            "Required quality commands pass; missing commands are blocking.",
+            "Open blocking questions are empty.",
+        ],
+        "generated_at": now_iso(),
+    }
+    quality_contract = {
+        "task_id": task_id,
+        "required_commands": infer_commands(profile, file_patterns),
+        "required_evidence": ["control_health", "code_design_gate", "design_to_code_mapping", "business_code_pileup_check", "traceability_matrix", "traceability_report_html", "technology_adoption", "rule_consumption", "quality_commands"],
+        "quality_gates": ["control_health", "code_design_gate", "design_to_code_mapping", "business_code_pileup_check", "traceability_matrix", "technology_adoption", "rule_consumption", "architecture_boundary", "build_lint_test", "semantic_review"],
+        "repair_policy": {"max_attempts": 2, "ask_human_only_for": ["approved design conflict", "business decision missing", "high risk approval", "production action", "repair attempts exhausted"]},
+        "generated_at": now_iso(),
+    }
     write_json(control / "design-contract.json", design_contract)
     write_json(control / "implementation-contract.json", implementation_contract)
     write_json(control / "quality-contract.json", quality_contract)
     traceability_matrix = build_initial_traceability(design_contract, implementation_contract, quality_contract)
     write_traceability_outputs(root, control, traceability_matrix)
-    context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
+    context = ["# Agent Context Pack", "", "## Read First", "- This is the task-scoped context pack. Consume it before broad doc search.", "- Read `artifacts/_control/coding-eligibility.json` and `artifacts/_control/code-design-decision.json` before implementation.", "- Required rule ids must come from `artifacts/rule-governance/task-rule-packs/code-development.json`.", "- A stale changed-files report, missing rule pack, blocking open question, or failed gate means stop and report blocked.", "- Human-readable traceability is in `docs/human-readable/traceability-report.html`; agent source of truth is `artifacts/_control/traceability-matrix.json`.", "", f"- task_id: {task_id}", f"- risk_level: {risk_level}", f"- source_design: {design_contract['source_design']}", f"- source_checksum: {design_contract['source_checksum']}", f"- changed_fact: {normalized_design['changed_fact']}", f"- owner_domain: {json.dumps(normalized_design['owner_domain'], ensure_ascii=False)}", f"- placement_decision: {json.dumps(normalized_design['placement_decision'], ensure_ascii=False)}", f"- task_rule_pack: artifacts/rule-governance/task-rule-packs/code-development.json", "", "## Goals", *[f"- {item}" for item in design_contract["goals"]], "", "## Allowed Modules", *[f"- {item}" for item in implementation_contract["allowed_modules"]], "", "## Technology Adoption Contract", f"- {json.dumps(implementation_contract['technology_adoption_contract'], ensure_ascii=False)}", "", "## Required Evidence", *[f"- {item}" for item in quality_contract["required_evidence"]], "", "## Fast Validation Commands", "- python3 engineering-assistant/scripts/validate_code_design_gate.py --eligibility <eligibility-json> --code-design-decision <design-json>", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --mode audit-readonly", "- python3 engineering-assistant/scripts/run_controlled_task.py --root <project-root> --rule-evidence <evidence-json>", ""]
     (control / "task-context.agent.md").write_text("\n".join(context), encoding="utf-8")
-    for name, rel, artifact_type in [("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
+    for name, rel, artifact_type in [("code-design-decision.json", normalized_design_path, "json"), ("design-contract.json", control / "design-contract.json", "json"), ("implementation-contract.json", control / "implementation-contract.json", "json"), ("quality-contract.json", control / "quality-contract.json", "json"), ("task-context.agent.md", control / "task-context.agent.md", "markdown")]:
         update_artifact_index(root, name, rel, artifact_type, "implementation-controller")
-    task.update({"task_id": task_id, "status": "contract_compiled", "current_contracts": {"design_contract": str((control / "design-contract.json").relative_to(root)), "implementation_contract": str((control / "implementation-contract.json").relative_to(root)), "quality_contract": str((control / "quality-contract.json").relative_to(root)), "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)), "traceability_report": "docs/human-readable/traceability-report.html", "context_pack": str((control / "task-context.agent.md").relative_to(root))}, "updated_at": now_iso()})
+    task.update({"task_id": task_id, "status": "contract_compiled", "current_contracts": {"coding_eligibility": str(eligibility_path.relative_to(root)), "code_design_decision": str(normalized_design_path.relative_to(root)), "design_contract": str((control / "design-contract.json").relative_to(root)), "implementation_contract": str((control / "implementation-contract.json").relative_to(root)), "quality_contract": str((control / "quality-contract.json").relative_to(root)), "traceability_matrix": str((control / "traceability-matrix.json").relative_to(root)), "traceability_report": "docs/human-readable/traceability-report.html", "context_pack": str((control / "task-context.agent.md").relative_to(root))}, "updated_at": now_iso()})
     write_json(control / "current-task.json", task)
     print(control / "implementation-contract.json")
 
