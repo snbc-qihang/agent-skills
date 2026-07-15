@@ -11,7 +11,7 @@
     "capture_id": {"type": "string", "pattern": "^capture-[a-f0-9]{24}$"},
     "session_ref": {"type": "string", "pattern": "^session-[a-f0-9]{16}$"},
     "turn_ref": {"type": "string", "pattern": "^turn-[a-f0-9]{16}$"},
-    "event_name": {"enum": ["Stop", "UserPromptSubmit"]},
+    "event_name": {"enum": ["PostToolUse", "Stop", "UserPromptSubmit"]},
     "platform": {"enum": ["codex", "hermes"]},
     "model": {"type": "string", "minLength": 1},
     "permission_mode": {"type": "string", "minLength": 1},

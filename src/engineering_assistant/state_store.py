@@ -24,6 +24,7 @@ class StateStore:
         self.schema_root = Path(schema_root).resolve()
         self.run_root = self.project_root / run_root
         self.artifacts = ArtifactIO(self.project_root, self.run_root)
+        self.artifacts.assert_runtime_target(self.schema_root)
 
     def run_dir(self, run_id: str) -> Path:
         if SAFE_ID.fullmatch(run_id) is None:

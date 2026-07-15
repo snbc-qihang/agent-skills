@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -14,8 +16,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .compiler import build_package, verify_package
+from .catalog import load_catalog
+from .artifact_io import ArtifactIO
+from .compiler import (
+    MAX_BUILD_MANIFEST_BYTES,
+    MAX_BUILD_PAYLOAD_FILE_BYTES,
+    build_package,
+    verify_package,
+)
 from .eval_runner import run_evals
+from .official_validation import validate_with_official_tools
 from .validation import ValidationFailure
 
 
@@ -23,7 +33,11 @@ PLUGIN_NAME = "engineering-assistant"
 DEFAULT_POLICY = "config/local-publish-policy.json"
 CODEX_CACHE_MARKETPLACE = "personal"
 MAX_PRESERVED_CODEX_CACHE_VERSIONS = 8
-RUNTIME_CACHE_IGNORES = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
+MAX_CODEX_CACHE_CANDIDATES = 512
+MAX_CODEX_CACHE_ENTRIES = 4096
+MAX_CODEX_CACHE_TOTAL_BYTES = 256 * 1024 * 1024
+RUNTIME_CACHE_IGNORED_NAMES = frozenset({"__pycache__", ".DS_Store"})
+RUNTIME_CACHE_IGNORED_SUFFIXES = (".pyc",)
 
 
 def _stamp() -> str:
@@ -67,14 +81,28 @@ def _run_repository_preflight(repository_root: Path) -> dict:
     )
     if completed.returncode != 0:
         raise ValidationFailure("仓库测试失败：\n" + completed.stdout + completed.stderr)
+    catalog = load_catalog(repository_root, require_sources=True)
     evaluation = run_evals(repository_root)
+    official_validation = validate_with_official_tools(
+        repository_root,
+        validate_plugin=False,
+    )
     return {
         "tests": "passed",
+        "source_validation": "passed",
+        "source_skill_count": len(catalog.skills),
+        "official_validation": official_validation,
         "version": evaluation["version"],
         "routing_cases": evaluation["routing"]["case_count"],
         "routing_top1_accuracy": evaluation["routing"]["top1_accuracy"],
         "unconfirmed_high_risk_writes": evaluation["routing"]["unconfirmed_high_risk_writes"],
         "simulation": evaluation["simulation"],
+        "canary": evaluation["canary"],
+        "canary_gate": {
+            "scope": "local_prerelease",
+            "required": False,
+            "status": "not_required_for_local_prerelease",
+        },
     }
 
 
@@ -235,52 +263,146 @@ def _codex_cache_root(codex_home: Path) -> Path:
     return codex_home / "plugins/cache" / CODEX_CACHE_MARKETPLACE / PLUGIN_NAME
 
 
-def _package_version(package_root: Path) -> str | None:
-    if package_root.is_symlink():
-        return None
-    manifest = package_root / ".codex-plugin/plugin.json"
-    if not manifest.is_file():
-        return None
+def _package_version_from_io(package_io: ArtifactIO) -> str | None:
     try:
-        return str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
-    except (KeyError, TypeError, json.JSONDecodeError):
+        manifest, _raw = package_io.read_json_limited(
+            MAX_BUILD_MANIFEST_BYTES,
+            ".codex-plugin",
+            "plugin.json",
+        )
+        version = manifest["version"]
+    except (FileNotFoundError, KeyError, TypeError, ValidationFailure):
         return None
+    if not isinstance(version, str) or re.fullmatch(
+        r"[0-9A-Za-z][0-9A-Za-z.+-]*",
+        version,
+    ) is None:
+        return None
+    return version
+
+
+def _package_version(package_root: Path) -> str | None:
+    if package_root.is_symlink() or not package_root.is_dir():
+        return None
+    package_io = None
+    try:
+        package_io = ArtifactIO(package_root, ".")
+        return _package_version_from_io(package_io)
+    except (OSError, ValidationFailure):
+        return None
+    finally:
+        if package_io is not None:
+            package_io.close()
+
+
+def _copy_clean_package_from_io(source_io: ArtifactIO, destination: Path) -> None:
+    destination_io = None
+    try:
+        destination.mkdir()
+        destination_io = ArtifactIO(destination, ".")
+        source_io.copy_contents_to(
+            destination_io,
+            max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,
+            max_entries=MAX_CODEX_CACHE_ENTRIES,
+            max_total_bytes=MAX_CODEX_CACHE_TOTAL_BYTES,
+            ignored_names=RUNTIME_CACHE_IGNORED_NAMES,
+            ignored_suffixes=RUNTIME_CACHE_IGNORED_SUFFIXES,
+        )
+        verify_package(destination)
+    except Exception:
+        if destination_io is not None:
+            destination_io.close()
+            destination_io = None
+        if destination.is_symlink() or destination.exists():
+            shutil.rmtree(destination)
+        raise
+    finally:
+        if destination_io is not None:
+            destination_io.close()
 
 
 def _copy_clean_package(source: Path, destination: Path) -> None:
     if source.is_symlink():
         raise ValidationFailure(f"拒绝从符号链接恢复插件 cache：{source}")
+    source_io = None
     try:
-        shutil.copytree(source, destination, ignore=RUNTIME_CACHE_IGNORES)
-        verify_package(destination)
+        source_io = ArtifactIO(source, ".")
+        _copy_clean_package_from_io(source_io, destination)
     except Exception:
-        if destination.exists():
-            shutil.rmtree(destination)
+        if source_io is not None:
+            source_io.close()
+            source_io = None
         raise
+    finally:
+        if source_io is not None:
+            source_io.close()
 
 
 def _snapshot_codex_caches(codex_home: Path, snapshot_root: Path) -> list[str]:
-    cache_root = _codex_cache_root(codex_home)
     versions: list[str] = []
-    if not cache_root.is_dir():
+    if codex_home.is_symlink() or not codex_home.is_dir():
         return versions
-    valid_candidates = (
-        source
-        for source in cache_root.iterdir()
-        if source.is_dir()
-        and not source.is_symlink()
-        and _package_version(source) == source.name
-    )
-    candidates = sorted(
-        valid_candidates,
-        key=lambda source: source.stat().st_mtime_ns,
-        reverse=True,
-    )[:MAX_PRESERVED_CODEX_CACHE_VERSIONS]
-    for source in sorted(candidates):
-        snapshot = snapshot_root / source.name
-        _copy_clean_package(source, snapshot)
-        versions.append(source.name)
-    return versions
+    codex_io = ArtifactIO(codex_home, ".")
+    cache_io = None
+    try:
+        try:
+            with codex_io.open_directory(
+                "plugins",
+                "cache",
+                CODEX_CACHE_MARKETPLACE,
+                PLUGIN_NAME,
+            ) as cache_fd:
+                cache_root = _codex_cache_root(codex_home)
+                cache_io = ArtifactIO.from_open_directory_fd(cache_root, cache_fd)
+        except FileNotFoundError:
+            return versions
+        candidates: list[tuple[int, str]] = []
+        with cache_io.open_directory() as cache_fd:
+            entry_count = 0
+            with os.scandir(cache_fd) as entries:
+                for entry in entries:
+                    entry_count += 1
+                    if entry_count > MAX_CODEX_CACHE_CANDIDATES:
+                        raise ValidationFailure("Codex cache 候选数量超出安全上限")
+                    metadata = os.stat(
+                        entry.name,
+                        dir_fd=cache_fd,
+                        follow_symlinks=False,
+                    )
+                    if not stat.S_ISDIR(metadata.st_mode):
+                        continue
+                    try:
+                        with cache_io.open_directory(entry.name) as candidate_fd:
+                            candidate_io = ArtifactIO.from_open_directory_fd(
+                                cache_root / entry.name,
+                                candidate_fd,
+                            )
+                        try:
+                            if _package_version_from_io(candidate_io) == entry.name:
+                                candidates.append((metadata.st_mtime_ns, entry.name))
+                        finally:
+                            candidate_io.close()
+                    except (OSError, ValidationFailure):
+                        continue
+        selected = sorted(candidates, reverse=True)[:MAX_PRESERVED_CODEX_CACHE_VERSIONS]
+        for _mtime, name in sorted(selected, key=lambda item: item[1]):
+            with cache_io.open_directory(name) as source_fd:
+                source_io = ArtifactIO.from_open_directory_fd(
+                    _codex_cache_root(codex_home) / name,
+                    source_fd,
+                )
+            try:
+                if _package_version_from_io(source_io) != name:
+                    raise ValidationFailure(f"Codex cache 版本在快照前发生变化：{name}")
+                _copy_clean_package_from_io(source_io, snapshot_root / name)
+            finally:
+                source_io.close()
+            versions.append(name)
+        return versions
+    finally:
+        if cache_io is not None:
+            cache_io.close()
+        codex_io.close()
 
 
 def _restore_codex_cache_snapshots(codex_home: Path, snapshot_root: Path) -> list[str]:
@@ -294,15 +416,102 @@ def _restore_codex_cache_snapshots(codex_home: Path, snapshot_root: Path) -> lis
             continue
         destination = cache_root / source.name
         if destination.exists():
-            if destination.is_symlink():
-                raise ValidationFailure(f"拒绝覆盖符号链接 cache：{destination}")
-            continue
+            expected = verify_package(source)
+            try:
+                _verify_codex_cache_version(codex_home, source.name, expected)
+            except (OSError, ValidationFailure):
+                quarantine = cache_root / f".{source.name}.corrupt-{_stamp()}"
+                if quarantine.is_symlink() or quarantine.exists():
+                    raise ValidationFailure(f"Codex cache 隔离目标已存在：{quarantine}")
+                cache_io = ArtifactIO(cache_root, ".")
+                try:
+                    with cache_io.open_directory() as cache_fd:
+                        os.rename(
+                            source.name,
+                            quarantine.name,
+                            src_dir_fd=cache_fd,
+                            dst_dir_fd=cache_fd,
+                        )
+                        os.fsync(cache_fd)
+                finally:
+                    cache_io.close()
+            else:
+                continue
         temporary = Path(tempfile.mkdtemp(prefix=f".{source.name}.restore-", dir=cache_root))
         temporary.rmdir()
         _copy_clean_package(source, temporary)
         os.replace(temporary, destination)
         restored.append(source.name)
     return restored
+
+
+def _verify_codex_cache_version(
+    codex_home: Path,
+    version: str,
+    expected: dict,
+) -> dict:
+    codex_io = ArtifactIO(codex_home, ".")
+    cache_io = None
+    try:
+        with codex_io.open_directory(
+            "plugins",
+            "cache",
+            CODEX_CACHE_MARKETPLACE,
+            PLUGIN_NAME,
+        ) as cache_root_fd:
+            cache = _codex_cache_root(codex_home) / version
+            flags = os.O_RDONLY
+            if hasattr(os, "O_DIRECTORY"):
+                flags |= os.O_DIRECTORY
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            cache_fd = os.open(version, flags, dir_fd=cache_root_fd)
+            try:
+                opened_cache = os.fstat(cache_fd)
+                if not stat.S_ISDIR(opened_cache.st_mode):
+                    raise ValidationFailure("Codex 注册 cache 版本不是目录")
+                cache_io = ArtifactIO.from_open_directory_fd(cache, cache_fd)
+            finally:
+                os.close(cache_fd)
+            registered_manifest, _raw = cache_io.read_json_limited(
+                MAX_BUILD_MANIFEST_BYTES,
+                "package-manifest.json",
+            )
+            if registered_manifest != expected:
+                raise ValidationFailure("Codex 注册 cache manifest 与发布目标不一致")
+            actual = cache_io.sha256_file_digests(
+                exclude=frozenset({"package-manifest.json"}),
+                max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,
+                max_entries=MAX_CODEX_CACHE_ENTRIES,
+                max_total_bytes=MAX_CODEX_CACHE_TOTAL_BYTES,
+            )
+            if actual != expected["payload_files"]:
+                raise ValidationFailure("Codex 注册 cache 与发布目标 payload 不一致")
+            digest = hashlib.sha256(
+                "\n".join(f"{path}:{value}" for path, value in actual.items()).encode("utf-8")
+            ).hexdigest()
+            if f"sha256:{digest}" != expected["payload_digest"]:
+                raise ValidationFailure("Codex 注册 cache 与发布目标摘要不一致")
+            current_cache = os.stat(
+                version,
+                dir_fd=cache_root_fd,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISDIR(current_cache.st_mode)
+                or (current_cache.st_dev, current_cache.st_ino)
+                != (opened_cache.st_dev, opened_cache.st_ino)
+            ):
+                raise ValidationFailure("Codex 注册 cache 版本目录在校验期间发生替换")
+            return {
+                "path": str(cache),
+                "plugin_version": version,
+                "payload_digest": expected["payload_digest"],
+            }
+    finally:
+        if cache_io is not None:
+            cache_io.close()
+        codex_io.close()
 
 
 def _repair_codex_cache_version(codex_home: Path, target: Path, version: str) -> Path:
@@ -329,6 +538,19 @@ def _repair_codex_cache_version(codex_home: Path, target: Path, version: str) ->
     return destination
 
 
+def _verify_codex_registered_cache(codex_home: Path, target: Path) -> dict:
+    version = _installed_platform_version(target, "codex")
+    published = verify_package(target)
+    try:
+        return _verify_codex_cache_version(codex_home, version, published)
+    except FileNotFoundError as exc:
+        cache = _codex_cache_root(codex_home) / version
+        raise ValidationFailure(f"Codex 注册后缺少已构建版本 cache：{cache}") from exc
+    except OSError as exc:
+        cache = _codex_cache_root(codex_home) / version
+        raise ValidationFailure(f"Codex 注册 cache 不是安全目录：{cache}") from exc
+
+
 def _publish_one(
     repository_root: Path,
     platform: str,
@@ -337,6 +559,7 @@ def _publish_one(
     hermes_home: Path,
     dry_run: bool,
     register: Callable[..., dict] = _run_registration,
+    official_validate: Callable[..., dict] = validate_with_official_tools,
 ) -> dict:
     target = _target_for(platform, codex_home, hermes_home)
     _ensure_outside_repository(repository_root, target)
@@ -351,6 +574,8 @@ def _publish_one(
     cache_snapshot: Path | None = None
     preserved_cache_versions: list[str] = []
     restored_cache_versions: list[str] = []
+    codex_environment = dict(os.environ)
+    codex_environment["CODEX_HOME"] = str(codex_home)
     try:
         build = build_package(
             repository_root,
@@ -359,6 +584,22 @@ def _publish_one(
             codex_cachebuster=cachebuster,
         )
         verify_package(staging)
+        official_validation = None
+        if platform == "codex":
+            official_validation = official_validate(
+                repository_root,
+                staging,
+                validate_skills=False,
+            )
+            verified_after_official = verify_package(staging)
+            if (
+                official_validation.get("codex_payload_digest")
+                != verified_after_official["payload_digest"]
+                or verified_after_official["payload_digest"] != build["payload_digest"]
+            ):
+                raise ValidationFailure(
+                    "官方校验的 Codex 包摘要与最终 staging 包不一致"
+                )
         if dry_run:
             shutil.rmtree(staging)
             return {
@@ -367,12 +608,14 @@ def _publish_one(
                 "canonical_version": build["canonical_version"],
                 "payload_digest": build["payload_digest"],
                 "skill_count": build["skill_count"],
+                "official_validation": official_validation,
             }
 
         marketplace_path = codex_home.parent / ".agents/plugins/marketplace.json"
         marketplace_previous = None
         marketplace_changed = False
         registration_attempted = False
+        registered_cache = None
         if platform == "codex":
             cache_snapshot = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-cache-snapshot-"))
             preserved_cache_versions = _snapshot_codex_caches(codex_home, cache_snapshot)
@@ -381,7 +624,11 @@ def _publish_one(
             if platform == "codex":
                 marketplace_previous, marketplace_changed = _update_personal_marketplace(marketplace_path)
                 registration_attempted = True
-                registration = register(["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"])
+                registration = register(
+                    ["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"],
+                    codex_environment,
+                )
+                registered_cache = _verify_codex_registered_cache(codex_home, target)
                 restored_cache_versions = _restore_codex_cache_snapshots(codex_home, cache_snapshot)
             else:
                 environment = dict(os.environ)
@@ -396,9 +643,15 @@ def _publish_one(
                 try:
                     if registration_attempted:
                         if backup is not None and _marketplace_contains_plugin(marketplace_previous):
-                            register(["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"])
+                            register(
+                                ["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"],
+                                codex_environment,
+                            )
                         else:
-                            register(["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"])
+                            register(
+                                ["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"],
+                                codex_environment,
+                            )
                     _restore_codex_cache_snapshots(codex_home, cache_snapshot)
                 except Exception as compensation_error:
                     raise ValidationFailure(
@@ -415,7 +668,9 @@ def _publish_one(
             "backup": str(backup) if backup is not None else None,
             "payload_digest": installed["payload_digest"],
             "skill_count": installed["skill_count"],
+            "official_validation": official_validation,
             "registration": registration,
+            "registered_cache": registered_cache,
             "preserved_cache_versions": preserved_cache_versions,
             "restored_cache_versions": restored_cache_versions,
         }

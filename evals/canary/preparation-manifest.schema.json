@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "product_repository", "runs"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "product_repository": {"type": "string", "minLength": 1},
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id", "workload_digest", "variant", "git_ref", "treatment_digest",
+          "execution_config_digest", "environment_digest",
+          "quality_rubric_digest", "evaluator_id", "started_at",
+          "finished_at", "artifact_paths", "artifact_measurements"
+        ],
+        "properties": {
+          "task_id": {"type": "string", "minLength": 1},
+          "workload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "variant": {"enum": ["baseline", "candidate"]},
+          "git_ref": {"type": "string", "minLength": 1},
+          "treatment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "environment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "quality_rubric_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "evaluator_id": {"type": "string", "minLength": 1},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time"},
+          "input_tokens": {"type": "integer", "minimum": 0},
+          "output_tokens": {"type": "integer", "minimum": 0},
+          "cost_usd_micros": {"type": "integer", "minimum": 0},
+          "quality_score": {"type": "number", "minimum": 0, "maximum": 100},
+          "document_noise_units": {"type": "integer", "minimum": 0},
+          "safety_violations": {"type": "integer", "minimum": 0},
+          "artifact_paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "artifact_measurements": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 64,
+            "propertyNames": {"type": "string", "minLength": 1},
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "usage", "billing", "quality_evaluation",
+                  "document_noise", "safety_audit"
+                ]
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

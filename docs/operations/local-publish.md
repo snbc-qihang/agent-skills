@@ -12,7 +12,7 @@ python3 scripts/publish_local.py --platform <codex|hermes|all> <--dry-run|--yes>
 python3 scripts/publish_local.py --platform all --dry-run
 ```
 
-预演会运行仓库测试、真实核心 eval、双平台构建和包摘要校验，不写入插件目录、marketplace 或平台配置。
+预演会运行仓库测试、作者源强校验、真实核心 eval、公开 skill 官方 `quick_validate.py`、双平台最终 staging 构建和包摘要校验，并对最终 Codex staging 包执行官方 plugin validator、核对官方校验摘要与构建摘要，不写入插件目录、marketplace 或平台配置。preflight 报告会原样披露 `ea eval` 的 canary 状态，并把当前策略标记为 `not_required_for_local_prerelease`；这只说明本机 RC 预发布不以产品 canary 为前置条件，不代表真实收益已经验证。真实验证流程见 [真实产品 Canary](canary.md)。官方 validator 使用仓库外 `uv` 隔离环境并固定 `PyYAML==6.0.2`；缺少工具、输出超限或校验失败时预演直接失败。
 
 ## 实际发布
 
@@ -42,11 +42,12 @@ HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform
 ### Codex
 
 1. 构建带唯一 cachebuster 的 Codex 包。
-2. 备份 `~/plugins/engineering-assistant`。
-3. 原子替换插件目录。
-4. 幂等维护 personal marketplace entry。
-5. 执行 `codex plugin add engineering-assistant@personal --json`。
-6. 校验安装包摘要；失败时恢复 marketplace 和旧插件。
+2. 对最终 staging 包执行官方 plugin validator，并绑定校验摘要。
+3. 备份 `~/plugins/engineering-assistant`。
+4. 原子替换插件目录。
+5. 幂等维护 personal marketplace entry。
+6. 执行 `codex plugin add engineering-assistant@personal --json`。
+7. 校验安装包摘要；失败时恢复 marketplace 和旧插件。
 
 ### Hermes
 

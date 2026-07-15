@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/host-trust-config.schema.json",
+  "type": "object",
+  "required": ["schema_version", "profiles"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 32,
+      "additionalProperties": {"$ref": "#/$defs/profile_trust"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "evidence_broker": {
+      "type": "object",
+      "required": ["enabled", "id", "introspection_url", "timeout_seconds"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "id": {"type": "string", "minLength": 1},
+        "introspection_url": {"type": "string", "pattern": "^https://"},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 30}
+      },
+      "additionalProperties": false
+    },
+    "approval_broker": {
+      "type": "object",
+      "required": ["enabled", "id", "audience", "introspection_url", "timeout_seconds"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "id": {"type": "string", "minLength": 1},
+        "audience": {"type": "string", "minLength": 1},
+        "introspection_url": {"type": "string", "pattern": "^https://"},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 30}
+      },
+      "additionalProperties": false
+    },
+    "profile_trust": {
+      "type": "object",
+      "required": ["evidence_broker", "approval_broker"],
+      "properties": {
+        "evidence_broker": {"$ref": "#/$defs/evidence_broker"},
+        "approval_broker": {"$ref": "#/$defs/approval_broker"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

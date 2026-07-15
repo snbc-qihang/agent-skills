@@ -1,0 +1,135 @@
+{
+  "version": "1.0.0.0-rc.1",
+  "review_scope": [
+    "anthropic-skills",
+    "obra-superpowers",
+    "addyosmani-agent-skills",
+    "taste-skill",
+    "ui-ux-pro-max-skill",
+    "ux-ui-agent-skills"
+  ],
+  "sources": [
+    {
+      "id": "anthropic-skills",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/anthropics/skills",
+      "revision": "9d2f1ae187231d8199c64b5b762e1bdf2244733d",
+      "license": "mixed: referenced skill assets Apache-2.0; source-available document assets excluded",
+      "license_evidence": ["README.md", "skills/skill-creator/LICENSE.txt"],
+      "evidence_digests": {
+        "README.md": "sha256:2fb9c4cc026366ea6e21c60cb23c908a4d27c62071819cc06beffaac102d0694",
+        "skills/skill-creator/LICENSE.txt": "sha256:bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362",
+        "spec/agent-skills-spec.md": "sha256:ff22f2be775f4b757c9a7a2df0421de4c94021d34d9382cea5dd567ff0cdad2c",
+        "template/SKILL.md": "sha256:eb685d91de039ed864fbd790cddf31684b017fd4a34ee1a55760d8d7cdbadefa",
+        "skills/skill-creator/SKILL.md": "sha256:dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf"
+      },
+      "integrity": null,
+      "decision": "fuse",
+      "rationale": "作为公开 Skill 结构、渐进加载和官方校验基线；只融合规范与 Apache-2.0 示例模式，不复制 source-available 文档能力。",
+      "evidence_paths": ["README.md", "spec/agent-skills-spec.md", "template/SKILL.md", "skills/skill-creator/SKILL.md"],
+      "target_refs": ["skills", "src/engineering_assistant/official_validation.py"],
+      "provider_id": null
+    },
+    {
+      "id": "obra-superpowers",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/obra/superpowers",
+      "revision": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "license_evidence": ["LICENSE"],
+      "evidence_digests": {
+        "LICENSE": "sha256:a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "skills/test-driven-development/SKILL.md": "sha256:b5b4717b8b761cce15a6cfe9022e33fd959e0894c0c39d72c9cb49c23486c10e",
+        "skills/systematic-debugging/SKILL.md": "sha256:3b20719eca4f0461cb51a195221320d775dcf03b6859271066a03a5132a6ce7a",
+        "skills/verification-before-completion/SKILL.md": "sha256:ea52d15aabaf72bc6b558efe2c126f161b53961090ddcd712000273bfe8c7b6c",
+        "skills/subagent-driven-development/SKILL.md": "sha256:41ab239a6ad1c487cd839fdac972a8c9cf0f5e90efa59a63f963767864f0df4c"
+      },
+      "integrity": null,
+      "decision": "fuse",
+      "rationale": "融合红绿 TDD、系统诊断、完成前验证和子 Agent 评审原则；平台专用命令与仓库流程不直接嵌入。",
+      "evidence_paths": ["skills/test-driven-development/SKILL.md", "skills/systematic-debugging/SKILL.md", "skills/verification-before-completion/SKILL.md", "skills/subagent-driven-development/SKILL.md"],
+      "target_refs": ["skills/tdd", "skills/diagnosing-bugs", "skills/code-review", "skills/engineering-assistant/SKILL.md"],
+      "provider_id": null
+    },
+    {
+      "id": "addyosmani-agent-skills",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/addyosmani/agent-skills",
+      "revision": "98967c45a42b88d6b8fb3a88b7ff6273920763d6",
+      "license": "MIT",
+      "license_evidence": ["LICENSE"],
+      "evidence_digests": {
+        "LICENSE": "sha256:6f202f8bd568cd730dbb2b0d1f8e243bc74c2fa1f64dbce9b2c7ea08bd5c9fd7",
+        "skills/code-simplification/SKILL.md": "sha256:f0c5ed754057eb0c1e027e2587f59de816651feb5e837242296c43ea21cf621d",
+        "skills/performance-optimization/SKILL.md": "sha256:c56f6059fed0b77c50c946e38275f04c8b297657f3742d5782ee564514ecc4dc",
+        "skills/code-review-and-quality/SKILL.md": "sha256:bec431b759ff389e47b8d2c9d74e1981ff93cf5f3c36b4a3b6a71a75c250be2c",
+        "references/definition-of-done.md": "sha256:d1c75d2ae65d2c7a9cd01f93fa8de63e00e75f2fe5d08be224d576157054dcee"
+      },
+      "integrity": null,
+      "decision": "fuse",
+      "rationale": "融合产品研发全周期、代码简化、性能测量、质量评审与可观测性检查原则，并由本仓库 Runtime 证据合同约束。",
+      "evidence_paths": ["skills/code-simplification/SKILL.md", "skills/performance-optimization/SKILL.md", "skills/code-review-and-quality/SKILL.md", "references/definition-of-done.md"],
+      "target_refs": ["skills/codebase-design", "skills/code-review", "packs/quality-evidence.md", "src/engineering_assistant/governance.py"],
+      "provider_id": null
+    },
+    {
+      "id": "taste-skill",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/Leonxlnx/taste-skill",
+      "revision": "b17742737e796305d829b3ad39eda3add0d79060",
+      "license": "MIT",
+      "license_evidence": ["LICENSE"],
+      "evidence_digests": {
+        "LICENSE": "sha256:4575a543ab88dad12ccea7d97e563d0bce5b448b06072e65d3264497dad326df",
+        "skills/taste-skill/SKILL.md": "sha256:aa194351b246b8b4799099d4ed7b033d29eab6e6e3d58d8d2172978be7b3ec89",
+        "skills/redesign-skill/SKILL.md": "sha256:98ad3e5b051bfb71b2795f7e8a6aa0d32b51ee095606c098a4b2822ac07926c9",
+        "skills/output-skill/SKILL.md": "sha256:e5bf48b1ae561511439cf71672209a10a88cee0968cc925909ff861dfa0a96a7"
+      },
+      "integrity": null,
+      "decision": "fuse",
+      "rationale": "融合审计优先、反模板化、重构前视觉判断和真实渲染复核原则；不嵌入其平台命令或生成资产。",
+      "evidence_paths": ["skills/taste-skill/SKILL.md", "skills/redesign-skill/SKILL.md", "skills/output-skill/SKILL.md"],
+      "target_refs": ["packs/frontend-product.md", "skills/prototype/references/ui.md", "skills/code-review/SKILL.md"],
+      "provider_id": null
+    },
+    {
+      "id": "ui-ux-pro-max-skill",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "revision": "3da52ff1cab1be91848072ec1be5f493d730fd5f",
+      "license": "MIT",
+      "license_evidence": ["LICENSE"],
+      "evidence_digests": {
+        "LICENSE": "sha256:738f69dfa83db5c347c678fb9d90e560877059f0de93a327c39001bff92dc014",
+        "src/ui-ux-pro-max/scripts/search.py": "sha256:d9983d2a21d330b6b696480940fd78029f7b34027814f2ac1cf17c5d0b042407",
+        "src/ui-ux-pro-max/templates/base/skill-content.md": "sha256:d283fef151964f334c231fc6e89c0e89092bbce19665e3b339b81acfe064116f"
+      },
+      "integrity": "sha256:c03a2109fdd9c0b37d92c707c81fbf8dbb41f92e4d157cd03b27bc13d864d2c5",
+      "decision": "external_provider",
+      "rationale": "保留大规模 UI/UX 检索数据和搜索脚本为固定摘要的可选外部 Provider；输出仅是不可信建议，失败时回退原生能力。",
+      "evidence_paths": ["LICENSE", "src/ui-ux-pro-max/scripts/search.py", "src/ui-ux-pro-max/templates/base/skill-content.md"],
+      "target_refs": ["catalog/providers/core.json", "src/engineering_assistant/provider_runtime.py"],
+      "provider_id": "ui-ux-pro-max"
+    },
+    {
+      "id": "ux-ui-agent-skills",
+      "version": "1.0.0.0-rc.1",
+      "repository_url": "https://github.com/plugin87/ux-ui-agent-skills",
+      "revision": "93a7fbbdb3f19016fc2ea01eeec48a3895045be1",
+      "license": "MIT declared in package.json and README; standalone LICENSE file absent at reviewed revision",
+      "license_evidence": ["package.json", "README.md"],
+      "evidence_digests": {
+        "package.json": "sha256:a3536deab95d4294f2b7196f16063bfdbbbbf4f5916a3cc35c9c9f42c158fe9b",
+        "README.md": "sha256:786edc03f83b112c223547497fe05204e66e4e84e7e5379c326cc7881d52589a",
+        "reference/README.md": "sha256:13f49e38270c065c2b463b3474b04d65cf31c2c6dd7820f60820ff85714f360f",
+        "design-systems/interop-protocol.md": "sha256:2b93baebed323308f4ceb060cec90078a84ecce46b32adc56fceabf4ec7a32b9"
+      },
+      "integrity": null,
+      "decision": "not_adopted",
+      "rationale": "其 token、设计系统互操作和参考图库与已选原生 pack 及外部 Provider 高度重叠，当前没有足以抵消额外上下文、供应链和维护成本的独立能力，因此不导入代码或资产。",
+      "evidence_paths": ["reference/README.md", "design-systems/interop-protocol.md", "package.json", "README.md"],
+      "target_refs": [],
+      "provider_id": null
+    }
+  ]
+}

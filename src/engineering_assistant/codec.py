@@ -25,7 +25,29 @@ from .model import (
     RunApprovalGrant,
     RunState,
     StepResult,
+    UsageObservationLedger,
+    UsageObservationPlan,
 )
+
+
+def usage_observation_plan_from_dict(data: Mapping[str, Any]) -> UsageObservationPlan:
+    return UsageObservationPlan(**data)
+
+
+def usage_observation_ledger_from_dict(
+    data: Mapping[str, Any],
+) -> UsageObservationLedger:
+    return UsageObservationLedger(
+        plan=usage_observation_plan_from_dict(data["plan"]),
+        tool_calls=data["tool_calls"],
+        shell_calls=data["shell_calls"],
+        index_queries=data["index_queries"],
+        output_bytes=data["output_bytes"],
+        tool_use_signatures=dict(data["tool_use_signatures"]),
+        completed_tool_use_ids=list(data["completed_tool_use_ids"]),
+        signals=list(data["signals"]),
+        revision=data["revision"],
+    )
 
 
 def capability_provider_spec_from_dict(data: Mapping[str, Any]) -> CapabilityProviderSpec:

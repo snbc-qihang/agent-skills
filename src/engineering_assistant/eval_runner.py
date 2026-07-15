@@ -4,15 +4,36 @@ from __future__ import annotations
 
 import hashlib
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 from .catalog import load_catalog
+from . import canary_limits
+from .canary import validate_measurement_evidence_coverage
+from .artifact_io import ArtifactIO
 from .engine import RuntimeEngine
 from .evidence import EvidenceStore
-from .model import CriterionResult, EvidenceRef, RunApprovalGrant, StepResult
+from .feedback import (
+    FeedbackStore,
+    export_feedback_evolution,
+    summarize_feedback_events,
+)
+from .governance import InvestigationStore, QualityGate
+from .model import (
+    CriterionResult,
+    EvidenceRef,
+    FeedbackEvent,
+    FeedbackDisposition,
+    InvestigationRequest,
+    ProviderInvocation,
+    QualityDimension,
+    QualitySnapshot,
+    RunApprovalGrant,
+    StepResult,
+)
 from .natural_intent import normalize_request
+from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
 from .trust import parse_time
@@ -27,6 +48,7 @@ def run_evals(repository_root: Path | str) -> dict:
     behavior = _behavior_eval(root, catalog)
     state_machine = _state_machine_eval(root, catalog)
     replay = _replay_eval(root, catalog)
+    capabilities = _capability_eval(root, catalog)
     report = {
         "schema_version": "1.0",
         "version": catalog.version,
@@ -36,6 +58,7 @@ def run_evals(repository_root: Path | str) -> dict:
         "behavior": behavior,
         "state_machine": state_machine,
         "replay": replay,
+        "capabilities": capabilities,
         "canary": {
             "status": "not_run",
             "reason": "尚无通过外部 evidence broker 验签并满足门槛的真实产品 canary 结果；本机预发布或未验签运行不等同于产品 canary 通过。",
@@ -46,102 +69,72 @@ def run_evals(repository_root: Path | str) -> dict:
     return report
 
 
-MAX_CANARY_JSON_BYTES = 1024 * 1024
-MAX_CANARY_ARTIFACT_BYTES = 16 * 1024 * 1024
-
-
-def _contained_canary_file(root: Path, reference: str, *, max_bytes: int) -> Path:
-    parsed = urlparse(reference)
-    if parsed.scheme or Path(reference).is_absolute():
-        raise ValidationFailure("canary references must be relative to the evidence root")
-    candidate = root / unquote(reference)
-    if candidate.is_symlink():
-        raise ValidationFailure("canary references cannot be symlinks")
-    resolved = candidate.resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValidationFailure("canary reference escapes the evidence root") from exc
-    if not resolved.is_file() or resolved.stat().st_size > max_bytes:
-        raise ValidationFailure("canary evidence file is missing or exceeds its size limit")
-    return resolved
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return f"sha256:{digest.hexdigest()}"
-
-
-def run_canary_result(
-    path: Path | str, *, trust_verifier: TrustVerifier | None = None
-) -> dict:
-    path = Path(path)
-    if trust_verifier is None:
-        raise ValidationFailure("canary validation requires an external evidence broker")
-    evidence_root = path.parent.resolve()
-    result_path = _contained_canary_file(
-        evidence_root, path.name, max_bytes=MAX_CANARY_JSON_BYTES
-    )
-    data = load_json(result_path)
+def _load_canary_observations(
+    artifacts: ArtifactIO,
+    evidence_refs: list[str],
+    trust_verifier: TrustVerifier,
+    *,
+    expected_evidence_broker_id: str,
+    expected_host_trust_config_digest: str,
+) -> list[dict]:
     repository_root = Path(__file__).resolve().parents[2]
-    validate_instance(data, load_json(repository_root / "evals/canary/result.schema.json"), "canary-result")
-    required = {"quality_delta_points", "token_reduction_ratio", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations"}
-    missing = sorted(required - set(data))
-    if missing:
-        raise ValidationFailure(f"canary result missing fields: {', '.join(missing)}")
-    missing_evidence = []
-    observations = []
     observation_schema = load_json(
         repository_root / "evals/canary/run-evidence.schema.json"
     )
-    for reference in data["evidence_refs"]:
+    missing_evidence = []
+    observations = []
+    total_artifact_count = 0
+    total_artifact_bytes = 0
+    for reference in evidence_refs:
         try:
-            evidence_path = _contained_canary_file(
-                evidence_root, reference, max_bytes=MAX_CANARY_JSON_BYTES
+            observation, _raw = artifacts.read_json_limited(
+                canary_limits.MAX_OBSERVATION_BYTES,
+                *Path(reference).parts,
             )
-        except ValidationFailure:
+        except (FileNotFoundError, ValidationFailure):
             missing_evidence.append(reference)
             continue
-        observation = load_json(evidence_path)
         validate_instance(
-            observation, observation_schema, f"canary-evidence:{evidence_path}"
+            observation, observation_schema, f"canary-evidence:{reference}"
         )
-        if observation["product_repository"] != data["product_repository"]:
-            raise ValidationFailure("canary evidence targets a different product repository")
+        validate_measurement_evidence_coverage(
+            observation,
+            (item["measurement_kinds"] for item in observation["artifact_refs"]),
+        )
         if not trust_verifier.verify_canary_observation(observation):
             raise ValidationFailure("canary observation attestation is not trusted")
-        expected_ref = (
-            data["baseline_ref"]
-            if observation["variant"] == "baseline"
-            else data["candidate_ref"]
-        )
-        if observation["git_ref"] != expected_ref:
-            raise ValidationFailure("canary evidence git_ref does not match its variant")
-        expected_config = (
-            data["baseline_execution_config_digest"]
-            if observation["variant"] == "baseline"
-            else data["candidate_execution_config_digest"]
-        )
-        if observation["execution_config_digest"] != expected_config:
+        expected_provenance = {
+            "evidence_broker_id": expected_evidence_broker_id,
+            "host_trust_config_digest": expected_host_trust_config_digest,
+        }
+        if observation["trust_provenance"] != expected_provenance:
             raise ValidationFailure(
-                "canary execution config does not match its declared treatment"
+                "canary observation was attested by a different host trust binding"
             )
         if parse_time(observation["finished_at"]) < parse_time(observation["started_at"]):
             raise ValidationFailure("canary evidence finishes before it starts")
         for artifact in observation["artifact_refs"]:
-            artifact_path = _contained_canary_file(
-                evidence_root,
-                artifact["path"],
-                max_bytes=MAX_CANARY_ARTIFACT_BYTES,
+            total_artifact_count += 1
+            if total_artifact_count > canary_limits.MAX_TOTAL_ARTIFACTS:
+                raise ValidationFailure("canary evidence has too many artifacts")
+            artifact_payload = artifacts.read_bytes_limited(
+                canary_limits.MAX_ARTIFACT_BYTES,
+                *Path(artifact["path"]).parts,
             )
-            if _sha256(artifact_path) != artifact["digest"]:
+            total_artifact_bytes += len(artifact_payload)
+            if total_artifact_bytes > canary_limits.MAX_TOTAL_ARTIFACT_BYTES:
+                raise ValidationFailure("canary evidence exceeds total artifact bytes limit")
+            if f"sha256:{hashlib.sha256(artifact_payload).hexdigest()}" != artifact["digest"]:
                 raise ValidationFailure("canary artifact digest does not match")
         observations.append(observation)
     if missing_evidence:
         raise ValidationFailure(f"canary evidence files are missing or non-local: {', '.join(missing_evidence)}")
+    return observations
+
+
+def _pair_canary_observations(
+    observations: list[dict],
+) -> tuple[dict[tuple[str, str], dict], set[str]]:
     pairs = {}
     for observation in observations:
         key = (observation["task_id"], observation["variant"])
@@ -169,6 +162,12 @@ def run_canary_result(
             raise ValidationFailure("canary pair environments do not match")
         if baseline["evaluator_id"] != candidate["evaluator_id"]:
             raise ValidationFailure("canary pair evaluators do not match")
+    return pairs, task_ids
+
+
+def _canary_metrics(
+    pairs: dict[tuple[str, str], dict], task_ids: set[str]
+) -> dict:
     baseline_tokens = sum(
         pairs[(task_id, "baseline")]["input_tokens"]
         + pairs[(task_id, "baseline")]["output_tokens"]
@@ -197,7 +196,7 @@ def run_canary_result(
         raise ValidationFailure(
             "canary baseline requires positive token and document-noise measurements"
         )
-    computed = {
+    return {
         "quality_delta_points": sum(
             pairs[(task_id, "candidate")]["quality_score"]
             - pairs[(task_id, "baseline")]["quality_score"]
@@ -212,8 +211,144 @@ def run_canary_result(
             for task_id in task_ids
         ),
     }
+
+
+def _single_canary_value(
+    observations: list[dict], field: str, *, variant: str | None = None
+):
+    values = {
+        observation[field]
+        for observation in observations
+        if variant is None or observation["variant"] == variant
+    }
+    if len(values) != 1:
+        scope = f"{variant} " if variant else ""
+        label = field.replace("_", " ")
+        raise ValidationFailure(f"{scope}canary evidence must use one {label}")
+    return next(iter(values))
+
+
+def assemble_canary_result(
+    evidence_root: Path | str,
+    evidence_refs: list[str],
+    *,
+    trust_verifier: TrustVerifier | None = None,
+    expected_evidence_broker_id: str,
+    expected_host_trust_config_digest: str,
+    artifact_io: ArtifactIO | None = None,
+) -> dict:
+    """Derive a strict result only from externally attested observations."""
+
+    if trust_verifier is None:
+        raise ValidationFailure("canary assembly requires an external evidence broker")
+    if not 10 <= len(evidence_refs) <= 128:
+        raise ValidationFailure("canary evidence requires between 10 and 128 references")
+    if len(evidence_refs) != len(set(evidence_refs)):
+        raise ValidationFailure("canary evidence references must be unique")
+    evidence_root = Path(evidence_root).resolve()
+    artifacts = artifact_io or ArtifactIO(evidence_root, ".")
+    observations = _load_canary_observations(
+        artifacts,
+        evidence_refs,
+        trust_verifier,
+        expected_evidence_broker_id=expected_evidence_broker_id,
+        expected_host_trust_config_digest=expected_host_trust_config_digest,
+    )
+    pairs, task_ids = _pair_canary_observations(observations)
+    metrics = _canary_metrics(pairs, task_ids)
+    result = {
+        "simulation": False,
+        "product_repository": _single_canary_value(
+            observations, "product_repository"
+        ),
+        "baseline_ref": _single_canary_value(
+            observations, "git_ref", variant="baseline"
+        ),
+        "candidate_ref": _single_canary_value(
+            observations, "git_ref", variant="candidate"
+        ),
+        "baseline_execution_config_digest": _single_canary_value(
+            observations, "execution_config_digest", variant="baseline"
+        ),
+        "candidate_execution_config_digest": _single_canary_value(
+            observations, "execution_config_digest", variant="candidate"
+        ),
+        "baseline_treatment_digest": _single_canary_value(
+            observations, "treatment_digest", variant="baseline"
+        ),
+        "candidate_treatment_digest": _single_canary_value(
+            observations, "treatment_digest", variant="candidate"
+        ),
+        "trust_provenance": {
+            "evidence_broker_id": _single_canary_value(
+                [item["trust_provenance"] for item in observations],
+                "evidence_broker_id",
+            ),
+            "host_trust_config_digest": _single_canary_value(
+                [item["trust_provenance"] for item in observations],
+                "host_trust_config_digest",
+            ),
+        },
+        **metrics,
+        "evidence_refs": list(evidence_refs),
+    }
+    if result["baseline_treatment_digest"] == result["candidate_treatment_digest"]:
+        raise ValidationFailure("canary treatment digests must differ")
+    repository_root = Path(__file__).resolve().parents[2]
+    validate_instance(
+        result,
+        load_json(repository_root / "evals/canary/result.schema.json"),
+        "assembled-canary-result",
+    )
+    return result
+
+
+def run_canary_result(
+    path: Path | str,
+    *,
+    trust_verifier: TrustVerifier | None = None,
+    expected_evidence_broker_id: str,
+    expected_host_trust_config_digest: str,
+) -> dict:
+    path = Path(path)
+    if trust_verifier is None:
+        raise ValidationFailure("canary validation requires an external evidence broker")
+    evidence_root = path.parent.resolve()
+    artifacts = ArtifactIO(evidence_root, ".")
+    data, _raw = artifacts.read_json_limited(
+        canary_limits.MAX_OBSERVATION_BYTES,
+        path.name,
+    )
+    repository_root = Path(__file__).resolve().parents[2]
+    validate_instance(
+        data,
+        load_json(repository_root / "evals/canary/result.schema.json"),
+        "canary-result",
+    )
+    computed = assemble_canary_result(
+        evidence_root,
+        data["evidence_refs"],
+        trust_verifier=trust_verifier,
+        expected_evidence_broker_id=expected_evidence_broker_id,
+        expected_host_trust_config_digest=expected_host_trust_config_digest,
+        artifact_io=artifacts,
+    )
+    metric_fields = {
+        "quality_delta_points",
+        "token_reduction_ratio",
+        "cost_reduction_ratio",
+        "document_noise_reduction_ratio",
+        "safety_violations",
+    }
     for field, value in computed.items():
-        if abs(data[field] - value) > 1e-9:
+        if field == "evidence_refs":
+            continue
+        matches = (
+            abs(data[field] - value) <= 1e-9
+            if field in metric_fields
+            else data[field] == value
+        )
+        if not matches:
             raise ValidationFailure(
                 f"canary summary {field} does not match observed run evidence"
             )
@@ -226,8 +361,10 @@ def run_canary_result(
     return {
         "status": "passed" if passed else "failed",
         **data,
-        "task_count": len(task_ids),
-        "computed_metrics": computed,
+        "task_count": len(data["evidence_refs"]) // 2,
+        "computed_metrics": {
+            field: computed[field] for field in sorted(metric_fields)
+        },
     }
 
 
@@ -326,6 +463,239 @@ def _replay_eval(root: Path, catalog) -> dict:
             }
         )
     return {"case_count": len(results), "passed": len(results), "pass_ratio": 1.0, "results": results}
+
+
+def _capability_eval(root: Path, catalog) -> dict:
+    definition = load_json(root / "evals/capabilities/cases.json")
+    cases = definition["cases"]
+    required_mechanisms = definition["required_mechanisms"]
+    runners = {
+        "provider-fallback": _scenario_provider_fallback,
+        "feedback-summary": _scenario_feedback_summary,
+        "quality-gate": _scenario_quality_gate,
+        "investigation-policy": _scenario_investigation_policy,
+    }
+    results = []
+    for case in cases:
+        runner = runners.get(case["runner"])
+        if runner is None:
+            raise ValidationFailure(f"unknown capability runner {case['runner']}")
+        detail = runner(catalog, root)
+        results.append(
+            {
+                "id": case["id"],
+                "capability": case["capability"],
+                "runner": case["runner"],
+                "status": "passed",
+                "detail": detail,
+            }
+        )
+    observed_mechanisms = {item["capability"] for item in results}
+    if observed_mechanisms != set(required_mechanisms):
+        raise ValidationFailure(
+            "runtime mechanism eval does not match its approved protocol scope"
+        )
+    return {
+        "case_count": len(results),
+        "passed": len(results),
+        "pass_ratio": 1.0 if results else 0.0,
+        "evidence_type": "observed-runtime-mechanism",
+        "product_benefit_claimed": False,
+        "evaluated_scope": "approved_protocol_mechanisms",
+        "coverage_claim": "selected_runtime_mechanisms_only",
+        "required_mechanisms": required_mechanisms,
+        "results": results,
+    }
+
+
+def _scenario_provider_fallback(catalog, _root: Path) -> dict:
+    with tempfile.TemporaryDirectory() as temporary:
+        result = ProviderExecutor(catalog).invoke(
+            ProviderInvocation(
+                invocation_id="eval-provider-1",
+                run_id="eval-provider-run",
+                capability_id="frontend-design",
+                query="enterprise dashboard",
+                operation="design_system",
+                project_name="Capability Eval",
+            ),
+            provider_root=Path(temporary) / "not-configured",
+        )
+    if result.status != "fallback" or result.provider_id != "native-engineering":
+        raise AssertionError("provider failure did not use the governed native fallback")
+    return {
+        "status": result.status,
+        "provider_id": result.provider_id,
+        "trust_level": result.trust_level,
+    }
+
+
+def _scenario_feedback_summary(_catalog, root: Path) -> dict:
+    with tempfile.TemporaryDirectory() as temporary:
+        project = Path(temporary)
+        store = FeedbackStore(project, root / "schemas")
+        event = FeedbackEvent(
+            event_id="eval-feedback-1",
+            run_id="eval-feedback-run",
+            task_id="eval-feedback-task",
+            node_id="quality",
+            turn_id=None,
+            event_type="quality_regression",
+            severity="medium",
+            source="runtime",
+            symptom="A quality dimension regressed.",
+            expected_behavior="Keep every quality dimension evaluated.",
+            observed_behavior="One quality dimension requires repair.",
+            human_action=None,
+            evidence_refs=[],
+            recurrence_key="quality-regression",
+            resolution="open",
+            reusable_candidate=False,
+            sensitivity="internal",
+            observed_at=datetime.now(timezone.utc).isoformat(),
+            scope_tags=["quality"],
+            change_kind="repair_failure",
+            affected_asset_refs=[],
+            recovery_condition="repair_and_revalidate",
+            manual_intervention_kind="none",
+        )
+        if not store.save_event(event):
+            raise AssertionError("feedback event was not persisted")
+        disposition = FeedbackDisposition(
+            schema_version="1.0",
+            disposition_id="feedback-disposition-" + "e" * 24,
+            event_id=event.event_id,
+            decision="accepted_for_evolution",
+            reason="capability eval acceptance",
+            actor_ref="eval-reviewer",
+            evidence_refs=[],
+            reusable_candidate=True,
+            decided_at=datetime.now(timezone.utc).isoformat(),
+        )
+        if not store.save_disposition(disposition):
+            raise AssertionError("feedback disposition was not persisted")
+        summary = summarize_feedback_events(project, root / "schemas", item_limit=1)
+        evolution = export_feedback_evolution(project, root / "schemas", limit=1)
+    if summary["event_count"] != 1 or summary["recurrence_counts"] != {
+        "quality-regression": 1
+    }:
+        raise AssertionError("feedback event was not included in the bounded summary")
+    if (
+        evolution["proposal_count"] != 1
+        or evolution["proposals"][0]["formal_assets_modified"] is not False
+        or evolution["proposals"][0]["requires_review"] is not True
+    ):
+        raise AssertionError("accepted feedback did not produce a governed evolution proposal")
+    return {
+        "event_count": summary["event_count"],
+        "evolution_proposal_count": evolution["proposal_count"],
+        "recurrence_overflow_event_count": summary[
+            "recurrence_overflow_event_count"
+        ],
+    }
+
+
+def _scenario_quality_gate(_catalog, _root: Path) -> dict:
+    dimensions = [
+        QualityDimension(
+            id=dimension,
+            status="pass",
+            delta=0,
+            summary=f"{dimension} observed",
+            evidence_ids=["eval-evidence"],
+        )
+        for dimension in (
+            "correctness",
+            "complexity",
+            "redundancy",
+            "performance",
+            "architecture",
+            "test_quality",
+        )
+    ]
+    snapshot = QualitySnapshot(
+        id="eval-quality-1",
+        run_id="eval-quality-run",
+        node_id="quality",
+        state_revision=0,
+        base_ref="base",
+        candidate_ref="sha256:" + "a" * 64,
+        candidate_evidence_id="eval-candidate",
+        dimensions=dimensions,
+        findings=[],
+        required_repairs=[],
+        evidence_refs=["eval-evidence", "eval-candidate"],
+        observed_at=datetime.now(timezone.utc).isoformat(),
+    )
+    passed = QualityGate.evaluate(snapshot)
+    warned = QualityGate.evaluate(
+        replace(
+            snapshot,
+            id="eval-quality-2",
+            dimensions=[
+                *dimensions[:-1],
+                QualityDimension(
+                    id="test_quality",
+                    status="warn",
+                    delta=-1,
+                    summary="test quality requires repair",
+                    evidence_ids=["eval-evidence"],
+                ),
+            ],
+        )
+    )
+    if passed.decision != "pass" or warned.decision != "repair":
+        raise AssertionError("quality warnings did not remain a strict repair gate")
+    return {"pass_decision": passed.decision, "warning_decision": warned.decision}
+
+
+def _scenario_investigation_policy(_catalog, root: Path) -> dict:
+    with tempfile.TemporaryDirectory() as temporary:
+        store = InvestigationStore(StateStore(Path(temporary), root / "schemas"))
+        base = {
+            "run_id": "eval-investigation-run",
+            "question": "Which official contract applies?",
+            "reason": "An external fact is required.",
+            "source_scope": ["official_docs"],
+            "reported_blocking": False,
+            "estimated_cost": "low",
+            "stop_conditions": ["The primary contract is identified."],
+            "evidence_requirements": ["Official documentation."],
+            "status": "proposed",
+        }
+        automatic = store.propose(
+            InvestigationRequest(
+                id="eval-investigation-auto",
+                mode="auto_readonly",
+                **base,
+            ),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "eval-explicit-profile-choice",
+                    "allowed_source_scope": ["official_docs"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        suggested = store.propose(
+            InvestigationRequest(
+                id="eval-investigation-suggest",
+                mode="suggest_then_run",
+                **base,
+            ),
+            investigation_policy={
+                "default_mode": "suggest_then_run",
+                "auto_readonly": {"enabled": False},
+            },
+        )
+    if automatic.request.status != "running" or suggested.request.status != "proposed":
+        raise AssertionError("investigation policy did not preserve the approval boundary")
+    return {
+        "explicit_auto_status": automatic.request.status,
+        "default_suggest_status": suggested.request.status,
+    }
 
 
 def _scenario_approval_resume(catalog, _root: Path) -> None:
@@ -435,37 +805,43 @@ def _scenario_evidence_resume(catalog, root: Path) -> None:
 
 
 def _scenario_retry(catalog, _root: Path) -> None:
-    engine = RuntimeEngine(catalog)
-    state = engine.start(
-        "eval-implement",
-        normalize_request("Implement the accepted endpoint behavior"),
-        run_id="eval-implement",
-    )
-    engine.next(state)
-    gate = engine.complete_step(
-        state,
-        StepResult(state.run_id, "select-slice", "failed", [], [], [], [], "retry"),
-        evidence_store=EvidenceStore(StateStore(Path.cwd(), catalog.root / "schemas")),
-    )
-    if gate.decision != "retry" or state.current_node != "select-slice":
-        raise AssertionError("failed step did not remain retryable")
+    with tempfile.TemporaryDirectory() as temporary:
+        engine = RuntimeEngine(catalog)
+        state = engine.start(
+            "eval-implement",
+            normalize_request("Implement the accepted endpoint behavior"),
+            run_id="eval-implement",
+        )
+        engine.next(state)
+        gate = engine.complete_step(
+            state,
+            StepResult(state.run_id, "select-slice", "failed", [], [], [], [], "retry"),
+            evidence_store=EvidenceStore(
+                StateStore(Path(temporary), catalog.root / "schemas")
+            ),
+        )
+        if gate.decision != "retry" or state.current_node != "select-slice":
+            raise AssertionError("failed step did not remain retryable")
 
 
 def _scenario_block(catalog, _root: Path) -> None:
-    engine = RuntimeEngine(catalog)
-    state = engine.start(
-        "eval-shape",
-        normalize_request("Clarify this requirement and its acceptance criteria"),
-        run_id="eval-shape",
-    )
-    engine.next(state)
-    gate = engine.complete_step(
-        state,
-        StepResult(state.run_id, "discover-facts", "blocked", [], [], [], ["missing authority"], "block"),
-        evidence_store=EvidenceStore(StateStore(Path.cwd(), catalog.root / "schemas")),
-    )
-    if gate.decision != "block" or state.status != "blocked":
-        raise AssertionError("blocking result did not stop the run")
+    with tempfile.TemporaryDirectory() as temporary:
+        engine = RuntimeEngine(catalog)
+        state = engine.start(
+            "eval-shape",
+            normalize_request("Clarify this requirement and its acceptance criteria"),
+            run_id="eval-shape",
+        )
+        engine.next(state)
+        gate = engine.complete_step(
+            state,
+            StepResult(state.run_id, "discover-facts", "blocked", [], [], [], ["missing authority"], "block"),
+            evidence_store=EvidenceStore(
+                StateStore(Path(temporary), catalog.root / "schemas")
+            ),
+        )
+        if gate.decision != "block" or state.status != "blocked":
+            raise AssertionError("blocking result did not stop the run")
 
 
 def _enforce_thresholds(report: dict) -> None:
@@ -485,5 +861,11 @@ def _enforce_thresholds(report: dict) -> None:
         failures.append("state-machine eval has failures")
     if report["replay"]["pass_ratio"] != 1.0:
         failures.append("replay eval has failures")
+    capabilities = report["capabilities"]
+    observed_capabilities = {item["capability"] for item in capabilities["results"]}
+    if capabilities["pass_ratio"] != 1.0:
+        failures.append("capability eval has failures")
+    if observed_capabilities != set(capabilities["required_mechanisms"]):
+        failures.append("runtime mechanism eval does not cover its approved scope")
     if failures:
         raise ValidationFailure("; ".join(failures))

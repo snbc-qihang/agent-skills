@@ -44,7 +44,7 @@ def validate_instance(instance: Any, schema: Dict[str, Any], label: str = "insta
             raise ValidationFailure("\n".join(rendered))
         return
     errors: List[str] = []
-    _validate_supported(instance, schema, "$", errors)
+    _validate_supported(instance, schema, "$", errors, schema)
     if errors:
         raise ValidationFailure("\n".join(f"{label}:{item}" for item in errors))
 
@@ -62,13 +62,41 @@ def _matches_type(value: Any, expected: str) -> bool:
     return expected in mapping and mapping[expected](value)
 
 
-def _is_valid(value: Any, schema: Dict[str, Any]) -> bool:
+def _is_valid(
+    value: Any,
+    schema: Dict[str, Any],
+    root_schema: Dict[str, Any],
+) -> bool:
     nested: List[str] = []
-    _validate_supported(value, schema, "$", nested)
+    _validate_supported(value, schema, "$", nested, root_schema)
     return not nested
 
 
-def _validate_supported(value: Any, schema: Dict[str, Any], path: str, errors: List[str]) -> None:
+def _validate_supported(
+    value: Any,
+    schema: Dict[str, Any],
+    path: str,
+    errors: List[str],
+    root_schema: Dict[str, Any],
+) -> None:
+    reference = schema.get("$ref")
+    if reference is not None:
+        if not isinstance(reference, str) or not reference.startswith("#/"):
+            errors.append(f"{path}: unsupported schema reference {reference!r}")
+            return
+        target: Any = root_schema
+        try:
+            for raw_part in reference[2:].split("/"):
+                part = raw_part.replace("~1", "/").replace("~0", "~")
+                target = target[part]
+        except (KeyError, TypeError):
+            errors.append(f"{path}: unresolved schema reference {reference}")
+            return
+        if not isinstance(target, dict):
+            errors.append(f"{path}: schema reference {reference} is not an object")
+            return
+        _validate_supported(value, target, path, errors, root_schema)
+        schema = {key: item for key, item in schema.items() if key != "$ref"}
     expected = schema.get("type")
     if expected is not None:
         allowed = expected if isinstance(expected, list) else [expected]
@@ -100,6 +128,8 @@ def _validate_supported(value: Any, schema: Dict[str, Any], path: str, errors: L
     if isinstance(value, list):
         if len(value) < schema.get("minItems", 0):
             errors.append(f"{path}: array is shorter than minItems")
+        if "maxItems" in schema and len(value) > schema["maxItems"]:
+            errors.append(f"{path}: array is longer than maxItems")
         if schema.get("uniqueItems"):
             encoded = [json.dumps(item, ensure_ascii=False, sort_keys=True) for item in value]
             if len(encoded) != len(set(encoded)):
@@ -107,23 +137,49 @@ def _validate_supported(value: Any, schema: Dict[str, Any], path: str, errors: L
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for index, item in enumerate(value):
-                _validate_supported(item, item_schema, f"{path}[{index}]", errors)
+                _validate_supported(
+                    item,
+                    item_schema,
+                    f"{path}[{index}]",
+                    errors,
+                    root_schema,
+                )
     if isinstance(value, dict):
+        if "maxProperties" in schema and len(value) > schema["maxProperties"]:
+            errors.append(f"{path}: object has more than maxProperties")
         for required in schema.get("required", []):
             if required not in value:
                 errors.append(f"{path}: missing required property {required}")
         properties = schema.get("properties", {})
         for key, item in value.items():
             if key in properties:
-                _validate_supported(item, properties[key], f"{path}.{key}", errors)
+                _validate_supported(
+                    item,
+                    properties[key],
+                    f"{path}.{key}",
+                    errors,
+                    root_schema,
+                )
             elif schema.get("additionalProperties") is False:
                 errors.append(f"{path}: additional property {key} is not allowed")
             elif isinstance(schema.get("additionalProperties"), dict):
-                _validate_supported(item, schema["additionalProperties"], f"{path}.{key}", errors)
+                _validate_supported(
+                    item,
+                    schema["additionalProperties"],
+                    f"{path}.{key}",
+                    errors,
+                    root_schema,
+                )
     for subschema in schema.get("allOf", []):
-        _validate_supported(value, subschema, path, errors)
-    if "if" in schema and _is_valid(value, schema["if"]):
-        _validate_supported(value, schema.get("then", {}), path, errors)
+        _validate_supported(value, subschema, path, errors, root_schema)
+    if "if" in schema and _is_valid(value, schema["if"], root_schema):
+        _validate_supported(
+            value,
+            schema.get("then", {}),
+            path,
+            errors,
+            root_schema,
+        )
 
 
 def validate_file(instance_path: Path, schema_path: Path) -> None:

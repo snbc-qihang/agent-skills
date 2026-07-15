@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,12 @@ from engineering_assistant.catalog import load_catalog  # noqa: E402
 from engineering_assistant.cli import build_parser  # noqa: E402
 from engineering_assistant.engine import RuntimeEngine  # noqa: E402
 from engineering_assistant.evidence import EvidenceStore  # noqa: E402
-from engineering_assistant.governance import InvestigationStore, QualityGate, QualityStore  # noqa: E402
+from engineering_assistant.governance import (  # noqa: E402
+    InvestigationStore,
+    QualityGate,
+    QualityStore,
+    investigation_evidence_contract,
+)
 from engineering_assistant.mcp_server import RuntimeTools  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     CriterionResult,
@@ -66,7 +72,9 @@ class GovernanceTests(unittest.TestCase):
         self.verifier: TrustVerifier = FakeTrustVerifier()
         self.evidence_store = EvidenceStore(self.state_store, self.verifier)
         self.quality_store = QualityStore(self.state_store, self.evidence_store)
-        self.investigation_store = InvestigationStore(self.state_store)
+        self.investigation_store = InvestigationStore(
+            self.state_store, self.evidence_store
+        )
         self.now = datetime.now(timezone.utc).isoformat()
 
     def tearDown(self) -> None:
@@ -91,6 +99,26 @@ class GovernanceTests(unittest.TestCase):
         self.evidence_store.save(
             run_id,
             self.attest_local(run_id, evidence),
+        )
+        performance_path = self.project / "performance-observation.txt"
+        performance_path.write_text("observed benchmark result\n", encoding="utf-8")
+        performance = EvidenceRef(
+            id="performance-observation",
+            kind="test",
+            uri=str(performance_path),
+            producer="benchmark-runner",
+            observed_at=self.now,
+            trust_level="observed",
+            scope="changed code benchmark workload",
+            scope_tags=[
+                "quality-dimension:performance",
+                "quality-measurement:benchmark",
+            ],
+            subject_digest=candidate_digest,
+        )
+        self.evidence_store.save(
+            run_id,
+            self.attest_local(run_id, performance),
         )
         review_path = self.project / "quality-review.txt"
         review_path.write_text("independent quality review\n", encoding="utf-8")
@@ -134,6 +162,42 @@ class GovernanceTests(unittest.TestCase):
             attestation=f"test-receipt:{run_id}:{evidence.id}",
         )
 
+    def investigation_evidence(
+        self,
+        record,
+        evidence_id: str,
+        source_scope: str,
+        *,
+        kind: str = "source",
+        covered_contract_refs: list[str] | None = None,
+    ) -> EvidenceRef:
+        contract = investigation_evidence_contract(record)
+        observed = self.project / f"{evidence_id}.txt"
+        observed.write_text("observed investigation result\n", encoding="utf-8")
+        evidence = EvidenceRef(
+            id=evidence_id,
+            kind=kind,
+            uri=str(observed),
+            producer="research-host",
+            observed_at=self.now,
+            trust_level="observed",
+            scope="investigation evidence",
+            scope_tags=[
+                *contract["required_scope_tags"],
+                f"investigation-source:{source_scope}",
+            ],
+            contract_refs=(
+                contract["required_contract_refs"]
+                if covered_contract_refs is None
+                else covered_contract_refs
+            ),
+            subject_digest=contract["subject_digest"],
+        )
+        return self.evidence_store.save(
+            record.request.run_id,
+            self.attest_local(record.request.run_id, evidence),
+        )
+
     def snapshot(self, run_id: str, *, status: str = "pass") -> QualitySnapshot:
         return QualitySnapshot(
             id="quality-1",
@@ -151,8 +215,10 @@ class GovernanceTests(unittest.TestCase):
                     0,
                     f"{item} was observed",
                     [
-                        "quality-observation"
-                        if item in {"correctness", "performance", "test_quality"}
+                        "performance-observation"
+                        if item == "performance"
+                        else "quality-observation"
+                        if item in {"correctness", "test_quality"}
                         else "quality-review"
                     ],
                 )
@@ -160,7 +226,12 @@ class GovernanceTests(unittest.TestCase):
             ],
             findings=[],
             required_repairs=[],
-            evidence_refs=["quality-observation", "quality-review", "candidate-source"],
+            evidence_refs=[
+                "quality-observation",
+                "performance-observation",
+                "quality-review",
+                "candidate-source",
+            ],
             observed_at=self.now,
         )
 
@@ -183,6 +254,24 @@ class GovernanceTests(unittest.TestCase):
                 ],
             )
             self.quality_store.save(missing)
+
+    def test_generic_test_evidence_cannot_satisfy_performance_quality(self) -> None:
+        self.evidence("run-performance-generic")
+        snapshot = self.snapshot("run-performance-generic")
+        snapshot = replace(
+            snapshot,
+            dimensions=[
+                replace(item, evidence_ids=["quality-observation"])
+                if item.id == "performance"
+                else item
+                for item in snapshot.dimensions
+            ],
+        )
+        with self.assertRaisesRegex(
+            ValidationFailure,
+            "performance.*benchmark or profile",
+        ):
+            self.quality_store.save(snapshot)
 
     def test_claimed_evidence_cannot_satisfy_a_quality_gate(self) -> None:
         claimed = self.project / "claimed.txt"
@@ -518,7 +607,7 @@ class GovernanceTests(unittest.TestCase):
             question="Which official API contract applies?",
             reason="The implementation boundary is uncertain.",
             source_scope=["official_docs", "source_repository"],
-            blocking=True,
+            reported_blocking=True,
             mode=mode,
             estimated_cost="low",
             stop_conditions=["The primary contract is identified."],
@@ -566,15 +655,19 @@ class GovernanceTests(unittest.TestCase):
             self.investigation_store.finish(
                 "run-investigation", "investigate-1", outcome="completed", evidence_refs=[]
             )
-        self.evidence("run-investigation")
+        official_evidence = self.investigation_evidence(
+            running,
+            "investigation-official-docs",
+            "official_docs",
+            covered_contract_refs=investigation_evidence_contract(running)[
+                "required_contract_refs"
+            ][:1],
+        )
         next_step = self.investigation_store.finish(
             "run-investigation",
             "investigate-1",
             outcome="completed",
-            evidence_refs=["quality-observation"],
-            available_evidence=self.evidence_store.ids(
-                "run-investigation", minimum_trust_level="observed"
-            ),
+            evidence_refs=[official_evidence.id],
         )
         self.assertEqual("proposed", next_step.request.status)
         self.assertEqual(["source_repository"], next_step.remaining_source_scope)
@@ -590,16 +683,231 @@ class GovernanceTests(unittest.TestCase):
             second, verifier=self.verifier, current_run_revision=0
         )
         self.assertEqual(["source_repository"], approved_second.current_source_scope)
-        self.investigation_store.start("run-investigation", "investigate-1")
+        running_second = self.investigation_store.start(
+            "run-investigation", "investigate-1"
+        )
+        source_evidence = self.investigation_evidence(
+            running_second,
+            "investigation-source-repository",
+            "source_repository",
+            covered_contract_refs=investigation_evidence_contract(running_second)[
+                "required_contract_refs"
+            ][1:],
+        )
         completed = self.investigation_store.finish(
             "run-investigation",
             "investigate-1",
             outcome="completed",
-            evidence_refs=["quality-observation"],
-            available_evidence=self.evidence_store.ids(
-                "run-investigation", minimum_trust_level="observed"
-            ),
+            evidence_refs=[source_evidence.id],
         )
+        self.assertEqual("completed", completed.request.status)
+        self.assertEqual(
+            [official_evidence.id, source_evidence.id],
+            completed.evidence_refs,
+        )
+
+    def test_investigation_list_is_bounded_and_cursor_paginated(self) -> None:
+        for investigation_id in ("investigate-a", "investigate-b", "investigate-c"):
+            self.investigation_store.propose(
+                replace(self.request(), id=investigation_id)
+            )
+
+        first, next_after_id = self.investigation_store.list(
+            "run-investigation", limit=2
+        )
+        self.assertEqual(
+            ["investigate-a", "investigate-b"],
+            [item.request.id for item in first],
+        )
+        self.assertEqual("investigate-b", next_after_id)
+
+        second, next_after_id = self.investigation_store.list(
+            "run-investigation", limit=2, after_id=next_after_id
+        )
+        self.assertEqual(["investigate-c"], [item.request.id for item in second])
+        self.assertIsNone(next_after_id)
+
+    def test_investigation_can_finish_blocked_with_bound_runtime_evidence(self) -> None:
+        running = self.investigation_store.propose(
+            replace(
+                self.request(mode="auto_readonly"),
+                id="blocked-research",
+                source_scope=["official_docs"],
+            ),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        blocker = self.investigation_evidence(
+            running,
+            "official-docs-unavailable",
+            "official_docs",
+            kind="external_state",
+            covered_contract_refs=[],
+        )
+
+        blocked = self.investigation_store.finish(
+            "run-investigation",
+            "blocked-research",
+            outcome="blocked",
+            evidence_refs=[blocker.id],
+        )
+
+        self.assertEqual("blocked", blocked.request.status)
+        self.assertEqual([blocker.id], blocked.evidence_refs)
+
+    def test_investigation_rejects_observed_evidence_not_bound_to_its_contract(
+        self,
+    ) -> None:
+        running = self.investigation_store.propose(
+            replace(self.request(), id="bound-evidence", mode="auto_readonly"),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs", "source_repository"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        self.assertEqual("running", running.request.status)
+        self.evidence("run-investigation")
+        with self.assertRaisesRegex(ValidationFailure, "subject digest"):
+            self.investigation_store.finish(
+                "run-investigation",
+                "bound-evidence",
+                outcome="completed",
+                evidence_refs=["quality-observation"],
+            )
+
+    def test_investigation_rejects_evidence_outside_approved_source_scope(
+        self,
+    ) -> None:
+        running = self.investigation_store.propose(
+            replace(self.request(), id="bounded-source", mode="auto_readonly"),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs", "source_repository"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        contract = investigation_evidence_contract(running)
+        self.assertEqual(
+            [
+                "investigation-source:official_docs",
+                "investigation-source:source_repository",
+            ],
+            contract["source_scope_tags"],
+        )
+        outside = self.investigation_evidence(running, "outside-scope", "issues")
+
+        with self.assertRaisesRegex(ValidationFailure, "approved source scope"):
+            self.investigation_store.finish(
+                "run-investigation",
+                "bounded-source",
+                outcome="completed",
+                evidence_refs=[outside.id],
+            )
+
+    def test_investigation_requires_evidence_for_each_contract_clause(self) -> None:
+        running = self.investigation_store.propose(
+            replace(self.request(), id="incomplete-contract", mode="auto_readonly"),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs", "source_repository"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        contract = investigation_evidence_contract(running)
+        incomplete = self.investigation_evidence(
+            running,
+            "incomplete-contract-evidence",
+            "official_docs",
+            covered_contract_refs=contract["required_contract_refs"][:1],
+        )
+
+        with self.assertRaisesRegex(ValidationFailure, "cover every requirement"):
+            self.investigation_store.finish(
+                "run-investigation",
+                "incomplete-contract",
+                outcome="completed",
+                evidence_refs=[incomplete.id],
+            )
+
+    def test_investigation_rejects_incompatible_evidence_kind(self) -> None:
+        running = self.investigation_store.propose(
+            replace(self.request(), id="wrong-evidence-kind", mode="auto_readonly"),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs", "source_repository"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        incompatible = self.investigation_evidence(
+            running,
+            "wrong-kind-evidence",
+            "official_docs",
+            kind="build",
+        )
+
+        with self.assertRaisesRegex(ValidationFailure, "incompatible kind"):
+            self.investigation_store.finish(
+                "run-investigation",
+                "wrong-evidence-kind",
+                outcome="completed",
+                evidence_refs=[incompatible.id],
+            )
+
+    def test_investigation_finish_validates_only_submitted_evidence(self) -> None:
+        running = self.investigation_store.propose(
+            replace(self.request(), id="bounded-evidence-read", mode="auto_readonly"),
+            investigation_policy={
+                "default_mode": "auto_readonly",
+                "auto_readonly": {
+                    "enabled": True,
+                    "authorization_id": "profile-choice",
+                    "allowed_source_scope": ["official_docs", "source_repository"],
+                    "max_cost": "low",
+                },
+            },
+        )
+        submitted = self.investigation_evidence(
+            running,
+            "bounded-evidence",
+            "official_docs",
+        )
+
+        with mock.patch.object(
+            self.evidence_store,
+            "ids",
+            side_effect=AssertionError("must not scan unrelated evidence"),
+        ):
+            completed = self.investigation_store.finish(
+                "run-investigation",
+                "bounded-evidence-read",
+                outcome="completed",
+                evidence_refs=[submitted.id],
+            )
+
         self.assertEqual("completed", completed.request.status)
 
     def test_forged_investigation_grant_cannot_approve(self) -> None:
@@ -626,6 +934,41 @@ class GovernanceTests(unittest.TestCase):
             self.investigation_store.apply_grant(
                 forged, verifier=self.verifier, current_run_revision=0
             )
+
+    def test_declined_investigation_does_not_require_or_consume_scope_and_cost(self) -> None:
+        self.investigation_store.propose(
+            replace(self.request(), id="declined-grant", estimated_cost="high")
+        )
+        declined = self.investigation_store.apply_grant(
+            InvestigationDecisionGrant(
+                grant_id="decline-without-allowance",
+                broker_id="test-broker",
+                audience="engineering-assistant",
+                action="investigation.select_mode",
+                run_id="run-investigation",
+                investigation_id="declined-grant",
+                run_revision=0,
+                decision="decline",
+                selected_mode="disabled",
+                allowed_source_scope=[],
+                max_cost="low",
+                issued_at=self.now,
+                expires_at="2099-01-01T00:00:00+00:00",
+                actor_ref="opaque-human",
+                nonce="0123456789abcdef",
+                token="test-grant:decline-without-allowance",
+            ),
+            verifier=self.verifier,
+            current_run_revision=0,
+        )
+
+        self.assertEqual("declined", declined.request.status)
+        self.assertEqual("disabled", declined.request.mode)
+        self.assertEqual([], declined.current_source_scope)
+        self.assertEqual(
+            ["official_docs", "source_repository"],
+            declined.remaining_source_scope,
+        )
 
     def test_investigation_modes_follow_profile_authorization(self) -> None:
         disabled = self.investigation_store.propose(
@@ -708,16 +1051,42 @@ class GovernanceTests(unittest.TestCase):
             ["artifact-validate", "--kind", "step-result", "--input", "result.json"]
         )
         self.assertEqual("artifact-validate", args.command)
+
+        summary = build_parser().parse_args(
+            ["feedback-summary", "--project-root", "/tmp/product"]
+        )
+        self.assertEqual("feedback-summary", summary.command)
+        self.assertEqual("/tmp/product", summary.project_root)
+        evolution = build_parser().parse_args(
+            [
+                "feedback-evolution-export",
+                "--project-root",
+                "/tmp/product",
+                "--limit",
+                "25",
+            ]
+        )
+        self.assertEqual("feedback-evolution-export", evolution.command)
+        self.assertEqual(25, evolution.limit)
         self.assertEqual("step-result", args.kind)
 
     def test_model_facing_tools_cannot_approve_investigations(self) -> None:
-        names = [item["name"] for item in RuntimeTools(ROOT).definitions()]
+        definitions = RuntimeTools(ROOT).definitions()
+        names = [item["name"] for item in definitions]
         self.assertIn("engineering_assistant_investigation_propose", names)
         self.assertIn("engineering_assistant_investigation_list", names)
         self.assertIn("engineering_assistant_investigation_start", names)
         self.assertIn("engineering_assistant_investigation_finish", names)
         self.assertNotIn("engineering_assistant_investigation_approve", names)
         self.assertNotIn("engineering_assistant_investigation_decide", names)
+        listing = next(
+            item
+            for item in definitions
+            if item["name"] == "engineering_assistant_investigation_list"
+        )
+        properties = listing["inputSchema"]["properties"]
+        self.assertEqual(100, properties["limit"]["maximum"])
+        self.assertIn("after_id", properties)
 
 
 if __name__ == "__main__":

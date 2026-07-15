@@ -49,27 +49,27 @@ python3 scripts/publish_local.py --platform hermes --dry-run
 python3 scripts/publish_local.py --platform hermes --yes
 ```
 
-同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)。
+同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
 
 ### 当前平台集成边界
 
-当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。两个 adapter 也会注册共享的反馈采集器：Codex 使用 `Stop` 与 `UserPromptSubmit`，Hermes 使用 `post_llm_call`。
+当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。两个 adapter 也会注册共享的反馈采集器：Codex 只为本插件 namespaced MCP 工具注册 `PreToolUse` 与 `PostToolUse`，Hermes 在插件 adapter 内使用 `post_llm_call`。
 
 | 能力 | 当前行为 |
 | --- | --- |
 | 发现并选择公开 skill | 平台可根据任务隐式选择，也支持用户显式指定 |
 | 加载 `SKILL.md` 和按需参考资料 | 选择 skill 后由平台完成 |
 | `route/start/next/complete` | 平台可作为工具调用；`start` 接收 intent 并在服务端重算路由，选择 skill 本身不会隐式启动状态机 |
-| 人工审批与调研选择 | 只接受 profile 固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
+| 人工审批与调研选择 | 只接受管理员固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
 | `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
-| Hook 反馈采集 | 每轮记录无原文 capture 元数据；只把阻断、失败、返工、人工纠正和范围追加提升为 `FeedbackEvent` |
-| `ea validate/artifact-validate/eval/build/verify-package/canary-validate` | 由开发者、CI 或发布维护者执行 |
+| Hook 反馈采集 | Codex 仅从本插件 MCP Pre/Post 提升可观测的工具失败和 usage 信号；Hermes 可在插件轮次内补充纠正、阻断、返工和范围变化；两者都记录无原文 capture 元数据并支持独立审计处置 |
+| `ea validate/artifact-validate/eval/build/verify-package/canary-prepare/canary-attestation-import/canary-assemble/canary-validate` | 由开发者、CI 或发布维护者执行 |
 
 所以，当前产品体验是“平台选择 skill，必要时调用 Runtime 工具进入受治理运行，并由生命周期 Hook 采集反馈候选”。只有出现实际 Runtime 工具调用和落盘状态，才能声称状态机、证据门禁或恢复机制已运行。聊天中的“同意”不会自动转换为签名 grant。Codex 的插件 Hook 在用户审查并信任当前定义前会被跳过。
 
 ## 核心设计
 
-- 单一事实源：skill、flow、policy、pack、provider 和 profile 的机器定义只存在于 `catalog/`。
+- 单一事实源：skill、flow、policy、pack、provider、开源来源决策和 profile 的机器定义只存在于 `catalog/`。
 - 渐进加载：公开 skill 只加载当前分支需要的 `references/` 和 pack，避免上下文膨胀。
 - 可验证完成：flow 节点通过 `StepResult`、完成条件和 `EvidenceRef` 判断是否推进。
 - 确定性门禁：高风险动作、审批、证据时效和状态转换由 runtime 执行。
@@ -81,7 +81,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 
 ```text
 agent-skills/
-├── catalog/                    # Skill、Flow、Policy、Pack、Capability、Provider、Profile
+├── catalog/                    # Skill、Flow、Policy、Pack、Provider、来源决策、Profile
 ├── skills/                     # 11 个公开 skill 及按需 references
 ├── packs/                      # 9 个专业能力与策略包
 ├── schemas/                    # 核心协议 JSON Schema
@@ -105,6 +105,7 @@ agent-skills/
 | 安全、审批和证据规则 | `catalog/policies/` |
 | 专业领域能力 | `catalog/packs/` 与 `packs/` |
 | 能力提供方及供应链约束 | `catalog/providers/` |
+| 开源能力采用决策与落点 | `catalog/sources/` |
 | 公共数据协议 | `schemas/` 与 `model.py` |
 | 路由和状态转换 | `router.py`、`engine.py`、`state_store.py` |
 | 平台输出 | `adapters/codex.py`、`adapters/hermes.py` |
@@ -159,6 +160,8 @@ Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → s
 
 ### 外部 UI/UX Provider
 
+六个评估来源的当前决策由 `catalog/sources/open-source.json` 机器校验：Anthropic Skills、Superpowers、Addy Osmani Agent Skills 与 Taste Skill 只融合规范或工程原则；UI/UX Pro Max 作为固定 revision、摘要和许可证的外部 Provider；UX/UI Agent Skills 因能力重叠且没有足以抵消上下文、供应链和维护成本的独立增量而不导入。每项记录都绑定 reviewed revision、许可证证据、代表性上游路径和本仓库落点；`fuse` 不表示复制整个上游仓库，`not_adopted` 也不会在运行时加载其资产。
+
 前端审美、反模板化规则和评审方法融合进原生 `frontend-product` pack；可执行设计知识不复制进核心，而是通过固定来源 Provider 调用。当前 `ui-ux-pro-max` Provider 固定到 MIT 许可的 revision `3da52ff1cab1be91848072ec1be5f493d730fd5f` 及 bundle 摘要，只为 `frontend-design` 和 `product-prototype-review` 提供只读建议。
 
 `engineering_assistant_provider_invoke` 可接收外部 bundle 路径；宿主也可通过 `ENGINEERING_ASSISTANT_UI_UX_PRO_MAX_ROOT` 固定受信路径。执行器拒绝 symlink、pyc、特殊文件、超深/超量目录和超限体积，把普通文件复制到私有快照并对快照验证摘要，再从快照执行。子进程不使用 shell、不传 HOME/代理环境、不使用 `--persist`；macOS 沙箱以 `deny default` 为基线，只放行系统运行时、固定 Python 运行时、私有快照与工作目录读取，禁止网络、fork、额外 exec 和工作目录外写入，并限制时间、进程组和输出文件；没有等价最小权限沙箱的平台安全回退原生能力。bundle 缺失、被篡改、超时或执行失败时返回 `fallback` 与明确的原生执行指令。完整 invocation claim 与结果分别不可变审计到当前 run 的 `providers/`，同 ID 不同输入会冲突，同请求并发只允许 first writer 执行；first writer 崩溃且执行租约到期后，仅一个 CAS 接管者可以恢复。Provider 输出固定标记为 `untrusted_advisory`，不是 `observed` evidence，不能直接完成节点或绕过质量门禁。
@@ -182,7 +185,7 @@ flowchart TB
     X --> E
     E --> P["RunState 持久化"]
     W --> F["生命周期 Hook"]
-    F --> C["FeedbackCapture + FeedbackEvent"]
+    F --> C["FeedbackCapture + FeedbackEvent + UsageEfficiencyFeedback"]
 ```
 
 默认运行状态写入目标项目：
@@ -191,7 +194,7 @@ flowchart TB
 .run-artifacts/engineering-assistant/
 ```
 
-反馈 capture 和候选事件分别写入该目录下的 `feedback/captures/` 与 `feedback/events/`。默认只保存内容摘要、长度、脱敏计数和最多 512 字符的脱敏信号片段，不读取不稳定的 transcript 格式。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：
+反馈 capture、候选事件、审计处置和去标识化效率候选分别写入该目录下的 `feedback/captures/`、`feedback/events/`、`feedback/dispositions/` 与 `feedback/efficiency-candidates/`。Hook 不保存原始 transcript、原始命令、原始工具输入输出或内容摘录；capture 会保存内容摘要、长度、脱敏计数、采集时间，以及由 session/turn 单向哈希得到的可关联伪名引用。运行期 usage ledger 还会短暂保存 task 摘要、伪名 session/turn 引用和最近 256 条工具签名哈希，用于幂等汇总。Codex 在本插件 MCP 工具的 PostToolUse 完成后汇总并删除 ledger，任一环节失败时保留以便下次插件工具调用重试；Hermes 在插件自身轮次结束时汇总。新插件调用会机会式清理超过 24 小时的孤儿 ledger，单次最多扫描 256 个文件。效率候选使用随机 ID，只保留聚合计数和受控信号；事件与处置用于长期优化输入，处置不覆盖原事件。处置文件中的 reason、actor_ref 和 evidence_refs 是人工或 CI 明确提交的原文元数据，Runtime 不会自动脱敏，因此不得放入凭证、个人信息或业务秘密；summary 和演进导出都不回显 reason 或 actor_ref，演进导出不复制处置 evidence_refs，并把事件 ID、复发键、事件 evidence_refs 和资产引用统一转成单向 SHA-256 opaque 引用。`ea feedback-summary --project-root <目标项目>` 以有界内存流式汇总效率、问题类型、人工参与、有效处置和有限条最近事件；复发键最多保留 256 个精确计数，超出部分只计入 `recurrence_overflow_event_count`，不会导致长期事件库占用无限增长。`ea feedback-disposition --project-root <目标项目> --input <文件>` 只导入人工或 CI 明确提供的不可变处置。`ea feedback-evolution-export --project-root <目标项目>` 只把当前有效且明确接受的反馈转换为确定性、可分页、去敏的回归提案，并固定标记 `requires_review=true`、`formal_assets_modified=false`。导出只在扫描前后短暂读取 disposition snapshot revision，不会在全库扫描期间占用处置写锁；后续页必须同时提交 opaque cursor 和该 revision，若处置集合变化则丢弃本页并明确要求从第一页重启，避免静默遗漏或输出过期 accepted 项。三者都不会自动修改 skill、flow、policy、eval 或门禁；当前 adapter 尚未获得可信 workspace 绑定，因此模型工具不暴露跨项目汇总、处置或演进入口。损坏 artifact 只计数、不回显内容。企业环境应由目标项目所有者为 captures/events/dispositions/candidates 制定合规保留与归档周期；Runtime 当前不擅自删除这些长期优化资料。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：
 
 - `candidates`：默认模式，保存 capture 并提升有效反馈候选。
 - `metadata`：只保存 capture 元数据。
@@ -209,7 +212,9 @@ flowchart TB
 - `EvidenceRef`：源码、测试、CI、浏览器或外部状态证据。
 - `CapabilityProviderSpec`：能力提供方、执行模式、固定来源、风险、网络和失败策略。
 - `FeedbackEvent`：问题、阻断、人工修正和可复用候选的结构化反馈。
-- `FeedbackCapture`：每轮 Hook 是否执行、内容摘要、脱敏计数和候选事件引用。
+- `FeedbackDisposition`：人工或 CI 对反馈事件作出的不可变、可审计处置。
+- `FeedbackCapture`：插件工具或 Hermes 插件轮次的 Hook 是否执行、内容摘要、脱敏计数和候选事件引用。
+- `UsageEfficiencyFeedback`：Codex 插件工具完成或 Hermes 插件轮次结束后生成的去标识化工具/输出聚合候选，仅用于离线持续优化；模型侧只能读取匿名汇总。
 - `QualitySnapshot`：正确性、复杂度、冗余、性能、架构和测试质量的证据快照。
 - `InvestigationRequest`：Agent 主动调研的问题、模式、成本、停止条件和证据要求。
 - `InvestigationRecord`：调研的人工选择引用、状态迁移、结果证据和 revision。
@@ -227,7 +232,7 @@ python3 -m pip install -e .
 | 分组 | 命令 | 用途 |
 | --- | --- | --- |
 | Runtime 控制面 | `route`、`start`、`next`、`complete`、`quality-submit`、`evidence-import`、`investigation-*`、`mcp-serve` | 供平台 adapter、受信执行器和内核调试调用 |
-| 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
+| 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-prepare`、`canary-attestation-import`、`canary-assemble`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
 
 完整命令语义：
 
@@ -246,20 +251,56 @@ ea investigation-start    启动已批准调研
 ea investigation-finish   以已登记证据结束调研
 ea mcp-serve         以 MCP stdio 暴露含受治理 Provider 调用的受限 Runtime 工具
 ea validate          校验 catalog、schema、引用和作者源
-ea artifact-validate 使用当前 Runtime schema 校验 step-result、quality-snapshot 等 artifact
+ea verify-sources    离线核验六个固定 revision checkout 的许可证和代表性证据摘要
+ea artifact-validate 使用当前 Runtime schema 校验 Provider、Feedback、Quality、Investigation、usage 和运行状态 artifact
 ea eval              执行真实核心评测
 ea build             构建 Codex 或 Hermes 包
 ea verify-package    校验包文件摘要
+ea canary-prepare    在管理员固定 broker 绑定下复制真实 artifact，并生成冻结 trust provenance 的未验签 draft
+ea canary-attestation-import  校验外部 broker 回执并生成不可变 run evidence
+ea canary-assemble   验签 observation 并确定性组装 canary result
 ea canary-validate   通过外部 evidence broker 校验真实产品 canary 结果
+ea feedback-summary  只读汇总目标项目中的效率候选、反馈事件和处置
+ea feedback-disposition  导入人工或 CI 明确给出的不可变反馈处置
+ea feedback-evolution-export  只读导出已接受反馈的去敏回归提案，不修改正式资产
 ```
 
 自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，`start` 必须在服务端重新计算决策，不能接受调用方构造的 `RouteDecision`。Codex MCP 与 Hermes 工具注册都调用同一个 `RuntimeTools`，不会形成并行路由器；模型工具集合不包含审批、自由文本决定或可信证据导入，后续调用必须使用 RunState 已绑定的 profile。
 
+Codex 插件 Hook 的 manifest 只匹配 `mcp__engineering-assistant__engineering_assistant_*` 工具。普通 Prompt、Stop、Bash、`apply_patch` 和其他 MCP 事件不会启动本插件 Hook，因此普通任务既无采集语义，也无本插件 Hook 进程开销。插件工具调用会建立短生命周期 `UsageObservationPlan`，只采集该次插件工具调用数、输出字节、重复输入、单次大输出和缺失 PostToolUse 等摘要信号；PostToolUse 完成后汇总匿名 `UsageEfficiencyFeedback` 并删除 ledger。工具失败只保存受控失败分类和哈希化工具或资产引用，不保存原始输入、输出、命令或反馈摘录。12 次工具和 64 KB 输出等值仅作为趋势参考，超过参考值、重复调用或采集失败都不会拒绝工具、阻断任务或要求人工放行。工具事件哈希最多保留最近 256 条，超出后继续累计摘要并标记截断，不限制任务。由于 Codex 当前严格限定为插件工具 matcher，它不声称观察整轮 Bash、代码索引、用户纠正或回复末尾文本；Hermes 只观测插件 adapter 注册的 `engineering-assistant` 工具，并在插件自身 `post_llm_call` 汇总轮次反馈。这些数据只用于持续优化分析，不作为安全门禁；观测或反馈存储失败时平台调用仍然继续。结构化产物优先通过只读 MCP 工具 `engineering_assistant_artifact_validate` 校验，CLI 仅作为开发环境回退。
+
 实现流的强制 `quality` 节点只有在六个质量维度全部为 `pass`、没有 medium 以上 finding、没有未关闭修复项且每个判断引用宿主签发的兼容证据时才能完成。质量快照绑定 run revision、候选源码证据摘要和一小时新鲜度；候选内容改变后旧快照自动失效。模型提交的证据输入固定降级为 `claimed`，不能自行设置 `observed` 或 `verified`。
 
-主动调研的最终模式来自 profile 预授权或外部审批 broker，而不是模型建议。`disabled` 直接拒绝；`auto_readonly` 仅在 profile 已授权的资料范围和成本内自动运行；`suggest_then_run` 使用一次 broker grant；`guided` 每次只批准一个资料范围，完成后若仍有资料源则重新进入 proposed。通用高风险审批同样只接受绑定 run、revision、flow、approval、actor 和有效期的 opaque grant。可信证据 receipt 与审批 token 必须由 profile 固定的 HTTPS introspection endpoint 验证，发布包不含签发器或私钥；未配置 broker 时保持等待，不回退到自由文本放行。
+主动调研的最终模式来自 profile 预授权或外部审批 broker，而不是模型建议。`disabled` 直接拒绝；`auto_readonly` 仅在 profile 已授权的资料范围和成本内自动运行；`suggest_then_run` 使用一次 broker grant；`guided` 每次只批准一个资料范围，完成后若仍有资料源则重新进入 proposed。请求中的 `reported_blocking` 只表示发起方观察到该问题可能影响工作，用于排序和反馈分析；它不暂停、不拒绝也不阻断受治理任务。调研进入运行态后，CLI 和 MCP 都返回确定性的 `evidence_contract`：它把问题、停止条件和证据要求绑定为 subject digest，并列出调研 ID 标签、当前获批资料范围标签和最低信任级别。`investigation-finish` 只接受外部宿主已登记且满足该合同的 observed/verified 证据；无关质量证据、错误问题摘要或范围外资料不能结束调研。通用高风险审批同样只接受绑定 run、revision、flow、approval、actor 和有效期的 opaque grant。可信证据 receipt 与审批 token 必须由管理员固定的 HTTPS introspection endpoint 验证，发布包不含签发器或私钥；未配置宿主 broker 时保持等待，不回退到仓库 profile endpoint 或自由文本放行。
 
-本地 artifact 防护面向静态路径逃逸、意外覆盖和协作进程并发，不把同一 OS 用户下的任意代码执行视为可由 JSON 存储层抵御的攻击。生产环境必须由平台沙箱限制 Agent 对插件、profile 和 `.run-artifacts` 的直接篡改，并由外部 broker/Provider 对真正的外部动作再次验签；未具备这些宿主条件时只能声明 Runtime 协议门禁，不能声明安全隔离。
+调研列表默认每页 50 条、最大 100 条，通过 `after_id`/`next_after_id` 继续读取；长生命周期 run 不会一次把全部调研记录和证据合同装入 MCP 响应。明确拒绝的 broker grant 只记录拒绝决定，不要求或消耗资料范围与成本额度。
+
+宿主可以通过管理员固定位置的配置，为已存在的 profile 注入真实 evidence/approval introspection endpoint：macOS 使用 `/Library/Application Support/engineering-assistant/host-trust.json`，其他 POSIX 系统使用 `/etc/engineering-assistant/host-trust.json`。模型输入和进程环境不能选择或改写该路径；Windows 在具备等价 ACL 校验前安全禁用该覆盖能力。固定配置不存在时不会回退到仓库 profile 中的 endpoint，所有可信 evidence、审批和 canary 命令均 fail-closed。该文件只允许配置两个 broker，不能覆盖 policy、store、Hook 或预算，也不能把任何参考阈值变为拒绝、暂停或审批条件；文件必须由 root 持有、不是符号链接且不可被 group/world 写入，并以受限大小、无符号链接跟随和读前后元数据校验方式读取。配置中不保存私钥或业务 token，Runtime 仍只把每次收到的 opaque receipt/token 发往 HTTPS broker 验证。最小结构如下：
+
+```json
+{
+  "schema_version": "1.0",
+  "profiles": {
+    "default": {
+      "evidence_broker": {
+        "enabled": true,
+        "id": "enterprise-evidence",
+        "introspection_url": "https://broker.example/v1/evidence/introspect",
+        "timeout_seconds": 5
+      },
+      "approval_broker": {
+        "enabled": true,
+        "id": "enterprise-approval",
+        "audience": "engineering-assistant",
+        "introspection_url": "https://broker.example/v1/approval/introspect",
+        "timeout_seconds": 5
+      }
+    }
+  }
+}
+```
+
+本地 artifact 防护面向静态路径逃逸、意外覆盖和协作进程并发，不把同一 OS 用户下的任意代码执行视为可由 JSON 存储层抵御的攻击。Runtime 会拒绝把目标项目设为 `engineering-assistant` 作者源或已安装插件目录，避免 Hook、反馈和运行状态污染插件源码；Hook 遇到该拒绝时 fail-open 且不创建 artifact。生产环境必须由平台沙箱限制 Agent 对插件、profile 和目标项目 `.run-artifacts` 的直接篡改，并由外部 broker/Provider 对真正的外部动作再次验签；未具备这些宿主条件时只能声明 Runtime 协议门禁，不能声明安全隔离。
 
 阶段完成默认由子 Agent 分别进行需求/架构评审和代码质量/安全评审，主 Agent 自动修复并复验。只有生产、发布、提交/推送、破坏性变更、安全降级、范围扩张、不可逆产品决策或证据充分后仍无法消除的评审冲突才请求人工判断。
 
@@ -311,7 +352,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 python3 scripts/publish_local.py --platform all --yes
 ```
 
-脚本自动执行：仓库测试 → 真实 eval → 平台构建 → 包摘要校验 → 旧插件备份 → 原子替换 → 平台注册 → 安装后验证。失败时自动恢复旧插件。
+脚本自动执行：仓库测试 → 作者源强校验 → 真实 eval → 11 个公开 skill 的官方 `quick_validate.py` → 平台最终 staging 构建 → 最终 Codex staging 包的官方 plugin validator → 官方校验摘要与 staging 摘要绑定 → 包摘要校验 → 旧插件备份 → 原子替换 → 平台注册 → 安装后验证。官方 validator 通过仓库外 `uv` 隔离环境运行并固定 `PyYAML==6.0.2`；缺少 validator、`uv`、输出超限或校验失败都会使 preflight 失败，不会 soft-pass。失败时自动恢复旧插件。
 
 - Codex：安装到 `~/plugins/engineering-assistant`，维护 personal marketplace 并刷新 Codex 缓存。
 - Hermes：安装到 `~/.hermes/plugins/engineering-assistant`，调用 `hermes plugins enable engineering-assistant`。
@@ -341,13 +382,14 @@ MAJOR.MINOR.PATCH.BUILD[-PRERELEASE]
 - `--dry-run` 不写入插件目录、marketplace 或平台配置。
 - `--yes` 只允许本机预发布；当前策略禁止稳定版发布和产品仓库修改。
 - 发布脚本始终保留直接回滚目录，不静默删除旧插件。
-- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。Canary 至少包含 5 组 workload 摘要一致的 baseline/candidate，result 固定声明两侧 execution config 摘要且配对环境摘要必须一致；每条 observation 由 profile 配置的外部 evidence broker 完整验签，并校验本地证据根内 artifact 摘要。token 降幅与实际美元成本降幅分开计算。默认 profile 未配置 broker，因此会安全拒绝 canary 结果。
+- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。`ea canary-prepare` 只把 manifest 指向的真实 artifact 复制到仓库外证据包，计算摘要，并在管理员固定 broker 绑定下把 broker ID 与宿主配置摘要冻结进待签 claims；缺少成本、质量、文档噪声或安全测量时状态保持 `incomplete`，它不会自行签名或生成 canary result。准备与组装两条入口都统一限制最多 512 个 artifact、总计 256 MiB，并对 JSON、attestation 和单 artifact 做有界、目录锚定读取。Canary 至少包含 5 组 workload 摘要一致的 baseline/candidate，外部 broker 必须分别签署不同的 `treatment_digest`，不能用 git ref 别名冒充不同处理；result 固定声明两侧 treatment、execution config 摘要、evidence broker ID 与管理员配置摘要，且配对环境摘要必须一致。Broker 必须核对实际 usage/账单、独立质量评分、文档噪声与安全审计来源，不能只签署调用方填写的数值；token 降幅与实际美元成本降幅分开计算。未配置宿主 broker 时所有 canary 命令均安全拒绝，绝不回退到仓库 profile endpoint。
 - 失败门禁不能用文字说明替代，必须修复或保持阻断。
 - 反馈 Hook 默认不阻断任务、不自动继续 Stop，也不自动修改正式 skill、flow、policy 或 eval。
-- Hook 不保存原始 transcript、session id 或 turn id；检测到凭证和邮箱时先脱敏，并拒绝通过符号链接把反馈写出项目目录。
+- Hook 不保存原始 transcript、原始 session id 或原始 turn id；会保存单向哈希得到的可关联伪名引用和时间戳。检测到凭证和邮箱时只记录脱敏计数，并拒绝通过符号链接把反馈写出项目目录。
 
 ## 文档
 
 - [当前架构](docs/architecture/overview.md)
 - [本机发布](docs/operations/local-publish.md)
+- [真实产品 Canary](docs/operations/canary.md)
 - [版本规范](VERSIONING.md)

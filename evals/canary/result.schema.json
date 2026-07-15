@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["simulation", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "quality_delta_points", "token_reduction_ratio", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "evidence_refs"],
+  "required": ["simulation", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "baseline_treatment_digest", "candidate_treatment_digest", "trust_provenance", "quality_delta_points", "token_reduction_ratio", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "evidence_refs"],
   "properties": {
     "simulation": {"const": false},
     "product_repository": {"type": "string", "minLength": 1},
@@ -9,6 +9,17 @@
     "candidate_ref": {"type": "string", "minLength": 1},
     "baseline_execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "candidate_execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "baseline_treatment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "candidate_treatment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "trust_provenance": {
+      "type": "object",
+      "required": ["evidence_broker_id", "host_trust_config_digest"],
+      "properties": {
+        "evidence_broker_id": {"type": "string", "minLength": 1},
+        "host_trust_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    },
     "quality_delta_points": {"type": "number"},
     "token_reduction_ratio": {"type": "number"},
     "cost_reduction_ratio": {"type": "number"},

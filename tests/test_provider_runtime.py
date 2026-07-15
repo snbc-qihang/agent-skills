@@ -94,6 +94,7 @@ class ProviderRuntimeTests(unittest.TestCase):
         self.assertNotIn("--persist", command)
         self.assertNotIn("HOME", calls[0][1]["env"])
         self.assertNotIn("HTTP_PROXY", calls[0][1]["env"])
+        self.assertNotIn("preexec_fn", calls[0][1])
         self.assertEqual(subprocess.DEVNULL, calls[0][1]["stdin"])
         self.assertTrue(calls[0][1]["start_new_session"])
 

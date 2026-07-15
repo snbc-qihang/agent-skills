@@ -1,0 +1,9 @@
+{
+  "required_mechanisms": ["provider", "feedback", "quality", "investigation"],
+  "cases": [
+    {"id": "provider-controlled-fallback", "capability": "provider", "runner": "provider-fallback"},
+    {"id": "feedback-persist-and-summarize", "capability": "feedback", "runner": "feedback-summary"},
+    {"id": "quality-strict-dimensions", "capability": "quality", "runner": "quality-gate"},
+    {"id": "investigation-explicit-auto-policy", "capability": "investigation", "runner": "investigation-policy"}
+  ]
+}

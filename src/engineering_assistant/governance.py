@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import heapq
+import json
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +35,22 @@ QUALITY_EVIDENCE_KINDS = {
     "performance": {"test", "ci"},
     "architecture": {"source", "review"},
 }
+PERFORMANCE_DIMENSION_TAG = "quality-dimension:performance"
+PERFORMANCE_MEASUREMENT_TAGS = frozenset(
+    {"quality-measurement:benchmark", "quality-measurement:profile"}
+)
+INVESTIGATION_SCOPE_TAG_PREFIX = "investigation-source:"
+INVESTIGATION_EVIDENCE_KINDS = {
+    "official_docs": {"source"},
+    "source_repository": {"source"},
+    "standards": {"source"},
+    "issues": {"source", "external_state"},
+    "internal_repository": {"source", "test", "build", "ci", "review"},
+    "runtime_evidence": {"test", "build", "browser", "ci", "external_state"},
+}
+INVESTIGATION_BLOCKER_EVIDENCE_KIND = "external_state"
+DEFAULT_INVESTIGATION_PAGE_SIZE = 50
+MAX_INVESTIGATION_PAGE_SIZE = 100
 
 
 def _now() -> str:
@@ -41,6 +60,45 @@ def _now() -> str:
 def _safe_id(value: str, label: str) -> None:
     if SAFE_ID.fullmatch(value) is None:
         raise ValidationFailure(f"unsafe {label} {value!r}")
+
+
+def investigation_evidence_contract(record: InvestigationRecord) -> dict:
+    """Return the deterministic contract that host evidence must attest."""
+
+    request = record.request
+    material = json.dumps(
+        {
+            "schema_version": "1.0",
+            "run_id": request.run_id,
+            "investigation_id": request.id,
+            "question": request.question,
+            "stop_conditions": request.stop_conditions,
+            "evidence_requirements": request.evidence_requirements,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    contract_refs = [
+        "requirement:sha256:"
+        + hashlib.sha256(item.encode("utf-8")).hexdigest()
+        for item in request.evidence_requirements
+    ] + [
+        "stop-condition:sha256:"
+        + hashlib.sha256(item.encode("utf-8")).hexdigest()
+        for item in request.stop_conditions
+    ]
+    return {
+        "subject_digest": "sha256:" + hashlib.sha256(material).hexdigest(),
+        "required_scope_tags": [f"investigation:{request.id}"],
+        "source_scope_tags": [
+            INVESTIGATION_SCOPE_TAG_PREFIX + item
+            for item in record.current_source_scope
+        ],
+        "evidence_requirements": list(request.evidence_requirements),
+        "required_contract_refs": contract_refs,
+        "minimum_trust_level": "observed",
+    }
 
 
 @dataclass(frozen=True)
@@ -76,6 +134,13 @@ class QualityGate:
         return QualityAssessment("repair" if reasons else "pass", tuple(reasons))
 
 
+def validate_quality_contract(snapshot: QualitySnapshot) -> None:
+    """Validate the public six-dimension contract shared by every entrypoint."""
+    dimension_ids = [item.id for item in snapshot.dimensions]
+    if len(dimension_ids) != len(QUALITY_DIMENSIONS) or set(dimension_ids) != QUALITY_DIMENSIONS:
+        raise ValidationFailure("quality dimensions must appear exactly once")
+
+
 class QualityStore:
     MAX_AGE_SECONDS = 3600
     MAX_FUTURE_SKEW_SECONDS = 300
@@ -96,13 +161,12 @@ class QualityStore:
         _safe_id(snapshot.id, "quality snapshot id")
         _safe_id(snapshot.run_id, "run id")
         validate_instance(snapshot.to_dict(), self.schema, "quality-snapshot")
+        validate_quality_contract(snapshot)
         if current_state_revision is not None and snapshot.state_revision != current_state_revision:
             raise ValidationFailure("quality snapshot targets a stale run revision")
         self._validate_time(snapshot)
         snapshot = replace(snapshot, observed_at=_now())
         assessment = QualityGate.evaluate(snapshot)
-        if "all quality dimensions must appear exactly once" in assessment.reasons:
-            raise ValidationFailure("quality dimensions must appear exactly once")
         referenced = set(snapshot.evidence_refs)
         referenced.update(evidence for item in snapshot.dimensions for evidence in item.evidence_ids)
         referenced.update(evidence for item in snapshot.findings for evidence in item.evidence_ids)
@@ -130,14 +194,19 @@ class QualityStore:
         directory = self.state_store.artifacts.path(run_id, "quality")
         if not directory.is_dir():
             return None
-        snapshots = [
-            quality_snapshot_from_dict(
+        latest: QualitySnapshot | None = None
+        latest_time: datetime | None = None
+        for path in directory.glob("*.json"):
+            snapshot = quality_snapshot_from_dict(
                 self.state_store.artifacts.read_json(run_id, "quality", path.name)
             )
-            for path in directory.glob("*.json")
-        ]
-        matching = [item for item in snapshots if item.run_id == run_id and item.node_id == node_id]
-        return max(matching, key=lambda item: parse_time(item.observed_at), default=None)
+            if snapshot.run_id != run_id or snapshot.node_id != node_id:
+                continue
+            observed_at = parse_time(snapshot.observed_at)
+            if latest_time is None or observed_at > latest_time:
+                latest = snapshot
+                latest_time = observed_at
+        return latest
 
     def latest_valid(
         self,
@@ -205,12 +274,26 @@ class QualityStore:
                 raise ValidationFailure(f"quality evidence {evidence_id} is stale")
         for dimension in snapshot.dimensions:
             evidence = [evidence_by_id[evidence_id] for evidence_id in dimension.evidence_ids]
-            if not any(
-                item.trust_level in {"observed", "verified"}
+            matching = [
+                item
+                for item in evidence
+                if item.trust_level in {"observed", "verified"}
                 and item.kind in QUALITY_EVIDENCE_KINDS[dimension.id]
                 and item.subject_digest == snapshot.candidate_ref
-                for item in evidence
-            ):
+            ]
+            if dimension.id == "performance":
+                matching = [
+                    item
+                    for item in matching
+                    if PERFORMANCE_DIMENSION_TAG in item.scope_tags
+                    and PERFORMANCE_MEASUREMENT_TAGS.intersection(item.scope_tags)
+                ]
+                if not matching:
+                    raise ValidationFailure(
+                        "quality dimension performance requires candidate-bound "
+                        "benchmark or profile evidence"
+                    )
+            elif not matching:
                 raise ValidationFailure(
                     f"quality dimension {dimension.id} lacks candidate-bound attested evidence"
                 )
@@ -225,8 +308,13 @@ class QualityStore:
             raise ValidationFailure("quality snapshot is stale")
 
 class InvestigationStore:
-    def __init__(self, state_store: StateStore) -> None:
+    def __init__(
+        self,
+        state_store: StateStore,
+        evidence_store: EvidenceStore | None = None,
+    ) -> None:
         self.state_store = state_store
+        self.evidence_store = evidence_store
         self.request_schema = load_json(state_store.schema_root / "investigation-request.schema.json")
         self.record_schema = load_json(state_store.schema_root / "investigation-record.schema.json")
 
@@ -284,6 +372,8 @@ class InvestigationStore:
                     "approve",
                     "profile:" + str(auto.get("authorization_id", "auto-readonly")),
                     mode="auto_readonly",
+                    current_source_scope=list(request.source_scope),
+                    remaining_source_scope=[],
                 )
                 return self._transition(
                     approved,
@@ -328,6 +418,16 @@ class InvestigationStore:
         record = self.load(grant.run_id, grant.investigation_id)
         if record.request.status != "proposed":
             raise ValidationFailure("only proposed investigations can be decided")
+        if grant.decision == "decline":
+            return self._transition(
+                record,
+                "declined",
+                "decline",
+                grant.grant_id,
+                mode=grant.selected_mode,
+                current_source_scope=[],
+                remaining_source_scope=list(record.remaining_source_scope),
+            )
         approved_scope = list(record.request.source_scope)
         if grant.selected_mode == "guided":
             selected = set(grant.allowed_source_scope)
@@ -341,11 +441,10 @@ class InvestigationStore:
             raise ValidationFailure("investigation exceeds the cost approved by the broker")
         if grant.decision == "approve" and grant.selected_mode == "disabled":
             raise ValidationFailure("disabled investigation mode cannot be approved")
-        status = "approved" if grant.decision == "approve" else "declined"
         return self._transition(
             record,
-            status,
-            grant.decision,
+            "approved",
+            "approve",
             grant.grant_id,
             mode=grant.selected_mode,
             current_source_scope=approved_scope,
@@ -367,7 +466,6 @@ class InvestigationStore:
         *,
         outcome: str,
         evidence_refs: list[str],
-        available_evidence: set[str] | None = None,
     ) -> InvestigationRecord:
         if outcome not in {"completed", "blocked"}:
             raise ValidationFailure("outcome must be completed or blocked")
@@ -376,9 +474,73 @@ class InvestigationStore:
             raise ValidationFailure("only running investigations can finish")
         if not evidence_refs:
             raise ValidationFailure("investigation finish requires evidence")
-        unknown = sorted(set(evidence_refs) - (available_evidence or set()))
-        if unknown:
-            raise ValidationFailure(f"investigation references unregistered evidence: {', '.join(unknown)}")
+        if self.evidence_store is None:
+            raise ValidationFailure(
+                "investigation finish requires an observed evidence store"
+            )
+        evidence_by_id = {}
+        for evidence_id in dict.fromkeys(evidence_refs):
+            try:
+                evidence_by_id[evidence_id] = self.evidence_store.get(
+                    run_id, evidence_id
+                )
+            except FileNotFoundError as exc:
+                raise ValidationFailure(
+                    f"investigation references unregistered evidence: {evidence_id}"
+                ) from exc
+        contract = investigation_evidence_contract(record)
+        allowed_source_tags = set(contract["source_scope_tags"])
+        if not allowed_source_tags:
+            raise ValidationFailure("investigation has no currently approved source scope")
+        required_scope_tags = set(contract["required_scope_tags"])
+        covered_contract_refs: set[str] = set()
+        for evidence_id in evidence_refs:
+            evidence = evidence_by_id[evidence_id]
+            if evidence.trust_level not in {"observed", "verified"}:
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} must be observed"
+                )
+            if evidence.subject_digest != contract["subject_digest"]:
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} has the wrong subject digest"
+                )
+            if evidence.digest is None:
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} has no content digest"
+                )
+            tags = set(evidence.scope_tags)
+            if not required_scope_tags.issubset(tags):
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} is not bound to the investigation"
+                )
+            source_tags = {
+                tag for tag in tags if tag.startswith(INVESTIGATION_SCOPE_TAG_PREFIX)
+            }
+            if not source_tags:
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} has no source scope tag"
+                )
+            if not source_tags.issubset(allowed_source_tags):
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} exceeds the approved source scope"
+                )
+            source_scopes = {
+                tag.removeprefix(INVESTIGATION_SCOPE_TAG_PREFIX)
+                for tag in source_tags
+            }
+            allowed_kinds = set.intersection(
+                *(
+                    INVESTIGATION_EVIDENCE_KINDS[source_scope]
+                    for source_scope in source_scopes
+                )
+            )
+            if outcome == "blocked":
+                allowed_kinds.add(INVESTIGATION_BLOCKER_EVIDENCE_KIND)
+            if evidence.kind not in allowed_kinds:
+                raise ValidationFailure(
+                    f"investigation evidence {evidence_id} has an incompatible kind"
+                )
+            covered_contract_refs.update(evidence.contract_refs)
         action = "complete" if outcome == "completed" else "block"
         if (
             outcome == "completed"
@@ -393,6 +555,33 @@ class InvestigationStore:
                 evidence_refs=evidence_refs,
                 current_source_scope=[],
             )
+        if outcome == "completed":
+            cumulative_contract_refs = set(covered_contract_refs)
+            for evidence_id in record.evidence_refs:
+                try:
+                    cumulative = self.evidence_store.get(run_id, evidence_id)
+                except FileNotFoundError as exc:
+                    raise ValidationFailure(
+                        f"investigation references unregistered evidence: {evidence_id}"
+                    ) from exc
+                if (
+                    cumulative.trust_level not in {"observed", "verified"}
+                    or cumulative.subject_digest != contract["subject_digest"]
+                    or cumulative.digest is None
+                ):
+                    raise ValidationFailure(
+                        f"investigation evidence {evidence_id} is no longer valid"
+                    )
+                cumulative_contract_refs.update(cumulative.contract_refs)
+            missing_contract_refs = sorted(
+                set(contract["required_contract_refs"])
+                - cumulative_contract_refs
+            )
+            if missing_contract_refs:
+                raise ValidationFailure(
+                    "investigation evidence does not cover every requirement and stop condition: "
+                    + ", ".join(missing_contract_refs)
+                )
         return self._transition(record, outcome, action, record.decision_ref, evidence_refs=evidence_refs)
 
     def load(self, run_id: str, investigation_id: str) -> InvestigationRecord:
@@ -406,11 +595,37 @@ class InvestigationStore:
         validate_instance(payload["request"], self.request_schema, str(path) + ":request")
         return investigation_record_from_dict(payload)
 
-    def list(self, run_id: str) -> list[InvestigationRecord]:
+    def list(
+        self,
+        run_id: str,
+        *,
+        limit: int = DEFAULT_INVESTIGATION_PAGE_SIZE,
+        after_id: str | None = None,
+    ) -> tuple[list[InvestigationRecord], str | None]:
+        if not 1 <= limit <= MAX_INVESTIGATION_PAGE_SIZE:
+            raise ValidationFailure(
+                f"investigation page limit must be between 1 and {MAX_INVESTIGATION_PAGE_SIZE}"
+            )
+        if after_id is not None:
+            _safe_id(after_id, "investigation cursor")
         directory = self.state_store.artifacts.path(run_id, "investigations")
         if not directory.is_dir():
-            return []
-        return [self.load(run_id, path.stem) for path in sorted(directory.glob("*.json"))]
+            return [], None
+        page = heapq.nsmallest(
+            limit + 1,
+            (
+                path
+                for path in directory.iterdir()
+                if path.is_file()
+                and path.suffix == ".json"
+                and (after_id is None or path.stem > after_id)
+            ),
+            key=lambda path: path.name,
+        )
+        truncated = len(page) > limit
+        selected = page[:limit]
+        records = [self.load(run_id, path.stem) for path in selected]
+        return records, selected[-1].stem if truncated else None
 
     def _transition(
         self,
@@ -434,7 +649,14 @@ class InvestigationStore:
             record,
             request=request,
             decision_ref=decision_ref,
-            evidence_refs=list(dict.fromkeys(evidence_refs or record.evidence_refs)),
+            evidence_refs=list(
+                dict.fromkeys(
+                    [
+                        *record.evidence_refs,
+                        *(evidence_refs if evidence_refs is not None else []),
+                    ]
+                )
+            ),
             remaining_source_scope=(
                 remaining_source_scope
                 if remaining_source_scope is not None

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, TextIO
 
+from .artifact_validation import ARTIFACT_SCHEMAS, validate_artifact_payload
 from .catalog import DEFAULT_REPOSITORY_ROOT, load_catalog
 from .artifact_io import ArtifactConflict
 from .codec import (
@@ -24,18 +25,24 @@ from .codec import (
 )
 from .engine import RuntimeEngine
 from .evidence import EvidenceStore
-from .governance import InvestigationStore, QualityGate, QualityStore
+from .governance import (
+    InvestigationStore,
+    QualityGate,
+    QualityStore,
+    investigation_evidence_contract,
+)
 from .model import EvidenceRef, ProviderResult
 from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
-from .trust import TrustVerifier, verifier_from_profile
+from .trust import TrustVerifier
 from .validation import ValidationFailure, load_json, validate_instance
 from .version import CANONICAL_VERSION
 
 
 PROTOCOL_VERSION = "2025-06-18"
 SUPPORTED_PROTOCOL_VERSIONS = {"2024-11-05", "2025-03-26", PROTOCOL_VERSION}
+MAX_MCP_REQUEST_CHARS = 1_048_576
 
 
 def _object_schema(properties: dict, required: list[str]) -> dict:
@@ -93,6 +100,24 @@ class RuntimeTools:
                 "inputSchema": _object_schema(
                     {"intent": self._route_intent_schema, "profile": profile},
                     ["intent"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_artifact_validate",
+                "title": "校验工程产物",
+                "description": "直接使用当前 Runtime schema 校验调用参数中的结构化产物；不读取本地路径、不修改产物。",
+                "inputSchema": _object_schema(
+                    {
+                        "kind": {"enum": sorted(ARTIFACT_SCHEMAS)},
+                        "artifact": {"type": "object"},
+                    },
+                    ["kind", "artifact"],
                 ),
                 "annotations": {
                     "readOnlyHint": True,
@@ -235,6 +260,8 @@ class RuntimeTools:
                         "run_id": {"type": "string", "minLength": 1},
                         "project_root": project_root,
                         "profile": profile,
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "after_id": {"type": ["string", "null"], "minLength": 1},
                     },
                     ["run_id", "project_root"],
                 ),
@@ -316,8 +343,7 @@ class RuntimeTools:
             self.catalog.root / "schemas",
             profile.store["run_root"],
         )
-        verifier = self.trust_verifier or verifier_from_profile(profile)
-        return state_store, EvidenceStore(state_store, verifier)
+        return state_store, EvidenceStore(state_store, self.trust_verifier)
 
     @staticmethod
     def _load_state(state_store: StateStore, run_id: str, profile_id: str):
@@ -349,6 +375,13 @@ class RuntimeTools:
             profile_id=arguments.get("profile", "default"),
         )
         return {"decision": decision.to_dict()}
+
+    def _artifact_validate(self, arguments: dict) -> dict:
+        return validate_artifact_payload(
+            schema_root=self.catalog.root / "schemas",
+            kind=arguments["kind"],
+            artifact=arguments["artifact"],
+        )
 
     def _start(self, arguments: dict) -> dict:
         profile_id = arguments.get("profile", "default")
@@ -718,6 +751,7 @@ class RuntimeTools:
         )
         return {
             "record": record.to_dict(),
+            "evidence_contract": investigation_evidence_contract(record),
             "approval_required": record.request.status == "proposed",
             "choices": ["auto_readonly", "suggest_then_run", "guided", "disabled"],
         }
@@ -729,8 +763,19 @@ class RuntimeTools:
         self._load_state(
             state_store, arguments["run_id"], arguments.get("profile", "default")
         )
-        records = InvestigationStore(state_store).list(arguments["run_id"])
-        return {"records": [item.to_dict() for item in records]}
+        records, next_after_id = InvestigationStore(state_store).list(
+            arguments["run_id"],
+            limit=arguments.get("limit", 50),
+            after_id=arguments.get("after_id"),
+        )
+        return {
+            "records": [item.to_dict() for item in records],
+            "evidence_contracts": {
+                item.request.id: investigation_evidence_contract(item)
+                for item in records
+            },
+            "next_after_id": next_after_id,
+        }
 
     def _investigation_start(self, arguments: dict) -> dict:
         state_store, _ = self._stores(
@@ -742,7 +787,10 @@ class RuntimeTools:
         record = InvestigationStore(state_store).start(
             arguments["run_id"], arguments["investigation_id"]
         )
-        return {"record": record.to_dict()}
+        return {
+            "record": record.to_dict(),
+            "evidence_contract": investigation_evidence_contract(record),
+        }
 
     def _investigation_finish(self, arguments: dict) -> dict:
         state_store, evidence_store = self._stores(
@@ -753,16 +801,16 @@ class RuntimeTools:
         )
         for claim in arguments.get("evidence_claims", []):
             evidence_store.save(arguments["run_id"], self._claim_evidence(claim))
-        record = InvestigationStore(state_store).finish(
+        record = InvestigationStore(state_store, evidence_store).finish(
             arguments["run_id"],
             arguments["investigation_id"],
             outcome=arguments["outcome"],
             evidence_refs=arguments["evidence_refs"],
-            available_evidence=evidence_store.ids(
-                arguments["run_id"], minimum_trust_level="observed"
-            ),
         )
-        return {"record": record.to_dict()}
+        return {
+            "record": record.to_dict(),
+            "evidence_contract": investigation_evidence_contract(record),
+        }
 
 
 class MCPServer:
@@ -845,7 +893,19 @@ def serve_stdio(
     output_stream: TextIO = sys.stdout,
 ) -> int:
     server = server or MCPServer()
-    for line in input_stream:
+    while True:
+        line = input_stream.readline(MAX_MCP_REQUEST_CHARS + 1)
+        if not line:
+            break
+        if len(line) > MAX_MCP_REQUEST_CHARS:
+            while line and not line.endswith("\n"):
+                line = input_stream.readline(MAX_MCP_REQUEST_CHARS + 1)
+            response = MCPServer._error(None, -32700, "Parse error: request is too large")
+            output_stream.write(
+                json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\n"
+            )
+            output_stream.flush()
+            continue
         if not line.strip():
             continue
         try:
@@ -853,7 +913,7 @@ def serve_stdio(
             if not isinstance(message, dict):
                 raise ValueError("message must be an object")
             response = server.handle(message)
-        except (json.JSONDecodeError, ValueError) as exc:
+        except (json.JSONDecodeError, ValueError, RecursionError) as exc:
             response = MCPServer._error(None, -32700, f"Parse error: {exc}")
         if response is not None:
             output_stream.write(json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\n")

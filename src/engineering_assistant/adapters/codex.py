@@ -96,8 +96,18 @@ class CodexAdapter:
             json.dumps(
                 {
                     "hooks": {
-                        "Stop": [{"hooks": [hook_handler]}],
-                        "UserPromptSubmit": [{"hooks": [hook_handler]}],
+                        "PreToolUse": [
+                            {
+                                "matcher": "mcp__engineering-assistant__engineering_assistant_.*",
+                                "hooks": [hook_handler],
+                            }
+                        ],
+                        "PostToolUse": [
+                            {
+                                "matcher": "mcp__engineering-assistant__engineering_assistant_.*",
+                                "hooks": [hook_handler],
+                            }
+                        ],
                     }
                 },
                 ensure_ascii=False,
@@ -108,12 +118,33 @@ class CodexAdapter:
         hook_script = hooks_dir / "feedback_capture.py"
         hook_script.write_text(
             "#!/usr/bin/env python3\n"
+            "import importlib.util\n"
+            "import json\n"
             "import sys\n"
             "from pathlib import Path\n"
-            "root = Path(__file__).resolve().parents[1]\n"
-            "sys.path.insert(0, str(root / 'engineering-assistant/runtime'))\n"
-            "from engineering_assistant.feedback import run_codex_hook\n"
-            "raise SystemExit(run_codex_hook(schema_root=root / 'engineering-assistant/schemas'))\n",
+            "def emit_empty():\n"
+            "    json.dump({}, sys.stdout); sys.stdout.write('\\n'); return 0\n"
+            "try:\n"
+            "    root = Path(__file__).resolve().parents[1]\n"
+            "    gate_path = root / 'engineering-assistant/runtime/engineering_assistant/hook_gate.py'\n"
+            "    spec = importlib.util.spec_from_file_location('_engineering_assistant_hook_gate', gate_path)\n"
+            "    if spec is None or spec.loader is None:\n"
+            "        raise ImportError('hook gate loader is unavailable')\n"
+            "    gate = importlib.util.module_from_spec(spec)\n"
+            "    spec.loader.exec_module(gate)\n"
+            "    should_load, raw = gate.read_gate_input(sys.stdin)\n"
+            "    if should_load:\n"
+            "        import io\n"
+            "        sys.path.insert(0, str(root / 'engineering-assistant/runtime'))\n"
+            "        from engineering_assistant.feedback import run_codex_hook\n"
+            "        output = io.StringIO()\n"
+            "        exit_code = run_codex_hook(input_stream=io.StringIO(raw), output_stream=output, schema_root=root / 'engineering-assistant/schemas')\n"
+            "        sys.stdout.write(output.getvalue())\n"
+            "    else:\n"
+            "        exit_code = emit_empty()\n"
+            "except Exception:\n"
+            "    exit_code = emit_empty()\n"
+            "raise SystemExit(exit_code)\n",
             encoding="utf-8",
         )
         hook_script.chmod(0o755)
@@ -125,7 +156,12 @@ class CodexAdapter:
             if len(short) < 25:
                 short = f"按明确范围、可验证证据和完成条件执行“{display}”工程工作流。"
             short = short[:64].rstrip()
-            default_prompt = f"使用 ${skill.id} 基于证据完成这项工程任务。"
+            invocation = (
+                "$engineering-assistant"
+                if skill.id == "engineering-assistant"
+                else f"$engineering-assistant:{skill.id}"
+            )
+            default_prompt = f"使用 {invocation} 基于证据完成这项工程任务。"
             content = (
                 "interface:\n"
                 f"  display_name: {json.dumps(display, ensure_ascii=False)}\n"

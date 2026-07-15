@@ -7,11 +7,13 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from engineering_assistant.codec import feedback_event_from_dict  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     CapabilityProviderSpec,
     CompletionCriterion,
@@ -149,6 +151,11 @@ class ModelAndSchemaTests(unittest.TestCase):
             observed_behavior="新增了未被调用的抽象层。",
             human_action="删除抽象层并直接复用现有接口。",
             evidence_refs=["evidence-1"],
+            scope_tags=["quality"],
+            change_kind="correct_behavior",
+            affected_asset_refs=["source.py"],
+            recovery_condition="apply_corrected_constraint",
+            manual_intervention_kind="user_correction",
             recurrence_key="unnecessary-abstraction",
             resolution="repaired",
             reusable_candidate=True,
@@ -165,11 +172,19 @@ class ModelAndSchemaTests(unittest.TestCase):
             candidate_evidence_id="evidence-1",
             dimensions=[
                 QualityDimension(
-                    id="complexity",
+                    id=dimension,
                     status="pass",
                     delta=0,
-                    summary="没有增加不必要复杂度。",
+                    summary=f"{dimension} 已评估。",
                     evidence_ids=["evidence-1"],
+                )
+                for dimension in (
+                    "correctness",
+                    "complexity",
+                    "redundancy",
+                    "performance",
+                    "architecture",
+                    "test_quality",
                 )
             ],
             findings=[Finding("finding-1", "low", "无阻断问题。", ["evidence-1"])],
@@ -183,7 +198,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             question="当前依赖是否提供官方扩展接口？",
             reason="避免复制已有能力。",
             source_scope=["official_docs", "source_repository"],
-            blocking=True,
+            reported_blocking=True,
             mode="suggest_then_run",
             estimated_cost="low",
             stop_conditions=["找到官方接口定义"],
@@ -204,6 +219,40 @@ class ModelAndSchemaTests(unittest.TestCase):
                 invalid["unknown"] = True
                 with self.assertRaises(ValidationFailure):
                     validate_instance(invalid, self.schema(schema_name), schema_name)
+
+    def test_legacy_feedback_event_remains_readable_with_unknown_action_context(
+        self,
+    ) -> None:
+        legacy = {
+            "event_id": "feedback-legacy",
+            "run_id": "run-1",
+            "task_id": "task-1",
+            "node_id": None,
+            "turn_id": "turn-1",
+            "event_type": "human_correction",
+            "severity": "medium",
+            "source": "human",
+            "symptom": "legacy event",
+            "expected_behavior": "apply correction",
+            "observed_behavior": "correction requested",
+            "human_action": None,
+            "evidence_refs": [],
+            "recurrence_key": "legacy-correction",
+            "resolution": "open",
+            "reusable_candidate": False,
+            "sensitivity": "internal",
+            "observed_at": "2026-07-13T10:00:00+08:00",
+        }
+
+        validate_instance(
+            legacy,
+            self.schema("feedback-event.schema.json"),
+            "legacy-feedback",
+        )
+        decoded = feedback_event_from_dict(legacy)
+        self.assertEqual(["unknown"], decoded.scope_tags)
+        self.assertEqual("unknown", decoded.change_kind)
+        self.assertEqual("unknown", decoded.recovery_condition)
 
     def test_external_provider_requires_pinned_source(self) -> None:
         provider = CapabilityProviderSpec(
@@ -252,11 +301,63 @@ class ModelAndSchemaTests(unittest.TestCase):
             "run-approval-grant.schema.json",
             "provider-invocation.schema.json",
             "provider-result.schema.json",
+            "usage-efficiency-feedback.schema.json",
+            "host-trust-config.schema.json",
         }
         self.assertTrue(expected.issubset({path.name for path in (ROOT / "schemas").glob("*.json")}))
         for name in expected:
             schema = self.schema(name)
             self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
+
+    def test_investigation_record_embeds_the_full_request_contract(self) -> None:
+        request_schema = self.schema("investigation-request.schema.json")
+        record_schema = self.schema("investigation-record.schema.json")
+        request_contract = {
+            key: value
+            for key, value in request_schema.items()
+            if key not in {"$schema", "$id"}
+        }
+
+        self.assertEqual(
+            request_contract,
+            record_schema["$defs"]["investigation_request"],
+        )
+        invalid_record = {
+            "request": {},
+            "decision_ref": None,
+            "evidence_refs": [],
+            "remaining_source_scope": [],
+            "current_source_scope": [],
+            "transition_history": [
+                {
+                    "from_status": "",
+                    "to_status": "proposed",
+                    "action": "propose",
+                    "decision_ref": None,
+                    "observed_at": "2026-07-14T00:00:00+00:00",
+                }
+            ],
+            "updated_at": "2026-07-14T00:00:00+00:00",
+            "revision": 0,
+        }
+        with self.assertRaises(ValidationFailure):
+            validate_instance(
+                invalid_record,
+                record_schema,
+                "investigation-record",
+            )
+
+    def test_builtin_validator_enforces_ref_sibling_constraints(self) -> None:
+        schema = {
+            "$defs": {"text": {"type": "string"}},
+            "$ref": "#/$defs/text",
+            "minLength": 3,
+        }
+        with mock.patch(
+            "engineering_assistant.validation.Draft202012Validator", None
+        ):
+            with self.assertRaises(ValidationFailure):
+                validate_instance("x", schema, "ref-sibling")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "draft_digest", "attestation"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "draft_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "attestation": {"type": "string", "minLength": 16, "maxLength": 8192}
+  },
+  "additionalProperties": false
+}

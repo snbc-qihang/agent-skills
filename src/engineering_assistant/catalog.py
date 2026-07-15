@@ -26,6 +26,16 @@ from .validation import ValidationFailure, load_json, validate_many
 
 
 DEFAULT_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REQUIRED_OPEN_SOURCE_IDS = frozenset(
+    {
+        "anthropic-skills",
+        "obra-superpowers",
+        "addyosmani-agent-skills",
+        "taste-skill",
+        "ui-ux-pro-max-skill",
+        "ux-ui-agent-skills",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -59,6 +69,23 @@ class Pack:
 
 
 @dataclass(frozen=True)
+class SourceDecision:
+    id: str
+    version: str
+    repository_url: str
+    revision: str
+    license: str
+    license_evidence: tuple[str, ...]
+    evidence_digests: Mapping[str, str]
+    integrity: str | None
+    decision: str
+    rationale: str
+    evidence_paths: tuple[str, ...]
+    target_refs: tuple[str, ...]
+    provider_id: str | None
+
+
+@dataclass(frozen=True)
 class Catalog:
     root: Path
     version: str
@@ -69,6 +96,7 @@ class Catalog:
     packs: Mapping[str, Pack]
     profiles: Mapping[str, ProjectProfile]
     providers: Mapping[str, CapabilityProviderSpec]
+    sources: Mapping[str, SourceDecision]
 
     def skill_for_capability(self, capability_id: str) -> SkillSpec | None:
         capability = self.capabilities.get(capability_id)
@@ -228,6 +256,7 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     pack_doc = load_json(root / "catalog/packs/core.json")
     profile_doc = load_json(root / "catalog/profiles/default.json")
     provider_doc = load_json(root / "catalog/providers/core.json")
+    source_doc = load_json(root / "catalog/sources/open-source.json")
 
     skill_data = _unique_by_id(skill_doc.get("skills", []), "skills")
     flow_data = _unique_by_id(flow_doc.get("flows", []), "flows")
@@ -235,6 +264,23 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     capability_data = _unique_by_id(capability_doc.get("capabilities", []), "capabilities")
     pack_data = _unique_by_id(pack_doc.get("packs", []), "packs")
     provider_data = _unique_by_id(provider_doc.get("providers", []), "providers")
+    source_data = _unique_by_id(source_doc.get("sources", []), "sources")
+    if set(source_doc) != {"version", "review_scope", "sources"}:
+        raise ValidationFailure(
+            "source registry must contain only version, review_scope and sources"
+        )
+    review_scope = source_doc.get("review_scope")
+    if (
+        not isinstance(review_scope, list)
+        or not review_scope
+        or any(not isinstance(item, str) or not item for item in review_scope)
+        or len(review_scope) != len(set(review_scope))
+        or set(review_scope) != REQUIRED_OPEN_SOURCE_IDS
+        or set(source_data) != REQUIRED_OPEN_SOURCE_IDS
+    ):
+        raise ValidationFailure(
+            "source registry review scope must match source decisions exactly"
+        )
 
     validate_many(skill_data.values(), load_json(schemas / "skill-spec.schema.json"), "skills")
     validate_many(flow_data.values(), load_json(schemas / "flow-spec.schema.json"), "flows")
@@ -245,6 +291,11 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         load_json(schemas / "capability-provider-spec.schema.json"),
         "providers",
     )
+    validate_many(
+        source_data.values(),
+        load_json(schemas / "source-decision.schema.json"),
+        "sources",
+    )
 
     versions = {
         skill_doc.get("version"),
@@ -254,6 +305,7 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         pack_doc.get("version"),
         profile_doc.get("version"),
         provider_doc.get("version"),
+        source_doc.get("version"),
     }
     if len(versions) != 1 or None in versions:
         raise ValidationFailure(f"catalog component versions do not agree: {sorted(str(item) for item in versions)}")
@@ -318,10 +370,29 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     providers = {
         item_id: _provider_spec(item) for item_id, item in provider_data.items()
     }
+    sources = {
+        item_id: SourceDecision(
+            id=item["id"],
+            version=item["version"],
+            repository_url=item["repository_url"],
+            revision=item["revision"],
+            license=item["license"],
+            license_evidence=tuple(item["license_evidence"]),
+            evidence_digests=dict(item["evidence_digests"]),
+            integrity=item.get("integrity"),
+            decision=item["decision"],
+            rationale=item["rationale"],
+            evidence_paths=tuple(item["evidence_paths"]),
+            target_refs=tuple(item["target_refs"]),
+            provider_id=item.get("provider_id"),
+        )
+        for item_id, item in source_data.items()
+    }
 
     versioned = [
         *skills.values(), *flows.values(), *policies.values(), *packs.values(),
         *providers.values(), profile,
+        *sources.values(),
     ]
     mismatched = sorted(item.id for item in versioned if item.version != version)
     if mismatched:
@@ -373,6 +444,67 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
                 raise ValidationFailure(
                     f"provider {provider.id}: invalid schema reference {contract_ref}"
                 )
+    for source in sources.values():
+        expected_evidence_paths = set(source.license_evidence) | set(source.evidence_paths)
+        if set(source.evidence_digests) != expected_evidence_paths:
+            raise ValidationFailure(
+                f"source {source.id}: evidence digests must exactly cover license and review evidence paths"
+            )
+        for upstream_path in (*source.license_evidence, *source.evidence_paths):
+            segments = upstream_path.split("/")
+            if (
+                upstream_path.startswith("/")
+                or upstream_path.endswith("/")
+                or "\\" in upstream_path
+                or ":" in upstream_path
+                or any(segment in {"", ".", ".."} for segment in segments)
+            ):
+                raise ValidationFailure(
+                    f"source {source.id}: unsafe upstream evidence path {upstream_path}"
+                )
+        if source.provider_id is not None:
+            _assert_refs(
+                [source.provider_id],
+                providers,
+                f"source {source.id} provider",
+            )
+            provider_source = providers[source.provider_id].source
+            normalized_source_url = source.repository_url.rstrip("/").removesuffix(".git")
+            normalized_provider_url = (
+                provider_source.url.rstrip("/").removesuffix(".git")
+                if provider_source is not None
+                else None
+            )
+            if (
+                provider_source is None
+                or provider_source.revision != source.revision
+                or normalized_provider_url != normalized_source_url
+                or provider_source.license != source.license
+                or provider_source.integrity != source.integrity
+            ):
+                raise ValidationFailure(
+                    f"source {source.id}: URL, revision, license and integrity must match provider {source.provider_id}"
+                )
+        if require_sources:
+            for target_ref in source.target_refs:
+                relative = Path(target_ref)
+                candidates = [root / relative]
+                if relative.parts and relative.parts[0] == "skills":
+                    candidates.append(root.parent / relative)
+                if relative.parts[:2] == ("src", "engineering_assistant"):
+                    candidates.append(
+                        root
+                        / "runtime/engineering_assistant"
+                        / Path(*relative.parts[2:])
+                    )
+                if (
+                    relative.is_absolute()
+                    or ".." in relative.parts
+                    or not any(candidate.exists() for candidate in candidates)
+                ):
+                    raise ValidationFailure(
+                        f"source {source.id}: invalid target reference {target_ref}"
+                    )
     for capability_id in capabilities:
         candidates = [
             provider for provider in providers.values()
@@ -423,4 +555,5 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         packs=packs,
         profiles={profile.id: profile},
         providers=providers,
+        sources=sources,
     )

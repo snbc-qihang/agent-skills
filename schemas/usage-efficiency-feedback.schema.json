@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/usage-efficiency-feedback.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "candidate_id", "source", "status", "tool_calls",
+    "shell_calls", "index_queries", "output_bytes", "reference_tool_calls",
+    "reference_shell_calls", "reference_index_queries", "reference_output_bytes",
+    "signals", "coverage", "ledger_revision", "reusable_candidate"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "candidate_id": {"type": "string", "pattern": "^efficiency-[0-9a-f]{24}$"},
+    "source": {"enum": ["stop_hook", "post_llm_call"]},
+    "status": {"enum": ["pending", "accepted", "rejected"]},
+    "tool_calls": {"type": "integer", "minimum": 0},
+    "shell_calls": {"type": "integer", "minimum": 0},
+    "index_queries": {"type": "integer", "minimum": 0},
+    "output_bytes": {"type": "integer", "minimum": 0},
+    "reference_tool_calls": {"type": "integer", "minimum": 1},
+    "reference_shell_calls": {"type": "integer", "minimum": 0},
+    "reference_index_queries": {"type": "integer", "minimum": 0},
+    "reference_output_bytes": {"type": "integer", "minimum": 1},
+    "signals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "duplicate_call", "index_query_reference_exceeded", "large_single_output",
+          "output_reference_exceeded", "plugin_skill_self_read", "post_without_pre", "replayed_tool_event",
+          "retention_truncated", "shell_call_reference_exceeded",
+          "tool_call_reference_exceeded", "tool_use_id_reused", "tool_without_post"
+        ]
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"enum": ["bash", "apply_patch", "mcp", "hermes_plugin_tool"]}
+    },
+    "ledger_revision": {"type": "integer", "minimum": 0},
+    "reusable_candidate": {"const": false}
+  },
+  "additionalProperties": false
+}

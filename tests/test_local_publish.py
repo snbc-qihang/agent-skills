@@ -13,11 +13,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
 from engineering_assistant.compiler import build_package, verify_package  # noqa: E402
 from engineering_assistant.local_publish import (  # noqa: E402
     _load_policy,
     _publish_one,
     _repair_codex_cache_version,
+    _run_repository_preflight,
     _resolve_platform_cli,
     _restore_codex_cache_snapshots,
     _roll_back,
@@ -25,9 +27,70 @@ from engineering_assistant.local_publish import (  # noqa: E402
     _swap_in,
     _update_personal_marketplace,
 )
+from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
+    @staticmethod
+    def official_validation(_repository: Path, package: Path, **_kwargs) -> dict:
+        manifest = json.loads(
+            (Path(package) / "package-manifest.json").read_text(encoding="utf-8")
+        )
+        return {
+            "status": "passed",
+            "codex_payload_digest": manifest["payload_digest"],
+        }
+
+    def test_repository_preflight_requires_source_and_official_validation(self) -> None:
+        evaluation = {
+            "version": "1.0.0.0-rc.1",
+            "simulation": False,
+            "canary": {
+                "status": "not_run",
+                "reason": "real product evidence is external to repository evals",
+                "simulation_results_accepted": False,
+            },
+            "routing": {
+                "case_count": 114,
+                "top1_accuracy": 1.0,
+                "unconfirmed_high_risk_writes": 0,
+            },
+        }
+        official = {
+            "status": "passed",
+            "skill_count": 11,
+            "quick_validate": "passed",
+            "codex_plugin_validate": "not_run",
+            "codex_payload_digest": None,
+            "validator_dependency": "pyyaml==6.0.2",
+        }
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch(
+            "engineering_assistant.local_publish.subprocess.run",
+            return_value=completed,
+        ), mock.patch(
+            "engineering_assistant.local_publish.run_evals",
+            return_value=evaluation,
+        ), mock.patch(
+            "engineering_assistant.local_publish.validate_with_official_tools",
+            return_value=official,
+        ) as validate_official:
+            report = _run_repository_preflight(ROOT)
+
+        self.assertEqual("passed", report["source_validation"])
+        self.assertEqual(11, report["source_skill_count"])
+        self.assertEqual(official, report["official_validation"])
+        self.assertEqual(evaluation["canary"], report["canary"])
+        self.assertEqual(
+            {
+                "scope": "local_prerelease",
+                "required": False,
+                "status": "not_required_for_local_prerelease",
+            },
+            report["canary_gate"],
+        )
+        validate_official.assert_called_once_with(ROOT, validate_plugin=False)
+
     def test_platform_cli_prefers_explicit_executable_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             executable = Path(temporary) / "codex-custom"
@@ -56,12 +119,224 @@ class LocalPublishTests(unittest.TestCase):
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
             self.assertEqual("1.0.0-rc.1+codex.local-test-1", manifest["version"])
 
+    def test_codex_registration_uses_the_selected_codex_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / "isolated-codex-home"
+            environments: list[dict[str, str] | None] = []
+
+            def register(_command: list[str], environment=None) -> dict:
+                environments.append(environment)
+                target = root / "plugins/engineering-assistant"
+                version = json.loads(
+                    (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"]
+                cache = (
+                    codex_home
+                    / "plugins/cache/personal/engineering-assistant"
+                    / version
+                )
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(target, cache)
+                return {"status": "passed"}
+
+            report = _publish_one(
+                ROOT,
+                "codex",
+                codex_home=codex_home,
+                hermes_home=root / ".hermes",
+                dry_run=False,
+                register=register,
+                official_validate=self.official_validation,
+            )
+
+            self.assertTrue(environments)
+            self.assertEqual(
+                str(
+                    codex_home
+                    / "plugins/cache/personal/engineering-assistant"
+                    / report["plugin_version"]
+                ),
+                report["registered_cache"]["path"],
+            )
+            self.assertEqual(
+                report["payload_digest"],
+                report["registered_cache"]["payload_digest"],
+            )
+            self.assertTrue(
+                all(
+                    environment is not None
+                    and environment.get("CODEX_HOME") == str(codex_home)
+                    for environment in environments
+                )
+            )
+
+    def test_codex_publish_rolls_back_when_registration_does_not_install_the_built_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            target = root / "plugins/engineering-assistant"
+            target.parent.mkdir(parents=True)
+            build_package(ROOT, "codex", target, codex_cachebuster="local-before-missing-cache")
+            previous_version = json.loads(
+                (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+            )["version"]
+
+            with self.assertRaisesRegex(ValidationFailure, "cache|缓存"):
+                _publish_one(
+                    ROOT,
+                    "codex",
+                    codex_home=codex_home,
+                    hermes_home=root / ".hermes",
+                    dry_run=False,
+                    register=lambda _command, _environment=None: {"status": "passed"},
+                    official_validate=self.official_validation,
+                )
+
+            self.assertEqual(
+                previous_version,
+                json.loads(
+                    (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"],
+            )
+
+    def test_codex_publish_rejects_a_registered_cache_with_a_payload_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+
+            def register(_command: list[str], _environment=None) -> dict:
+                target = root / "plugins/engineering-assistant"
+                version = json.loads(
+                    (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"]
+                cache = (
+                    codex_home
+                    / "plugins/cache/personal/engineering-assistant"
+                    / version
+                )
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(target, cache)
+                registered_hook = cache / "hooks/hooks.json"
+                registered_hook.unlink()
+                registered_hook.symlink_to(target / "hooks/hooks.json")
+                return {"status": "passed"}
+
+            with self.assertRaises(ValidationFailure):
+                _publish_one(
+                    ROOT,
+                    "codex",
+                    codex_home=codex_home,
+                    hermes_home=root / ".hermes",
+                    dry_run=False,
+                    register=register,
+                    official_validate=self.official_validation,
+                )
+
+    def test_codex_publish_rejects_a_registered_cache_directory_replaced_after_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            registered_cache: Path | None = None
+
+            def register(_command: list[str], _environment=None) -> dict:
+                nonlocal registered_cache
+                target = root / "plugins/engineering-assistant"
+                version = json.loads(
+                    (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"]
+                registered_cache = (
+                    codex_home
+                    / "plugins/cache/personal/engineering-assistant"
+                    / version
+                )
+                registered_cache.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(target, registered_cache)
+                return {"status": "passed"}
+
+            original_hash = ArtifactIO.sha256_file_digests
+            replaced = False
+
+            def replace_after_hash(artifacts, **kwargs):
+                nonlocal replaced
+                result = original_hash(artifacts, **kwargs)
+                if registered_cache is not None and not replaced:
+                    moved = registered_cache.with_name(registered_cache.name + ".moved")
+                    registered_cache.rename(moved)
+                    registered_cache.mkdir()
+                    replaced = True
+                return result
+
+            with mock.patch.object(
+                ArtifactIO,
+                "sha256_file_digests",
+                autospec=True,
+                side_effect=replace_after_hash,
+            ):
+                with self.assertRaisesRegex(ValidationFailure, "变化|identity|替换"):
+                    _publish_one(
+                        ROOT,
+                        "codex",
+                        codex_home=codex_home,
+                        hermes_home=root / ".hermes",
+                        dry_run=False,
+                        register=register,
+                        official_validate=self.official_validation,
+                    )
+
+            self.assertTrue(replaced)
+
+    def test_codex_publish_restores_a_corrupted_old_active_cache_during_compensation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            target = root / "plugins/engineering-assistant"
+            target.parent.mkdir(parents=True)
+            old_version = "1.0.0-rc.1+codex.local-corrupted-active"
+            build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
+            old_cache = (
+                codex_home
+                / "plugins/cache/personal/engineering-assistant"
+                / old_version
+            )
+            shutil.copytree(target, old_cache)
+            _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
+            registration_calls = 0
+
+            def register(_command: list[str], _environment=None) -> dict:
+                nonlocal registration_calls
+                registration_calls += 1
+                if registration_calls == 1:
+                    (old_cache / "hooks/hooks.json").write_text("{}\n", encoding="utf-8")
+                return {"status": "passed"}
+
+            with self.assertRaisesRegex(ValidationFailure, "cache|缓存"):
+                _publish_one(
+                    ROOT,
+                    "codex",
+                    codex_home=codex_home,
+                    hermes_home=root / ".hermes",
+                    dry_run=False,
+                    register=register,
+                    official_validate=self.official_validation,
+                )
+
+            self.assertEqual(2, registration_calls)
+            verify_package(old_cache)
+            self.assertEqual(
+                old_version,
+                json.loads(
+                    (old_cache / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"],
+            )
+
     def test_codex_registration_can_restore_caches_used_by_active_threads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
             version = "1.0.0-rc.1+codex.local-active-thread"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
             runtime_cache = cache / "engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
@@ -74,6 +349,72 @@ class LocalPublishTests(unittest.TestCase):
             shutil.rmtree(cache)
             self.assertEqual([version], _restore_codex_cache_snapshots(codex_home, snapshot))
             self.assertTrue((cache / "hooks/feedback_capture.py").is_file())
+
+    def test_codex_cache_snapshot_preserves_the_known_previous_manifest_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            version = "1.0.0-rc.1+codex.local-previous-contract"
+            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
+            build_package(
+                ROOT,
+                "codex",
+                cache,
+                codex_cachebuster="local-previous-contract",
+            )
+            manifest_path = cache / "package-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("build_format_version")
+            manifest.pop("source_count")
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+
+            self.assertEqual([version], _snapshot_codex_caches(codex_home, snapshot))
+            shutil.rmtree(cache)
+            self.assertEqual([version], _restore_codex_cache_snapshots(codex_home, snapshot))
+            self.assertEqual(manifest, verify_package(cache))
+
+    def test_codex_cache_snapshot_never_follows_a_payload_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            version = "1.0.0-rc.1+codex.local-unsafe-snapshot"
+            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
+            build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
+            outside_hook = root / "outside-hooks.json"
+            outside_hook.write_bytes((cache / "hooks/hooks.json").read_bytes())
+            (cache / "hooks/hooks.json").unlink()
+            (cache / "hooks/hooks.json").symlink_to(outside_hook)
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+
+            with self.assertRaisesRegex(ValidationFailure, "unsafe"):
+                _snapshot_codex_caches(codex_home, snapshot)
+
+    def test_codex_cache_candidate_discovery_never_follows_a_manifest_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_home = root / ".codex"
+            version = "1.0.0-rc.1+codex.local-unsafe-manifest"
+            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
+            build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
+            outside_manifest = root / "outside-plugin.json"
+            manifest = cache / ".codex-plugin/plugin.json"
+            outside_manifest.write_bytes(manifest.read_bytes())
+            manifest.unlink()
+            manifest.symlink_to(outside_manifest)
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+
+            self.assertEqual([], _snapshot_codex_caches(codex_home, snapshot))
+            self.assertEqual([], list(snapshot.iterdir()))
 
     def test_missing_active_cache_can_be_repaired_from_publish_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -102,6 +443,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
+            target.parent.mkdir(parents=True)
             old_version = "1.0.0-rc.1+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
@@ -124,6 +466,7 @@ class LocalPublishTests(unittest.TestCase):
                 hermes_home=hermes_home,
                 dry_run=False,
                 register=register,
+                official_validate=self.official_validation,
             )
 
             self.assertIn(old_version, report["preserved_cache_versions"])
@@ -135,6 +478,7 @@ class LocalPublishTests(unittest.TestCase):
             root = Path(temporary)
             codex_home = root / ".codex"
             cache_root = codex_home / "plugins/cache/personal/engineering-assistant"
+            cache_root.mkdir(parents=True)
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
@@ -162,6 +506,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
+            target.parent.mkdir(parents=True)
             old_version = "1.0.0-rc.1+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
@@ -189,6 +534,7 @@ class LocalPublishTests(unittest.TestCase):
                     hermes_home=hermes_home,
                     dry_run=False,
                     register=register,
+                    official_validate=self.official_validation,
                 )
 
             self.assertEqual(old_version, registered_versions[-1])
@@ -201,6 +547,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
+            target.parent.mkdir(parents=True)
             old_version = "1.0.0-rc.1+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
@@ -239,6 +586,7 @@ class LocalPublishTests(unittest.TestCase):
                         hermes_home=hermes_home,
                         dry_run=False,
                         register=register,
+                        official_validate=self.official_validation,
                     )
 
             self.assertEqual(old_version, registered_versions[-1])
@@ -277,11 +625,44 @@ class LocalPublishTests(unittest.TestCase):
                     hermes_home=home / ".hermes",
                     dry_run=True,
                     register=lambda _command, _environment=None: self.fail("dry-run must not register"),
+                    official_validate=self.official_validation,
                 )
                 self.assertEqual("dry_run_passed", report["status"])
                 self.assertEqual(11, report["skill_count"])
+                if platform == "codex":
+                    self.assertEqual(
+                        report["payload_digest"],
+                        report["official_validation"]["codex_payload_digest"],
+                    )
+                else:
+                    self.assertIsNone(report["official_validation"])
             self.assertFalse((home / "plugins").exists())
             self.assertFalse((home / ".hermes").exists())
+
+    def test_official_validator_cannot_mutate_final_staging_after_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+
+            def mutating_validator(_repository: Path, package: Path, **_kwargs) -> dict:
+                manifest = json.loads(
+                    (Path(package) / "package-manifest.json").read_text(encoding="utf-8")
+                )
+                plugin = Path(package) / ".codex-plugin/plugin.json"
+                plugin.write_text("{}\n", encoding="utf-8")
+                return {
+                    "status": "passed",
+                    "codex_payload_digest": manifest["payload_digest"],
+                }
+
+            with self.assertRaisesRegex(Exception, "payload|digest|hash|摘要"):
+                _publish_one(
+                    ROOT,
+                    "codex",
+                    codex_home=home / ".codex",
+                    hermes_home=home / ".hermes",
+                    dry_run=True,
+                    official_validate=mutating_validator,
+                )
 
     def test_atomic_swap_can_be_rolled_back(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

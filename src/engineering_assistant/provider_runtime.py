@@ -14,11 +14,6 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-try:  # pragma: no cover - unavailable on Windows, where execution safely falls back
-    import resource
-except ImportError:  # pragma: no cover
-    resource = None
-
 from .catalog import Catalog
 from .model import CapabilityProviderSpec, ProviderInvocation, ProviderResult
 from .validation import ValidationFailure, load_json, validate_instance
@@ -130,7 +125,8 @@ class ProviderExecutor:
         if not script.is_file() or script.is_symlink():
             raise ValidationFailure("provider search entrypoint is missing or unsafe")
         bootstrap = (
-            "import runpy,sys;"
+            "import resource,runpy,sys;"
+            f"resource.setrlimit(resource.RLIMIT_FSIZE,({MAX_OUTPUT_BYTES + 1},{MAX_OUTPUT_BYTES + 1}));"
             "entry=sys.argv[2];"
             "sys.path.insert(0,sys.argv[1]);"
             "sys.argv=[entry,*sys.argv[3:]];"
@@ -183,13 +179,6 @@ class ProviderExecutor:
         stdout_path = work / "stdout.txt"
         stderr_path = work / "stderr.txt"
         with stdout_path.open("w+b") as stdout, stderr_path.open("w+b") as stderr:
-            def limit_output() -> None:
-                if resource is not None:
-                    resource.setrlimit(
-                        resource.RLIMIT_FSIZE,
-                        (MAX_OUTPUT_BYTES + 1, MAX_OUTPUT_BYTES + 1),
-                    )
-
             process = subprocess.Popen(
                 sandboxed_command,
                 cwd=work,
@@ -198,7 +187,6 @@ class ProviderExecutor:
                 stdout=stdout,
                 stderr=stderr,
                 start_new_session=True,
-                preexec_fn=limit_output if resource is not None else None,
             )
             try:
                 returncode = process.wait(timeout=provider.timeout_seconds)

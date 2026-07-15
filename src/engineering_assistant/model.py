@@ -124,6 +124,7 @@ class EvidenceRef(Serializable):
     trust_level: str
     scope: str
     scope_tags: List[str] = field(default_factory=list)
+    contract_refs: List[str] = field(default_factory=list)
     subject_digest: Optional[str] = None
     digest: Optional[str] = None
     attestation: Optional[str] = None
@@ -209,6 +210,24 @@ class FeedbackEvent(Serializable):
     reusable_candidate: bool
     sensitivity: str
     observed_at: str
+    scope_tags: List[str] = field(default_factory=lambda: ["unknown"])
+    change_kind: str = "unknown"
+    affected_asset_refs: List[str] = field(default_factory=list)
+    recovery_condition: str = "unknown"
+    manual_intervention_kind: str = "none"
+
+
+@dataclass(frozen=True)
+class FeedbackDisposition(Serializable):
+    schema_version: str
+    disposition_id: str
+    event_id: str
+    decision: str
+    reason: str
+    actor_ref: str
+    evidence_refs: List[str]
+    reusable_candidate: bool
+    decided_at: str
 
 
 @dataclass(frozen=True)
@@ -226,6 +245,53 @@ class FeedbackCapture(Serializable):
     redaction_count: int
     candidate_event_ids: List[str]
     captured_at: str
+
+
+@dataclass(frozen=True)
+class UsageObservationPlan(Serializable):
+    observation_id: str
+    session_ref: str
+    turn_ref: str
+    task_digest: str
+    activation_source: str
+    reference_tool_calls: int
+    reference_shell_calls: int
+    reference_index_queries: int
+    reference_output_bytes: int
+    coverage: List[str]
+
+
+@dataclass(frozen=True)
+class UsageObservationLedger(Serializable):
+    plan: UsageObservationPlan
+    tool_calls: int
+    shell_calls: int
+    index_queries: int
+    output_bytes: int
+    tool_use_signatures: Dict[str, str]
+    completed_tool_use_ids: List[str]
+    signals: List[str]
+    revision: int
+
+
+@dataclass(frozen=True)
+class UsageEfficiencyFeedback(Serializable):
+    schema_version: str
+    candidate_id: str
+    source: str
+    status: str
+    tool_calls: int
+    shell_calls: int
+    index_queries: int
+    output_bytes: int
+    reference_tool_calls: int
+    reference_shell_calls: int
+    reference_index_queries: int
+    reference_output_bytes: int
+    signals: List[str]
+    coverage: List[str]
+    ledger_revision: int
+    reusable_candidate: bool
 
 
 @dataclass(frozen=True)
@@ -260,7 +326,7 @@ class InvestigationRequest(Serializable):
     question: str
     reason: str
     source_scope: List[str]
-    blocking: bool
+    reported_blocking: bool
     mode: str
     estimated_cost: str
     stop_conditions: List[str]
