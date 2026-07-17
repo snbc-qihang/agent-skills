@@ -24,6 +24,11 @@ class ValidationFailure(ValueError):
 
 VALIDATION_BACKEND = "jsonschema-draft-2020-12" if Draft202012Validator is not None else "builtin-supported-keywords"
 
+_RFC3339_DATE_TIME = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}"
+    r"(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$"
+)
+
 
 def load_json(path: Path) -> Any:
     try:
@@ -33,6 +38,10 @@ def load_json(path: Path) -> Any:
 
 
 def validate_instance(instance: Any, schema: Dict[str, Any], label: str = "instance") -> None:
+    stable_errors: List[str] = []
+    _validate_supported(instance, schema, "$", stable_errors, schema)
+    if stable_errors:
+        raise ValidationFailure("\n".join(f"{label}:{item}" for item in stable_errors))
     if Draft202012Validator is not None:
         validator = Draft202012Validator(schema, format_checker=FormatChecker())
         errors = sorted(validator.iter_errors(instance), key=lambda item: list(item.absolute_path))
@@ -42,11 +51,20 @@ def validate_instance(instance: Any, schema: Dict[str, Any], label: str = "insta
                 location = ".".join(str(item) for item in error.absolute_path) or "$"
                 rendered.append(f"{label}:{location}: {error.message}")
             raise ValidationFailure("\n".join(rendered))
-        return
-    errors: List[str] = []
-    _validate_supported(instance, schema, "$", errors, schema)
-    if errors:
-        raise ValidationFailure("\n".join(f"{label}:{item}" for item in errors))
+
+
+def _is_rfc3339_date_time(value: str) -> bool:
+    if _RFC3339_DATE_TIME.fullmatch(value) is None:
+        return False
+    normalized = value
+    if value[-1] in "Zz":
+        normalized = value[:-1] + "+00:00"
+    normalized = normalized.replace("t", "T", 1)
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
 
 
 def _matches_type(value: Any, expected: str) -> bool:
@@ -110,16 +128,17 @@ def _validate_supported(
     if isinstance(value, str):
         if len(value) < schema.get("minLength", 0):
             errors.append(f"{path}: string is shorter than minLength")
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            errors.append(f"{path}: string is longer than maxLength")
         pattern = schema.get("pattern")
         if pattern and re.search(pattern, value) is None:
             errors.append(f"{path}: string does not match pattern {pattern}")
-        if schema.get("format") == "date-time":
-            try:
-                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                if parsed.tzinfo is None:
-                    raise ValueError("timezone is required")
-            except ValueError:
+        string_format = schema.get("format")
+        if string_format == "date-time":
+            if not _is_rfc3339_date_time(value):
                 errors.append(f"{path}: string is not an RFC 3339 date-time")
+        elif string_format == "email" and "@" not in value:
+            errors.append(f"{path}: string is not an email address")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
             errors.append(f"{path}: value is below minimum")
@@ -145,8 +164,20 @@ def _validate_supported(
                     root_schema,
                 )
     if isinstance(value, dict):
+        if len(value) < schema.get("minProperties", 0):
+            errors.append(f"{path}: object has fewer than minProperties")
         if "maxProperties" in schema and len(value) > schema["maxProperties"]:
             errors.append(f"{path}: object has more than maxProperties")
+        property_names = schema.get("propertyNames")
+        if isinstance(property_names, dict):
+            for key in value:
+                _validate_supported(
+                    key,
+                    property_names,
+                    f"{path}.{key}",
+                    errors,
+                    root_schema,
+                )
         for required in schema.get("required", []):
             if required not in value:
                 errors.append(f"{path}: missing required property {required}")
