@@ -168,7 +168,8 @@
         {"id": "green-observed", "description": "最小实现后，同一测试和相关回归套件均已通过。", "evidence_kinds": ["test"]}
       ],
       "context_pointers": [
-        {"when": "需要替换依赖边界", "path": "references/mocking.md", "purpose": "只在真实 seam 上使用 fake 或 mock。"}
+        {"when": "需要替换依赖边界", "path": "references/mocking.md", "purpose": "只在真实 seam 上使用 fake 或 mock。"},
+        {"when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同", "path": "references/security-seams.md", "purpose": "用最小适用反例矩阵、组合编码与真实生产 adapter 合同生成高风险回归。"}
       ],
       "policy_refs": ["scope-control", "evidence-quality", "team-standards"],
       "risk_class": "reversible_write",
@@ -208,7 +209,8 @@
         {"id": "findings-actionable", "description": "每项问题都包含证据、影响和级别，且不重复确定性工具输出。", "evidence_kinds": ["source", "test", "ci", "review"]}
       ],
       "context_pointers": [
-        {"when": "仓库规范缺失或不完整", "path": "references/smell-baseline.md", "purpose": "使用明确标记的启发式基线，但不把主观判断当作硬性违规。"}
+        {"when": "仓库规范缺失或不完整", "path": "references/smell-baseline.md", "purpose": "使用明确标记的启发式基线，但不把主观判断当作硬性违规。"},
+        {"when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同", "path": "references/security-seams.md", "purpose": "用最小适用反例矩阵闭合异步终止、组合编码、真实事务与持久化事实源。"}
       ],
       "policy_refs": ["evidence-quality", "team-standards", "risk-approval"],
       "risk_class": "read_only",

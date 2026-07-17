@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version", "experiment_id", "opaque_label", "run_id", "arm_id",
+    "treatment_digest", "outcome_fact_digest", "assignment_raw_digest",
+    "assignment_canonical_digest", "score_raw_digest", "score_canonical_digest",
+    "reveal_session_id", "revealed_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "opaque_label": {"type": "string", "pattern": "^opaque-[0-9a-f]{16,64}$"},
+    "run_id": {"type": "string", "minLength": 1},
+    "arm_id": {"enum": [
+      "route_only", "minimum_skills", "full_local",
+      "minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"
+    ]},
+    "treatment_digest": {"$ref": "#/$defs/digest"},
+    "outcome_fact_digest": {"$ref": "#/$defs/digest"},
+    "assignment_raw_digest": {"$ref": "#/$defs/digest"},
+    "assignment_canonical_digest": {"$ref": "#/$defs/digest"},
+    "score_raw_digest": {"$ref": "#/$defs/digest"},
+    "score_canonical_digest": {"$ref": "#/$defs/digest"},
+    "reveal_session_id": {"type": "string", "minLength": 1},
+    "revealed_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

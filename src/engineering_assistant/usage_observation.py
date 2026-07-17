@@ -124,6 +124,73 @@ class UsageObservationStore:
                 self.artifacts.remove_empty_directory(session_ref)
             return deleted
 
+    def finalize_snapshot(self, snapshot: UsageObservationLedger) -> str:
+        session_ref = snapshot.plan.session_ref
+        turn_ref = snapshot.plan.turn_ref
+        parts = self.parts(session_ref, turn_ref)
+        with self.artifacts.transaction():
+            try:
+                current = self._load_unlocked(session_ref, turn_ref)
+            except FileNotFoundError:
+                return "missing"
+            if current.plan.observation_id != snapshot.plan.observation_id:
+                return "advanced"
+            if current.revision == snapshot.revision:
+                deleted = self.artifacts.delete_regular_file(*parts)
+                if deleted:
+                    self.artifacts.remove_empty_directory(session_ref)
+                    return "deleted"
+                return "missing"
+            if current.revision < snapshot.revision:
+                return "stale"
+
+            snapshot_completed = set(snapshot.completed_tool_use_ids)
+            rebased = UsageObservationLedger(
+                plan=replace(
+                    current.plan,
+                    observation_id=hashed_ref(
+                        "observation-",
+                        (
+                            f"{current.plan.observation_id}\0"
+                            f"{snapshot.revision}\0{current.revision}"
+                        ),
+                        24,
+                    ),
+                ),
+                tool_calls=current.tool_calls - snapshot.tool_calls,
+                shell_calls=current.shell_calls - snapshot.shell_calls,
+                index_queries=current.index_queries - snapshot.index_queries,
+                output_bytes=current.output_bytes - snapshot.output_bytes,
+                tool_use_signatures={
+                    key: value
+                    for key, value in current.tool_use_signatures.items()
+                    if snapshot.tool_use_signatures.get(key) != value
+                },
+                completed_tool_use_ids=[
+                    key
+                    for key in current.completed_tool_use_ids
+                    if key not in snapshot_completed
+                ],
+                signals=[
+                    signal
+                    for signal, count in current.signal_counts.items()
+                    if count - snapshot.signal_counts.get(signal, 0) > 0
+                ],
+                signal_counts={
+                    signal: count - snapshot.signal_counts.get(signal, 0)
+                    for signal, count in current.signal_counts.items()
+                    if count - snapshot.signal_counts.get(signal, 0) > 0
+                },
+                revision=0,
+            )
+            self._validate(rebased)
+            self.artifacts.replace_json_cas(
+                rebased.to_dict(),
+                *parts,
+                expected_revision=current.revision,
+            )
+            return "rebased"
+
     def prune_stale(self, *, now: float | None = None) -> int:
         with self.artifacts.transaction():
             root = self.artifacts.path()
@@ -212,6 +279,8 @@ class UsageObservationStore:
             raise ValidationFailure("too many retained tool signatures")
         if len(ledger.completed_tool_use_ids) > MAX_RETAINED_TOOL_EVENTS:
             raise ValidationFailure("too many retained completed tool ids")
+        if set(ledger.signal_counts) != set(ledger.signals):
+            raise ValidationFailure("usage observation signal counts do not match signals")
         if len(ledger.tool_use_signatures) > ledger.tool_calls:
             raise ValidationFailure("retained tool signatures exceed tool calls")
 
@@ -253,6 +322,19 @@ class UsageObservationController:
     def discard_ledger(self, payload: Mapping[str, object]) -> bool:
         session_ref, turn_ref, store = self._context(payload)
         return store.delete(session_ref, turn_ref)
+
+    def finalize_ledger(
+        self,
+        payload: Mapping[str, object],
+        snapshot: UsageObservationLedger,
+    ) -> str:
+        session_ref, turn_ref, store = self._context(payload)
+        if (
+            session_ref != snapshot.plan.session_ref
+            or turn_ref != snapshot.plan.turn_ref
+        ):
+            raise ValidationFailure("usage observation snapshot context changed")
+        return store.finalize_snapshot(snapshot)
 
     @staticmethod
     def is_explicit_plugin_request(prompt: str) -> bool:
@@ -465,6 +547,7 @@ class UsageObservationController:
                 tool_use_signatures={},
                 completed_tool_use_ids=[],
                 signals=[],
+                signal_counts={},
                 revision=0,
             )
         )
@@ -496,14 +579,19 @@ class UsageObservationController:
         increment_revision: bool = True,
     ) -> UsageObservationLedger:
         merged = list(ledger.signals)
+        counts = dict(ledger.signal_counts)
         for signal in signals:
-            if signal and signal not in merged:
+            if not signal:
+                continue
+            counts[signal] = counts.get(signal, 0) + 1
+            if signal not in merged:
                 merged.append(signal)
-        if merged == ledger.signals:
+        if merged == ledger.signals and counts == ledger.signal_counts:
             return ledger
         return replace(
             ledger,
             signals=merged,
+            signal_counts=counts,
             revision=ledger.revision + int(increment_revision),
         )
 

@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import math
 import tempfile
+from collections import defaultdict
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, Mapping
 
 from .catalog import load_catalog
 from . import canary_limits
-from .canary import validate_measurement_evidence_coverage
+from .canary import (
+    DELEGATION_ABLATION_ARMS,
+    _project_promotion_observation,
+    validate_ablation_artifact_bindings,
+    validate_canary_measurements,
+    validate_measurement_evidence_coverage,
+)
+from .canary_protocol import canonical_digest
 from .artifact_io import ArtifactIO
 from .engine import RuntimeEngine
 from .evidence import EvidenceStore
@@ -85,6 +96,9 @@ def _load_canary_observations(
     observations = []
     total_artifact_count = 0
     total_artifact_bytes = 0
+    artifact_cache: dict[tuple[str, str], bytes] = {}
+    validated_closures: dict[tuple, dict[str, Any]] = {}
+    delegation_observations: list[tuple[dict, tuple, dict[str, Any]]] = []
     for reference in evidence_refs:
         try:
             observation, _raw = artifacts.read_json_limited(
@@ -97,6 +111,7 @@ def _load_canary_observations(
         validate_instance(
             observation, observation_schema, f"canary-evidence:{reference}"
         )
+        validate_canary_measurements(observation)
         validate_measurement_evidence_coverage(
             observation,
             (item["measurement_kinds"] for item in observation["artifact_refs"]),
@@ -111,25 +126,386 @@ def _load_canary_observations(
             raise ValidationFailure(
                 "canary observation was attested by a different host trust binding"
             )
+        if observation["experiment_kind"] != "delegation_ablation":
+            raise ValidationFailure(
+                "paired_canary is legacy evidence and is not promotable by canary assemble"
+            )
         if parse_time(observation["finished_at"]) < parse_time(observation["started_at"]):
             raise ValidationFailure("canary evidence finishes before it starts")
+        observation_artifacts = []
         for artifact in observation["artifact_refs"]:
-            total_artifact_count += 1
-            if total_artifact_count > canary_limits.MAX_TOTAL_ARTIFACTS:
-                raise ValidationFailure("canary evidence has too many artifacts")
-            artifact_payload = artifacts.read_bytes_limited(
-                canary_limits.MAX_ARTIFACT_BYTES,
-                *Path(artifact["path"]).parts,
+            artifact_key = (artifact["path"], artifact["digest"])
+            artifact_payload = artifact_cache.get(artifact_key)
+            if artifact_payload is None:
+                artifact_payload = artifacts.read_bytes_limited(
+                    canary_limits.MAX_ARTIFACT_BYTES,
+                    *Path(artifact["path"]).parts,
+                )
+                total_artifact_count += 1
+                if total_artifact_count > canary_limits.MAX_TOTAL_ARTIFACTS:
+                    raise ValidationFailure("canary evidence has too many artifacts")
+                total_artifact_bytes += len(artifact_payload)
+                if total_artifact_bytes > canary_limits.MAX_TOTAL_ARTIFACT_BYTES:
+                    raise ValidationFailure("canary evidence exceeds total artifact bytes limit")
+                if f"sha256:{hashlib.sha256(artifact_payload).hexdigest()}" != artifact["digest"]:
+                    raise ValidationFailure("canary artifact digest does not match")
+                artifact_cache[artifact_key] = artifact_payload
+            observation_artifacts.append((artifact, artifact_payload))
+        if observation["experiment_kind"] == "delegation_ablation":
+            descriptor = _controlled_closure_descriptor(observation_artifacts)
+            closure_metadata = validated_closures.get(descriptor)
+            if closure_metadata is None:
+                formal_projection = validate_ablation_artifact_bindings(
+                    observation, observation_artifacts
+                )
+                closure_metadata = _derive_formal_closure_metadata(
+                    observation_artifacts
+                )
+                cached_projection = closure_metadata["projections"].get(
+                    _observation_projection_key(observation)
+                )
+                if formal_projection is None or cached_projection != formal_projection:
+                    raise ValidationFailure(
+                        "delegation ablation replay projection cache is inconsistent"
+                    )
+                validated_closures[descriptor] = closure_metadata
+            else:
+                _validate_reused_ablation_observation_claims(
+                    observation, closure_metadata
+                )
+            delegation_observations.append(
+                (observation, descriptor, closure_metadata)
             )
-            total_artifact_bytes += len(artifact_payload)
-            if total_artifact_bytes > canary_limits.MAX_TOTAL_ARTIFACT_BYTES:
-                raise ValidationFailure("canary evidence exceeds total artifact bytes limit")
-            if f"sha256:{hashlib.sha256(artifact_payload).hexdigest()}" != artifact["digest"]:
-                raise ValidationFailure("canary artifact digest does not match")
+        else:
+            validate_ablation_artifact_bindings(
+                observation, observation_artifacts
+            )
         observations.append(observation)
     if missing_evidence:
         raise ValidationFailure(f"canary evidence files are missing or non-local: {', '.join(missing_evidence)}")
+    _validate_delegation_observation_coverage(delegation_observations)
     return observations
+
+
+_FORMAL_ARTIFACT_KINDS = frozenset(
+    {
+        "experiment_protocol",
+        "run_record",
+        "raw_run_evidence",
+        "inclusion_manifest",
+        "local_audit_report",
+    }
+)
+
+
+def _controlled_closure_descriptor(
+    artifact_payloads: list[tuple[Mapping[str, Any], bytes]],
+) -> tuple:
+    """Return a complete, stable descriptor for the controlled formal closure."""
+
+    return tuple(
+        sorted(
+            (
+                item["path"],
+                item["digest"],
+                tuple(sorted(item["measurement_kinds"])),
+            )
+            for item, _payload in artifact_payloads
+            if _FORMAL_ARTIFACT_KINDS.intersection(item["measurement_kinds"])
+        )
+    )
+
+
+def _formal_json_artifact(
+    artifact_payloads: list[tuple[Mapping[str, Any], bytes]], kind: str
+) -> dict[str, Any]:
+    matches = [
+        payload
+        for artifact, payload in artifact_payloads
+        if kind in artifact["measurement_kinds"]
+    ]
+    if len(matches) != 1:
+        raise ValidationFailure(
+            f"delegation ablation requires exactly one {kind} artifact"
+        )
+    try:
+        value = json.loads(matches[0].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValidationFailure(
+            f"delegation ablation {kind} artifact must be JSON"
+        ) from exc
+    if not isinstance(value, dict):
+        raise ValidationFailure(
+            f"delegation ablation {kind} artifact must be an object"
+        )
+    return value
+
+
+def _formal_json_artifacts(
+    artifact_payloads: list[tuple[Mapping[str, Any], bytes]], kind: str
+) -> list[dict[str, Any]]:
+    values = []
+    for artifact, payload in artifact_payloads:
+        if kind not in artifact["measurement_kinds"]:
+            continue
+        try:
+            value = json.loads(payload.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValidationFailure(
+                f"delegation ablation {kind} artifact must be JSON"
+            ) from exc
+        if not isinstance(value, dict):
+            raise ValidationFailure(
+                f"delegation ablation {kind} artifact must be an object"
+            )
+        values.append(value)
+    return values
+
+
+def _binding_signature(binding: Mapping[str, Any]) -> tuple:
+    return (
+        binding["run_id"],
+        binding["workload_id"],
+        binding["repeat_index"],
+        binding["arm_id"],
+        binding["run_record_digest"],
+    )
+
+
+def _cell_signature(bindings: list[Mapping[str, Any]]) -> tuple:
+    return tuple(sorted(_binding_signature(item) for item in bindings))
+
+
+def _observation_projection_key(observation: Mapping[str, Any]) -> tuple[str, int, str]:
+    binding = observation["ablation_run_bindings"][0]
+    return binding["workload_id"], binding["repeat_index"], observation["arm_id"]
+
+
+def _derive_formal_closure_metadata(
+    artifact_payloads: list[tuple[Mapping[str, Any], bytes]],
+) -> dict[str, Any]:
+    """Derive trusted metadata only after the closure passed full replay."""
+
+    protocol = _formal_json_artifact(artifact_payloads, "experiment_protocol")
+    audit = _formal_json_artifact(artifact_payloads, "local_audit_report")
+    workload_digests = {
+        item["workload_id"]: item["workload_digest"]
+        for item in protocol["workloads"]
+    }
+    arm_treatments = {
+        item["arm_id"]: item["treatment_digest"] for item in protocol["arms"]
+    }
+    records = _formal_json_artifacts(artifact_payloads, "run_record")
+    records_by_id = {item["run_id"]: item for item in records}
+    raw_evidence_payloads = {
+        artifact["digest"]: payload
+        for artifact, payload in artifact_payloads
+        if "raw_run_evidence" in artifact["measurement_kinds"]
+    }
+    outcomes_by_id = {
+        run_id: json.loads(
+            raw_evidence_payloads[record["outcome_artifact"]["digest"]].decode(
+                "utf-8"
+            )
+        )
+        for run_id, record in records_by_id.items()
+    }
+    quality_bindings = audit["quality_cohort_bindings"]
+    blind_by_id = {
+        item["run_id"]: item for item in audit["blind_review_bindings"]
+    }
+    promotion_burden_bindings = audit["promotion_burden_bindings"]
+    projections: dict[tuple[str, int, str], dict[str, Any]] = {}
+    seen_projection_keys: set[tuple[str, int, str]] = set()
+    for binding in quality_bindings:
+        key = (
+            binding["workload_id"],
+            binding["repeat_index"],
+            binding["arm_id"],
+        )
+        if key in seen_projection_keys:
+            raise ValidationFailure(
+                "delegation ablation promotion projection cells must be unique"
+            )
+        seen_projection_keys.add(key)
+        try:
+            projection = _project_promotion_observation(
+                observation={"arm_id": binding["arm_id"]},
+                promotion_burden_bindings=promotion_burden_bindings,
+                selected_quality_binding=binding,
+                selected_blind=blind_by_id[binding["run_id"]],
+                outcomes_by_id=outcomes_by_id,
+                records_by_id=records_by_id,
+            )
+        except ValidationFailure:
+            continue
+        projections[key] = projection
+    included_by_cell: dict[tuple[str, int], list[Mapping[str, Any]]] = defaultdict(list)
+    for binding in audit["included_run_bindings"]:
+        included_by_cell[
+            (binding["workload_id"], binding["repeat_index"])
+        ].append(binding)
+    included_cells = {
+        cell: _cell_signature(bindings)
+        for cell, bindings in included_by_cell.items()
+        if len(bindings) == len(DELEGATION_ABLATION_ARMS)
+        and {item["arm_id"] for item in bindings} == DELEGATION_ABLATION_ARMS
+    }
+    return {
+        "protocol_digest": canonical_digest(protocol),
+        "protocol_fields": {
+            field: protocol[field]
+            for field in (
+                "product_repository",
+                "git_ref",
+                "execution_config_digest",
+                "environment_digest",
+                "quality_rubric_digest",
+            )
+        },
+        "workload_digests": workload_digests,
+        "arm_treatments": arm_treatments,
+        "included_cells": included_cells,
+        "projections": projections,
+    }
+
+
+def _validate_reused_ablation_observation_claims(
+    observation: Mapping[str, Any], closure: Mapping[str, Any]
+) -> None:
+    """Validate one observation's claims against a replay-validated closure."""
+
+    if observation["experiment_protocol_digest"] != closure["protocol_digest"]:
+        raise ValidationFailure(
+            "delegation ablation protocol canonical digest does not match"
+        )
+    for field, expected in closure["protocol_fields"].items():
+        if observation.get(field) != expected:
+            raise ValidationFailure(
+                f"delegation ablation protocol {field} does not match"
+            )
+    bindings = observation["ablation_run_bindings"]
+    cell = (bindings[0]["workload_id"], bindings[0]["repeat_index"])
+    if closure["workload_digests"].get(cell[0]) != observation["workload_digest"]:
+        raise ValidationFailure(
+            "delegation ablation workload is not bound by the protocol"
+        )
+    if closure["arm_treatments"].get(observation["arm_id"]) != observation[
+        "treatment_digest"
+    ]:
+        raise ValidationFailure(
+            "delegation ablation observation treatment is not protocol-bound"
+        )
+    if closure["included_cells"].get(cell) != _cell_signature(bindings):
+        raise ValidationFailure(
+            "delegation ablation selected run bindings are not audit-included"
+        )
+    projection = closure["projections"].get(
+        _observation_projection_key(observation)
+    )
+    if projection is None:
+        raise ValidationFailure(
+            "delegation ablation observation is not replay-derivable"
+        )
+    required_projection_fields = {
+        "promotion_attempt_set_digest",
+        "promotion_attempt_bindings",
+        "quality_attempt_binding",
+        "blind_review_binding",
+        "input_tokens",
+        "noncached_input_tokens",
+        "output_tokens",
+        "wall_time_milliseconds",
+        "cost_usd_micros",
+        "quality_score",
+        "blind_blocker_count",
+        "blind_major_count",
+        "document_noise_units",
+        "safety_violations",
+        "human_intervention_count",
+        "human_rework_minutes",
+        "applicable_matrix_cells",
+        "closed_matrix_cells",
+        "production_contract_failures",
+        "quality_blocker_count",
+        "quality_major_count",
+        "product_gate_failures",
+    }
+    if not required_projection_fields.issubset(projection):
+        raise ValidationFailure(
+            "delegation ablation promotion projection is incomplete"
+        )
+    for field in sorted(required_projection_fields):
+        if observation.get(field) != projection[field]:
+            raise ValidationFailure(
+                f"delegation ablation observation {field} does not match replay projection"
+            )
+
+
+def _validate_delegation_observation_coverage(
+    entries: list[tuple[Mapping[str, Any], tuple, Mapping[str, Any]]],
+) -> None:
+    """Require one observation pair for every included repeat of each used workload."""
+
+    by_closure: dict[tuple, list[Mapping[str, Any]]] = defaultdict(list)
+    workload_closures: dict[tuple[str, str], tuple] = {}
+    protocol_closures: dict[str, tuple] = {}
+    for observation, descriptor, closure in entries:
+        by_closure[descriptor].append(observation)
+        protocol_digest = observation["experiment_protocol_digest"]
+        previous_protocol_closure = protocol_closures.get(protocol_digest)
+        if (
+            previous_protocol_closure is not None
+            and previous_protocol_closure != descriptor
+        ):
+            raise ValidationFailure(
+                "delegation ablation protocol observations use inconsistent audit closures"
+            )
+        protocol_closures[protocol_digest] = descriptor
+        workload_id = observation["ablation_run_bindings"][0]["workload_id"]
+        workload_key = (protocol_digest, workload_id)
+        previous = workload_closures.get(workload_key)
+        if previous is not None and previous != descriptor:
+            raise ValidationFailure(
+                "delegation ablation workload observations use inconsistent audit closures"
+            )
+        workload_closures[workload_key] = descriptor
+
+    for descriptor, observations in by_closure.items():
+        closure = next(
+            closure
+            for _observation, candidate, closure in entries
+            if candidate == descriptor
+        )
+        used_workloads = {
+            item["ablation_run_bindings"][0]["workload_id"]
+            for item in observations
+        }
+        expected_cells = {
+            cell: signature
+            for cell, signature in closure["included_cells"].items()
+            if cell[0] in used_workloads
+        }
+        observed: dict[tuple[tuple[str, int], str], int] = defaultdict(int)
+        for observation in observations:
+            bindings = observation["ablation_run_bindings"]
+            cell = (bindings[0]["workload_id"], bindings[0]["repeat_index"])
+            if expected_cells.get(cell) != _cell_signature(bindings):
+                raise ValidationFailure(
+                    "delegation ablation observation is outside the audit-included repeat cells"
+                )
+            observed[(cell, observation["variant"])] += 1
+        incomplete = [
+            (cell, variant, observed.get((cell, variant), 0))
+            for cell in sorted(expected_cells)
+            for variant in ("baseline", "candidate")
+            if observed.get((cell, variant), 0) != 1
+        ]
+        if incomplete:
+            raise ValidationFailure(
+                "delegation ablation requires exactly one baseline/candidate "
+                "observation pair for every audit-included repeat cell"
+            )
 
 
 def _pair_canary_observations(
@@ -147,10 +523,20 @@ def _pair_canary_observations(
         for task_id in sorted(task_ids)
         if (task_id, "baseline") not in pairs or (task_id, "candidate") not in pairs
     ]
-    if len(task_ids) < 5 or incomplete:
+    workload_digests = {
+        pairs[(task_id, "baseline")]["workload_digest"]
+        for task_id in task_ids
+        if (task_id, "baseline") in pairs
+    }
+    if len(task_ids) < 5 or len(workload_digests) < 5 or incomplete:
         raise ValidationFailure(
-            "canary evidence requires at least five complete task pairs"
+            "canary evidence requires complete pairs for at least five distinct workloads"
         )
+    used_ablation_triads: dict[tuple[str, ...], str] = {}
+    used_ablation_run_ids: dict[str, str] = {}
+    used_ablation_record_digests: dict[str, str] = {}
+    ablation_workload_ids: dict[str, str] = {}
+    ablation_workload_digests: dict[str, str] = {}
     for task_id in task_ids:
         baseline = pairs[(task_id, "baseline")]
         candidate = pairs[(task_id, "candidate")]
@@ -162,12 +548,137 @@ def _pair_canary_observations(
             raise ValidationFailure("canary pair environments do not match")
         if baseline["evaluator_id"] != candidate["evaluator_id"]:
             raise ValidationFailure("canary pair evaluators do not match")
+        if baseline["git_ref"] != candidate["git_ref"]:
+            raise ValidationFailure("canary pair git refs do not match")
+        for field in ("experiment_kind", "experiment_protocol_digest"):
+            if baseline[field] != candidate[field]:
+                raise ValidationFailure(f"canary pair {field} values do not match")
+        if baseline.get("ablation_run_bindings") != candidate.get(
+            "ablation_run_bindings"
+        ):
+            raise ValidationFailure("canary pair ablation run bindings do not match")
+        if baseline["experiment_kind"] == "delegation_ablation":
+            workload_id = baseline["ablation_run_bindings"][0]["workload_id"]
+            workload_digest = baseline["workload_digest"]
+            previous_digest = ablation_workload_ids.get(workload_id)
+            previous_id = ablation_workload_digests.get(workload_digest)
+            if (
+                previous_digest is not None
+                and previous_digest != workload_digest
+            ) or (previous_id is not None and previous_id != workload_id):
+                raise ValidationFailure(
+                    "delegation ablation workload ids and digests must be one-to-one"
+                )
+            ablation_workload_ids[workload_id] = workload_digest
+            ablation_workload_digests[workload_digest] = workload_id
+            triad = tuple(
+                sorted(
+                    item["run_record_digest"]
+                    for item in baseline["ablation_run_bindings"]
+                )
+            )
+            previous_task = used_ablation_triads.get(triad)
+            if previous_task is not None:
+                raise ValidationFailure(
+                    "delegation ablation run-record triad cannot be reused across tasks"
+                )
+            used_ablation_triads[triad] = task_id
+            for binding in baseline["ablation_run_bindings"]:
+                for value, seen, label in (
+                    (binding["run_id"], used_ablation_run_ids, "run id"),
+                    (
+                        binding["run_record_digest"],
+                        used_ablation_record_digests,
+                        "run-record digest",
+                    ),
+                ):
+                    if value in seen:
+                        raise ValidationFailure(
+                            f"delegation ablation {label} cannot be reused across tasks"
+                        )
+                    seen[value] = task_id
+        if (
+            baseline["execution_config_digest"]
+            != candidate["execution_config_digest"]
+        ):
+            raise ValidationFailure(
+                "canary pair execution config digests do not match"
+            )
     return pairs, task_ids
 
 
 def _canary_metrics(
     pairs: dict[tuple[str, str], dict], task_ids: set[str]
 ) -> dict:
+    def reduction_ratio(baseline: int, candidate: int) -> float | int:
+        if baseline == 0:
+            return 0 if candidate == 0 else -1
+        return 1 - candidate / baseline
+
+    workload_efficiency = []
+    for task_id in sorted(task_ids):
+        baseline = pairs[(task_id, "baseline")]
+        candidate = pairs[(task_id, "candidate")]
+        fields = {
+            "total_input_token_reduction_ratio": "input_tokens",
+            "noncached_input_token_reduction_ratio": "noncached_input_tokens",
+            "output_token_reduction_ratio": "output_tokens",
+            "wall_time_reduction_ratio": "wall_time_milliseconds",
+        }
+        reductions = {}
+        for metric, field in fields.items():
+            reductions[metric] = reduction_ratio(
+                baseline[field], candidate[field]
+            )
+        workload_efficiency.append(
+            {
+                "task_id": task_id,
+                "workload_digest": baseline["workload_digest"],
+                **(
+                    {
+                        "workload_id": baseline["ablation_run_bindings"][0][
+                            "workload_id"
+                        ]
+                    }
+                    if baseline["experiment_kind"] == "delegation_ablation"
+                    else {}
+                ),
+                **reductions,
+                "overhead_fields": sorted(
+                    metric
+                    for metric, field in fields.items()
+                    if candidate[field] > baseline[field]
+                ),
+            }
+        )
+    baseline_input_tokens = sum(
+        pairs[(task_id, "baseline")]["input_tokens"] for task_id in task_ids
+    )
+    candidate_input_tokens = sum(
+        pairs[(task_id, "candidate")]["input_tokens"] for task_id in task_ids
+    )
+    baseline_noncached_input_tokens = sum(
+        pairs[(task_id, "baseline")]["noncached_input_tokens"]
+        for task_id in task_ids
+    )
+    candidate_noncached_input_tokens = sum(
+        pairs[(task_id, "candidate")]["noncached_input_tokens"]
+        for task_id in task_ids
+    )
+    baseline_output_tokens = sum(
+        pairs[(task_id, "baseline")]["output_tokens"] for task_id in task_ids
+    )
+    candidate_output_tokens = sum(
+        pairs[(task_id, "candidate")]["output_tokens"] for task_id in task_ids
+    )
+    baseline_wall_time = sum(
+        pairs[(task_id, "baseline")]["wall_time_milliseconds"]
+        for task_id in task_ids
+    )
+    candidate_wall_time = sum(
+        pairs[(task_id, "candidate")]["wall_time_milliseconds"]
+        for task_id in task_ids
+    )
     baseline_tokens = sum(
         pairs[(task_id, "baseline")]["input_tokens"]
         + pairs[(task_id, "baseline")]["output_tokens"]
@@ -192,24 +703,75 @@ def _canary_metrics(
         pairs[(task_id, "candidate")]["document_noise_units"]
         for task_id in task_ids
     )
-    if baseline_tokens <= 0 or baseline_cost <= 0 or baseline_noise <= 0:
+    if (
+        baseline_tokens <= 0
+        or baseline_input_tokens <= 0
+        or baseline_wall_time <= 0
+        or baseline_cost <= 0
+        or baseline_noise <= 0
+    ):
         raise ValidationFailure(
-            "canary baseline requires positive token and document-noise measurements"
+            "canary baseline requires positive usage, timing, cost, and document-noise measurements"
         )
+    quality_deltas = [
+        pairs[(task_id, "candidate")]["quality_score"]
+        - pairs[(task_id, "baseline")]["quality_score"]
+        for task_id in task_ids
+    ]
     return {
-        "quality_delta_points": sum(
-            pairs[(task_id, "candidate")]["quality_score"]
-            - pairs[(task_id, "baseline")]["quality_score"]
-            for task_id in task_ids
-        )
-        / len(task_ids),
+        "quality_delta_points": sum(quality_deltas) / len(task_ids),
+        "worst_workload_quality_delta_points": min(quality_deltas),
         "token_reduction_ratio": 1 - candidate_tokens / baseline_tokens,
+        "total_input_token_reduction_ratio": (
+            1 - candidate_input_tokens / baseline_input_tokens
+        ),
+        "noncached_input_token_reduction_ratio": reduction_ratio(
+            baseline_noncached_input_tokens,
+            candidate_noncached_input_tokens,
+        ),
+        "output_token_reduction_ratio": reduction_ratio(
+            baseline_output_tokens,
+            candidate_output_tokens,
+        ),
+        "wall_time_reduction_ratio": 1 - candidate_wall_time / baseline_wall_time,
+        "worst_workload_total_input_token_reduction_ratio": min(
+            item["total_input_token_reduction_ratio"]
+            for item in workload_efficiency
+        ),
+        "worst_workload_noncached_input_token_reduction_ratio": min(
+            item["noncached_input_token_reduction_ratio"]
+            for item in workload_efficiency
+        ),
+        "worst_workload_output_token_reduction_ratio": min(
+            item["output_token_reduction_ratio"] for item in workload_efficiency
+        ),
+        "worst_workload_wall_time_reduction_ratio": min(
+            item["wall_time_reduction_ratio"] for item in workload_efficiency
+        ),
         "cost_reduction_ratio": 1 - candidate_cost / baseline_cost,
         "document_noise_reduction_ratio": 1 - candidate_noise / baseline_noise,
         "safety_violations": sum(
             pairs[(task_id, "candidate")]["safety_violations"]
             for task_id in task_ids
         ),
+        "blind_blocker_count": sum(
+            pairs[(task_id, "candidate")]["blind_blocker_count"]
+            for task_id in task_ids
+        ),
+        "blind_major_count": sum(
+            pairs[(task_id, "candidate")]["blind_major_count"]
+            for task_id in task_ids
+        ),
+        "open_matrix_cells": sum(
+            pairs[(task_id, "candidate")]["applicable_matrix_cells"]
+            - pairs[(task_id, "candidate")]["closed_matrix_cells"]
+            for task_id in task_ids
+        ),
+        "production_contract_failures": sum(
+            pairs[(task_id, "candidate")]["production_contract_failures"]
+            for task_id in task_ids
+        ),
+        "workload_efficiency": workload_efficiency,
     }
 
 
@@ -226,6 +788,96 @@ def _single_canary_value(
         label = field.replace("_", " ")
         raise ValidationFailure(f"{scope}canary evidence must use one {label}")
     return next(iter(values))
+
+
+CANARY_PROMOTION_THRESHOLDS = {
+    "quality_delta_points": ("minimum", -2),
+    "worst_workload_quality_delta_points": ("minimum", -5),
+    "total_input_token_reduction_ratio": ("minimum", 0),
+    "noncached_input_token_reduction_ratio": ("minimum", 0),
+    "output_token_reduction_ratio": ("minimum", 0),
+    "wall_time_reduction_ratio": ("minimum", 0),
+    "worst_workload_total_input_token_reduction_ratio": ("minimum", 0),
+    "worst_workload_noncached_input_token_reduction_ratio": ("minimum", 0),
+    "worst_workload_output_token_reduction_ratio": ("minimum", 0),
+    "worst_workload_wall_time_reduction_ratio": ("minimum", 0),
+    "cost_reduction_ratio": ("minimum", 0.25),
+    "document_noise_reduction_ratio": ("minimum", 0.30),
+    "safety_violations": ("maximum", 0),
+    "blind_blocker_count": ("maximum", 0),
+    "blind_major_count": ("maximum", 0),
+    "open_matrix_cells": ("maximum", 0),
+    "production_contract_failures": ("maximum", 0),
+}
+
+
+def canary_threshold_failures(metrics: Mapping[str, Any]) -> list[str]:
+    """Return deterministic promotion failures; never interrupts task execution."""
+
+    failures = set()
+    tolerance = 1e-9
+    for field, (direction, threshold) in CANARY_PROMOTION_THRESHOLDS.items():
+        value = metrics[field]
+        if isinstance(value, float) and not math.isfinite(value):
+            failures.add(field)
+            continue
+        failed = (
+            value < threshold - tolerance
+            if direction == "minimum"
+            else value > threshold + tolerance
+        )
+        if failed:
+            failures.add(field)
+    for workload in metrics.get("workload_efficiency", []):
+        for field in workload.get("overhead_fields", []):
+            failures.add(f"worst_workload_{field}")
+    return sorted(failures)
+
+
+def _validate_result_ablation_bindings(result: Mapping[str, Any]) -> None:
+    bindings = result.get("ablation_run_bindings")
+    if result.get("experiment_kind") != "delegation_ablation":
+        if bindings is not None:
+            raise ValidationFailure("paired canary result cannot contain ablation bindings")
+        raise ValidationFailure(
+            "paired_canary is legacy evidence and is not promotable"
+        )
+    if not isinstance(bindings, list):
+        raise ValidationFailure("delegation ablation result requires run bindings")
+    task_ids = set()
+    triads = set()
+    run_ids = set()
+    record_digests = set()
+    for item in bindings:
+        if not isinstance(item, Mapping) or set(item) != {"task_id", "runs"}:
+            raise ValidationFailure("delegation ablation result binding is malformed")
+        task_id = item["task_id"]
+        if task_id in task_ids:
+            raise ValidationFailure("delegation ablation result task bindings must be unique")
+        task_ids.add(task_id)
+        runs = item["runs"]
+        if not isinstance(runs, list):
+            raise ValidationFailure("delegation ablation result runs must be an array")
+        probe = {
+            "experiment_kind": "delegation_ablation",
+            "variant": "baseline",
+            "arm_id": "full_local_control",
+            "ablation_run_bindings": runs,
+        }
+        validate_canary_measurements(probe)
+        triad = tuple(sorted(run["run_record_digest"] for run in runs))
+        if triad in triads:
+            raise ValidationFailure(
+                "delegation ablation result cannot reuse a run-record triad"
+            )
+        triads.add(triad)
+        for run in runs:
+            if run["run_id"] in run_ids or run["run_record_digest"] in record_digests:
+                raise ValidationFailure(
+                    "delegation ablation result cannot reuse run ids or run-record digests"
+                )
+            run_ids.add(run["run_id"])
+            record_digests.add(run["run_record_digest"])
 
 
 def assemble_canary_result(
@@ -258,6 +910,16 @@ def assemble_canary_result(
     metrics = _canary_metrics(pairs, task_ids)
     result = {
         "simulation": False,
+        "experiment_kind": _single_canary_value(observations, "experiment_kind"),
+        "experiment_protocol_digest": _single_canary_value(
+            observations, "experiment_protocol_digest"
+        ),
+        "baseline_arm_id": _single_canary_value(
+            observations, "arm_id", variant="baseline"
+        ),
+        "candidate_arm_id": _single_canary_value(
+            observations, "arm_id", variant="candidate"
+        ),
         "product_repository": _single_canary_value(
             observations, "product_repository"
         ),
@@ -292,6 +954,15 @@ def assemble_canary_result(
         **metrics,
         "evidence_refs": list(evidence_refs),
     }
+    if result["experiment_kind"] == "delegation_ablation":
+        result["ablation_run_bindings"] = [
+            {
+                "task_id": task_id,
+                "runs": pairs[(task_id, "baseline")]["ablation_run_bindings"],
+            }
+            for task_id in sorted(task_ids)
+        ]
+    _validate_result_ablation_bindings(result)
     if result["baseline_treatment_digest"] == result["candidate_treatment_digest"]:
         raise ValidationFailure("canary treatment digests must differ")
     repository_root = Path(__file__).resolve().parents[2]
@@ -325,6 +996,7 @@ def run_canary_result(
         load_json(repository_root / "evals/canary/result.schema.json"),
         "canary-result",
     )
+    _validate_result_ablation_bindings(data)
     computed = assemble_canary_result(
         evidence_root,
         data["evidence_refs"],
@@ -335,7 +1007,16 @@ def run_canary_result(
     )
     metric_fields = {
         "quality_delta_points",
+        "worst_workload_quality_delta_points",
         "token_reduction_ratio",
+        "total_input_token_reduction_ratio",
+        "noncached_input_token_reduction_ratio",
+        "output_token_reduction_ratio",
+        "wall_time_reduction_ratio",
+        "worst_workload_total_input_token_reduction_ratio",
+        "worst_workload_noncached_input_token_reduction_ratio",
+        "worst_workload_output_token_reduction_ratio",
+        "worst_workload_wall_time_reduction_ratio",
         "cost_reduction_ratio",
         "document_noise_reduction_ratio",
         "safety_violations",
@@ -352,16 +1033,12 @@ def run_canary_result(
             raise ValidationFailure(
                 f"canary summary {field} does not match observed run evidence"
             )
-    passed = (
-        data["quality_delta_points"] >= -2
-        and data["cost_reduction_ratio"] >= 0.25
-        and data["document_noise_reduction_ratio"] >= 0.30
-        and data["safety_violations"] == 0
-    )
+    threshold_failures = canary_threshold_failures(data)
     return {
-        "status": "passed" if passed else "failed",
+        "status": "passed" if not threshold_failures else "failed",
         **data,
         "task_count": len(data["evidence_refs"]) // 2,
+        "threshold_failures": threshold_failures,
         "computed_metrics": {
             field: computed[field] for field in sorted(metric_fields)
         },

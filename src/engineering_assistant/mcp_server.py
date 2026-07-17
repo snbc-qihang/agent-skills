@@ -31,7 +31,7 @@ from .governance import (
     QualityStore,
     investigation_evidence_contract,
 )
-from .model import EvidenceRef, ProviderResult
+from .model import ProviderResult
 from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
@@ -62,9 +62,17 @@ class RuntimeTools:
         repository_root: Path | str = DEFAULT_REPOSITORY_ROOT,
         *,
         trust_verifier: TrustVerifier | None = None,
+        evidence_broker_enabled: bool = False,
+        approval_broker_enabled: bool = False,
     ) -> None:
         self.catalog = load_catalog(repository_root)
         self.trust_verifier = trust_verifier
+        self.evidence_broker_enabled = bool(
+            trust_verifier is not None and evidence_broker_enabled
+        )
+        self.approval_broker_enabled = bool(
+            trust_verifier is not None and approval_broker_enabled
+        )
         schemas = self.catalog.root / "schemas"
         self._route_intent_schema = load_json(schemas / "route-intent.schema.json")
         self._step_result_schema = load_json(schemas / "step-result.schema.json")
@@ -174,13 +182,17 @@ class RuntimeTools:
             {
                 "name": "engineering_assistant_complete",
                 "title": "提交节点结果",
-                "description": "验证节点结果及证据，执行门禁并持久化下一状态；失败不会被口头放行。",
+                "description": "验证节点结果及宿主登记证据，执行门禁并持久化下一状态；模型不能通过 evidence_claims 登记完成证据，失败不会被口头放行。",
                 "inputSchema": _object_schema(
                     {
                         "run_id": {"type": "string", "minLength": 1},
                         "project_root": project_root,
                         "result": self._step_result_schema,
-                        "evidence_claims": {"type": "array", "items": self._evidence_claim_schema},
+                        "evidence_claims": {
+                            "type": "array",
+                            "items": self._evidence_claim_schema,
+                            "description": "兼容字段；非空输入会在任何写入前被拒绝，证据必须由宿主导入。",
+                        },
                         "evidence_max_age_seconds": {"type": ["integer", "null"], "minimum": 1},
                         "profile": profile,
                     },
@@ -354,27 +366,55 @@ class RuntimeTools:
             )
         return state
 
-    @staticmethod
-    def _claim_evidence(claim: Mapping[str, Any]) -> EvidenceRef:
-        return EvidenceRef(
-            id=claim["id"],
-            kind=claim["kind"],
-            uri=claim["uri"],
-            producer="model",
-            observed_at=datetime.now(timezone.utc).isoformat(),
-            trust_level="claimed",
-            scope=claim["scope"],
-            digest=None,
-            attestation=None,
-        )
-
     def _route(self, arguments: dict) -> dict:
         decision = route_intent(
             route_intent_from_dict(arguments["intent"]),
             self.catalog,
             profile_id=arguments.get("profile", "default"),
         )
-        return {"decision": decision.to_dict()}
+        has_flow = bool(decision.flow_id)
+        approval_ready = (
+            not decision.approval_required or self.approval_broker_enabled
+        )
+        persisted_flow_ready = bool(
+            decision.decision in {"proceed", "confirm"}
+            and has_flow
+            and self.evidence_broker_enabled
+            and approval_ready
+        )
+        if decision.decision != "proceed":
+            recommended_execution = "stop"
+            reason = {
+                "ask": "route_requires_input",
+                "confirm": "route_requires_confirmation",
+                "block": "route_blocked",
+            }[decision.decision]
+        elif not has_flow:
+            recommended_execution = "inline"
+            reason = "no_persisted_flow"
+        elif not self.evidence_broker_enabled:
+            recommended_execution = "skills_only"
+            reason = (
+                "host_trust_unavailable"
+                if self.trust_verifier is None
+                else "evidence_broker_unavailable"
+            )
+        elif not approval_ready:
+            recommended_execution = "skills_only"
+            reason = "approval_broker_unavailable"
+        else:
+            recommended_execution = "persisted_flow"
+            reason = "host_trust_ready"
+        return {
+            "decision": decision.to_dict(),
+            "execution": {
+                "external_approval_available": self.approval_broker_enabled,
+                "external_evidence_available": self.evidence_broker_enabled,
+                "persisted_flow_ready": persisted_flow_ready,
+                "recommended_execution": recommended_execution,
+                "reason": reason,
+            },
+        }
 
     def _artifact_validate(self, arguments: dict) -> dict:
         return validate_artifact_payload(
@@ -385,6 +425,21 @@ class RuntimeTools:
 
     def _start(self, arguments: dict) -> dict:
         profile_id = arguments.get("profile", "default")
+        decision = route_intent(
+            route_intent_from_dict(arguments["intent"]),
+            self.catalog,
+            profile_id=profile_id,
+        )
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "persisted flow requires an administrator-bound evidence broker; "
+                "use the routed skills only and do not retry unchanged"
+            )
+        if decision.approval_required and not self.approval_broker_enabled:
+            raise ValidationFailure(
+                "persisted flow approvals require an administrator-bound approval "
+                "broker; stop and do not retry unchanged"
+            )
         state = RuntimeEngine(self.catalog).start(
             arguments["task_id"],
             route_intent_from_dict(arguments["intent"]),
@@ -399,6 +454,11 @@ class RuntimeTools:
         return {"state": state.to_dict(), "state_path": str(path)}
 
     def _next(self, arguments: dict) -> dict:
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "persisted flow is unavailable without an administrator-bound "
+                "evidence broker; do not retry unchanged"
+            )
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -417,6 +477,16 @@ class RuntimeTools:
         }
 
     def _complete(self, arguments: dict) -> dict:
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "persisted flow is unavailable without an administrator-bound "
+                "evidence broker; do not retry unchanged"
+            )
+        if arguments.get("evidence_claims"):
+            raise ValidationFailure(
+                "model evidence_claims cannot register completion evidence; import "
+                "host-observed evidence and do not retry unchanged"
+            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -424,9 +494,9 @@ class RuntimeTools:
             state_store, arguments["run_id"], arguments.get("profile", "default")
         )
         previous_revision = state.revision
-        for claim in arguments.get("evidence_claims", []):
-            evidence_store.save(arguments["run_id"], self._claim_evidence(claim))
         result = step_result_from_dict(arguments["result"])
+        if result.run_id != state.run_id or result.node_id != state.current_node:
+            raise ValidationFailure("step result does not match the active run and node")
         engine = RuntimeEngine(self.catalog)
         gate = engine.complete_step(
             state,
@@ -442,6 +512,11 @@ class RuntimeTools:
         }
 
     def _quality_submit(self, arguments: dict) -> dict:
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "persisted quality flow is unavailable without an administrator-bound "
+                "evidence broker; report inline quality findings instead"
+            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -458,6 +533,11 @@ class RuntimeTools:
         return {"snapshot": saved.to_dict(), "gate": QualityGate.evaluate(saved).to_dict()}
 
     def _provider_invoke(self, arguments: dict) -> dict:
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "provider invocation is unavailable without an administrator-bound "
+                "evidence broker; use native skills and do not retry unchanged"
+            )
         profile_id = arguments.get("profile", "default")
         state_store, _ = self._stores(arguments["project_root"], profile_id)
         invocation = provider_invocation_from_dict(arguments["invocation"])
@@ -738,6 +818,7 @@ class RuntimeTools:
         return expected is None or current == expected
 
     def _investigation_propose(self, arguments: dict) -> dict:
+        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -757,6 +838,7 @@ class RuntimeTools:
         }
 
     def _investigation_list(self, arguments: dict) -> dict:
+        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -778,6 +860,7 @@ class RuntimeTools:
         }
 
     def _investigation_start(self, arguments: dict) -> dict:
+        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -793,14 +876,18 @@ class RuntimeTools:
         }
 
     def _investigation_finish(self, arguments: dict) -> dict:
+        self._require_investigation_broker()
+        if arguments.get("evidence_claims"):
+            raise ValidationFailure(
+                "model evidence_claims cannot register investigation evidence; "
+                "import host-observed evidence and do not retry unchanged"
+            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
         self._load_state(
             state_store, arguments["run_id"], arguments.get("profile", "default")
         )
-        for claim in arguments.get("evidence_claims", []):
-            evidence_store.save(arguments["run_id"], self._claim_evidence(claim))
         record = InvestigationStore(state_store, evidence_store).finish(
             arguments["run_id"],
             arguments["investigation_id"],
@@ -811,6 +898,13 @@ class RuntimeTools:
             "record": record.to_dict(),
             "evidence_contract": investigation_evidence_contract(record),
         }
+
+    def _require_investigation_broker(self) -> None:
+        if not self.evidence_broker_enabled:
+            raise ValidationFailure(
+                "persisted investigation is unavailable without an administrator-bound "
+                "evidence broker; report inline findings and do not retry unchanged"
+            )
 
 
 class MCPServer:

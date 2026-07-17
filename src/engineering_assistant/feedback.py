@@ -374,6 +374,7 @@ class FeedbackStore:
         marker_id: str,
         *,
         expected_revision: int,
+        ledger_revision: int,
     ) -> None:
         parts = ("efficiency-candidate-index", f"{marker_id}.json")
         try:
@@ -382,6 +383,7 @@ class FeedbackStore:
                     "schema_version": "1.0",
                     "status": "committed",
                     "revision": expected_revision + 1,
+                    "ledger_revision": ledger_revision,
                 },
                 *parts,
                 expected_revision=expected_revision,
@@ -390,6 +392,27 @@ class FeedbackStore:
             current = self.artifacts.read_json(*parts)
             if current.get("status") != "committed":
                 raise
+
+    def committed_efficiency_ledger_revision(
+        self,
+        observation_id: str,
+    ) -> int | None:
+        marker_id = hashlib.sha256(observation_id.encode("utf-8")).hexdigest()
+        try:
+            current = self.artifacts.read_json(
+                "efficiency-candidate-index", f"{marker_id}.json"
+            )
+        except FileNotFoundError:
+            return None
+        ledger_revision = current.get("ledger_revision")
+        if (
+            current.get("schema_version") != "1.0"
+            or current.get("status") != "committed"
+            or not isinstance(ledger_revision, int)
+            or ledger_revision < 0
+        ):
+            return None
+        return ledger_revision
 
     def iter_efficiency_candidates(self) -> Iterator[dict | None]:
         try:
@@ -658,9 +681,21 @@ class FeedbackCollector:
             store.commit_efficiency_observation(
                 marker_id,
                 expected_revision=marker_revision,
+                ledger_revision=candidate.ledger_revision,
             )
             store.cleanup_efficiency_staging(marker_id)
             return candidate
+
+    def committed_usage_efficiency_revision(
+        self,
+        *,
+        project_root: Path | str,
+        observation_id: str,
+    ) -> int | None:
+        return FeedbackStore(
+            project_root,
+            self.schema_root,
+        ).committed_efficiency_ledger_revision(observation_id)
     def collect_tool_result(
         self,
         payload: Mapping[str, object],
@@ -1366,6 +1401,9 @@ def run_codex_hook(
         mode = environment.get("ENGINEERING_ASSISTANT_FEEDBACK_MODE", "candidates")
         collector = FeedbackCollector(schema_root)
         efficiency_complete = mode != "candidates"
+        efficiency_signal_observed = mode != "candidates"
+        reported_ledger_revision: int | None = None
+        ledger: UsageObservationLedger | None = None
         feedback_complete = False
         if (
             (
@@ -1378,11 +1416,33 @@ def run_codex_hook(
             and mode == "candidates"
         ):
             try:
-                collector.collect_usage_efficiency(
-                    project_root=str(payload.get("cwd") or ""),
-                    ledger=observer.current_ledger(payload),
+                ledger = observer.current_ledger(payload)
+                pending_tool_uses = set(ledger.tool_use_signatures) - set(
+                    ledger.completed_tool_use_ids
                 )
-                efficiency_complete = True
+                if not scoped_plugin_completion or not pending_tool_uses:
+                    candidate = collector.collect_usage_efficiency(
+                        project_root=str(payload.get("cwd") or ""),
+                        ledger=ledger,
+                        source=(
+                            "tool_hook" if scoped_plugin_completion else "stop_hook"
+                        ),
+                    )
+                    efficiency_complete = True
+                    efficiency_signal_observed = (
+                        candidate is not None or bool(ledger.signals)
+                    )
+                    if candidate is not None:
+                        reported_ledger_revision = candidate.ledger_revision
+                    elif ledger.signals:
+                        reported_ledger_revision = (
+                            collector.committed_usage_efficiency_revision(
+                                project_root=str(payload.get("cwd") or ""),
+                                observation_id=ledger.plan.observation_id,
+                            )
+                        )
+                    elif event_name == "Stop":
+                        reported_ledger_revision = ledger.revision
             except Exception:
                 pass
         try:
@@ -1392,7 +1452,10 @@ def run_codex_hook(
             pass
         if (
             (
-                scoped_plugin_completion
+                (
+                    scoped_plugin_completion
+                    and efficiency_signal_observed
+                )
                 or (
                     event_name == "Stop"
                     and not bool(payload.get("stop_hook_active", False))
@@ -1402,7 +1465,13 @@ def run_codex_hook(
             and feedback_complete
         ):
             try:
-                observer.discard_ledger(payload)
+                if mode != "candidates":
+                    observer.discard_ledger(payload)
+                elif (
+                    ledger is not None
+                    and reported_ledger_revision == ledger.revision
+                ):
+                    observer.finalize_ledger(payload, ledger)
             except Exception:
                 pass
     json.dump(response, output_stream, ensure_ascii=False)

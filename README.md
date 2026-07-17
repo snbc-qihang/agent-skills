@@ -63,7 +63,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 | 人工审批与调研选择 | 只接受管理员固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
 | `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
 | Hook 反馈采集 | Codex 仅从本插件 MCP Pre/Post 提升可观测的工具失败和 usage 信号；Hermes 可在插件轮次内补充纠正、阻断、返工和范围变化；两者都记录无原文 capture 元数据并支持独立审计处置 |
-| `ea validate/artifact-validate/eval/build/verify-package/canary-prepare/canary-attestation-import/canary-assemble/canary-validate` | 由开发者、CI 或发布维护者执行 |
+| `ea validate/artifact-validate/eval/build/verify-package/canary-audit/canary-prepare/canary-attestation-import/canary-assemble/canary-validate` | 由开发者、CI 或发布维护者执行 |
 
 所以，当前产品体验是“平台选择 skill，必要时调用 Runtime 工具进入受治理运行，并由生命周期 Hook 采集反馈候选”。只有出现实际 Runtime 工具调用和落盘状态，才能声称状态机、证据门禁或恢复机制已运行。聊天中的“同意”不会自动转换为签名 grant。Codex 的插件 Hook 在用户审查并信任当前定义前会被跳过。
 
@@ -194,7 +194,7 @@ flowchart TB
 .run-artifacts/engineering-assistant/
 ```
 
-反馈 capture、候选事件、审计处置和去标识化效率候选分别写入该目录下的 `feedback/captures/`、`feedback/events/`、`feedback/dispositions/` 与 `feedback/efficiency-candidates/`。Hook 不保存原始 transcript、原始命令、原始工具输入输出或内容摘录；capture 会保存内容摘要、长度、脱敏计数、采集时间，以及由 session/turn 单向哈希得到的可关联伪名引用。运行期 usage ledger 还会短暂保存 task 摘要、伪名 session/turn 引用和最近 256 条工具签名哈希，用于幂等汇总。Codex 在本插件 MCP 工具的 PostToolUse 完成后汇总并删除 ledger，任一环节失败时保留以便下次插件工具调用重试；Hermes 在插件自身轮次结束时汇总。新插件调用会机会式清理超过 24 小时的孤儿 ledger，单次最多扫描 256 个文件。效率候选使用随机 ID，只保留聚合计数和受控信号；事件与处置用于长期优化输入，处置不覆盖原事件。处置文件中的 reason、actor_ref 和 evidence_refs 是人工或 CI 明确提交的原文元数据，Runtime 不会自动脱敏，因此不得放入凭证、个人信息或业务秘密；summary 和演进导出都不回显 reason 或 actor_ref，演进导出不复制处置 evidence_refs，并把事件 ID、复发键、事件 evidence_refs 和资产引用统一转成单向 SHA-256 opaque 引用。`ea feedback-summary --project-root <目标项目>` 以有界内存流式汇总效率、问题类型、人工参与、有效处置和有限条最近事件；复发键最多保留 256 个精确计数，超出部分只计入 `recurrence_overflow_event_count`，不会导致长期事件库占用无限增长。`ea feedback-disposition --project-root <目标项目> --input <文件>` 只导入人工或 CI 明确提供的不可变处置。`ea feedback-evolution-export --project-root <目标项目>` 只把当前有效且明确接受的反馈转换为确定性、可分页、去敏的回归提案，并固定标记 `requires_review=true`、`formal_assets_modified=false`。导出只在扫描前后短暂读取 disposition snapshot revision，不会在全库扫描期间占用处置写锁；后续页必须同时提交 opaque cursor 和该 revision，若处置集合变化则丢弃本页并明确要求从第一页重启，避免静默遗漏或输出过期 accepted 项。三者都不会自动修改 skill、flow、policy、eval 或门禁；当前 adapter 尚未获得可信 workspace 绑定，因此模型工具不暴露跨项目汇总、处置或演进入口。损坏 artifact 只计数、不回显内容。企业环境应由目标项目所有者为 captures/events/dispositions/candidates 制定合规保留与归档周期；Runtime 当前不擅自删除这些长期优化资料。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：
+反馈 capture、候选事件、审计处置和去标识化效率候选分别写入该目录下的 `feedback/captures/`、`feedback/events/`、`feedback/dispositions/` 与 `feedback/efficiency-candidates/`。Hook 不保存原始 transcript、原始命令、原始工具输入输出或内容摘录；capture 会保存内容摘要、长度、脱敏计数、采集时间，以及由 session/turn 单向哈希得到的可关联伪名引用。运行期 usage ledger 还会短暂保存 task 摘要、伪名 session/turn 引用和最近 256 条工具签名哈希，用于幂等汇总。Codex 在本插件 MCP 工具的 PostToolUse 完成后尝试汇总：若仍有已跟踪调用未完成则等待后续 PostToolUse，避免把正常并发误报为缺失完成事件；全部已跟踪调用完成且出现受控效率信号并成功生成候选时，按已汇总 revision 条件清理 ledger；若其间出现并发新调用，则将新增计数与散列事件原子换入新的 observation，而不删除或重复计入已汇总快照。尚无信号时保留有界散列签名，以便同轮后续插件调用识别重复输入；任一环节失败时也保留以便重试。真正缺失的 PostToolUse 只在平台提供的可靠轮次结束边界汇总。Hermes 在插件自身轮次结束时汇总。新插件调用会机会式清理超过 24 小时的孤儿 ledger，单次最多扫描 256 个文件。效率候选使用随机 ID，只保留聚合计数和受控信号；事件与处置用于长期优化输入，处置不覆盖原事件。处置文件中的 reason、actor_ref 和 evidence_refs 是人工或 CI 明确提交的原文元数据，Runtime 不会自动脱敏，因此不得放入凭证、个人信息或业务秘密；summary 和演进导出都不回显 reason 或 actor_ref，演进导出不复制处置 evidence_refs，并把事件 ID、复发键、事件 evidence_refs 和资产引用统一转成单向 SHA-256 opaque 引用。`ea feedback-summary --project-root <目标项目>` 以有界内存流式汇总效率、问题类型、人工参与、有效处置和有限条最近事件；复发键最多保留 256 个精确计数，超出部分只计入 `recurrence_overflow_event_count`，不会导致长期事件库占用无限增长。`ea feedback-disposition --project-root <目标项目> --input <文件>` 只导入人工或 CI 明确提供的不可变处置。`ea feedback-evolution-export --project-root <目标项目>` 只把当前有效且明确接受的反馈转换为确定性、可分页、去敏的回归提案，并固定标记 `requires_review=true`、`formal_assets_modified=false`。导出只在扫描前后短暂读取 disposition snapshot revision，不会在全库扫描期间占用处置写锁；后续页必须同时提交 opaque cursor 和该 revision，若处置集合变化则丢弃本页并明确要求从第一页重启，避免静默遗漏或输出过期 accepted 项。三者都不会自动修改 skill、flow、policy、eval 或门禁；当前 adapter 尚未获得可信 workspace 绑定，因此模型工具不暴露跨项目汇总、处置或演进入口。损坏 artifact 只计数、不回显内容。企业环境应由目标项目所有者为 captures/events/dispositions/candidates 制定合规保留与归档周期；Runtime 当前不擅自删除这些长期优化资料。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：
 
 - `candidates`：默认模式，保存 capture 并提升有效反馈候选。
 - `metadata`：只保存 capture 元数据。
@@ -232,7 +232,7 @@ python3 -m pip install -e .
 | 分组 | 命令 | 用途 |
 | --- | --- | --- |
 | Runtime 控制面 | `route`、`start`、`next`、`complete`、`quality-submit`、`evidence-import`、`investigation-*`、`mcp-serve` | 供平台 adapter、受信执行器和内核调试调用 |
-| 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-prepare`、`canary-attestation-import`、`canary-assemble`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
+| 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-audit`、`canary-prepare`、`canary-attestation-import`、`canary-assemble`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
 
 完整命令语义：
 
@@ -256,6 +256,7 @@ ea artifact-validate 使用当前 Runtime schema 校验 Provider、Feedback、Qu
 ea eval              执行真实核心评测
 ea build             构建 Codex 或 Hermes 包
 ea verify-package    校验包文件摘要
+ea canary-audit      只读审计绑定逐臂 prompt 的本地三臂实验、纳入替换和 transcript 结构；不生成可信收益证据
 ea canary-prepare    在管理员固定 broker 绑定下复制真实 artifact，并生成冻结 trust provenance 的未验签 draft
 ea canary-attestation-import  校验外部 broker 回执并生成不可变 run evidence
 ea canary-assemble   验签 observation 并确定性组装 canary result
@@ -265,9 +266,9 @@ ea feedback-disposition  导入人工或 CI 明确给出的不可变反馈处置
 ea feedback-evolution-export  只读导出已接受反馈的去敏回归提案，不修改正式资产
 ```
 
-自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，`start` 必须在服务端重新计算决策，不能接受调用方构造的 `RouteDecision`。Codex MCP 与 Hermes 工具注册都调用同一个 `RuntimeTools`，不会形成并行路由器；模型工具集合不包含审批、自由文本决定或可信证据导入，后续调用必须使用 RunState 已绑定的 profile。
+自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，`start` 必须在服务端重新计算决策，不能接受调用方构造的 `RouteDecision`。Codex MCP 与 Hermes 工具注册都调用同一个 `RuntimeTools`，不会形成并行路由器；模型工具集合不包含审批、自由文本决定或可信证据导入，后续调用必须使用 RunState 已绑定的 profile。Router 会在同一次响应中披露宿主固定 Host Trust 的执行能力；`ask`、`confirm` 或 `block` 一律返回 `recommended_execution=stop`。只有 `proceed` 的持久化 flow 在缺少外部 evidence/approval broker 时才返回 `skills_only`，Agent 继续执行已选公开 skill，但不重试必然无法完成的 `start`、`next`、`complete` 或 `quality_submit`。
 
-Codex 插件 Hook 的 manifest 只匹配 `mcp__engineering-assistant__engineering_assistant_*` 工具。普通 Prompt、Stop、Bash、`apply_patch` 和其他 MCP 事件不会启动本插件 Hook，因此普通任务既无采集语义，也无本插件 Hook 进程开销。插件工具调用会建立短生命周期 `UsageObservationPlan`，只采集该次插件工具调用数、输出字节、重复输入、单次大输出和缺失 PostToolUse 等摘要信号；PostToolUse 完成后汇总匿名 `UsageEfficiencyFeedback` 并删除 ledger。工具失败只保存受控失败分类和哈希化工具或资产引用，不保存原始输入、输出、命令或反馈摘录。12 次工具和 64 KB 输出等值仅作为趋势参考，超过参考值、重复调用或采集失败都不会拒绝工具、阻断任务或要求人工放行。工具事件哈希最多保留最近 256 条，超出后继续累计摘要并标记截断，不限制任务。由于 Codex 当前严格限定为插件工具 matcher，它不声称观察整轮 Bash、代码索引、用户纠正或回复末尾文本；Hermes 只观测插件 adapter 注册的 `engineering-assistant` 工具，并在插件自身 `post_llm_call` 汇总轮次反馈。这些数据只用于持续优化分析，不作为安全门禁；观测或反馈存储失败时平台调用仍然继续。结构化产物优先通过只读 MCP 工具 `engineering_assistant_artifact_validate` 校验，CLI 仅作为开发环境回退。
+Codex 插件 Hook 的 manifest 使用锚定正则 `^mcp__engineering_assistant__engineering_assistant_.*$`，只匹配本插件工具。普通 Prompt、Stop、Bash、`apply_patch` 和其他 MCP 事件不会启动本插件 Hook，因此普通任务既无采集语义，也无本插件 Hook 进程开销。插件工具调用会建立短生命周期 `UsageObservationPlan`，只采集该次插件工具调用数、输出字节、重复输入、单次大输出和缺失 PostToolUse 等摘要信号；PostToolUse 会等待全部已跟踪调用完成后再尝试汇总匿名 `UsageEfficiencyFeedback`，成功产生信号候选后删除 ledger，无信号时保留有界散列签名供同轮后续插件调用比较。工具失败只保存受控失败分类和哈希化工具或资产引用，不保存原始输入、输出、命令或反馈摘录。12 次工具和 64 KB 输出等值仅作为趋势参考，超过参考值、重复调用或采集失败都不会拒绝工具、阻断任务或要求人工放行。工具事件哈希最多保留最近 256 条，超出后继续累计摘要并标记截断，不限制任务；超过 24 小时的孤儿 ledger 由后续插件调用机会式清理。由于 Codex 当前严格限定为插件工具 matcher，它不声称观察整轮 Bash、代码索引、用户纠正或回复末尾文本；Hermes 只观测插件 adapter 注册的 `engineering-assistant` 工具，并在插件自身 `post_llm_call` 汇总轮次反馈。这些数据只用于持续优化分析，不作为安全门禁；观测或反馈存储失败时平台调用仍然继续。结构化产物优先通过只读 MCP 工具 `engineering_assistant_artifact_validate` 校验，CLI 仅作为开发环境回退。
 
 实现流的强制 `quality` 节点只有在六个质量维度全部为 `pass`、没有 medium 以上 finding、没有未关闭修复项且每个判断引用宿主签发的兼容证据时才能完成。质量快照绑定 run revision、候选源码证据摘要和一小时新鲜度；候选内容改变后旧快照自动失效。模型提交的证据输入固定降级为 `claimed`，不能自行设置 `observed` 或 `verified`。
 
@@ -382,7 +383,7 @@ MAJOR.MINOR.PATCH.BUILD[-PRERELEASE]
 - `--dry-run` 不写入插件目录、marketplace 或平台配置。
 - `--yes` 只允许本机预发布；当前策略禁止稳定版发布和产品仓库修改。
 - 发布脚本始终保留直接回滚目录，不静默删除旧插件。
-- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。`ea canary-prepare` 只把 manifest 指向的真实 artifact 复制到仓库外证据包，计算摘要，并在管理员固定 broker 绑定下把 broker ID 与宿主配置摘要冻结进待签 claims；缺少成本、质量、文档噪声或安全测量时状态保持 `incomplete`，它不会自行签名或生成 canary result。准备与组装两条入口都统一限制最多 512 个 artifact、总计 256 MiB，并对 JSON、attestation 和单 artifact 做有界、目录锚定读取。Canary 至少包含 5 组 workload 摘要一致的 baseline/candidate，外部 broker 必须分别签署不同的 `treatment_digest`，不能用 git ref 别名冒充不同处理；result 固定声明两侧 treatment、execution config 摘要、evidence broker ID 与管理员配置摘要，且配对环境摘要必须一致。Broker 必须核对实际 usage/账单、独立质量评分、文档噪声与安全审计来源，不能只签署调用方填写的数值；token 降幅与实际美元成本降幅分开计算。未配置宿主 broker 时所有 canary 命令均安全拒绝，绝不回退到仓库 profile endpoint。
+- 没有真实运行证据时，不得声明产品 canary 或收益目标已完成。`ea canary-prepare` 只把 manifest 指向的真实 artifact 复制到仓库外证据包，计算摘要，并在管理员固定 broker 绑定下把 broker ID 与宿主配置摘要冻结进待签 claims；缺少 usage、墙钟、成本、质量、文档噪声或安全测量时状态保持 `incomplete`，它不会自行签名或生成 canary result。准备与组装两条入口都统一限制最多 512 个 artifact、总计 256 MiB，并对 JSON、attestation 和单 artifact 做有界、目录锚定读取。Canary 至少包含 5 组 workload 摘要一致的 baseline/candidate，外部 broker 必须分别签署不同的 `treatment_digest`，不能用 git ref 别名冒充不同处理；result 固定声明两侧 treatment、execution config 摘要、evidence broker ID 与管理员配置摘要，且配对环境摘要必须一致。Broker 必须核对 total/noncached input、output、墙钟、实际账单、独立质量评分、文档噪声与安全审计来源，不能只签署调用方填写的数值；效率阈值只用于运行结束后的 RC 晋级，不得在任务执行中截断或暂停，Token 指标也不能代替实际美元成本门禁。未配置宿主 broker 时所有 canary 命令均安全拒绝，绝不回退到仓库 profile endpoint。
 - 失败门禁不能用文字说明替代，必须修复或保持阻断。
 - 反馈 Hook 默认不阻断任务、不自动继续 Stop，也不自动修改正式 skill、flow、policy 或 eval。
 - Hook 不保存原始 transcript、原始 session id 或原始 turn id；会保存单向哈希得到的可关联伪名引用和时间戳。检测到凭证和邮箱时只记录脱敏计数，并拒绝通过符号链接把反馈写出项目目录。

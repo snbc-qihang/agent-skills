@@ -1,9 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["simulation", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "baseline_treatment_digest", "candidate_treatment_digest", "trust_provenance", "quality_delta_points", "token_reduction_ratio", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "evidence_refs"],
+  "required": ["simulation", "experiment_kind", "experiment_protocol_digest", "baseline_arm_id", "candidate_arm_id", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "baseline_treatment_digest", "candidate_treatment_digest", "trust_provenance", "quality_delta_points", "worst_workload_quality_delta_points", "token_reduction_ratio", "total_input_token_reduction_ratio", "noncached_input_token_reduction_ratio", "output_token_reduction_ratio", "wall_time_reduction_ratio", "worst_workload_total_input_token_reduction_ratio", "worst_workload_noncached_input_token_reduction_ratio", "worst_workload_output_token_reduction_ratio", "worst_workload_wall_time_reduction_ratio", "workload_efficiency", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "blind_blocker_count", "blind_major_count", "open_matrix_cells", "production_contract_failures", "evidence_refs"],
   "properties": {
     "simulation": {"const": false},
+    "experiment_kind": {"enum": ["paired_canary", "delegation_ablation"]},
+    "experiment_protocol_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "baseline_arm_id": {"enum": ["baseline", "full_local_control"]},
+    "candidate_arm_id": {"enum": ["candidate", "minimum_matrix_risk_delegation"]},
+    "ablation_run_bindings": {
+      "description": "binding 使用 canonical JSON digest；每个 task 的 run_id 与 run_record_digest 还必须由运行时执行全局唯一校验。",
+      "type": "array", "minItems": 5, "maxItems": 64, "uniqueItems": true,
+      "items": {
+        "type": "object", "required": ["task_id", "runs"],
+        "properties": {
+          "task_id": {"type": "string", "minLength": 1},
+          "runs": {"$ref": "#/$defs/ablation_run_bindings"}
+        },
+        "additionalProperties": false
+      }
+    },
     "product_repository": {"type": "string", "minLength": 1},
     "baseline_ref": {"type": "string", "minLength": 1},
     "candidate_ref": {"type": "string", "minLength": 1},
@@ -21,11 +37,86 @@
       "additionalProperties": false
     },
     "quality_delta_points": {"type": "number"},
+    "worst_workload_quality_delta_points": {"type": "number"},
     "token_reduction_ratio": {"type": "number"},
+    "total_input_token_reduction_ratio": {"type": "number"},
+    "noncached_input_token_reduction_ratio": {"type": "number"},
+    "output_token_reduction_ratio": {"type": "number"},
+    "wall_time_reduction_ratio": {"type": "number"},
+    "worst_workload_total_input_token_reduction_ratio": {"type": "number"},
+    "worst_workload_noncached_input_token_reduction_ratio": {"type": "number"},
+    "worst_workload_output_token_reduction_ratio": {"type": "number"},
+    "worst_workload_wall_time_reduction_ratio": {"type": "number"},
+    "workload_efficiency": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "required": ["task_id", "workload_digest", "total_input_token_reduction_ratio", "noncached_input_token_reduction_ratio", "output_token_reduction_ratio", "wall_time_reduction_ratio", "overhead_fields"],
+        "properties": {
+          "task_id": {"type": "string", "minLength": 1},
+          "workload_id": {"type": "string", "minLength": 1},
+          "workload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "total_input_token_reduction_ratio": {"type": "number"},
+          "noncached_input_token_reduction_ratio": {"type": "number"},
+          "output_token_reduction_ratio": {"type": "number"},
+          "wall_time_reduction_ratio": {"type": "number"},
+          "overhead_fields": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {"enum": ["total_input_token_reduction_ratio", "noncached_input_token_reduction_ratio", "output_token_reduction_ratio", "wall_time_reduction_ratio"]}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "cost_reduction_ratio": {"type": "number"},
     "document_noise_reduction_ratio": {"type": "number"},
     "safety_violations": {"type": "integer", "minimum": 0},
+    "blind_blocker_count": {"type": "integer", "minimum": 0},
+    "blind_major_count": {"type": "integer", "minimum": 0},
+    "open_matrix_cells": {"type": "integer", "minimum": 0},
+    "production_contract_failures": {"type": "integer", "minimum": 0},
     "evidence_refs": {"type": "array", "minItems": 10, "maxItems": 128, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"experiment_kind": {"const": "delegation_ablation"}}},
+      "then": {
+        "required": ["ablation_run_bindings"],
+        "properties": {
+          "baseline_arm_id": {"const": "full_local_control"},
+          "candidate_arm_id": {"const": "minimum_matrix_risk_delegation"}
+        }
+      },
+      "else": {
+        "not": {"required": ["ablation_run_bindings"]},
+        "properties": {
+          "baseline_arm_id": {"const": "baseline"},
+          "candidate_arm_id": {"const": "candidate"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ablation_run_bindings": {
+      "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ablation_run_binding"}
+    },
+    "ablation_run_binding": {
+      "type": "object",
+      "required": ["run_id", "workload_id", "repeat_index", "arm_id", "run_record_digest"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "workload_id": {"type": "string", "minLength": 1},
+        "repeat_index": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "arm_id": {"enum": ["minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"]},
+        "run_record_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

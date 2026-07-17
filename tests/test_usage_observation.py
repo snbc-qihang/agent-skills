@@ -14,7 +14,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.feedback import run_codex_hook  # noqa: E402
+from engineering_assistant.feedback import FeedbackCollector, run_codex_hook  # noqa: E402
 from engineering_assistant.hook_gate import (  # noqa: E402
     is_explicit_plugin_request,
     should_load_runtime,
@@ -129,6 +129,7 @@ class UsageObservationHookTests(unittest.TestCase):
             "tool_use_signatures": {},
             "completed_tool_use_ids": [],
             "signals": [],
+            "signal_counts": {},
             "revision": 0,
         }
 
@@ -193,7 +194,7 @@ class UsageObservationHookTests(unittest.TestCase):
 
     def test_plugin_tool_call_is_a_trusted_activation_signal(self) -> None:
         response = self.pre(
-            "mcp__engineering-assistant__engineering_assistant_route",
+            "mcp__engineering_assistant__engineering_assistant_route",
             {"intent": {"task_kind": "review"}},
             "tool-1",
         )
@@ -204,15 +205,80 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertEqual(["mcp"], payload["plan"]["coverage"])
         self.assertEqual(1, payload["tool_calls"])
 
+    def test_plugin_tool_completion_labels_efficiency_source_as_tool_hook(self) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        tool_input = {"intent": {"task_kind": "review"}}
+
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-1"))
+        self.assertEqual(
+            {},
+            self.post(
+                tool_name,
+                tool_input,
+                "tool-1",
+                {"content": [{"type": "text", "text": "x" * 2_048}]},
+            ),
+        )
+
+        candidate = json.loads(
+            next(
+                (
+                    self.project
+                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                ).glob("*.json")
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual("tool_hook", candidate["source"])
+
+    def test_sequential_plugin_calls_publish_duplicate_signal_after_each_post(self) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        tool_input = {"intent": {"task_kind": "review"}}
+        small_response = {"content": [{"type": "text", "text": "ok"}]}
+
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-1"))
+        self.assertEqual(
+            {}, self.post(tool_name, tool_input, "tool-1", small_response)
+        )
+        first = self.ledger()
+        self.assertEqual(1, first["tool_calls"])
+        self.assertEqual(1, len(first["completed_tool_use_ids"]))
+        self.assertEqual([], first["signals"])
+
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-2"))
+        self.assertEqual(
+            {}, self.post(tool_name, tool_input, "tool-2", small_response)
+        )
+
+        candidate = json.loads(
+            next(
+                (
+                    self.project
+                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                ).glob("*.json")
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual("tool_hook", candidate["source"])
+        self.assertEqual(2, candidate["tool_calls"])
+        self.assertIn("duplicate_call", candidate["signals"])
+        self.assertEqual(
+            [],
+            list(
+                (
+                    self.project
+                    / ".run-artifacts/engineering-assistant/usage-observations"
+                ).rglob("turn-*.json")
+            ),
+        )
+
     def test_concurrent_first_plugin_calls_are_both_observed_without_blocking(self) -> None:
         calls = [
             (
-                "mcp__engineering-assistant__engineering_assistant_route",
+                "mcp__engineering_assistant__engineering_assistant_route",
                 {"intent": {"task_kind": "review"}},
                 "tool-route",
             ),
             (
-                "mcp__engineering-assistant__engineering_assistant_artifact_validate",
+                "mcp__engineering_assistant__engineering_assistant_artifact_validate",
                 {"kind": "step-result", "artifact": {}},
                 "tool-validate",
             ),
@@ -223,6 +289,204 @@ class UsageObservationHookTests(unittest.TestCase):
 
         self.assertEqual([{}, {}], responses)
         self.assertEqual(2, self.ledger()["tool_calls"])
+
+    def test_interleaved_plugin_posts_wait_for_all_tracked_calls(self) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        first_input = {"intent": {"task_kind": "review"}}
+        second_input = {"intent": {"task_kind": "implementation"}}
+        small_response = {"content": [{"type": "text", "text": "ok"}]}
+        candidates = (
+            self.project
+            / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+        )
+
+        self.assertEqual({}, self.pre(tool_name, first_input, "tool-1"))
+        self.assertEqual({}, self.pre(tool_name, second_input, "tool-2"))
+        self.assertEqual(
+            {}, self.post(tool_name, first_input, "tool-1", small_response)
+        )
+
+        after_first_post = self.ledger()
+        self.assertEqual(2, after_first_post["tool_calls"])
+        self.assertEqual(1, len(after_first_post["completed_tool_use_ids"]))
+        self.assertEqual([], list(candidates.glob("*.json")))
+
+        self.assertEqual(
+            {}, self.post(tool_name, second_input, "tool-2", small_response)
+        )
+        after_second_post = self.ledger()
+        self.assertEqual(2, len(after_second_post["completed_tool_use_ids"]))
+        self.assertEqual([], list(candidates.glob("*.json")))
+
+        self.assertEqual({}, self.pre(tool_name, first_input, "tool-3"))
+        self.assertEqual(
+            {}, self.post(tool_name, first_input, "tool-3", small_response)
+        )
+        candidate = json.loads(next(candidates.glob("*.json")).read_text("utf-8"))
+        self.assertEqual(3, candidate["tool_calls"])
+        self.assertIn("duplicate_call", candidate["signals"])
+        self.assertNotIn("tool_without_post", candidate["signals"])
+
+    def test_concurrent_pre_during_candidate_commit_is_rebased_not_deleted(
+        self,
+    ) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        first_input = {"intent": {"task_kind": "review"}}
+        concurrent_input = {"intent": {"task_kind": "implementation"}}
+        original_collect = FeedbackCollector.collect_usage_efficiency
+
+        self.assertEqual({}, self.pre(tool_name, first_input, "tool-1"))
+        first_observation_id = self.ledger()["plan"]["observation_id"]
+
+        def collect_after_concurrent_pre(collector, **kwargs):
+            self.assertEqual(
+                {}, self.pre(tool_name, concurrent_input, "tool-concurrent")
+            )
+            return original_collect(collector, **kwargs)
+
+        with patch.object(
+            FeedbackCollector,
+            "collect_usage_efficiency",
+            autospec=True,
+            side_effect=collect_after_concurrent_pre,
+        ):
+            self.assertEqual(
+                {},
+                self.post(
+                    tool_name,
+                    first_input,
+                    "tool-1",
+                    {"content": [{"type": "text", "text": "x" * 40_000}]},
+                ),
+            )
+
+        rebased = self.ledger()
+        self.assertNotEqual(first_observation_id, rebased["plan"]["observation_id"])
+        self.assertEqual(1, rebased["tool_calls"])
+        self.assertEqual(0, rebased["output_bytes"])
+        self.assertEqual([], rebased["completed_tool_use_ids"])
+        self.assertEqual([], rebased["signals"])
+
+        small_response = {"content": [{"type": "text", "text": "ok"}]}
+        self.assertEqual(
+            {},
+            self.post(
+                tool_name,
+                concurrent_input,
+                "tool-concurrent",
+                small_response,
+            ),
+        )
+        self.assertEqual(
+            {}, self.pre(tool_name, concurrent_input, "tool-concurrent-repeat")
+        )
+        self.assertEqual(
+            {},
+            self.post(
+                tool_name,
+                concurrent_input,
+                "tool-concurrent-repeat",
+                small_response,
+            ),
+        )
+
+        candidates = [
+            json.loads(path.read_text("utf-8"))
+            for path in (
+                self.project
+                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+            ).glob("*.json")
+        ]
+        self.assertEqual(2, len(candidates))
+        self.assertEqual(
+            [
+                "duplicate_call",
+                "large_single_output",
+                "output_reference_exceeded",
+            ],
+            sorted(
+                signal
+                for candidate in candidates
+                for signal in candidate["signals"]
+            ),
+        )
+        self.assertEqual(
+            [1, 2], sorted(candidate["tool_calls"] for candidate in candidates)
+        )
+
+    def test_rebase_preserves_a_repeated_signal_occurring_after_snapshot(
+        self,
+    ) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        tool_input = {"intent": {"task_kind": "review"}}
+        small_response = {"content": [{"type": "text", "text": "ok"}]}
+        original_collect = FeedbackCollector.collect_usage_efficiency
+
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-1"))
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-2"))
+        self.assertEqual(
+            {}, self.post(tool_name, tool_input, "tool-1", small_response)
+        )
+
+        def collect_after_same_signal(collector, **kwargs):
+            self.assertEqual({}, self.pre(tool_name, tool_input, "tool-3"))
+            return original_collect(collector, **kwargs)
+
+        with patch.object(
+            FeedbackCollector,
+            "collect_usage_efficiency",
+            autospec=True,
+            side_effect=collect_after_same_signal,
+        ):
+            self.assertEqual(
+                {}, self.post(tool_name, tool_input, "tool-2", small_response)
+            )
+
+        rebased = self.ledger()
+        self.assertEqual(1, rebased["tool_calls"])
+        self.assertEqual(["duplicate_call"], rebased["signals"])
+        self.assertEqual({"duplicate_call": 1}, rebased["signal_counts"])
+
+        self.assertEqual(
+            {}, self.post(tool_name, tool_input, "tool-3", small_response)
+        )
+        candidates = [
+            json.loads(path.read_text("utf-8"))
+            for path in (
+                self.project
+                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+            ).glob("*.json")
+        ]
+        self.assertEqual(2, len(candidates))
+        self.assertEqual(
+            [["duplicate_call"], ["duplicate_call"]],
+            sorted(candidate["signals"] for candidate in candidates),
+        )
+        self.assertEqual(
+            [1, 2], sorted(candidate["tool_calls"] for candidate in candidates)
+        )
+
+    def test_legacy_ledger_without_signal_counts_is_upgraded_on_mutation(
+        self,
+    ) -> None:
+        tool_name = "mcp__engineering_assistant__engineering_assistant_route"
+        tool_input = {"intent": {"task_kind": "review"}}
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-1"))
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-2"))
+
+        ledger_path = next(
+            (
+                self.project
+                / ".run-artifacts/engineering-assistant/usage-observations"
+            ).rglob("turn-*.json")
+        )
+        legacy = json.loads(ledger_path.read_text("utf-8"))
+        legacy.pop("signal_counts")
+        ledger_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+        self.assertEqual({}, self.pre(tool_name, tool_input, "tool-3"))
+        upgraded = self.ledger()
+        self.assertEqual({"duplicate_call": 2}, upgraded["signal_counts"])
 
     def test_lookalike_mcp_server_cannot_activate_plugin_observation(self) -> None:
         response = self.pre(
@@ -362,7 +626,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.activate()
         before = self.ledger()
         tool_name = (
-            "mcp__engineering-assistant__engineering_assistant_feedback_summary"
+            "mcp__engineering_assistant__engineering_assistant_feedback_summary"
         )
         tool_input = {"project_root": str(self.project)}
 
@@ -409,7 +673,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self,
     ) -> None:
         tool_name = (
-            "mcp__engineering-assistant__engineering_assistant_feedback_summary"
+            "mcp__engineering_assistant__engineering_assistant_feedback_summary"
         )
         tool_input = {"project_root": str(self.project)}
 
@@ -1328,6 +1592,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
         self.assertNotIn("candidate_id", index_payload)
         self.assertEqual("committed", index_payload["status"])
+        self.assertEqual(candidate["ledger_revision"], index_payload["ledger_revision"])
         self.assertEqual(
             [],
             list(

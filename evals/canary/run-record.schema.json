@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version", "evidence_status", "run_id", "experiment_id",
+    "workload_id", "arm_id", "repeat_index"
+  ],
+  "properties": {
+    "schema_version": {"enum": ["1.0", "2.0"]},
+    "evidence_status": {"enum": ["local_structural", "legacy_unverifiable"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "protocol_digest": {"$ref": "#/$defs/digest"},
+    "workload_id": {"type": "string", "minLength": 1},
+    "workload_digest": {"$ref": "#/$defs/digest"},
+    "arm_id": {"enum": [
+      "route_only", "minimum_skills", "full_local",
+      "minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"
+    ]},
+    "repeat_index": {"type": "integer", "minimum": 1, "maximum": 1024},
+    "actual_start_order": {"type": "integer", "minimum": 1, "maximum": 4096},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "process_exit_code": {"type": "integer", "minimum": 0, "maximum": 255},
+    "product_repository": {"type": "string", "minLength": 1},
+    "git_ref": {"type": "string", "minLength": 1},
+    "treatment_digest": {"$ref": "#/$defs/digest"},
+    "prompt_digest": {"$ref": "#/$defs/digest"},
+    "prompt_artifact": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "outcome_artifact": {"$ref": "#/$defs/artifact_ref"},
+    "blind_review": {"$ref": "#/$defs/blind_review"},
+    "execution_config_digest": {"$ref": "#/$defs/digest"},
+    "environment_digest": {"$ref": "#/$defs/digest"},
+    "quality_rubric_digest": {"$ref": "#/$defs/digest"},
+    "root_thread_id": {"type": "string", "minLength": 1},
+    "platform_transcript": {
+      "type": "object",
+      "required": ["ref", "digest", "complete"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "complete": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "gate_receipts": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": {
+        "type": "object",
+        "required": [
+          "gate_id", "argv", "cwd", "command_digest", "started_at", "finished_at",
+          "wall_time_milliseconds", "exit_code", "timed_out", "status",
+          "stdout_ref", "stdout_digest", "stderr_ref", "stderr_digest"
+        ],
+        "properties": {
+          "gate_id": {"type": "string", "minLength": 1},
+          "argv": {
+            "type": "array", "minItems": 1, "maxItems": 128,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "cwd": {"type": "string", "minLength": 1},
+          "command_digest": {"$ref": "#/$defs/digest"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time"},
+          "wall_time_milliseconds": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+          "exit_code": {"type": "integer", "minimum": 0, "maximum": 255},
+          "timed_out": {"type": "boolean"},
+          "status": {"enum": ["passed", "failed"]},
+          "stdout_ref": {"type": "string", "minLength": 1},
+          "stdout_digest": {"$ref": "#/$defs/digest"},
+          "stderr_ref": {"type": "string", "minLength": 1},
+          "stderr_digest": {"$ref": "#/$defs/digest"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "usage": {
+      "type": "object",
+      "required": [
+        "aggregation_semantics", "coverage", "complete", "delegation_event_count",
+        "threads", "aggregate", "wall_time_milliseconds"
+      ],
+      "properties": {
+        "aggregation_semantics": {"enum": ["root_inclusive", "per_thread_exclusive", "unknown"]},
+        "coverage": {"enum": ["root_only", "root_and_descendants"]},
+        "complete": {"type": "boolean"},
+        "delegation_event_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "threads": {
+          "type": "array", "minItems": 1, "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "required": [
+              "thread_id", "parent_thread_id", "role", "transcript_ref",
+              "transcript_digest", "evidence_refs", "complete", "input_tokens",
+              "cached_input_tokens", "output_tokens"
+            ],
+            "properties": {
+              "thread_id": {"type": "string", "minLength": 1},
+              "parent_thread_id": {"type": ["string", "null"], "minLength": 1},
+              "role": {"type": "string", "minLength": 1},
+              "transcript_ref": {"type": "string", "minLength": 1},
+              "transcript_digest": {"$ref": "#/$defs/digest"},
+              "native_transcript_ref": {"type": "string", "minLength": 1},
+              "native_transcript_digest": {"$ref": "#/$defs/digest"},
+              "evidence_refs": {
+                "type": "array", "maxItems": 4096,
+                "items": {"$ref": "#/$defs/evidence_ref"}
+              },
+              "complete": {"type": "boolean"},
+              "input_tokens": {"$ref": "#/$defs/count"},
+              "cached_input_tokens": {"$ref": "#/$defs/count"},
+              "output_tokens": {"$ref": "#/$defs/count"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "aggregate": {"$ref": "#/$defs/token_usage"},
+        "wall_time_milliseconds": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807}
+      },
+      "additionalProperties": false
+    },
+    "treatment_observation": {
+      "type": "object",
+      "required": [
+        "route_call_count", "loaded_skill_ids", "active_runtime_call_count",
+        "other_engineering_assistant_call_count", "delegation_event_count",
+        "recursive_discovery_count", "read_path_capture_status", "observed_read_paths",
+        "evidence_binding_version",
+        "hypothesis_artifact", "unresolved_hypothesis_ids", "delegation_hypothesis_batches",
+        "duplicate_full_review_delegations", "root_child_shared_evidence"
+      ],
+      "properties": {
+        "route_call_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "loaded_skill_ids": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "active_runtime_call_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "other_engineering_assistant_call_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "delegation_event_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "recursive_discovery_count": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "read_path_capture_status": {"enum": ["not_exposed", "captured"]},
+        "observed_read_paths": {
+          "type": "array", "maxItems": 4096, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "evidence_binding_version": {"const": "2.0"},
+        "unresolved_hypothesis_ids": {
+          "type": "array", "maxItems": 1024, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 256}
+        },
+        "hypothesis_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "delegation_hypothesis_batches": {
+          "type": "array", "maxItems": 1024,
+          "items": {
+            "type": "object",
+            "required": ["child_thread_id", "prompt_artifact"],
+            "properties": {
+              "child_thread_id": {"type": "string", "minLength": 1},
+              "prompt_artifact": {"$ref": "#/$defs/artifact_ref"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "duplicate_full_review_delegations": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "root_child_shared_evidence": {
+          "type": "array", "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "required": ["digest", "evidence_kind"],
+            "properties": {
+              "digest": {"$ref": "#/$defs/digest"},
+              "evidence_kind": {"$ref": "#/$defs/shareable_evidence_kind"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "broker": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["unavailable", "configured", "attested"]},
+        "broker_id": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "billing": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["not_collected", "unavailable", "collected"]},
+        "source": {"type": "string", "minLength": 1},
+        "cost_usd_micros": {"$ref": "#/$defs/count"}
+      },
+      "additionalProperties": false
+    },
+    "legacy_reason": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"evidence_status": {"const": "local_structural"}}},
+      "then": {
+        "required": [
+          "protocol_digest", "workload_digest", "actual_start_order", "started_at", "finished_at",
+          "process_exit_code",
+          "product_repository", "git_ref",
+          "treatment_digest", "prompt_digest", "prompt_artifact", "execution_config_digest", "environment_digest",
+          "quality_rubric_digest", "root_thread_id", "platform_transcript", "gate_receipts", "usage",
+          "treatment_observation", "broker", "billing", "outcome_artifact"
+        ],
+        "properties": {"schema_version": {"const": "2.0"}}
+      }
+    },
+    {
+      "if": {"properties": {"evidence_status": {"const": "legacy_unverifiable"}}},
+      "then": {"required": ["legacy_reason"]}
+    },
+    {
+      "if": {"properties": {"broker": {"properties": {"status": {"const": "attested"}}}}},
+      "then": {"properties": {"broker": {"required": ["broker_id"]}}}
+    },
+    {
+      "if": {"properties": {"billing": {"properties": {"status": {"const": "collected"}}}}},
+      "then": {"properties": {"billing": {"required": ["source", "cost_usd_micros"]}}}
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_ref": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "blind_review": {
+      "type": "object",
+      "required": ["assignment_artifact", "score_artifact", "reveal_artifact"],
+      "properties": {
+        "assignment_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "score_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "reveal_artifact": {"$ref": "#/$defs/artifact_ref"}
+      },
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["ref", "digest", "evidence_kind"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "evidence_kind": {"enum": [
+          "fixed_workload_input", "fixed_diff", "adapter_contract",
+          "security_regression_fixture", "quality_rubric", "fixed_environment_snapshot",
+          "root_note", "review_finding"
+        ]}
+      },
+      "additionalProperties": false
+    },
+    "shareable_evidence_kind": {"enum": [
+      "fixed_workload_input", "fixed_diff", "adapter_contract",
+      "security_regression_fixture", "quality_rubric", "fixed_environment_snapshot"
+    ]},
+    "count": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "token_usage": {
+      "type": "object",
+      "required": ["input_tokens", "cached_input_tokens", "output_tokens"],
+      "properties": {
+        "input_tokens": {"$ref": "#/$defs/count"},
+        "cached_input_tokens": {"$ref": "#/$defs/count"},
+        "output_tokens": {"$ref": "#/$defs/count"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -195,7 +196,7 @@ class CompilerAdapterTests(unittest.TestCase):
         )
         for groups in hooks["hooks"].values():
             self.assertEqual(
-                "mcp__engineering-assistant__engineering_assistant_.*",
+                "^mcp__engineering_assistant__engineering_assistant_.*$",
                 groups[0]["matcher"],
             )
             command = groups[0]["hooks"][0]["command"]
@@ -533,7 +534,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertEqual({"PreToolUse", "PostToolUse"}, set(hooks["hooks"]))
         self.assertEqual(
             {
-                "mcp__engineering-assistant__engineering_assistant_.*",
+                "^mcp__engineering_assistant__engineering_assistant_.*$",
             },
             {
                 group["matcher"]
@@ -541,6 +542,25 @@ class CompilerAdapterTests(unittest.TestCase):
                 for group in groups
             },
         )
+        matcher = next(
+            group["matcher"]
+            for groups in hooks["hooks"].values()
+            for group in groups
+        )
+        self.assertIsNotNone(
+            re.search(
+                matcher,
+                "mcp__engineering_assistant__engineering_assistant_route",
+            )
+        )
+        for unrelated_tool in (
+            "Bash",
+            "apply_patch",
+            "mcp__filesystem__read_file",
+            "mcp__other__mcp__engineering_assistant__engineering_assistant_route",
+            "mcp__engineering-assistant__engineering_assistant_route",
+        ):
+            self.assertIsNone(re.search(matcher, unrelated_tool), unrelated_tool)
 
         project = self.root / "codex-scoped-hook-project"
         project.mkdir()
@@ -551,7 +571,7 @@ class CompilerAdapterTests(unittest.TestCase):
             "cwd": str(project),
             "model": "test",
             "permission_mode": "default",
-            "tool_name": "mcp__engineering-assistant__engineering_assistant_route",
+            "tool_name": "mcp__engineering_assistant__engineering_assistant_route",
             "tool_input": {"intent": {"task_kind": "review"}},
             "tool_use_id": "scoped-tool",
         }
@@ -597,6 +617,15 @@ class CompilerAdapterTests(unittest.TestCase):
                 )
             ),
         )
+        efficiency_candidate = json.loads(
+            next(
+                (
+                    project
+                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                ).glob("*.json")
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual("tool_hook", efficiency_candidate["source"])
         self.assertEqual(
             1,
             len(

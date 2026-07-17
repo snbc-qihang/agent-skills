@@ -12,12 +12,17 @@
       "items": {
         "type": "object",
         "required": [
+          "experiment_kind", "experiment_protocol_digest", "arm_id",
           "task_id", "workload_digest", "variant", "git_ref", "treatment_digest",
           "execution_config_digest", "environment_digest",
           "quality_rubric_digest", "evaluator_id", "started_at",
           "finished_at", "artifact_paths", "artifact_measurements"
         ],
         "properties": {
+          "experiment_kind": {"enum": ["paired_canary", "delegation_ablation"]},
+          "experiment_protocol_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "arm_id": {"enum": ["baseline", "candidate", "minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"]},
+          "ablation_run_bindings": {"$ref": "#/$defs/ablation_run_bindings"},
           "task_id": {"type": "string", "minLength": 1},
           "workload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
           "variant": {"enum": ["baseline", "candidate"]},
@@ -29,23 +34,35 @@
           "evaluator_id": {"type": "string", "minLength": 1},
           "started_at": {"type": "string", "format": "date-time"},
           "finished_at": {"type": "string", "format": "date-time"},
-          "input_tokens": {"type": "integer", "minimum": 0},
-          "output_tokens": {"type": "integer", "minimum": 0},
-          "cost_usd_micros": {"type": "integer", "minimum": 0},
+          "input_tokens": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+          "noncached_input_tokens": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+          "output_tokens": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+          "wall_time_milliseconds": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+          "cost_usd_micros": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
           "quality_score": {"type": "number", "minimum": 0, "maximum": 100},
-          "document_noise_units": {"type": "integer", "minimum": 0},
-          "safety_violations": {"type": "integer", "minimum": 0},
+          "document_noise_units": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+          "safety_violations": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "blind_blocker_count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "blind_major_count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "applicable_matrix_cells": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "closed_matrix_cells": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "production_contract_failures": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "human_intervention_count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "human_rework_minutes": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+          "product_gate_failures": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "quality_blocker_count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+          "quality_major_count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
           "artifact_paths": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 64,
+            "maxItems": 512,
             "uniqueItems": true,
             "items": {"type": "string", "minLength": 1}
           },
           "artifact_measurements": {
             "type": "object",
             "minProperties": 1,
-            "maxProperties": 64,
+            "maxProperties": 512,
             "propertyNames": {"type": "string", "minLength": 1},
             "additionalProperties": {
               "type": "array",
@@ -53,15 +70,41 @@
               "uniqueItems": true,
               "items": {
                 "enum": [
-                  "usage", "billing", "quality_evaluation",
-                  "document_noise", "safety_audit"
+                  "usage", "timing", "billing", "quality_evaluation",
+                  "document_noise", "safety_audit", "experiment_protocol", "run_record",
+                  "raw_run_evidence", "inclusion_manifest", "local_audit_report"
                 ]
               }
             }
           }
         },
+        "allOf": [
+          {
+            "if": {"properties": {"experiment_kind": {"const": "delegation_ablation"}}},
+            "then": {"required": ["ablation_run_bindings"]},
+            "else": {"not": {"required": ["ablation_run_bindings"]}}
+          }
+        ],
         "additionalProperties": false
       }
+    }
+  },
+  "$defs": {
+    "ablation_run_bindings": {
+      "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ablation_run_binding"}
+    },
+    "ablation_run_binding": {
+      "type": "object",
+      "required": ["run_id", "workload_id", "repeat_index", "arm_id", "run_record_digest"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "workload_id": {"type": "string", "minLength": 1},
+        "repeat_index": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "arm_id": {"enum": ["minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"]},
+        "run_record_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.catalog import load_catalog  # noqa: E402
 from engineering_assistant.policy import PolicyOverride, resolve_policies  # noqa: E402
+from engineering_assistant.router import ROUTES  # noqa: E402
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
@@ -68,6 +69,15 @@ class CatalogTests(unittest.TestCase):
             "ui-ux-pro-max",
             self.catalog.provider_for_capability("frontend-design").id,
         )
+
+    def test_security_seam_guidance_is_progressive_and_does_not_expand_routing(self) -> None:
+        for skill_id in ("tdd", "code-review"):
+            pointers = self.catalog.skills[skill_id].context_pointers
+            self.assertTrue(
+                any(pointer.path == "references/security-seams.md" for pointer in pointers),
+                skill_id,
+            )
+        self.assertEqual(("implement", ("tdd", "code-review")), ROUTES["implement"])
 
     def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
         sourced = load_catalog(ROOT, require_sources=True)

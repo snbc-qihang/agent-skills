@@ -33,6 +33,7 @@ from engineering_assistant.model import (  # noqa: E402
 from engineering_assistant.natural_intent import normalize_request  # noqa: E402
 from engineering_assistant.provider_runtime import ProviderExecutor  # noqa: E402
 from engineering_assistant.state_store import StateStore  # noqa: E402
+from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
 class MCPServerTests(unittest.TestCase):
@@ -47,7 +48,13 @@ class MCPServerTests(unittest.TestCase):
             return False
 
     def setUp(self) -> None:
-        self.server = MCPServer(RuntimeTools(ROOT))
+        self.server = MCPServer(
+            RuntimeTools(
+                ROOT,
+                trust_verifier=self.TestVerifier(),
+                evidence_broker_enabled=True,
+            )
+        )
 
     def request(self, method: str, params: dict | None = None, request_id: int = 1) -> dict:
         message = {"jsonrpc": "2.0", "id": request_id, "method": method}
@@ -154,6 +161,120 @@ class MCPServerTests(unittest.TestCase):
         self.assertNotIn("engineering_assistant_feedback_summary", names)
         with self.assertRaisesRegex(KeyError, "unknown tool"):
             tools.call("engineering_assistant_feedback_summary", {})
+
+    def test_route_reports_when_persisted_flow_cannot_receive_trusted_evidence(self) -> None:
+        intent = normalize_request("Implement the accepted endpoint behavior").to_dict()
+
+        unavailable = RuntimeTools(ROOT).call(
+            "engineering_assistant_route",
+            {"intent": intent},
+        )
+        self.assertEqual(
+            {
+                "external_approval_available": False,
+                "external_evidence_available": False,
+                "persisted_flow_ready": False,
+                "recommended_execution": "skills_only",
+                "reason": "host_trust_unavailable",
+            },
+            unavailable["execution"],
+        )
+
+        available = RuntimeTools(
+            ROOT,
+            trust_verifier=self.TestVerifier(),
+            evidence_broker_enabled=True,
+        ).call(
+            "engineering_assistant_route",
+            {"intent": intent},
+        )
+        self.assertTrue(available["execution"]["persisted_flow_ready"])
+        self.assertEqual(
+            "persisted_flow",
+            available["execution"]["recommended_execution"],
+        )
+
+    def test_route_never_recommends_execution_for_ask_confirm_or_block(self) -> None:
+        base = {
+            "task_kind": "implement",
+            "requested_outcome": "change code",
+            "scope": ["module-a"],
+            "requested_external_actions": [],
+            "risk_signals": [],
+            "confidence": 0.95,
+            "evidence": ["user request"],
+        }
+        cases = (
+            ({**base, "confidence": 0.4}, "ask", "route_requires_input"),
+            (
+                {**base, "requested_external_actions": ["production write"]},
+                "confirm",
+                "route_requires_confirmation",
+            ),
+            (
+                {**base, "risk_signals": ["forbidden"]},
+                "block",
+                "route_blocked",
+            ),
+        )
+        for intent, decision, reason in cases:
+            with self.subTest(decision=decision):
+                routed = self.server.tools.call(
+                    "engineering_assistant_route",
+                    {"intent": intent},
+                )
+                self.assertEqual(decision, routed["decision"]["decision"])
+                self.assertFalse(routed["execution"]["persisted_flow_ready"])
+                self.assertEqual("stop", routed["execution"]["recommended_execution"])
+                self.assertEqual(reason, routed["execution"]["reason"])
+
+        broker_ready = RuntimeTools(
+            ROOT,
+            trust_verifier=self.TestVerifier(),
+            evidence_broker_enabled=True,
+            approval_broker_enabled=True,
+        ).call(
+            "engineering_assistant_route",
+            {"intent": {**base, "requested_external_actions": ["production write"]}},
+        )
+        self.assertEqual("confirm", broker_ready["decision"]["decision"])
+        self.assertEqual("stop", broker_ready["execution"]["recommended_execution"])
+        self.assertTrue(broker_ready["execution"]["persisted_flow_ready"])
+
+    def test_no_broker_runtime_rejects_flow_start_without_writing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            tools = RuntimeTools(ROOT)
+            intent = normalize_request(
+                "Implement the accepted endpoint behavior"
+            ).to_dict()
+            with self.assertRaisesRegex(ValidationFailure, "evidence broker"):
+                tools.call(
+                    "engineering_assistant_start",
+                    {
+                        "intent": intent,
+                        "task_id": "no-broker-task",
+                        "run_id": "no-broker-run",
+                        "project_root": str(project),
+                    },
+                )
+            self.assertFalse(
+                (project / ".run-artifacts/engineering-assistant").exists()
+            )
+
+    def test_no_broker_runtime_rejects_existing_run_provider_and_investigation_paths(self) -> None:
+        tools = RuntimeTools(ROOT)
+        with self.assertRaisesRegex(ValidationFailure, "evidence broker"):
+            tools._provider_invoke({})
+        for method in (
+            tools._investigation_propose,
+            tools._investigation_list,
+            tools._investigation_start,
+            tools._investigation_finish,
+        ):
+            with self.subTest(method=method.__name__):
+                with self.assertRaisesRegex(ValidationFailure, "evidence broker"):
+                    method({})
 
     def test_artifact_validator_is_a_direct_readonly_mcp_tool(self) -> None:
         artifact = {
@@ -451,8 +572,18 @@ class MCPServerTests(unittest.TestCase):
                     },
                 },
             )
-        self.assertTrue(response["result"]["isError"])
-        self.assertIn("must be observed or verified", response["result"]["content"][0]["text"])
+            self.assertTrue(response["result"]["isError"])
+            self.assertIn(
+                "cannot register completion evidence",
+                response["result"]["content"][0]["text"],
+            )
+            self.assertFalse(
+                (
+                    project
+                    / ".run-artifacts/engineering-assistant"
+                    / "claimed-run/evidence/model-claim.json"
+                ).exists()
+            )
 
     def test_provider_invocation_is_audited_and_idempotently_falls_back(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -547,7 +678,13 @@ class MCPServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
             verifier = self.TestVerifier()
-            server = MCPServer(RuntimeTools(ROOT, trust_verifier=verifier))
+            server = MCPServer(
+                RuntimeTools(
+                    ROOT,
+                    trust_verifier=verifier,
+                    evidence_broker_enabled=True,
+                )
+            )
             state_store = StateStore(project, ROOT / "schemas")
             state = RuntimeEngine(load_catalog(ROOT)).start(
                 "mcp-quality-task",
@@ -662,7 +799,13 @@ class MCPServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
             verifier = self.TestVerifier()
-            server = MCPServer(RuntimeTools(ROOT, trust_verifier=verifier))
+            server = MCPServer(
+                RuntimeTools(
+                    ROOT,
+                    trust_verifier=verifier,
+                    evidence_broker_enabled=True,
+                )
+            )
             state_store = StateStore(project, ROOT / "schemas")
             state = RuntimeEngine(load_catalog(ROOT)).start(
                 "mcp-investigation-task",

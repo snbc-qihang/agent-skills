@@ -758,7 +758,13 @@ class TrustTests(unittest.TestCase):
             self.assertEqual("grant-selection-1", selected["record"]["decision_ref"])
             self.assertEqual(1, selected["record"]["revision"])
 
-            server = MCPServer(RuntimeTools(ROOT))
+            server = MCPServer(
+                RuntimeTools(
+                    ROOT,
+                    trust_verifier=SimpleNamespace(),
+                    evidence_broker_enabled=True,
+                )
+            )
             listed = server.handle(
                 {
                     "jsonrpc": "2.0",

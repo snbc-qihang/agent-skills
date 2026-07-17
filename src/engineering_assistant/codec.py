@@ -37,6 +37,13 @@ def usage_observation_plan_from_dict(data: Mapping[str, Any]) -> UsageObservatio
 def usage_observation_ledger_from_dict(
     data: Mapping[str, Any],
 ) -> UsageObservationLedger:
+    signals = list(data["signals"])
+    raw_signal_counts = data.get("signal_counts")
+    signal_counts = (
+        {signal: 1 for signal in signals}
+        if "signal_counts" not in data
+        else dict(raw_signal_counts)
+    )
     return UsageObservationLedger(
         plan=usage_observation_plan_from_dict(data["plan"]),
         tool_calls=data["tool_calls"],
@@ -45,7 +52,8 @@ def usage_observation_ledger_from_dict(
         output_bytes=data["output_bytes"],
         tool_use_signatures=dict(data["tool_use_signatures"]),
         completed_tool_use_ids=list(data["completed_tool_use_ids"]),
-        signals=list(data["signals"]),
+        signals=signals,
+        signal_counts=signal_counts,
         revision=data["revision"],
     )
 

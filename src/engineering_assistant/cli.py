@@ -11,6 +11,12 @@ from . import canary_limits
 from .artifact_validation import ARTIFACT_SCHEMAS
 from .artifact_io import ArtifactConflict, ArtifactIO
 from .canary import import_canary_attestation, prepare_canary_bundle
+from .canary_protocol import (
+    MAX_AUDIT_INPUT_FILE_BYTES,
+    MAX_AUDIT_INPUT_FILES,
+    MAX_AUDIT_INPUT_TOTAL_BYTES,
+    audit_canary_protocol,
+)
 from .catalog import DEFAULT_REPOSITORY_ROOT, load_catalog
 from .codec import (
     evidence_ref_from_dict,
@@ -353,6 +359,49 @@ def command_canary_validate(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "passed" else 2
 
 
+def command_canary_audit(args: argparse.Namespace) -> int:
+    repository_root = Path(args.repository_root).resolve()
+    input_paths = [
+        Path(args.protocol),
+        *(Path(path) for path in args.run_record),
+        Path(args.inclusion_manifest),
+    ]
+    if len(input_paths) > MAX_AUDIT_INPUT_FILES:
+        raise ValidationFailure("canary audit input file count exceeds limit")
+    inputs = []
+    total_bytes = 0
+    for path in input_paths:
+        if path.is_symlink():
+            raise ValidationFailure("canary audit input cannot be a symlink")
+        resolved = path.resolve()
+        source = ArtifactIO(resolved.parent, ".")
+        try:
+            payload, raw = source.read_json_limited(
+                MAX_AUDIT_INPUT_FILE_BYTES,
+                resolved.name,
+            )
+        finally:
+            source.close()
+        total_bytes += len(raw)
+        if total_bytes > MAX_AUDIT_INPUT_TOTAL_BYTES:
+            raise ValidationFailure("canary audit input bytes exceed limit")
+        inputs.append(payload)
+    report = audit_canary_protocol(
+        inputs[0],
+        inputs[1:-1],
+        inputs[-1],
+        schema_root=repository_root / "evals/canary",
+        evidence_root=args.evidence_root,
+    )
+    _emit(report)
+    if report["status"] in {
+        "local_structural",
+        "legacy_unverifiable",
+    }:
+        return 3
+    return 2
+
+
 def command_canary_prepare(args: argparse.Namespace) -> int:
     broker_id, config_digest = _canary_trust_provenance(args)
     _emit(
@@ -471,6 +520,8 @@ def command_mcp_serve(args: argparse.Namespace) -> int:
             RuntimeTools(
                 args.repository_root,
                 trust_verifier=args.trust_verifier,
+                evidence_broker_enabled=bool(args.evidence_broker.get("enabled")),
+                approval_broker_enabled=bool(args.approval_broker.get("enabled")),
             )
         )
     )
@@ -621,6 +672,16 @@ def build_parser() -> argparse.ArgumentParser:
     canary = subparsers.add_parser("canary-validate")
     canary.add_argument("--result", required=True)
     canary.set_defaults(handler=command_canary_validate)
+
+    canary_audit = subparsers.add_parser(
+        "canary-audit",
+        help="只读审计三臂 canary 运行、纳入替换和本地证据完整性。",
+    )
+    canary_audit.add_argument("--protocol", required=True)
+    canary_audit.add_argument("--evidence-root", required=True)
+    canary_audit.add_argument("--run-record", action="append", required=True)
+    canary_audit.add_argument("--inclusion-manifest", required=True)
+    canary_audit.set_defaults(handler=command_canary_audit)
 
     feedback_summary = subparsers.add_parser(
         "feedback-summary",

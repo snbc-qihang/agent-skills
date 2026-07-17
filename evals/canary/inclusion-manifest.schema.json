@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "experiment_id", "protocol_digest", "entries"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "protocol_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entries": {
+      "type": "array", "minItems": 1, "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "disposition", "reason_code", "run_record_digest", "decided_at"],
+        "properties": {
+          "run_id": {"type": "string", "minLength": 1},
+          "disposition": {"enum": ["included", "excluded", "replaced"]},
+          "reason_code": {"enum": [
+            "protocol_conformant", "legacy_unverifiable", "protocol_nonconformant",
+            "standard_gate_failed", "usage_attribution_incomplete",
+            "transcript_incomplete", "treatment_nonconformance",
+            "infrastructure_invalidated"
+          ]},
+          "replacement_run_id": {"type": "string", "minLength": 1},
+          "invalidation_artifact": {"$ref": "#/$defs/artifact_ref"},
+          "blind_review": {"$ref": "#/$defs/blind_review"},
+          "run_record_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "decided_at": {"type": "string", "format": "date-time"}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"disposition": {"const": "replaced"}}},
+            "then": {
+              "required": ["replacement_run_id", "invalidation_artifact"],
+              "properties": {"reason_code": {"const": "infrastructure_invalidated"}}
+            }
+          },
+          {
+            "if": {"properties": {"disposition": {"const": "included"}}},
+            "then": {"required": ["blind_review"]}
+          }
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_ref": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "blind_review": {
+      "type": "object", "required": ["assignment_artifact", "score_artifact", "reveal_artifact"],
+      "properties": {
+        "assignment_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "score_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "reveal_artifact": {"$ref": "#/$defs/artifact_ref"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

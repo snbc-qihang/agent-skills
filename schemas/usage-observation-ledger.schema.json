@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-skills.local/schemas/usage-observation-ledger.schema.json",
   "type": "object",
-  "required": ["plan", "tool_calls", "shell_calls", "index_queries", "output_bytes", "tool_use_signatures", "completed_tool_use_ids", "signals", "revision"],
+  "required": ["plan", "tool_calls", "shell_calls", "index_queries", "output_bytes", "tool_use_signatures", "completed_tool_use_ids", "signals", "signal_counts", "revision"],
   "properties": {
     "plan": {
       "type": "object",
@@ -28,6 +28,7 @@
     "tool_use_signatures": {"type": "object", "maxProperties": 256, "propertyNames": {"pattern": "^tool-[a-f0-9]{16}$"}, "additionalProperties": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}},
     "completed_tool_use_ids": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^tool-[a-f0-9]{16}$"}},
     "signals": {"type": "array", "maxItems": 11, "uniqueItems": true, "items": {"enum": ["duplicate_call", "index_query_reference_exceeded", "large_single_output", "output_reference_exceeded", "plugin_skill_self_read", "post_without_pre", "replayed_tool_event", "retention_truncated", "shell_call_reference_exceeded", "tool_call_reference_exceeded", "tool_use_id_reused"]}},
+    "signal_counts": {"type": "object", "maxProperties": 11, "propertyNames": {"enum": ["duplicate_call", "index_query_reference_exceeded", "large_single_output", "output_reference_exceeded", "plugin_skill_self_read", "post_without_pre", "replayed_tool_event", "retention_truncated", "shell_call_reference_exceeded", "tool_call_reference_exceeded", "tool_use_id_reused"]}, "additionalProperties": {"type": "integer", "minimum": 1}},
     "revision": {"type": "integer", "minimum": 0}
   },
   "additionalProperties": false

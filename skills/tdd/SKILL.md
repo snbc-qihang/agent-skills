@@ -14,8 +14,8 @@ description: 在确认的公共 seam 上使用红绿循环纵向切片实现一�
 3. 运行测试并记录红灯结果。
 4. 实现最小端到端行为，避免推测性分层。
 5. 运行同一测试和相关回归套件，在保持绿灯的前提下清理代码；删除无调用方抽象、重复路径和不必要计算。
-6. 为实现流提交六维 `QualitySnapshot`，每个判断引用实际测试、源码或评审证据；存在告警或未评估项时继续修复。
+6. 始终完成正确性、复杂度、冗余、性能、架构和测试质量六维判断，每个判断引用实际测试、源码或评审证据；存在告警或未评估项时继续修复。只有当前存在可执行的 active persisted quality node 时才提交 Runtime `QualitySnapshot`，否则只内联报告六维判断，不构造或反复校验形式化 flow 产物。
 
-只有必须控制真实依赖边界时才读取 [references/mocking.md](references/mocking.md)。
+只有必须控制真实依赖边界时才读取 [references/mocking.md](references/mocking.md)。行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同时，才读取 [references/security-seams.md](references/security-seams.md)。
 
 不得先写实现，再把没有实际运行的测试描述成红灯。

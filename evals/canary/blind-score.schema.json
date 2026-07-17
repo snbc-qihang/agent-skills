@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version", "experiment_id", "opaque_label", "asset_digest",
+    "rubric_digest", "evaluator_session_id", "quality_score",
+    "blind_blocker_count", "blind_major_count", "frozen_at",
+    "evaluator_transcript_artifact"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "opaque_label": {"type": "string", "pattern": "^opaque-[0-9a-f]{16,64}$"},
+    "asset_digest": {"$ref": "#/$defs/digest"},
+    "rubric_digest": {"$ref": "#/$defs/digest"},
+    "evaluator_session_id": {"type": "string", "minLength": 1},
+    "quality_score": {"type": "number", "minimum": 0, "maximum": 100},
+    "blind_blocker_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "blind_major_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "evaluator_transcript_artifact": {"$ref": "#/$defs/artifact_ref"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_ref": {
+      "type": "object", "required": ["ref", "digest"],
+      "properties": {"ref": {"type": "string", "minLength": 1}, "digest": {"$ref": "#/$defs/digest"}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

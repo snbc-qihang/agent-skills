@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version", "experiment_id", "product_repository", "git_ref",
+    "minimum_repeats", "execution_config", "execution_config_digest", "environment_digest",
+    "environment_artifact", "quality_rubric_digest", "quality_rubric_artifact",
+    "order_policy", "randomization_seed_digest",
+    "required_gate_ids", "gate_specs", "workloads", "arms", "run_plan"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "experiment_kind": {"enum": ["routing_ablation", "delegation_ablation"]},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "product_repository": {"type": "string", "minLength": 1},
+    "git_ref": {"type": "string", "minLength": 1},
+    "minimum_repeats": {"type": "integer", "minimum": 2, "maximum": 32},
+    "execution_config_digest": {"$ref": "#/$defs/digest"},
+    "execution_config": {
+      "type": "object",
+      "required": [
+        "model", "reasoning_effort", "sandbox_mode", "approval_policy",
+        "network_policy", "plugin_payload_digest", "package_manifest_artifact",
+        "prompt_digest", "cli_argv"
+      ],
+      "properties": {
+        "model": {"type": "string", "minLength": 1},
+        "reasoning_effort": {"type": "string", "minLength": 1},
+        "sandbox_mode": {"type": "string", "minLength": 1},
+        "approval_policy": {"type": "string", "minLength": 1},
+        "network_policy": {"type": "string", "minLength": 1},
+        "plugin_payload_digest": {"$ref": "#/$defs/digest"},
+        "package_manifest_artifact": {"$ref": "#/$defs/artifact_ref"},
+        "plugin_root": {"type": "string", "pattern": "^/", "minLength": 2},
+        "plugin_skill_digests": {
+          "type": "object", "minProperties": 1, "maxProperties": 64,
+          "propertyNames": {"pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "additionalProperties": {"$ref": "#/$defs/digest"}
+        },
+        "prompt_digest": {"$ref": "#/$defs/digest"},
+        "cli_argv": {
+          "type": "array", "minItems": 1, "maxItems": 128,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment_digest": {"$ref": "#/$defs/digest"},
+    "environment_artifact": {"$ref": "#/$defs/artifact_ref"},
+    "quality_rubric_digest": {"$ref": "#/$defs/digest"},
+    "quality_rubric_artifact": {"$ref": "#/$defs/artifact_ref"},
+    "order_policy": {"const": "interleaved_blocks"},
+    "randomization_seed_digest": {"$ref": "#/$defs/digest"},
+    "required_gate_ids": {
+      "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "gate_specs": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": ["gate_id", "argv", "cwd"],
+        "properties": {
+          "gate_id": {"type": "string", "minLength": 1},
+          "argv": {
+            "type": "array", "minItems": 1, "maxItems": 128,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "cwd": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "workloads": {
+      "type": "array", "minItems": 1, "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": [
+          "workload_id", "workload_digest", "input_artifact", "deliverable_capture"
+        ],
+        "properties": {
+          "workload_id": {"type": "string", "minLength": 1},
+          "workload_digest": {"$ref": "#/$defs/digest"},
+          "input_artifact": {"$ref": "#/$defs/artifact_ref"},
+          "deliverable_capture": {"$ref": "#/$defs/deliverable_capture"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "arms": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["arm_id", "prompt_digest", "treatment_digest", "conformance"],
+        "properties": {
+          "arm_id": {"enum": [
+            "route_only", "minimum_skills", "full_local",
+            "minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"
+          ]},
+          "prompt_digest": {"$ref": "#/$defs/digest"},
+          "treatment_digest": {"$ref": "#/$defs/digest"},
+          "conformance": {
+            "type": "object",
+            "required": [
+              "minimum_route_calls", "maximum_route_calls", "required_skill_ids",
+              "allowed_skill_ids", "maximum_active_runtime_calls",
+              "maximum_other_engineering_assistant_calls", "delegation_policy",
+              "allowed_read_roots", "forbid_recursive_discovery"
+            ],
+            "properties": {
+              "minimum_route_calls": {"type": "integer", "minimum": 0, "maximum": 32},
+              "maximum_route_calls": {"type": "integer", "minimum": 0, "maximum": 32},
+              "required_skill_ids": {
+                "type": "array", "maxItems": 64, "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "allowed_skill_ids": {
+                "type": "array", "maxItems": 64, "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "maximum_active_runtime_calls": {"type": "integer", "minimum": 0, "maximum": 1024},
+              "maximum_other_engineering_assistant_calls": {"type": "integer", "minimum": 0, "maximum": 1024},
+              "delegation_policy": {"enum": ["forbidden", "allowed", "required"]},
+              "allowed_read_roots": {
+                "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1}
+              },
+              "forbid_recursive_discovery": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "run_plan": {
+      "type": "array", "minItems": 6, "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "required": ["run_id", "workload_id", "arm_id", "repeat_index", "planned_order", "plan_role"],
+        "properties": {
+          "run_id": {"type": "string", "minLength": 1},
+          "workload_id": {"type": "string", "minLength": 1},
+          "arm_id": {"enum": [
+            "route_only", "minimum_skills", "full_local",
+            "minimum_matrix_inline", "minimum_matrix_risk_delegation", "full_local_control"
+          ]},
+          "repeat_index": {"type": "integer", "minimum": 1, "maximum": 1024},
+          "planned_order": {"type": "integer", "minimum": 1, "maximum": 4096}
+          ,
+          "plan_role": {"enum": ["primary", "replacement_spare"]},
+          "replacement_for_run_id": {"type": "string", "minLength": 1}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"plan_role": {"const": "replacement_spare"}}},
+            "then": {"required": ["replacement_for_run_id"]}
+          }
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_ref": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "deliverable_capture": {
+      "type": "object",
+      "required": ["capture_kind"],
+      "properties": {
+        "capture_kind": {
+          "enum": ["final_response", "workspace_patch", "workspace_tree"]
+        },
+        "path_roots": {
+          "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"capture_kind": {"const": "final_response"}}},
+          "then": {"not": {"required": ["path_roots"]}},
+          "else": {"required": ["path_roots"]}
+        }
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

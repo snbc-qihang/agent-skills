@@ -271,6 +271,7 @@ class UsageObservationLedger(Serializable):
     tool_use_signatures: Dict[str, str]
     completed_tool_use_ids: List[str]
     signals: List[str]
+    signal_counts: Dict[str, int]
     revision: int
 
 

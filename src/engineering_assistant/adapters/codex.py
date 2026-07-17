@@ -98,13 +98,13 @@ class CodexAdapter:
                     "hooks": {
                         "PreToolUse": [
                             {
-                                "matcher": "mcp__engineering-assistant__engineering_assistant_.*",
+                                "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
                                 "hooks": [hook_handler],
                             }
                         ],
                         "PostToolUse": [
                             {
-                                "matcher": "mcp__engineering-assistant__engineering_assistant_.*",
+                                "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
                                 "hooks": [hook_handler],
                             }
                         ],

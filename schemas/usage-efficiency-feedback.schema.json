@@ -11,7 +11,7 @@
   "properties": {
     "schema_version": {"const": "1.0"},
     "candidate_id": {"type": "string", "pattern": "^efficiency-[0-9a-f]{24}$"},
-    "source": {"enum": ["stop_hook", "post_llm_call"]},
+    "source": {"enum": ["tool_hook", "stop_hook", "post_llm_call"]},
     "status": {"enum": ["pending", "accepted", "rejected"]},
     "tool_calls": {"type": "integer", "minimum": 0},
     "shell_calls": {"type": "integer", "minimum": 0},
