@@ -177,13 +177,15 @@ class CompilerAdapterTests(unittest.TestCase):
         mcp_config = json.loads((codex / ".mcp.json").read_text(encoding="utf-8"))
         self.assertEqual(
             ["mcp-serve"],
-            mcp_config["mcpServers"]["engineering-assistant"]["args"][-1:],
+            mcp_config["mcpServers"]["teamwork-engineering-assistant"]["args"][-1:],
         )
         self.assertEqual(
             "./engineering-assistant/bin/ea",
-            mcp_config["mcpServers"]["engineering-assistant"]["command"],
+            mcp_config["mcpServers"]["teamwork-engineering-assistant"]["command"],
         )
-        self.assertEqual(".", mcp_config["mcpServers"]["engineering-assistant"]["cwd"])
+        self.assertEqual(
+            ".", mcp_config["mcpServers"]["teamwork-engineering-assistant"]["cwd"]
+        )
 
         hermes_manifest = (hermes / "plugin.yaml").read_text(encoding="utf-8")
         self.assertIn("provides_tools:", hermes_manifest)
@@ -196,7 +198,7 @@ class CompilerAdapterTests(unittest.TestCase):
         )
         for groups in hooks["hooks"].values():
             self.assertEqual(
-                "^mcp__engineering_assistant__engineering_assistant_.*$",
+                "^mcp__teamwork_engineering_assistant__engineering_assistant_.*$",
                 groups[0]["matcher"],
             )
             command = groups[0]["hooks"][0]["command"]
@@ -434,7 +436,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertIn(
             "hookSpecificOutput",
             run_continuation_prompt(
-                "使用 engineering-assistant 插件评审当前 diff。",
+                "使用 teamwork-engineering-assistant 插件评审当前 diff。",
                 "continuation-turn-1",
             ),
         )
@@ -534,7 +536,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertEqual({"PreToolUse", "PostToolUse"}, set(hooks["hooks"]))
         self.assertEqual(
             {
-                "^mcp__engineering_assistant__engineering_assistant_.*$",
+                "^mcp__teamwork_engineering_assistant__engineering_assistant_.*$",
             },
             {
                 group["matcher"]
@@ -550,7 +552,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertIsNotNone(
             re.search(
                 matcher,
-                "mcp__engineering_assistant__engineering_assistant_route",
+                "mcp__teamwork_engineering_assistant__engineering_assistant_route",
             )
         )
         for unrelated_tool in (
@@ -558,6 +560,7 @@ class CompilerAdapterTests(unittest.TestCase):
             "apply_patch",
             "mcp__filesystem__read_file",
             "mcp__other__mcp__engineering_assistant__engineering_assistant_route",
+            "mcp__engineering_assistant__engineering_assistant_route",
             "mcp__engineering-assistant__engineering_assistant_route",
         ):
             self.assertIsNone(re.search(matcher, unrelated_tool), unrelated_tool)
@@ -737,7 +740,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.0.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("2.0.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -749,9 +752,9 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.0.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("2.0.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"1.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"2.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
 
     def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
         output = self.root / "runtime-smoke"
@@ -816,7 +819,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
                 {
                     "schema_version": "1.0",
                     "profiles": {
-                        "default": {
+                        "rrq-yq-team": {
                             "evidence_broker": {
                                 "enabled": True,
                                 "id": "enterprise-evidence",
@@ -826,7 +829,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
                             "approval_broker": {
                                 "enabled": False,
                                 "id": "enterprise-approval",
-                                "audience": "engineering-assistant",
+                                "audience": "teamwork-engineering-assistant",
                                 "introspection_url": "https://broker.example/approval",
                                 "timeout_seconds": 5,
                             },
@@ -927,7 +930,7 @@ print(json.dumps({
         self.assertEqual("review", json.loads(second)["decision"]["flow_id"])
         context.hooks["post_llm_call"](
             "hermes-efficiency-session",
-            "使用 engineering-assistant 插件评审当前变更。",
+            "使用 teamwork-engineering-assistant 插件评审当前变更。",
             "评审完成。",
             [],
             "test",
@@ -982,7 +985,7 @@ print(json.dumps({
         ) as collect_turn:
             context.hooks["post_llm_call"](
                 "hermes-efficiency-session",
-                "使用 engineering-assistant 插件评审当前变更。",
+                "使用 teamwork-engineering-assistant 插件评审当前变更。",
                 "发现一个需要记录的人工修正。",
                 [],
                 "test",
@@ -1010,7 +1013,7 @@ print(json.dumps({
         ) as collect_turn:
             context.hooks["post_llm_call"](
                 "hermes-efficiency-session",
-                "使用 engineering-assistant 插件评审当前变更。",
+                "使用 teamwork-engineering-assistant 插件评审当前变更。",
                 "发现一个需要记录的人工修正。",
                 [],
                 "test",
@@ -1063,7 +1066,7 @@ print(json.dumps({
             )
             context.hooks["post_llm_call"](
                 "hermes-mode-session",
-                "使用 engineering-assistant 插件评审当前变更。",
+                "使用 teamwork-engineering-assistant 插件评审当前变更。",
                 "评审完成。",
                 [],
                 "test",
@@ -1228,7 +1231,7 @@ print(json.dumps({
 
         context.hooks["post_llm_call"](
             "session-1",
-            "使用 $engineering-assistant:code-review，补充要求：不要增加新依赖。",
+            "使用 $teamwork-engineering-assistant:code-review，补充要求：不要增加新依赖。",
             "当前被测试失败阻断。",
             [],
             "test",
@@ -1271,7 +1274,7 @@ print(json.dumps({
         self.assertIsNone(
             context.hooks["post_llm_call"](
                 hostile_session,
-                "使用 $engineering-assistant:code-review 完成评审。",
+                "使用 $teamwork-engineering-assistant:code-review 完成评审。",
                 "评审完成。",
                 [],
                 "test",
@@ -1415,7 +1418,7 @@ print(json.dumps({
         for index in range(1025):
             context.hooks["post_llm_call"](
                 f"explicit-session-{index}",
-                "使用 engineering-assistant 插件评审当前 diff。",
+                "使用 teamwork-engineering-assistant 插件评审当前 diff。",
                 "评审完成。",
                 [],
                 "test",

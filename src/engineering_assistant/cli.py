@@ -287,6 +287,16 @@ def command_validate(args: argparse.Namespace) -> int:
             "flows": len(catalog.flows),
             "policies": len(catalog.policies),
             "packs": len(catalog.packs),
+            "profiles": len(catalog.profiles),
+            "rule_catalogs": len(catalog.rule_catalogs),
+            "team_rules": sum(
+                len(rule_catalog.rules)
+                for rule_catalog in catalog.rule_catalogs.values()
+            ),
+            "team_rule_sources": sum(
+                len(rule_catalog.sources)
+                for rule_catalog in catalog.rule_catalogs.values()
+            ),
             "providers": len(catalog.providers),
             "sources": len(catalog.sources),
             "sources_required": args.require_sources,
@@ -530,7 +540,7 @@ def command_mcp_serve(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ea")
     parser.add_argument("--repository-root", default=str(DEFAULT_REPOSITORY_ROOT))
-    parser.add_argument("--profile", default="default")
+    parser.add_argument("--profile")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     route = subparsers.add_parser("route")
@@ -717,6 +727,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         catalog = load_catalog(args.repository_root)
+        args.profile = args.profile or catalog.product.default_profile_id
         bindings = trust_bindings_from_host(
             catalog.profiles[args.profile],
             catalog.root / "schemas",

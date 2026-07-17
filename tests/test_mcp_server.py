@@ -434,11 +434,12 @@ class MCPServerTests(unittest.TestCase):
                     "run_id": "run-1",
                     "project_root": str(project),
                     "context_refs": [],
+                    "profile": "default",
                 },
             )
             advanced = self.server.tools.call(
                 "engineering_assistant_next",
-                {"run_id": "run-1", "project_root": str(project)},
+                {"run_id": "run-1", "project_root": str(project), "profile": "default"},
             )
             self.assertEqual("run-1", started["state"]["run_id"])
             self.assertEqual("repo-context", advanced["node"]["id"])

@@ -11,6 +11,8 @@ from typing import Mapping, TextIO
 
 MAX_HOOK_INPUT_CHARS = 1_048_576
 OBSERVATION_ROOT = ".run-artifacts/engineering-assistant/usage-observations"
+PLUGIN_NAMES = ("teamwork-engineering-assistant", "engineering-assistant")
+PLUGIN_SERVER_NAMES = frozenset(name.replace("-", "_") for name in PLUGIN_NAMES)
 PLUGIN_SKILL_IDS = (
     "engineering-assistant",
     "research",
@@ -42,8 +44,9 @@ PLUGIN_TOOL_NAMES = frozenset(
 OBSERVATION_EXEMPT_TOOL_NAMES = frozenset(
     {"engineering_assistant_feedback_summary"}
 )
+_PLUGIN_NAME = r"(?:" + "|".join(re.escape(name) for name in PLUGIN_NAMES) + r")"
 _SKILL_TOKEN = (
-    r"\$engineering-assistant(?::(?:"
+    r"\$" + _PLUGIN_NAME + r"(?::(?:"
     + "|".join(re.escape(skill) for skill in PLUGIN_SKILL_IDS)
     + r"))?(?!:)\b"
 )
@@ -68,24 +71,24 @@ _NAMESPACED_PLUGIN_CALLS = (
 )
 _NATURAL_PLUGIN_CALL = re.compile(
     r"^\s*" + _ZH_COMMAND_PREFIX + r"(?:已安装的\s*)?"
-    r"engineering-assistant\s*插件"
+    + _PLUGIN_NAME + r"\s*插件"
     r"(?=\s|[，,。:：]|完成|执行|进行|评审|审查|分析|处理|帮|$)",
     re.IGNORECASE,
 )
 _ENGLISH_PLUGIN_CALL = re.compile(
     r"^\s*" + _EN_COMMAND_PREFIX +
-    r"(?:the\s+)?(?:installed\s+)?engineering-assistant\s+plugin\b",
+    r"(?:the\s+)?(?:installed\s+)?" + _PLUGIN_NAME + r"\s+plugin\b",
     re.IGNORECASE,
 )
 _SEQUENCED_PLUGIN_CALLS = (
     re.compile(
         r"(?:\bthen\s+|然后\s*)" + _EN_COMMAND_PREFIX
-        + r"(?:the\s+)?(?:installed\s+)?engineering-assistant\s+plugin\b",
+        + r"(?:the\s+)?(?:installed\s+)?" + _PLUGIN_NAME + r"\s+plugin\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"(?:\bthen\s+|然后\s*)" + _ZH_COMMAND_PREFIX
-        + r"(?:已安装的\s*)?engineering-assistant\s*插件",
+        + r"(?:已安装的\s*)?" + _PLUGIN_NAME + r"\s*插件",
         re.IGNORECASE,
     ),
 )
@@ -106,10 +109,10 @@ _POLICY_OR_CONDITIONAL_CONTEXT = re.compile(
 )
 _NEGATING_CONTEXT = re.compile(
     r"不是(?:本|当前)?任务[^。！？!?]{0,24}(?:要求|请求)|"
-    r"(?:不要|不应|无需)[^。！？!?]{0,24}(?:使用|调用|启用|用)[^。！？!?]{0,24}engineering-assistant|"
+    r"(?:不要|不应|无需)[^。！？!?]{0,24}(?:使用|调用|启用|用)[^。！？!?]{0,24}" + _PLUGIN_NAME + r"|"
     r"(?:\bdo\s+not\b|\bdon't\b)[^.;!?]{0,24}(?:use|invoke|enable)"
-    r"[^.;!?]{0,24}(?:engineering-assistant|\bit\b)|"
-    r"engineering-assistant[^.;!?]{0,80}\bnot\s+(?:required|requested)\b",
+    r"[^.;!?]{0,24}(?:" + _PLUGIN_NAME + r"|\bit\b)|"
+    + _PLUGIN_NAME + r"[^.;!?]{0,80}\bnot\s+(?:required|requested)\b",
     re.IGNORECASE,
 )
 _EXPLANATORY_TAIL = re.compile(
@@ -250,7 +253,7 @@ def is_plugin_tool(tool_name: str) -> bool:
     if len(parts) != 3 or parts[0] != "mcp":
         return False
     server = parts[1].replace("-", "_")
-    return server == "engineering_assistant" and parts[2] in PLUGIN_TOOL_NAMES
+    return server in PLUGIN_SERVER_NAMES and parts[2] in PLUGIN_TOOL_NAMES
 
 
 def is_observation_exempt_tool(tool_name: str) -> bool:
@@ -259,7 +262,7 @@ def is_observation_exempt_tool(tool_name: str) -> bool:
         return False
     server = parts[1].replace("-", "_")
     return (
-        server == "engineering_assistant"
+        server in PLUGIN_SERVER_NAMES
         and parts[2] in OBSERVATION_EXEMPT_TOOL_NAMES
     )
 

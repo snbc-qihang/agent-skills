@@ -22,6 +22,7 @@
           "policy_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
           ,"evidence_kinds": {"type": "array", "items": {"enum": ["source", "test", "build", "browser", "ci", "review", "approval", "external_state"]}, "uniqueItems": true}
           ,"evidence_scope_tags": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+          ,"required_evidence_kinds": {"type": "array", "items": {"enum": ["source", "test", "build", "browser", "ci", "review", "approval", "external_state"]}, "uniqueItems": true}
         },
         "additionalProperties": false
       }

@@ -36,13 +36,20 @@ HIGH_RISK_SIGNALS = {
     "irreversible",
     "cross-repository",
 }
+TEAM_DELIVERY_TASKS = {"shape", "design", "implement", "release", "evolve"}
 
 
 def _ordered_unique(values: Sequence[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "default") -> RouteDecision:
+def route_intent(
+    intent: RouteIntent,
+    catalog: Catalog,
+    *,
+    profile_id: str | None = None,
+) -> RouteDecision:
+    profile_id = profile_id or catalog.product.default_profile_id
     validate_instance(
         intent.to_dict(),
         load_json(catalog.root / "schemas/route-intent.schema.json"),
@@ -50,8 +57,15 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
     )
     if intent.task_kind not in ROUTES:
         raise ValidationFailure(f"unsupported task kind {intent.task_kind}")
+    if profile_id not in catalog.profiles:
+        raise ValidationFailure(f"unknown profile {profile_id}")
 
     flow_id, skill_ids = ROUTES[intent.task_kind]
+    if (
+        catalog.profiles[profile_id].rule_catalog_ref is not None
+        and intent.task_kind in TEAM_DELIVERY_TASKS
+    ):
+        flow_id = "team-delivery"
     if intent.confidence < 0.55:
         decision = RouteDecision(
             decision="ask",

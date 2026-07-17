@@ -174,9 +174,9 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             "build_format_version": "1.0",
             "status": "built",
             "platform": "codex",
-            "canonical_version": "1.0.0.0-rc.1",
+            "canonical_version": "2.0.0.0-rc.1",
             "skill_versions": {
-                skill_id: "1.0.0.0-rc.1" for skill_id in self.plugin_skill_digests
+                skill_id: "2.0.0.0-rc.1" for skill_id in self.plugin_skill_digests
             },
             "skill_count": len(self.plugin_skill_digests),
             "flow_count": 0,

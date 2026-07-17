@@ -38,21 +38,23 @@ class CodexAdapter:
         version = platform_version(catalog.version, supports_four_part=False)
         if self.cachebuster:
             version = f"{version.partition('+')[0]}+codex.{self.cachebuster}"
+        product = catalog.product
+        mcp_namespace = product.id.replace("-", "_")
         manifest = {
-            "name": "engineering-assistant",
+            "name": product.id,
             "version": version,
-            "description": "基于证据的工程原语、受治理流程、状态恢复和人工审批门禁。",
+            "description": product.description,
             "author": {
-                "name": "sunliming625@gmail.com",
-                "email": "sunliming625@gmail.com",
+                "name": product.developer,
+                "email": product.developer,
             },
             "skills": "./skills/",
             "mcpServers": "./.mcp.json",
             "interface": {
-                "displayName": "工程助手",
-                "shortDescription": "基于证据、状态和审批门禁执行工程任务。",
-                "longDescription": "以可复用工程原语、受治理 flow、可恢复运行状态和人工审批门禁，协助完成研究、设计、实现、诊断、评审与发布准备。",
-                "developerName": "sunliming625@gmail.com",
+                "displayName": product.display_name,
+                "shortDescription": product.description[:64],
+                "longDescription": product.description,
+                "developerName": product.developer,
                 "category": "Productivity",
                 "capabilities": ["Interactive", "Write"],
                 "defaultPrompt": [
@@ -69,7 +71,7 @@ class CodexAdapter:
             json.dumps(
                 {
                     "mcpServers": {
-                        "engineering-assistant": {
+                        product.id: {
                             "command": "./engineering-assistant/bin/ea",
                             "args": ["mcp-serve"],
                             "cwd": ".",
@@ -98,13 +100,13 @@ class CodexAdapter:
                     "hooks": {
                         "PreToolUse": [
                             {
-                                "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
+                                "matcher": f"^mcp__{mcp_namespace}__engineering_assistant_.*$",
                                 "hooks": [hook_handler],
                             }
                         ],
                         "PostToolUse": [
                             {
-                                "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
+                                "matcher": f"^mcp__{mcp_namespace}__engineering_assistant_.*$",
                                 "hooks": [hook_handler],
                             }
                         ],
@@ -157,9 +159,9 @@ class CodexAdapter:
                 short = f"按明确范围、可验证证据和完成条件执行“{display}”工程工作流。"
             short = short[:64].rstrip()
             invocation = (
-                "$engineering-assistant"
-                if skill.id == "engineering-assistant"
-                else f"$engineering-assistant:{skill.id}"
+                f"${product.id}"
+                if skill.id == product.root_skill_id
+                else f"${product.id}:{skill.id}"
             )
             default_prompt = f"使用 {invocation} 基于证据完成这项工程任务。"
             content = (

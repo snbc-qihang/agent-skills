@@ -59,6 +59,7 @@ class FlowNode(Serializable):
     policy_refs: List[str]
     evidence_kinds: List[str] = field(default_factory=list)
     evidence_scope_tags: List[str] = field(default_factory=list)
+    required_evidence_kinds: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

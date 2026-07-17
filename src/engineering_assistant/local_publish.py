@@ -29,7 +29,7 @@ from .official_validation import validate_with_official_tools
 from .validation import ValidationFailure
 
 
-PLUGIN_NAME = "engineering-assistant"
+PLUGIN_NAME = load_catalog().product.id
 DEFAULT_POLICY = "config/local-publish-policy.json"
 CODEX_CACHE_MARKETPLACE = "personal"
 MAX_PRESERVED_CODEX_CACHE_VERSIONS = 8
@@ -727,7 +727,7 @@ def publish_local(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="将 engineering-assistant 安全发布到本机 Codex 或 Hermes。")
+    parser = argparse.ArgumentParser(description=f"将 {PLUGIN_NAME} 安全发布到本机 Codex 或 Hermes。")
     parser.add_argument("--platform", choices=["codex", "hermes", "all"], default="codex")
     parser.add_argument("--repository-root", default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument("--policy", default=DEFAULT_POLICY)

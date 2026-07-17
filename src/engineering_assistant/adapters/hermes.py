@@ -15,16 +15,18 @@ class HermesAdapter:
     def write_platform_files(self, package_root: Path, catalog: Catalog) -> list[Path]:
         plugin_yaml = package_root / "plugin.yaml"
         version = platform_version(catalog.version, supports_four_part=False)
+        product = catalog.product
+        mcp_namespace = product.id.replace("-", "_")
         provides_tools = "".join(
             f"  - {tool['name']}\n" for tool in RuntimeTools(catalog.root).definitions()
         )
         plugin_yaml.write_text(
-            "name: engineering-assistant\n"
+            f"name: {product.id}\n"
             f'version: "{version}"\n'
             f'canonical_version: "{catalog.version}"\n'
             'skill_versions_source: "engineering-assistant/catalog/skills/public.json"\n'
-            'description: "基于证据的工程原语、受治理流程、状态恢复和人工审批门禁。"\n'
-            'author: "sunliming625@gmail.com"\n'
+            f'description: "{product.description}"\n'
+            f'author: "{product.developer}"\n'
             "kind: standalone\n"
             "provides_tools:\n"
             + provides_tools
@@ -38,7 +40,7 @@ class HermesAdapter:
         )
         entrypoint = package_root / "__init__.py"
         entrypoint.write_text(
-            '"""Generated Hermes adapter for engineering-assistant."""\n\n'
+            f'"""Generated Hermes adapter for {product.id}."""\n\n'
             "import json\n"
             "import os\n"
             "import secrets\n"
@@ -68,7 +70,7 @@ class HermesAdapter:
             "except Exception:\n"
             "    _OBSERVER = None\n\n"
             "_CATALOG = load_catalog(_ROOT / 'engineering-assistant')\n"
-            "_TRUST = trust_bindings_from_host(_CATALOG.profiles['default'], _ROOT / 'engineering-assistant/schemas')\n"
+            "_TRUST = trust_bindings_from_host(_CATALOG.default_profile, _ROOT / 'engineering-assistant/schemas')\n"
             "_TOOLS = RuntimeTools(\n"
             "    _ROOT / 'engineering-assistant',\n"
             "    trust_verifier=_TRUST.verifier,\n"
@@ -116,7 +118,7 @@ class HermesAdapter:
             "        return None\n"
             "    payload = {\n"
             "        **context, 'hook_event_name': 'PreToolUse',\n"
-            "        'tool_name': f'mcp__engineering_assistant__{name}',\n"
+            f"        'tool_name': f'mcp__{mcp_namespace}__{{name}}',\n"
             "        'tool_input': args, 'tool_use_id': secrets.token_hex(12),\n"
             "    }\n"
             "    _OBSERVER.handle(payload, os.environ)\n"
@@ -145,7 +147,7 @@ class HermesAdapter:
             "                if _FEEDBACK is not None and context is not None:\n"
             "                    mode = kwargs.get('feedback_mode') or os.environ.get('ENGINEERING_ASSISTANT_FEEDBACK_MODE', 'candidates')\n"
             "                    _FEEDBACK.collect_tool_result(\n"
-            "                        {**context, 'tool_name': f'mcp__engineering_assistant__{name}', 'tool_response': {'error': 'ToolExecutionError', 'status': 'failed'}},\n"
+            f"                        {{**context, 'tool_name': f'mcp__{mcp_namespace}__{{name}}', 'tool_response': {{'error': 'ToolExecutionError', 'status': 'failed'}}}},\n"
             "                        mode=mode, platform='hermes',\n"
             "                    )\n"
             "            except Exception:\n"
@@ -217,7 +219,7 @@ class HermesAdapter:
             "            'parameters': tool['inputSchema'],\n"
             "        }\n"
             "        ctx.register_tool(\n"
-            "            name=tool['name'], toolset='engineering-assistant',\n"
+            f"            name=tool['name'], toolset='{product.id}',\n"
             "            schema=schema, handler=_handler(tool['name']),\n"
             "        )\n"
             "    if _FEEDBACK is not None:\n"

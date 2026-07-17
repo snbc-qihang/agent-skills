@@ -43,24 +43,24 @@ HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform
 
 1. 构建带唯一 cachebuster 的 Codex 包。
 2. 对最终 staging 包执行官方 plugin validator，并绑定校验摘要。
-3. 备份 `~/plugins/engineering-assistant`。
+3. 备份 `~/plugins/teamwork-engineering-assistant`。
 4. 原子替换插件目录。
 5. 幂等维护 personal marketplace entry。
-6. 执行 `codex plugin add engineering-assistant@personal --json`。
+6. 执行 `codex plugin add teamwork-engineering-assistant@personal --json`。
 7. 校验安装包摘要；失败时恢复 marketplace 和旧插件。
 
 ### Hermes
 
 1. 构建 Hermes 目录插件。
-2. 备份 `~/.hermes/plugins/engineering-assistant`。
+2. 备份 `~/.hermes/plugins/teamwork-engineering-assistant`。
 3. 原子替换插件目录。
-4. 执行 `hermes plugins enable engineering-assistant`。
+4. 执行 `hermes plugins enable teamwork-engineering-assistant`。
 5. 校验安装包摘要；失败时恢复旧插件。
 
 Hermes 可以使用限定名加载 skill：
 
 ```bash
-hermes --skills engineering-assistant:repo-context
+hermes --skills teamwork-engineering-assistant:repo-context
 ```
 
 ## 回滚

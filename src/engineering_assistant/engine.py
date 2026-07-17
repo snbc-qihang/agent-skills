@@ -18,6 +18,7 @@ from .model import (
     StepResult,
 )
 from .router import route_intent
+from .team_context import team_rules_for_capability
 from .trust import TrustVerifier, parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
@@ -38,10 +39,11 @@ class RuntimeEngine:
         task_id: str,
         intent: RouteIntent,
         *,
-        profile_id: str = "default",
+        profile_id: str | None = None,
         run_id: str | None = None,
         context_refs: list[str] | None = None,
     ) -> RunState:
+        profile_id = profile_id or self.catalog.product.default_profile_id
         if profile_id not in self.catalog.profiles:
             raise ValidationFailure(f"unknown profile {profile_id}")
         decision = route_intent(intent, self.catalog, profile_id=profile_id)
@@ -282,7 +284,10 @@ class RuntimeEngine:
         blocker = next((finding for finding in result.findings if finding.severity == "blocker"), None)
         if blocker:
             return self._terminal_gate(state, "blocked", "block", node, blocker.summary)
-        if state.flow_id == "implement" and node.id == "quality":
+        if (
+            (state.flow_id == "implement" and node.id == "quality")
+            or (state.flow_id == "team-delivery" and node.id == "quality-gate")
+        ):
             quality_snapshot = QualityStore(
                 evidence_store.state_store, evidence_store
             ).latest_valid(
@@ -317,7 +322,77 @@ class RuntimeEngine:
                     for item in items
                 ):
                     missing.append(f"{criterion.criterion_id}:evidence-contract")
+        if node.required_evidence_kinds:
+            observed_kinds = {
+                evidence[evidence_id].kind for evidence_id in criterion_evidence_ids
+            }
+            for missing_kind in sorted(
+                set(node.required_evidence_kinds) - observed_kinds
+            ):
+                missing.append(f"{node.id}:required-kind:{missing_kind}")
+        applicable_rules = self._applicable_rule_ids(state, node)
+        if applicable_rules:
+            rule_catalog_ref = self.catalog.profiles[state.profile_id].rule_catalog_ref
+            if rule_catalog_ref is None:
+                raise ValidationFailure("team rule catalog is unavailable")
+            referenced_rules = {
+                contract_ref.removeprefix("rule:")
+                for evidence_id in criterion_evidence_ids
+                for contract_ref in evidence[evidence_id].contract_refs
+                if contract_ref.startswith("rule:")
+            }
+            unknown_rules = sorted(
+                referenced_rules - set(self.catalog.rule_catalogs[rule_catalog_ref].rules)
+            )
+            if unknown_rules:
+                raise ValidationFailure(
+                    "step references unknown team rules: " + ", ".join(unknown_rules)
+                )
+            if not referenced_rules.intersection(applicable_rules):
+                missing.append(f"{node.id}:rule-contract")
         if missing:
+            approval_marker = f"{node.id}:required-kind:approval"
+            external_marker = f"{node.id}:required-kind:external_state"
+            if missing == [approval_marker]:
+                state.status = "waiting_for_approval"
+                state.next_actions = [
+                    "waiting_for_human_review: import trusted approval evidence"
+                ]
+                self._record(
+                    state,
+                    "pause",
+                    state.status,
+                    "Trusted human approval evidence is required.",
+                )
+                gate = GateDecision(
+                    "pause_for_approval",
+                    list(node.policy_refs),
+                    missing,
+                    "Trusted human approval evidence is required.",
+                    node.id,
+                )
+                self._validate_gate(gate)
+                return gate
+            if missing == [external_marker]:
+                state.status = "waiting_for_input"
+                state.next_actions = [
+                    "wait for Broker-verified external execution evidence"
+                ]
+                self._record(
+                    state,
+                    "pause",
+                    state.status,
+                    "Broker-verified external state evidence is required.",
+                )
+                gate = GateDecision(
+                    "pause_for_input",
+                    list(node.policy_refs),
+                    missing,
+                    "Broker-verified external state evidence is required.",
+                    node.id,
+                )
+                self._validate_gate(gate)
+                return gate
             state.status = "running"
             state.next_actions = [f"satisfy criterion: {item}" for item in missing]
             self._record(state, "retry", "running", "Completion criteria are not evidenced.")
@@ -359,6 +434,17 @@ class RuntimeEngine:
         state.completed_nodes.append(node.id)
         return self._advance_after_resolution(state, node, "Step completion criteria passed with registered evidence.")
 
+    def _applicable_rule_ids(self, state: RunState, node: FlowNode) -> set[str]:
+        profile = self.catalog.profiles[state.profile_id]
+        if profile.rule_catalog_ref is None:
+            return set()
+        rule_catalog = self.catalog.rule_catalogs[profile.rule_catalog_ref]
+        return {
+            rule.id
+            for rule in rule_catalog.rules.values()
+            if node.capability in rule.capability_refs
+        }
+
     def _evaluate_quality_snapshot(
         self,
         state: RunState,
@@ -396,6 +482,14 @@ class RuntimeEngine:
         node = self._node(state, state.current_node)
         payload = node.to_dict()
         payload["criterion_ids"] = criterion_ids(node)
+        team_rules = team_rules_for_capability(
+            self.catalog, state.profile_id, node.capability
+        )
+        if team_rules:
+            payload["team_rules"] = team_rules
+            payload["rule_contract_refs"] = [
+                rule["evidence_contract_ref"] for rule in team_rules
+            ]
         return payload
 
     def _advance_after_resolution(self, state: RunState, node: FlowNode, reason: str) -> GateDecision:

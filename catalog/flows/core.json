@@ -1,9 +1,9 @@
 {
-  "version": "1.0.0.0-rc.1",
+  "version": "2.0.0.0-rc.1",
   "flows": [
     {
       "id": "shape",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["请求结果尚未达到决策完备状态"],
       "nodes": [
         {"id": "discover-facts", "capability": "repo-context", "depends_on": [], "when": "仓库事实可能回答待解决问题", "completion_criteria": ["可调查事实均已记录并附有证据"], "policy_refs": ["evidence-quality"]},
@@ -15,7 +15,7 @@
     },
     {
       "id": "design",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["已有需求塑形契约，或任务本身是有明确边界的设计请求"],
       "nodes": [
         {"id": "repo-context", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["模块、接口、数据、依赖和影响范围均有证据"], "policy_refs": ["evidence-quality", "scope-control"]},
@@ -29,7 +29,7 @@
     },
     {
       "id": "implement",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["已有批准设计，或存在边界明确的实现任务"],
       "nodes": [
         {"id": "select-slice", "capability": "work-slicing", "depends_on": [], "when": "always", "completion_criteria": ["已明确一个有边界的纵向切片和允许修改的文件"], "policy_refs": ["scope-control"]},
@@ -43,7 +43,7 @@
     },
     {
       "id": "review",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["存在固定的设计或代码比较点"],
       "nodes": [
         {"id": "fixed-point", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["评审范围和固定比较点没有歧义"], "policy_refs": ["evidence-quality"]},
@@ -56,7 +56,7 @@
     },
     {
       "id": "release",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["已有实现和评审证据", "明确的发布范围已获批准"],
       "nodes": [
         {"id": "readiness", "capability": "release-readiness", "depends_on": [], "when": "always", "completion_criteria": ["范围、风险、窗口、负责人、回滚和审批均已完备"], "policy_refs": ["release-safety"], "evidence_kinds": ["source", "review", "ci"], "evidence_scope_tags": ["flow:release"]},
@@ -68,7 +68,7 @@
     },
     {
       "id": "evolve",
-      "version": "1.0.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "entry_conditions": ["存在关于 skill、flow、policy 或工具的有证据反馈"],
       "nodes": [
         {"id": "ingest", "capability": "feedback-ingest", "depends_on": [], "when": "always", "completion_criteria": ["反馈具备来源、症状、范围和复发数据"], "policy_refs": ["feedback-evolution"]},

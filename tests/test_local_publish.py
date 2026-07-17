@@ -43,7 +43,7 @@ class LocalPublishTests(unittest.TestCase):
 
     def test_repository_preflight_requires_source_and_official_validation(self) -> None:
         evaluation = {
-            "version": "1.0.0.0-rc.1",
+            "version": "2.0.0.0-rc.1",
             "simulation": False,
             "canary": {
                 "status": "not_run",
@@ -117,7 +117,7 @@ class LocalPublishTests(unittest.TestCase):
             build_package(ROOT, "codex", output, codex_cachebuster="local-test-1")
             verify_package(output)
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-            self.assertEqual("1.0.0-rc.1+codex.local-test-1", manifest["version"])
+            self.assertEqual("2.0.0-rc.1+codex.local-test-1", manifest["version"])
 
     def test_codex_registration_uses_the_selected_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -127,13 +127,13 @@ class LocalPublishTests(unittest.TestCase):
 
             def register(_command: list[str], environment=None) -> dict:
                 environments.append(environment)
-                target = root / "plugins/engineering-assistant"
+                target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
                 )["version"]
                 cache = (
                     codex_home
-                    / "plugins/cache/personal/engineering-assistant"
+                    / "plugins/cache/personal/teamwork-engineering-assistant"
                     / version
                 )
                 cache.parent.mkdir(parents=True, exist_ok=True)
@@ -154,7 +154,7 @@ class LocalPublishTests(unittest.TestCase):
             self.assertEqual(
                 str(
                     codex_home
-                    / "plugins/cache/personal/engineering-assistant"
+                    / "plugins/cache/personal/teamwork-engineering-assistant"
                     / report["plugin_version"]
                 ),
                 report["registered_cache"]["path"],
@@ -175,7 +175,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
             build_package(ROOT, "codex", target, codex_cachebuster="local-before-missing-cache")
             previous_version = json.loads(
@@ -206,13 +206,13 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
 
             def register(_command: list[str], _environment=None) -> dict:
-                target = root / "plugins/engineering-assistant"
+                target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
                 )["version"]
                 cache = (
                     codex_home
-                    / "plugins/cache/personal/engineering-assistant"
+                    / "plugins/cache/personal/teamwork-engineering-assistant"
                     / version
                 )
                 cache.parent.mkdir(parents=True, exist_ok=True)
@@ -241,13 +241,13 @@ class LocalPublishTests(unittest.TestCase):
 
             def register(_command: list[str], _environment=None) -> dict:
                 nonlocal registered_cache
-                target = root / "plugins/engineering-assistant"
+                target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
                 )["version"]
                 registered_cache = (
                     codex_home
-                    / "plugins/cache/personal/engineering-assistant"
+                    / "plugins/cache/personal/teamwork-engineering-assistant"
                     / version
                 )
                 registered_cache.parent.mkdir(parents=True, exist_ok=True)
@@ -290,13 +290,13 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "1.0.0-rc.1+codex.local-corrupted-active"
+            old_version = "2.0.0-rc.1+codex.local-corrupted-active"
             build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
             old_cache = (
                 codex_home
-                / "plugins/cache/personal/engineering-assistant"
+                / "plugins/cache/personal/teamwork-engineering-assistant"
                 / old_version
             )
             shutil.copytree(target, old_cache)
@@ -334,8 +334,8 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "1.0.0-rc.1+codex.local-active-thread"
-            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            version = "2.0.0-rc.1+codex.local-active-thread"
+            cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
             runtime_cache = cache / "engineering-assistant/runtime/engineering_assistant/__pycache__"
@@ -354,8 +354,8 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "1.0.0-rc.1+codex.local-previous-contract"
-            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            version = "2.0.0-rc.1+codex.local-previous-contract"
+            cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(
                 ROOT,
@@ -383,8 +383,8 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "1.0.0-rc.1+codex.local-unsafe-snapshot"
-            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            version = "2.0.0-rc.1+codex.local-unsafe-snapshot"
+            cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
             outside_hook = root / "outside-hooks.json"
@@ -401,8 +401,8 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "1.0.0-rc.1+codex.local-unsafe-manifest"
-            cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
+            version = "2.0.0-rc.1+codex.local-unsafe-manifest"
+            cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
             outside_manifest = root / "outside-plugin.json"
@@ -420,10 +420,10 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            backup = target.parent / ".engineering-assistant.backup-test"
-            version = "1.0.0-rc.1+codex.local-repair"
+            backup = target.parent / ".teamwork-engineering-assistant.backup-test"
+            version = "2.0.0-rc.1+codex.local-repair"
             build_package(ROOT, "codex", backup, codex_cachebuster="local-repair")
             runtime_cache = backup / "engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
@@ -432,7 +432,7 @@ class LocalPublishTests(unittest.TestCase):
             repaired = _repair_codex_cache_version(codex_home, target, version)
 
             self.assertEqual(
-                codex_home / "plugins/cache/personal/engineering-assistant" / version,
+                codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version,
                 repaired,
             )
             self.assertTrue((repaired / "hooks/feedback_capture.py").is_file())
@@ -442,11 +442,11 @@ class LocalPublishTests(unittest.TestCase):
             root = Path(temporary)
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "1.0.0-rc.1+codex.local-old-thread"
+            old_version = "2.0.0-rc.1+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
-            old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
+            old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
 
@@ -477,12 +477,12 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            cache_root = codex_home / "plugins/cache/personal/engineering-assistant"
+            cache_root = codex_home / "plugins/cache/personal/teamwork-engineering-assistant"
             cache_root.mkdir(parents=True)
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
-                version = f"1.0.0-rc.1+codex.{cachebuster}"
+                version = f"2.0.0-rc.1+codex.{cachebuster}"
                 cache = cache_root / version
                 build_package(ROOT, "codex", cache, codex_cachebuster=cachebuster)
                 os.utime(cache, ns=(index + 1, index + 1))
@@ -505,11 +505,11 @@ class LocalPublishTests(unittest.TestCase):
             root = Path(temporary)
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "1.0.0-rc.1+codex.local-partial-registration"
+            old_version = "2.0.0-rc.1+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
-            old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
+            old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
             registered_versions: list[str] = []
@@ -546,11 +546,11 @@ class LocalPublishTests(unittest.TestCase):
             root = Path(temporary)
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
-            target = root / "plugins/engineering-assistant"
+            target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "1.0.0-rc.1+codex.local-old-registration"
+            old_version = "2.0.0-rc.1+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
-            old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
+            old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
             registered_versions: list[str] = []
@@ -597,7 +597,7 @@ class LocalPublishTests(unittest.TestCase):
         policy = ROOT / "config/local-publish-policy.json"
         loaded = _load_policy(policy, ["codex", "hermes"])
         self.assertTrue(loaded["enabled"])
-        self.assertEqual("1.0.0.0-rc.1", loaded["canonical_version"])
+        self.assertEqual("2.0.0.0-rc.1", loaded["canonical_version"])
         self.assertNotIn("reviewer", loaded)
         self.assertNotIn("execution_result", loaded)
 
@@ -609,8 +609,8 @@ class LocalPublishTests(unittest.TestCase):
             self.assertTrue(changed)
             payload = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual("personal", payload["name"])
-            self.assertEqual("engineering-assistant", payload["plugins"][0]["name"])
-            self.assertEqual("./plugins/engineering-assistant", payload["plugins"][0]["source"]["path"])
+            self.assertEqual("teamwork-engineering-assistant", payload["plugins"][0]["name"])
+            self.assertEqual("./plugins/teamwork-engineering-assistant", payload["plugins"][0]["source"]["path"])
             _, changed_again = _update_personal_marketplace(path)
             self.assertFalse(changed_again)
 

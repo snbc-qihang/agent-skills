@@ -35,6 +35,7 @@ from .model import ProviderResult
 from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
+from .team_context import team_context_for_intent
 from .trust import TrustVerifier
 from .validation import ValidationFailure, load_json, validate_instance
 from .version import CANONICAL_VERSION
@@ -93,18 +94,25 @@ class RuntimeTools:
         self._investigation_request_schema = load_json(schemas / "investigation-request.schema.json")
         self._definitions = self._build_definitions()
 
+    def _profile_id(self, arguments: Mapping[str, Any]) -> str:
+        return str(arguments.get("profile") or self.catalog.product.default_profile_id)
+
     def _build_definitions(self) -> list[dict]:
         project_root = {
             "type": "string",
             "minLength": 1,
             "description": "目标项目绝对路径或当前工作目录相对路径。",
         }
-        profile = {"type": "string", "minLength": 1, "default": "default"}
+        profile = {
+            "type": "string",
+            "minLength": 1,
+            "default": self.catalog.product.default_profile_id,
+        }
         return [
             {
                 "name": "engineering_assistant_route",
                 "title": "工程任务路由",
-                "description": "把已结构化的工程意图路由到唯一的 flow、skills 和治理策略；不执行写入。",
+                "description": "把已结构化的工程意图路由到唯一的 flow、skills 和治理策略；团队 profile 同时返回按任务启用的 packs、规则及来源，不执行写入。",
                 "inputSchema": _object_schema(
                     {"intent": self._route_intent_schema, "profile": profile},
                     ["intent"],
@@ -367,10 +375,12 @@ class RuntimeTools:
         return state
 
     def _route(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        intent = route_intent_from_dict(arguments["intent"])
         decision = route_intent(
-            route_intent_from_dict(arguments["intent"]),
+            intent,
             self.catalog,
-            profile_id=arguments.get("profile", "default"),
+            profile_id=profile_id,
         )
         has_flow = bool(decision.flow_id)
         approval_ready = (
@@ -405,7 +415,7 @@ class RuntimeTools:
         else:
             recommended_execution = "persisted_flow"
             reason = "host_trust_ready"
-        return {
+        response = {
             "decision": decision.to_dict(),
             "execution": {
                 "external_approval_available": self.approval_broker_enabled,
@@ -415,6 +425,10 @@ class RuntimeTools:
                 "reason": reason,
             },
         }
+        team_context = team_context_for_intent(self.catalog, profile_id, intent)
+        if team_context is not None:
+            response["team_context"] = team_context
+        return response
 
     def _artifact_validate(self, arguments: dict) -> dict:
         return validate_artifact_payload(
@@ -424,7 +438,7 @@ class RuntimeTools:
         )
 
     def _start(self, arguments: dict) -> dict:
-        profile_id = arguments.get("profile", "default")
+        profile_id = self._profile_id(arguments)
         decision = route_intent(
             route_intent_from_dict(arguments["intent"]),
             self.catalog,
@@ -460,10 +474,10 @@ class RuntimeTools:
                 "evidence broker; do not retry unchanged"
             )
         state_store, _ = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         state = self._load_state(
-            state_store, arguments["run_id"], arguments.get("profile", "default")
+            state_store, arguments["run_id"], self._profile_id(arguments)
         )
         previous_revision = state.revision
         engine = RuntimeEngine(self.catalog)
@@ -488,10 +502,10 @@ class RuntimeTools:
                 "host-observed evidence and do not retry unchanged"
             )
         state_store, evidence_store = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         state = self._load_state(
-            state_store, arguments["run_id"], arguments.get("profile", "default")
+            state_store, arguments["run_id"], self._profile_id(arguments)
         )
         previous_revision = state.revision
         result = step_result_from_dict(arguments["result"])
@@ -518,11 +532,11 @@ class RuntimeTools:
                 "evidence broker; report inline quality findings instead"
             )
         state_store, evidence_store = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         snapshot = quality_snapshot_from_dict(arguments["snapshot"])
         state = self._load_state(
-            state_store, snapshot.run_id, arguments.get("profile", "default")
+            state_store, snapshot.run_id, self._profile_id(arguments)
         )
         if state.current_node != snapshot.node_id:
             raise ValidationFailure("quality snapshot does not match the active run and node")
@@ -538,7 +552,7 @@ class RuntimeTools:
                 "provider invocation is unavailable without an administrator-bound "
                 "evidence broker; use native skills and do not retry unchanged"
             )
-        profile_id = arguments.get("profile", "default")
+        profile_id = self._profile_id(arguments)
         state_store, _ = self._stores(arguments["project_root"], profile_id)
         invocation = provider_invocation_from_dict(arguments["invocation"])
         self._load_state(state_store, invocation.run_id, profile_id)
@@ -820,10 +834,10 @@ class RuntimeTools:
     def _investigation_propose(self, arguments: dict) -> dict:
         self._require_investigation_broker()
         state_store, _ = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         request = investigation_request_from_dict(arguments["request"])
-        profile_id = arguments.get("profile", "default")
+        profile_id = self._profile_id(arguments)
         self._load_state(state_store, request.run_id, profile_id)
         profile = self.catalog.profiles[profile_id]
         record = InvestigationStore(state_store).propose(
@@ -840,10 +854,10 @@ class RuntimeTools:
     def _investigation_list(self, arguments: dict) -> dict:
         self._require_investigation_broker()
         state_store, _ = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         self._load_state(
-            state_store, arguments["run_id"], arguments.get("profile", "default")
+            state_store, arguments["run_id"], self._profile_id(arguments)
         )
         records, next_after_id = InvestigationStore(state_store).list(
             arguments["run_id"],
@@ -862,10 +876,10 @@ class RuntimeTools:
     def _investigation_start(self, arguments: dict) -> dict:
         self._require_investigation_broker()
         state_store, _ = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         self._load_state(
-            state_store, arguments["run_id"], arguments.get("profile", "default")
+            state_store, arguments["run_id"], self._profile_id(arguments)
         )
         record = InvestigationStore(state_store).start(
             arguments["run_id"], arguments["investigation_id"]
@@ -883,10 +897,10 @@ class RuntimeTools:
                 "import host-observed evidence and do not retry unchanged"
             )
         state_store, evidence_store = self._stores(
-            arguments["project_root"], arguments.get("profile", "default")
+            arguments["project_root"], self._profile_id(arguments)
         )
         self._load_state(
-            state_store, arguments["run_id"], arguments.get("profile", "default")
+            state_store, arguments["run_id"], self._profile_id(arguments)
         )
         record = InvestigationStore(state_store, evidence_store).finish(
             arguments["run_id"],
@@ -944,7 +958,7 @@ class MCPServer:
                     "protocolVersion": negotiated,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {
-                        "name": "engineering-assistant",
+                        "name": self.tools.catalog.product.id,
                         "version": CANONICAL_VERSION,
                     },
                 },

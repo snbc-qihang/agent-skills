@@ -1,0 +1,1987 @@
+{
+  "id": "rrq-yq-team-rules",
+  "version": "2.0.0.0-rc.1",
+  "profile_id": "rrq-yq-team",
+  "sources": [
+    {
+      "id": "rrq-common-tech",
+      "title": "人人取----通用技术需求",
+      "url": "http://mrdoc.xtjc.net/doc/238/",
+      "digest": "git-blob:1237f3faeaf683d7c98c8924bd057d438434e74c",
+      "topics": [
+        "日志",
+        "性能",
+        "稳定性",
+        "幂等",
+        "异常",
+        "安全",
+        "业务监控"
+      ]
+    },
+    {
+      "id": "rrq-yapi-standard",
+      "title": "人人取----Yapi使用规范",
+      "url": "http://mrdoc.xtjc.net/doc/",
+      "digest": "git-blob:2719d0710263bc1a9de7a38c6c7c0c3efe411de2",
+      "topics": [
+        "YApi",
+        "接口分组",
+        "接口路径",
+        "字段命名",
+        "响应结构",
+        "JSR303"
+      ]
+    },
+    {
+      "id": "rrq-redis-standard",
+      "title": "人人取----缓存Redis设计规范",
+      "url": "http://mrdoc.xtjc.net/doc/135/",
+      "digest": "git-blob:8dee6816cc60d18a8dabfcd96adb299a4ed83b4a",
+      "topics": [
+        "Redis",
+        "key",
+        "value",
+        "TTL",
+        "命中率",
+        "一致性",
+        "运维安全"
+      ]
+    },
+    {
+      "id": "rrq-redis-template",
+      "title": "Redis详细设计模板",
+      "url": "http://mrdoc.xtjc.net/doc/497/",
+      "digest": "git-blob:128e2131fb7e5b523104f716f0a7851356da0720",
+      "topics": [
+        "Redis设计文档",
+        "公共配置",
+        "存储设计",
+        "预估数据",
+        "多团队协同",
+        "监控"
+      ]
+    },
+    {
+      "id": "rrq-idempotency",
+      "title": "人人取----幂等性方案",
+      "url": "http://mrdoc.xtjc.net/doc/482/",
+      "digest": "git-blob:06a9f2ff25235b48adfa92b083b16f612f6d4d02",
+      "topics": [
+        "幂等",
+        "请求去重",
+        "MQ去重",
+        "乐观锁",
+        "悲观锁",
+        "最终一致性"
+      ]
+    },
+    {
+      "id": "rrq-architecture",
+      "title": "人人取----整体架构设计",
+      "url": "http://mrdoc.xtjc.net/doc/134/",
+      "digest": "git-blob:a72e2284b342cc266543470a0a5df4d62d1e0402",
+      "topics": [
+        "微服务",
+        "事件驱动",
+        "DDD",
+        "多租户",
+        "最终一致性",
+        "系统边界"
+      ]
+    },
+    {
+      "id": "yq-overview",
+      "title": "萤启运营系统概要设计",
+      "url": "http://mrdoc.xtjc.net/project/",
+      "digest": "git-blob:9c6c0e48d4ed58efe9f6e6658639991d57c44731",
+      "topics": [
+        "萤启服务商系统",
+        "异常编码",
+        "系统交互",
+        "性能",
+        "YApi",
+        "Redis"
+      ]
+    },
+    {
+      "id": "yq-vems-franchisee",
+      "title": "合作加盟服务(vems-franchisee)",
+      "url": "http://mrdoc.xtjc.net/project/",
+      "digest": "git-blob:12857d7fb3bd82c12154ae5328268ebe17f9cfa5",
+      "topics": [
+        "vems-franchisee",
+        "售货机管理",
+        "加盟商",
+        "MQ",
+        "库存同步",
+        "YApi"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "A1",
+      "category": "架构",
+      "guidance": "不强制平台采用微服务 + 事件驱动 + DDD，但是设计文档必须体现系统边界、业务域、事件协作和最终一致性。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "A2",
+      "category": "架构",
+      "guidance": "系统间交互优先通过开放能力接口或事件，不允许直接调用未开放接口。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "A3",
+      "category": "架构",
+      "guidance": "目标业务系统与目标客户端系统属于不同系统边界，跨系统协作必须明确接口、事件、消息体、幂等和一致性。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "A4",
+      "category": "架构",
+      "guidance": "应用层只暴露 api/tapi/mapi/console，业务层和共享层只暴露 service 能力。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "A5",
+      "category": "架构",
+      "guidance": "关键跨系统场景必须进入关键场景设计；简单服务内部 CRUD 不进入关键场景文档。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "A6",
+      "category": "架构",
+      "guidance": "跨库事务优先本地消息表、事件驱动、补偿机制；必要时使用 Seata，并说明事务边界。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "H1",
+      "category": "概要设计",
+      "guidance": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图；核心功能下保留关键协作摘要，不生成流程图。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H2",
+      "category": "概要设计",
+      "guidance": "明确参与系统、职责边界、调用方向、事件流和异常流。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H3",
+      "category": "概要设计",
+      "guidance": "声明是否涉及 Redis/MQ/DB/定时任务/权限/幂等/跨系统交互。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H4",
+      "category": "概要设计",
+      "guidance": "后端业务系统研发结构按 presentation/application/domain/port/infrastructure/common 分层；如项目 profile 另有约定，以 profile 为准。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H5",
+      "category": "概要设计",
+      "guidance": "application 层负责编排，不直接沉淀复杂业务判断；核心业务规则进入 domain。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H6",
+      "category": "概要设计",
+      "guidance": "聚合根不通过依赖注入创建，应通过工厂创建；一次业务中聚合根创建和修改边界要清晰。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H7",
+      "category": "概要设计",
+      "guidance": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；核心功能中的 4.1.2 只写关键协作摘要，不得用通用证据/Findings/门禁决策模板替代正文。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H8",
+      "category": "概要设计",
+      "guidance": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H9",
+      "category": "概要设计",
+      "guidance": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H10",
+      "category": "概要设计",
+      "guidance": "概要设计聚焦跨系统/跨服务架构边界、服务间时序、调用/事件方向、异常流、最终一致性和专项文档引用；不得展开接口字段、请求/响应字段、SQL/DDL、数据库字段索引、Controller/Mapper/Repository、类方法签名、伪代码或单元测试步骤。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "H11",
+      "category": "概要设计",
+      "guidance": "概要设计不得生成 Mermaid flowchart；关键协作只允许文字摘要与服务间 sequenceDiagram，研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言。",
+      "source_refs": [
+        "rrq-architecture",
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "design-review"
+      ]
+    },
+    {
+      "id": "D1",
+      "category": "详细设计",
+      "guidance": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D2",
+      "category": "详细设计",
+      "guidance": "列出业务规则、状态机、校验规则、异常码、幂等点、事务边界、回滚策略。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D3",
+      "category": "详细设计",
+      "guidance": "导入、批处理、异步任务必须写数据量上限、批次大小、超时时间、进度查询、失败处理。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D4",
+      "category": "详细设计",
+      "guidance": "状态流转说明允许状态、终态、CAS/乐观锁控制、并发竞争处理。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D5",
+      "category": "详细设计",
+      "guidance": "项目定制功能不能破坏原有通用能力，说明新增模块边界和兼容策略。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "I2",
+      "category": "接口",
+      "guidance": "接口必须有充分业务理由，禁止 API 简单封装 DB CRUD。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "I5",
+      "category": "接口",
+      "guidance": "响应结构为 header.code/header.message/body。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "E5",
+      "category": "异常",
+      "guidance": "禁止空 catch、只打印不抛、重复打印日志、用异常控制业务流程。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "E7",
+      "category": "异常",
+      "guidance": "异常日志必须包含 TraceId，敏感信息不得进入异常消息或日志。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "P1",
+      "category": "幂等并发",
+      "guidance": "修改核心数据接口必须评估幂等。",
+      "source_refs": [
+        "rrq-idempotency"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "P4",
+      "category": "幂等并发",
+      "guidance": "最终一致性只处理最新消息，旧消息基于时间戳/版本号丢弃。",
+      "source_refs": [
+        "rrq-idempotency"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "R1",
+      "category": "Redis",
+      "guidance": "Redis 只做加速层、协调层、短态承载层，不做事实库、分析库、跨服务共享源、消息队列。",
+      "source_refs": [
+        "rrq-redis-standard",
+        "rrq-redis-template"
+      ],
+      "target_refs": [
+        "rrq-yq-redis"
+      ],
+      "capability_refs": [
+        "redis-design",
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "R6",
+      "category": "Redis",
+      "guidance": "所有 Key 必须设置 TTL，最大不超过 30 天，大批量 Key 增加随机抖动。",
+      "source_refs": [
+        "rrq-redis-standard",
+        "rrq-redis-template"
+      ],
+      "target_refs": [
+        "rrq-yq-redis"
+      ],
+      "capability_refs": [
+        "redis-design",
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "M3",
+      "category": "MQ",
+      "guidance": "一个服务一个队列，一个队列可绑定多个 Exchange/routingKey。",
+      "source_refs": [
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-mq"
+      ],
+      "capability_refs": [
+        "mq-design",
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "M5",
+      "category": "MQ",
+      "guidance": "必须配置死信队列，至少记录失败消息。",
+      "source_refs": [
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-mq"
+      ],
+      "capability_refs": [
+        "mq-design",
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "M6",
+      "category": "MQ",
+      "guidance": "消息体默认不超过 10KB，超过需评审。",
+      "source_refs": [
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-mq"
+      ],
+      "capability_refs": [
+        "mq-design",
+        "implementation-contract",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DB1",
+      "category": "数据库",
+      "guidance": "MySQL 是事实数据唯一真相来源，Redis/MQ 不作为事实数据最终来源。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-database"
+      ],
+      "capability_refs": [
+        "database-design",
+        "implementation-contract",
+        "design-review"
+      ]
+    },
+    {
+      "id": "DB3",
+      "category": "数据库",
+      "guidance": "禁止无条件全表查询，动态 where 至少有有效条件。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-database"
+      ],
+      "capability_refs": [
+        "database-design",
+        "implementation-contract",
+        "design-review"
+      ]
+    },
+    {
+      "id": "DB6",
+      "category": "数据库",
+      "guidance": "数据迁移、DDL、订正需要迁移步骤、灰度、回滚、审批点。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-database"
+      ],
+      "capability_refs": [
+        "database-design",
+        "implementation-contract",
+        "design-review"
+      ]
+    },
+    {
+      "id": "FW1",
+      "category": "框架选型",
+      "guidance": "框架选型必须在概要设计或详细设计中明确，未明确时必须主动询问用户或从项目 profile/repo_context 获取。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FW2",
+      "category": "框架选型",
+      "guidance": "Java/Spring 后端默认持久化框架为 mybatis-plus；直接使用 JDBC 必须有明确项目约束或评审批准。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FW3",
+      "category": "框架选型",
+      "guidance": "代码生成必须优先遵循现有仓库框架、依赖、分层和 mapper/repository 模式，不得凭空引入不同持久化技术。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FW4",
+      "category": "框架选型",
+      "guidance": "选型变更、框架替换、直接 SQL/JDBC 绕过团队默认框架时必须进入设计评审和代码评审 blocker 检查。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FE1",
+      "category": "前端",
+      "guidance": "涉及页面、组件、交互或客户端流程时必须进入前端设计，明确页面结构、组件边界、状态、接口和异常态。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-frontend"
+      ],
+      "capability_refs": [
+        "frontend-design",
+        "frontend-implementation",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FE2",
+      "category": "前端",
+      "guidance": "前端研发必须遵循现有项目技术栈和组件库；未明确 React/Vue/移动端客户端等技术栈时必须主动询问用户。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-frontend"
+      ],
+      "capability_refs": [
+        "frontend-design",
+        "frontend-implementation",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FE3",
+      "category": "前端",
+      "guidance": "前端设计必须覆盖接口联调契约、表单校验、加载/空态/错误态、权限可见性和埋点/可观测性。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-frontend"
+      ],
+      "capability_refs": [
+        "frontend-design",
+        "frontend-implementation",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "FE4",
+      "category": "前端",
+      "guidance": "前端实现必须输出设计到 UI 映射、变更文件、验证方式和兼容性风险。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-frontend"
+      ],
+      "capability_refs": [
+        "frontend-design",
+        "frontend-implementation",
+        "implementation",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DG1",
+      "category": "文档治理",
+      "guidance": "正式留存文档必须具备唯一文档编号，格式为 <PREFIX>-<DOMAIN>-<YYYYMMDD>-<SEQ>。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG2",
+      "category": "文档治理",
+      "guidance": "文档必须声明 document_status 和 retention_policy；未声明时按中间过程产物处理。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG3",
+      "category": "文档治理",
+      "guidance": "draft、reviewing、blocked、waiting_for_input 状态文档不得作为正式文档沉淀。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG4",
+      "category": "文档治理",
+      "guidance": "只有 approved 或 final 且 retention_policy=persist 的文档可进入正式文档目录。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG5",
+      "category": "文档治理",
+      "guidance": "任务过程摘要、缺失输入清单、临时评审意见和 flow 运行状态只允许写入 .run-artifacts/engineering-assistant/ 或登记为 EvidenceRef，不得伪装为正式文档。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG6",
+      "category": "文档治理",
+      "guidance": "正式文档被替代时必须标记 superseded 或 archived，并记录替代关系。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG7",
+      "category": "文档治理",
+      "guidance": "需求事实或需求契约尚未完备时，只能生成信息盘点、缺失信息、方向确认和恢复点等控制产物，RunState 必须保持等待或当前节点，不得生成或登记正式设计文档。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG8",
+      "category": "文档治理",
+      "guidance": "人工补充信息必须写回目标项目的可机读 MD/JSON/YAML 事实源，并通过 RunState.context_refs 或 EvidenceRef 登记来源；人工填写界面不得反向作为 Agent 事实源。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG9",
+      "category": "文档治理",
+      "guidance": "人工评审意见回来后必须先分类为事实补充、方案方向变化、文档缺陷、规范违背或团队规范候选；默认增量修正受影响产物，只有核心方案变化才允许整套重生并标记旧版 superseded。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG10",
+      "category": "文档治理",
+      "guidance": "正式设计文档进入人工评审前必须完成自我评审、确定性 validator 和自动修复；未关闭 blocker 必须保留在 unresolved-review-findings，不得标记 approved/final。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG11",
+      "category": "文档治理",
+      "guidance": "需求迭代中的用户修改、agent 修改、自审问题和人工评审意见只能抽取为规范候选，进入 TL 审核包；未经 TL 批准不得自动写回团队插件、SKILL.md、模板或规则目录。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "QIN1",
+      "category": "信息补全",
+      "guidance": "必填信息缺失且无法通过仓库或上游产物可靠推导时，skill 必须主动询问用户，不得继续伪造结论。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN2",
+      "category": "信息补全",
+      "guidance": "主动询问必须区分 blocking 与 optional；blocking 问题未回答时状态必须为 waiting_for_input。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN3",
+      "category": "信息补全",
+      "guidance": "每个问题必须说明用途、阻断原因、期望格式、示例和默认处理方式。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN4",
+      "category": "信息补全",
+      "guidance": "一次询问优先返回最小必要问题集，按 critical、major、minor 排序，避免把可从上下文推导的信息重复问用户。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN5",
+      "category": "信息补全",
+      "guidance": "用户补充信息后必须写回目标项目的可机读事实源，并通过 RunState.context_refs 或 EvidenceRef 保留来源。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN6",
+      "category": "信息补全",
+      "guidance": "涉及高风险动作、审批、生产变更或跨系统边界的信息缺失时，不允许以假设绕过人工确认。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN7",
+      "category": "信息补全",
+      "guidance": "信息收集完成判定必须覆盖需求目标、范围、非目标、涉及系统、数据对象、关键流程、专项涉及项和缺失信息分类；未完成时不得进入正式设计生成或后续 flow 节点。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "QIN8",
+      "category": "信息补全",
+      "guidance": "设计目标规划必须输出本次设计目标、阶段范围、需要生成的专项文档、已足够生成的信息、blocking 缺失项、可声明假设和需要人工评审的高风险点。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "decision-interview",
+        "shape-contract"
+      ]
+    },
+    {
+      "id": "D6",
+      "category": "详细设计",
+      "guidance": "涉及租户、认证、鉴权、角色、权限、多租户隔离时，必须生成 IAM/RBAC 专项规范。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D7",
+      "category": "详细设计",
+      "guidance": "涉及 Spring AI、LLM provider、RAG、Agent、Tool Calling、Embedding、VectorStore 时，必须生成 Spring AI 专项规范。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D8",
+      "category": "详细设计",
+      "guidance": "涉及快速演进的外部框架时，必须核对官方文档或官方发布页，并记录来源和核对日期。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D12",
+      "category": "详细设计",
+      "guidance": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D13",
+      "category": "详细设计",
+      "guidance": "详细设计业务流程图必须体现代码执行路径，覆盖正常流程、参数/权限/状态校验失败、外部依赖失败、事务/一致性失败、重试/补偿、人工处理或失败终态。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "D14",
+      "category": "详细设计",
+      "guidance": "详细设计流程图后的异常场景必须用表格说明场景、触发条件、异常编码、异常信息、系统处理动作、数据状态、日志/告警、补偿/重试/人工处理。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "design-review",
+        "work-slicing",
+        "implementation"
+      ]
+    },
+    {
+      "id": "CD1",
+      "category": "代码研发",
+      "guidance": "代码实现必须输出需求规格/原型-设计-代码追踪矩阵；每个代码变更必须映射 source_id、design_section、code_path 和验证证据，无法映射的实现视为无设计依据。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "work-slicing",
+        "tdd",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "CQ1",
+      "category": "代码质量",
+      "guidance": "好代码必须同时满足正确性、领域表达、边界清晰、可测试、可维护、安全、可观测、性能并发可控和可演进。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "tdd",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "CQ2",
+      "category": "代码质量",
+      "guidance": "代码必须能映射到需求、设计文档、接口契约和测试证据；无法映射的实现视为无设计依据。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "tdd",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "JDK1",
+      "category": "JDK21",
+      "guidance": "JDK21 稳定特性可以提升表达力，但不得启用未批准 preview feature 或让新语法掩盖复杂业务。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DDD1",
+      "category": "DDD",
+      "guidance": "domain 层禁止依赖 Spring、MyBatis-Plus、Redis、MQ、Sa-Token、Spring AI 等框架。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DDD2",
+      "category": "DDD",
+      "guidance": "application 层负责编排和事务边界，不沉淀复杂业务规则，不直接依赖 mapper/SDK。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "TDD1",
+      "category": "TDD",
+      "guidance": "代码研发必须有测试清单、失败测试、最小实现、重构和异常路径补充证据。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "work-slicing",
+        "tdd",
+        "implementation",
+        "quality-evidence"
+      ]
+    },
+    {
+      "id": "FWU1",
+      "category": "框架高级特性",
+      "guidance": "框架高级特性必须降低复杂度或增强可靠性，不得泄漏到业务层。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DP1",
+      "category": "设计模式",
+      "guidance": "设计模式必须对应真实变化点，禁止为模式而模式和过早抽象。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "DG17",
+      "category": "文档治理",
+      "guidance": "团队正式规则必须在 profile.rule_catalog_ref 指向的唯一规则目录登记，以稳定 rule ID 作为 Agent 和 reviewer 的机读规则索引。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG18",
+      "category": "文档治理",
+      "guidance": "每个任务必须通过 profile.pack_refs 和 rule_catalog_ref 按需加载规则；规则目录缺失、引用断裂或校验失败时不得进入实现或审核通过。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG19",
+      "category": "文档治理",
+      "guidance": "规则治理只保留结构化规则、来源记录和摘要，不携带人工评审页面、原始站点 HTML 或附件镜像。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG20",
+      "category": "文档治理",
+      "guidance": "规则包必须保留 rule_id、强度、标签、规则文本、来源路径和行号。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG21",
+      "category": "文档治理",
+      "guidance": "重复规范必须先生成 duplicate report，再由文档治理任务合并、归档或标记替代关系。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "DG22",
+      "category": "文档治理",
+      "guidance": "审核 finding 必须引用适用 rule_id；没有读取任务规则包的审核结论无效。",
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "shape-contract",
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "release-readiness",
+        "release-verification",
+        "release-retrospective",
+        "feedback-ingest",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "RRQ-ARCH1",
+      "category": "人人取架构",
+      "guidance": "人人取 SaaS 平台设计默认按微服务架构、事件驱动和领域驱动设计评审；设计必须说明系统边界、业务域划分、事件协作和最终一致性。",
+      "source_refs": [
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-TECH1",
+      "category": "人人取通用技术",
+      "guidance": "核心业务接口需要声明性能目标、调用链压测方式、耗时监控和超时告警；没有性能目标或证据时不得直接放行。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-TECH2",
+      "category": "人人取通用技术",
+      "guidance": "性能优化方案使用缓存、限流、预处理或减少外部依赖时，必须给出缓存命中率、数据库查询频率、外部依赖失败的熔断降级策略。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-LOG1",
+      "category": "人人取日志",
+      "guidance": "团队日志必须包含 traceId、userId、requestId 等上下文；日志级别、采集平台和敏感信息脱敏策略必须明确。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-SEC1",
+      "category": "人人取安全",
+      "guidance": "日志和异常消息禁止输出完整手机号、银行账号、信用卡、邮箱、密码、公钥、私钥、完整签名等敏感信息。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-OBS1",
+      "category": "人人取监控",
+      "guidance": "核心业务必须覆盖关键路径埋点、异常告警、处理日志、TPS、响应时间、异常比率等系统级业务监控。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-IDEMP1",
+      "category": "人人取幂等",
+      "guidance": "支付、订单创建、库存更新、外部回调、MQ 消费、用户表单提交等修改核心数据场景必须进行幂等性设计。",
+      "source_refs": [
+        "rrq-idempotency"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-IDEMP2",
+      "category": "人人取幂等",
+      "guidance": "请求或消息去重可基于全量请求体 hash、关键字段排序 hash、messageId 或业务唯一键；必须说明去重窗口、存储介质、TTL 和重复处理结果。",
+      "source_refs": [
+        "rrq-idempotency"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "RRQ-IDEMP3",
+      "category": "人人取幂等",
+      "guidance": "MQ 多节点消费存在乱序风险时，必须使用时间戳或版本号只处理最新消息，旧消息丢弃或补偿。",
+      "source_refs": [
+        "rrq-idempotency"
+      ],
+      "target_refs": [
+        "rrq-yq-code-quality"
+      ],
+      "capability_refs": [
+        "implementation-contract",
+        "implementation",
+        "quality-evidence",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI1",
+      "category": "YApi",
+      "guidance": "YApi group 按产品线划分，新增 group 需要架构师确认并评审；Project 命名必须为中文名称 + 英文名称，英文名与 Jenkins 构建名称一致。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI2",
+      "category": "YApi",
+      "guidance": "模块名称格式为【资源】【动作】，接口名称格式为【动作】【资源】，必须清晰描述接口用途并符合逻辑视图分层。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI3",
+      "category": "YApi",
+      "guidance": "应用层只提供 api/tapi/mapi/console，业务层和平台共享层只提供 service；禁止跨层暴露错误接口类型。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI4",
+      "category": "YApi",
+      "guidance": "接口路径遵循 /api/v1、/service/v1、/console、/tapi/v1、/mapi 约定；路径使用小写英文，多个单词用短横线连接。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI5",
+      "category": "YApi",
+      "guidance": "请求和响应字段使用小写驼峰，禁止拼音或无意义缩写；响应结构必须包含 header.code、header.message 和 body。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YAPI6",
+      "category": "YApi",
+      "guidance": "接口文档必须包含接口用途、适用场景、权限要求、注意事项和错误码；入参和返回参数必须补充注解，必填字段使用 JSR303 约束并写正确错误码。",
+      "source_refs": [
+        "rrq-yapi-standard"
+      ],
+      "target_refs": [
+        "rrq-yq-api"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YQ1",
+      "category": "萤启服务商系统",
+      "guidance": "萤启服务商系统异常编码结构为 [系统]-[服务]-[模块]-[错误码]，服务编码必须从 profile 或概要设计读取，例如 FRCH、TMGE、TCER、FRME、FRST。",
+      "source_refs": [
+        "yq-overview",
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YQ2",
+      "category": "萤启服务商系统",
+      "guidance": "萤启服务商系统错误码段必须按类型划分：1000 业务、2000 参数、3000 数据库、4000 第三方、5000 权限、6000 状态、7000 网络、8000 系统、9000 未知。",
+      "source_refs": [
+        "yq-overview",
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YQ3",
+      "category": "萤启服务商系统",
+      "guidance": "系统交互流向遵循客户端到网关到系统应用到领域服务；禁止跨系统直接使用 Feign 调用未开放能力。",
+      "source_refs": [
+        "yq-overview",
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "YQ4",
+      "category": "萤启服务商系统",
+      "guidance": "服务商系统涉及 MQ 场景时，必须优先从项目 profile、repo_context 或用户确认中读取已有通用队列、exchange、routingKey、消息 key、消息体、幂等和租户/服务商路由；缺失时主动询问，不得在团队插件中硬编码具体业务队列。",
+      "source_refs": [
+        "yq-overview",
+        "yq-vems-franchisee"
+      ],
+      "target_refs": [
+        "rrq-yq-architecture"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "design-review",
+        "code-review"
+      ]
+    },
+    {
+      "id": "KM1",
+      "category": "知识沉淀",
+      "guidance": "单次需求暴露的设计纠偏必须先拆分为团队长期规范、项目事实、本次需求事实、运行状态和 eval/regression 样例；具体业务事实不得进入通用 SKILL.md 或 validator 默认规则。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "release-retrospective",
+        "feedback-ingest",
+        "knowledge-mining",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    },
+    {
+      "id": "KM2",
+      "category": "知识沉淀",
+      "guidance": "自优化提示词只能作为 prompt-optimization-candidates 或 rule-candidates 提交 TL，必须包含来源、原始修改、归纳规则、适用范围、不适用范围、反例、泛化程度、建议落点和审核状态。",
+      "source_refs": [
+        "rrq-common-tech"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "release-retrospective",
+        "feedback-ingest",
+        "knowledge-mining",
+        "skill-quality",
+        "skill-evolution"
+      ]
+    }
+  ]
+}

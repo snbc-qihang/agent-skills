@@ -342,7 +342,9 @@ class GovernanceTests(unittest.TestCase):
                 confidence=0.95,
                 evidence=["explicit request"],
         )
-        state = engine.start("task-quality", task_intent, run_id="run-quality")
+        state = engine.start(
+            "task-quality", task_intent, profile_id="default", run_id="run-quality"
+        )
         state.current_node = "quality"
         state.status = "running"
         self.evidence(state.run_id)
@@ -399,7 +401,9 @@ class GovernanceTests(unittest.TestCase):
                 confidence=0.95,
                 evidence=["explicit request"],
         )
-        state = engine.start("design-review", task_intent, run_id="design-review")
+        state = engine.start(
+            "design-review", task_intent, profile_id="default", run_id="design-review"
+        )
         state.current_node = "gate"
         state.status = "running"
         review_path = self.project / "design-review.txt"
@@ -579,7 +583,10 @@ class GovernanceTests(unittest.TestCase):
                 evidence=["explicit request"],
         )
         state = engine.start(
-            "task-blocked-quality", task_intent, run_id="run-blocked-quality"
+            "task-blocked-quality",
+            task_intent,
+            profile_id="default",
+            run_id="run-blocked-quality",
         )
         state.current_node = "quality"
         state.status = "running"

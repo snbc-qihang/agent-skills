@@ -1,4 +1,4 @@
-# engineering-assistant 当前架构
+# teamwork-engineering-assistant 当前架构
 
 ## 架构边界
 
@@ -26,7 +26,7 @@ flowchart LR
     H --> F
 ```
 
-- `catalog/` 是 skill、flow、policy、pack、capability、provider、开源来源决策和 profile 的唯一机器事实源；`catalog/sources/` 把每个评估来源固定到 revision、许可证证据、采用方式和当前资产落点。
+- `catalog/` 是 product、skill、flow、policy、pack、capability、团队规则、provider、开源来源决策和 profile 的唯一机器事实源；`catalog/product.json` 固定产品身份与默认 profile，`catalog/rules/` 固定团队规则、来源和目标 pack，`catalog/sources/` 把开源评估来源固定到 revision、许可证证据、采用方式和当前资产落点。
 - `skills/` 和 `packs/` 是面向 agent 的指令与专业知识源。
 - `schemas/` 和 `model.py` 定义平台无关协议。
 - `router.py` 只消费结构化 `RouteIntent`。
@@ -51,6 +51,12 @@ flowchart LR
 - Adapter 改写核心协议语义。
 - 仓库保存编译后的平台包。
 
+## 产品扩展 seam
+
+`ProductSpec` 只决定插件 ID、展示信息、开发者、根 skill 和默认 profile。团队版对外显示为 `teamwork-engineering-assistant`，默认使用 `rrq-yq-team`；11 个公开 skill ID、`ea`、`engineering_assistant_*` 工具、JSON 运行协议和 `.run-artifacts/engineering-assistant/` 保持通用内核兼容。
+
+Catalog loader 按文件名排序聚合 flows、policies、packs 和 profiles。跨文件重复 ID、版本漂移、未知默认 profile、断裂 pack/rule/source/capability 引用均在加载时失败。`rrq-yq-team` 通过 `pack_refs` 与 `rule_catalog_ref` 启用 8 个团队 pack 和 105 条规则；路由响应按任务和显式影响范围提供团队 pack、规则与来源，持久化节点再按 capability 收窄。节点证据使用既有 `EvidenceRef.contract_refs` 记录 `rule:<rule-id>`，不引入第二套运行状态机。
+
 ## 运行状态
 
 任务运行状态存放于目标项目 `.run-artifacts/engineering-assistant/`。`RunState` 固定创建时的 profile，`revision` 用于阻止并发旧写入；审批具有有效期；完成条件必须引用当前可复核的 observed/verified 证据并满足节点 policy 的证据种类。生命周期 Hook 的 capture 和候选事件分别存放于 `feedback/captures/` 和 `feedback/events/`；质量快照和主动调研记录分别存放于每个 run 的 `quality/` 与 `investigations/`。
@@ -63,7 +69,7 @@ Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`�
 
 两个平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
 
-模型工具暴露路由、运行推进、质量快照，以及调研提议/查看/启动/结束能力。`start` 只接收 intent 并由内核重新路由，不能消费调用方构造的 decision。模型只能提交 `claimed` evidence；`observed`/`verified` evidence receipt、通用运行审批和调研模式 grant 必须由管理员固定的 HTTPS introspection endpoint 验证。宿主只能通过管理员固定位置的 `host-trust.json` 绑定真实 broker；模型参数与进程环境不能选择配置路径，配置缺失时不会回退到仓库 profile endpoint，配置 schema 只允许覆盖 evidence/approval broker，不能覆盖 Hook、策略、存储或预算。Canary draft 在 broker 签发前就冻结 evidence broker ID、宿主配置摘要和 treatment digest，import 不得改变待签 claims；准备与组装共享总文件数、总字节和单文件读取上限，baseline/candidate 必须具有不同的 broker 签名 treatment digest。发布包不包含签发器或私钥，自由文本 `approve`/`investigation-decide` CLI 不存在。`quality` 节点只约束 implement flow，并要求六维全部通过、证据种类兼容、所有质量证据绑定同一候选摘要且 run revision 仍匹配；性能维度还必须引用带 `quality-dimension:performance` 和 benchmark/profile 测量标签的实际证据，通用测试结果不能替代性能观测。设计评审不会被错误要求提交代码质量快照。
+模型工具暴露路由、运行推进、质量快照，以及调研提议/查看/启动/结束能力。`start` 只接收 intent 并由内核重新路由，不能消费调用方构造的 decision。模型只能提交 `claimed` evidence；`observed`/`verified` evidence receipt、通用运行审批和调研模式 grant 必须由管理员固定的 HTTPS introspection endpoint 验证。宿主只能通过管理员固定位置的 `host-trust.json` 绑定真实 broker；模型参数与进程环境不能选择配置路径，配置缺失时不会回退到仓库 profile endpoint，配置 schema 只允许覆盖 evidence/approval broker，不能覆盖 Hook、策略、存储或预算。Canary draft 在 broker 签发前就冻结 evidence broker ID、宿主配置摘要和 treatment digest，import 不得改变待签 claims；准备与组装共享总文件数、总字节和单文件读取上限，baseline/candidate 必须具有不同的 broker 签名 treatment digest。发布包不包含签发器或私钥，自由文本 `approve`/`investigation-decide` CLI 不存在。`implement.quality` 与 `team-delivery.quality-gate` 复用同一六维质量快照，要求六维全部通过、证据种类兼容、所有质量证据绑定同一候选摘要且 run revision 仍匹配；性能维度还必须引用带 `quality-dimension:performance` 和 benchmark/profile 测量标签的实际证据，通用测试结果不能替代性能观测。设计评审不会被错误要求提交代码质量快照。
 
 四种调研模式由 profile 或 broker 决定：禁用直接拒绝，只读自动模式受资料范围和成本上限约束，建议后执行使用一次签名选择，引导模式每次只允许一个资料范围并累积已经验真的 contract refs，只有最终完成才要求覆盖全部需求和停止条件。真实资料或运行环境不可用时，可以用绑定当前调研与已批准资料范围的 observed/verified `external_state` 证据结束为 `blocked`，不虚报成功条件。broker 未配置、签名无效、过期、范围或 revision 不匹配时保持等待。
 

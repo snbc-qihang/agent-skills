@@ -1058,7 +1058,7 @@ def _routing_eval(root: Path, catalog) -> dict:
     failures = []
     for case in cases:
         intent = normalize_request(case["request"])
-        decision = route_intent(intent, catalog)
+        decision = route_intent(intent, catalog, profile_id="default")
         if decision.decision == "ask":
             no_result += 1
         if intent.task_kind == case["task_kind"]:
@@ -1082,20 +1082,32 @@ def _routing_eval(root: Path, catalog) -> dict:
 
 
 def _behavior_eval(root: Path, catalog) -> dict:
-    cases = load_json(root / "evals/behavior/cases.json")["cases"]
+    cases = [
+        *load_json(root / "evals/behavior/cases.json")["cases"],
+        *load_json(root / "evals/behavior/teamwork-cases.json")["cases"],
+    ]
     passed = 0
     failures = []
     for case in cases:
         intent = normalize_request(case["request"])
-        decision = route_intent(intent, catalog)
+        decision = route_intent(
+            intent, catalog, profile_id=case.get("profile_id", "default")
+        )
         actual = {
             "task_kind": intent.task_kind,
             "decision": decision.decision,
             "flow_id": decision.flow_id,
             "skill_ids": decision.skill_ids,
+            "policy_refs": decision.policy_refs,
         }
         expected = case["expected"]
-        if all(actual.get(key) == value for key, value in expected.items()):
+        required_policy_refs = expected.get("required_policy_refs", [])
+        scalar_expected = {
+            key: value for key, value in expected.items() if key != "required_policy_refs"
+        }
+        if all(
+            actual.get(key) == value for key, value in scalar_expected.items()
+        ) and set(required_policy_refs).issubset(actual["policy_refs"]):
             passed += 1
         else:
             failures.append({"id": case["id"], "expected": expected, "actual": actual})
@@ -1380,6 +1392,7 @@ def _scenario_approval_resume(catalog, _root: Path) -> None:
     state = engine.start(
         "eval-release",
         normalize_request("Prepare a release rollout plan"),
+        profile_id="default",
         run_id="eval-release",
     )
     if engine.next(state).decision != "pause_for_approval":
@@ -1440,6 +1453,7 @@ def _scenario_evidence_resume(catalog, root: Path) -> None:
         state = engine.start(
             "eval-design",
             normalize_request("Design the module boundary and interface"),
+            profile_id="default",
             run_id="eval-design",
         )
         store.create(state)
@@ -1487,6 +1501,7 @@ def _scenario_retry(catalog, _root: Path) -> None:
         state = engine.start(
             "eval-implement",
             normalize_request("Implement the accepted endpoint behavior"),
+            profile_id="default",
             run_id="eval-implement",
         )
         engine.next(state)
@@ -1507,6 +1522,7 @@ def _scenario_block(catalog, _root: Path) -> None:
         state = engine.start(
             "eval-shape",
             normalize_request("Clarify this requirement and its acceptance criteria"),
+            profile_id="default",
             run_id="eval-shape",
         )
         engine.next(state)

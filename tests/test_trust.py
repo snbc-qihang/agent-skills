@@ -559,6 +559,8 @@ class TrustTests(unittest.TestCase):
                         [
                             "--repository-root",
                             str(ROOT),
+                            "--profile",
+                            "default",
                             "start",
                             "--intent",
                             str(intent),
@@ -604,6 +606,8 @@ class TrustTests(unittest.TestCase):
                     [
                         "--repository-root",
                         str(ROOT),
+                        "--profile",
+                        "default",
                         "evidence-import",
                         "--run-id",
                         run_id,
@@ -642,7 +646,9 @@ class TrustTests(unittest.TestCase):
                     "engineering_assistant.trust.urllib.request.urlopen",
                     return_value=response,
                 ), redirect_stdout(output):
-                    code = cli_main(["--repository-root", str(ROOT), *argv])
+                    code = cli_main(
+                        ["--repository-root", str(ROOT), "--profile", "default", *argv]
+                    )
                 return code, json.loads(output.getvalue())
 
             intent = root / "intent.json"
@@ -772,7 +778,11 @@ class TrustTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         "name": "engineering_assistant_investigation_list",
-                        "arguments": {"project_root": str(project), "run_id": run_id},
+                        "arguments": {
+                            "project_root": str(project),
+                            "run_id": run_id,
+                            "profile": "default",
+                        },
                     },
                 }
             )["result"]
@@ -789,6 +799,7 @@ class TrustTests(unittest.TestCase):
                             "project_root": str(project),
                             "run_id": run_id,
                             "investigation_id": "selection-1",
+                            "profile": "default",
                         },
                     },
                 }
@@ -839,7 +850,11 @@ class TrustTests(unittest.TestCase):
                     "method": "tools/call",
                     "params": {
                         "name": "engineering_assistant_investigation_list",
-                        "arguments": {"project_root": str(project), "run_id": run_id},
+                        "arguments": {
+                            "project_root": str(project),
+                            "run_id": run_id,
+                            "profile": "default",
+                        },
                     },
                 }
             )["result"]["structuredContent"]["records"]

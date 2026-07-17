@@ -1,6 +1,6 @@
 # 真实产品 Canary
 
-本流程用于验证 `engineering-assistant` 在真实产品仓库中的质量、成本、上下文占用、文档噪声和安全表现。它不生成模拟证据，也不允许 Runtime 自签结果。运行 artifact、broker 回执和结果必须保存在目标项目 `.run-artifacts/engineering-assistant/` 或仓库外受控证据目录，不能写入本作者源仓库。
+本流程用于验证 `teamwork-engineering-assistant` 在真实产品仓库中的质量、成本、上下文占用、文档噪声和安全表现。它不生成模拟证据，也不允许 Runtime 自签结果。运行 artifact、broker 回执和结果必须保存在目标项目 `.run-artifacts/engineering-assistant/` 或仓库外受控证据目录，不能写入本作者源仓库。
 
 ## 前置条件
 

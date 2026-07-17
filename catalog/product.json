@@ -1,0 +1,8 @@
+{
+  "id": "teamwork-engineering-assistant",
+  "display_name": "团队研发助手",
+  "description": "基于通用工程内核、默认加载团队研发流程与规范的团队版工程助手。",
+  "developer": "sunliming625@gmail.com",
+  "root_skill_id": "engineering-assistant",
+  "default_profile_id": "rrq-yq-team"
+}

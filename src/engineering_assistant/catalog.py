@@ -46,6 +46,16 @@ class Capability:
 
 
 @dataclass(frozen=True)
+class ProductSpec:
+    id: str
+    display_name: str
+    description: str
+    developer: str
+    root_skill_id: str
+    default_profile_id: str
+
+
+@dataclass(frozen=True)
 class ProjectProfile:
     id: str
     version: str
@@ -56,6 +66,8 @@ class ProjectProfile:
     investigation_policy: Mapping[str, Any]
     evidence_policy: Mapping[str, Any]
     adapter_preferences: tuple[str, ...]
+    pack_refs: tuple[str, ...]
+    rule_catalog_ref: str | None
 
 
 @dataclass(frozen=True)
@@ -86,9 +98,38 @@ class SourceDecision:
 
 
 @dataclass(frozen=True)
+class TeamRuleSource:
+    id: str
+    title: str
+    url: str
+    digest: str
+    topics: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TeamRule:
+    id: str
+    category: str
+    guidance: str
+    source_refs: tuple[str, ...]
+    target_refs: tuple[str, ...]
+    capability_refs: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TeamRuleCatalog:
+    id: str
+    version: str
+    profile_id: str
+    sources: Mapping[str, TeamRuleSource]
+    rules: Mapping[str, TeamRule]
+
+
+@dataclass(frozen=True)
 class Catalog:
     root: Path
     version: str
+    product: ProductSpec
     skills: Mapping[str, SkillSpec]
     flows: Mapping[str, FlowSpec]
     policies: Mapping[str, PolicySpec]
@@ -97,6 +138,11 @@ class Catalog:
     profiles: Mapping[str, ProjectProfile]
     providers: Mapping[str, CapabilityProviderSpec]
     sources: Mapping[str, SourceDecision]
+    rule_catalogs: Mapping[str, TeamRuleCatalog]
+
+    @property
+    def default_profile(self) -> ProjectProfile:
+        return self.profiles[self.product.default_profile_id]
 
     def skill_for_capability(self, capability_id: str) -> SkillSpec | None:
         capability = self.capabilities.get(capability_id)
@@ -128,6 +174,34 @@ def _assert_refs(refs: Iterable[str], available: Mapping[str, Any], label: str) 
     missing = sorted(set(refs) - set(available))
     if missing:
         raise ValidationFailure(f"{label}: unknown references: {', '.join(missing)}")
+
+
+def _load_component_documents(
+    directory: Path,
+    collection_key: str,
+) -> tuple[list[Mapping[str, Any]], list[Mapping[str, Any]]]:
+    paths = sorted(path for path in directory.glob("*.json") if path.is_file())
+    if not paths:
+        raise ValidationFailure(f"catalog component directory is empty: {directory}")
+    documents = [load_json(path) for path in paths]
+    items: list[Mapping[str, Any]] = []
+    for path, document in zip(paths, documents):
+        if set(document) != {"version", collection_key}:
+            raise ValidationFailure(
+                f"catalog component {path.name} must contain only version and {collection_key}"
+            )
+        collection = document.get(collection_key)
+        if not isinstance(collection, list):
+            raise ValidationFailure(f"catalog component {path.name} has invalid {collection_key}")
+        items.extend(collection)
+    return documents, items
+
+
+def _load_profile_documents(directory: Path) -> list[Mapping[str, Any]]:
+    paths = sorted(path for path in directory.glob("*.json") if path.is_file())
+    if not paths:
+        raise ValidationFailure(f"catalog profile directory is empty: {directory}")
+    return [load_json(path) for path in paths]
 
 
 def _assert_acyclic(flow: FlowSpec) -> None:
@@ -249,20 +323,26 @@ def _validate_skill_source(root: Path, skill: SkillSpec) -> None:
 def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources: bool = False) -> Catalog:
     root = Path(root).resolve()
     schemas = root / "schemas"
+    product_doc = load_json(root / "catalog/product.json")
     skill_doc = load_json(root / "catalog/skills/public.json")
-    flow_doc = load_json(root / "catalog/flows/core.json")
-    policy_doc = load_json(root / "catalog/policies/core.json")
+    flow_docs, flow_items = _load_component_documents(root / "catalog/flows", "flows")
+    policy_docs, policy_items = _load_component_documents(
+        root / "catalog/policies", "policies"
+    )
     capability_doc = load_json(root / "catalog/capabilities/registry.json")
-    pack_doc = load_json(root / "catalog/packs/core.json")
-    profile_doc = load_json(root / "catalog/profiles/default.json")
+    pack_docs, pack_items = _load_component_documents(root / "catalog/packs", "packs")
+    profile_docs = _load_profile_documents(root / "catalog/profiles")
+    rule_catalog_docs = _load_profile_documents(root / "catalog/rules")
     provider_doc = load_json(root / "catalog/providers/core.json")
     source_doc = load_json(root / "catalog/sources/open-source.json")
 
     skill_data = _unique_by_id(skill_doc.get("skills", []), "skills")
-    flow_data = _unique_by_id(flow_doc.get("flows", []), "flows")
-    policy_data = _unique_by_id(policy_doc.get("policies", []), "policies")
+    flow_data = _unique_by_id(flow_items, "flows")
+    policy_data = _unique_by_id(policy_items, "policies")
     capability_data = _unique_by_id(capability_doc.get("capabilities", []), "capabilities")
-    pack_data = _unique_by_id(pack_doc.get("packs", []), "packs")
+    pack_data = _unique_by_id(pack_items, "packs")
+    profile_data = _unique_by_id(profile_docs, "profiles")
+    rule_catalog_data = _unique_by_id(rule_catalog_docs, "rule catalogs")
     provider_data = _unique_by_id(provider_doc.get("providers", []), "providers")
     source_data = _unique_by_id(source_doc.get("sources", []), "sources")
     if set(source_doc) != {"version", "review_scope", "sources"}:
@@ -287,6 +367,21 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     validate_many(policy_data.values(), load_json(schemas / "policy-spec.schema.json"), "policies")
     validate_many(pack_data.values(), load_json(schemas / "pack-spec.schema.json"), "packs")
     validate_many(
+        profile_data.values(),
+        load_json(schemas / "project-profile.schema.json"),
+        "profiles",
+    )
+    validate_many(
+        rule_catalog_data.values(),
+        load_json(schemas / "team-rule-catalog.schema.json"),
+        "rule catalogs",
+    )
+    validate_many(
+        [product_doc],
+        load_json(schemas / "product-spec.schema.json"),
+        "product",
+    )
+    validate_many(
         provider_data.values(),
         load_json(schemas / "capability-provider-spec.schema.json"),
         "providers",
@@ -299,11 +394,12 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
 
     versions = {
         skill_doc.get("version"),
-        flow_doc.get("version"),
-        policy_doc.get("version"),
+        *(document.get("version") for document in flow_docs),
+        *(document.get("version") for document in policy_docs),
         capability_doc.get("version"),
-        pack_doc.get("version"),
-        profile_doc.get("version"),
+        *(document.get("version") for document in pack_docs),
+        *(document.get("version") for document in profile_docs),
+        *(document.get("version") for document in rule_catalog_docs),
         provider_doc.get("version"),
         source_doc.get("version"),
     }
@@ -329,44 +425,62 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         )
         for item_id, item in pack_data.items()
     }
-    profile = ProjectProfile(
-        id=profile_doc["id"],
-        version=profile_doc["version"],
-        policy_refs=tuple(profile_doc["policy_refs"]),
-        store=profile_doc["store"],
-        evidence_broker=profile_doc["evidence_broker"],
-        approval_broker=profile_doc["approval_broker"],
-        investigation_policy=profile_doc["investigation_policy"],
-        evidence_policy=profile_doc["evidence_policy"],
-        adapter_preferences=tuple(profile_doc["adapter_preferences"]),
-    )
-    for broker_name, broker in (
-        ("evidence_broker", profile.evidence_broker),
-        ("approval_broker", profile.approval_broker),
-    ):
-        required = ("enabled", "id", "introspection_url", "timeout_seconds")
-        if not isinstance(broker.get("enabled"), bool) or any(key not in broker for key in required):
-            raise ValidationFailure(f"profile {broker_name} is incomplete")
-        if broker["enabled"] and not str(broker["introspection_url"]).startswith("https://"):
-            raise ValidationFailure(f"profile {broker_name} requires an HTTPS introspection URL")
-    if not isinstance(profile.approval_broker.get("audience"), str) or not profile.approval_broker[
-        "audience"
-    ].strip():
-        raise ValidationFailure("profile approval_broker requires a non-empty audience")
-    investigation_mode = profile.investigation_policy.get("default_mode")
-    if investigation_mode not in {"auto_readonly", "suggest_then_run", "guided", "disabled"}:
-        raise ValidationFailure("profile investigation_policy has an invalid default_mode")
-    auto_readonly = profile.investigation_policy.get("auto_readonly", {})
-    if not isinstance(auto_readonly.get("enabled"), bool):
-        raise ValidationFailure("profile auto_readonly policy requires enabled")
-    max_evidence_age = profile.evidence_policy.get("max_age_seconds")
-    max_future_skew = profile.evidence_policy.get("max_future_skew_seconds")
-    if not isinstance(max_evidence_age, int) or max_evidence_age <= 0:
-        raise ValidationFailure("profile evidence_policy requires positive max_age_seconds")
-    if not isinstance(max_future_skew, int) or max_future_skew < 0:
-        raise ValidationFailure(
-            "profile evidence_policy requires non-negative max_future_skew_seconds"
+    profiles = {
+        item_id: ProjectProfile(
+            id=item["id"],
+            version=item["version"],
+            policy_refs=tuple(item["policy_refs"]),
+            store=item["store"],
+            evidence_broker=item["evidence_broker"],
+            approval_broker=item["approval_broker"],
+            investigation_policy=item["investigation_policy"],
+            evidence_policy=item["evidence_policy"],
+            adapter_preferences=tuple(item["adapter_preferences"]),
+            pack_refs=tuple(item["pack_refs"]),
+            rule_catalog_ref=item.get("rule_catalog_ref"),
         )
+        for item_id, item in profile_data.items()
+    }
+    for profile in profiles.values():
+        for broker_name, broker in (
+            ("evidence_broker", profile.evidence_broker),
+            ("approval_broker", profile.approval_broker),
+        ):
+            required = ("enabled", "id", "introspection_url", "timeout_seconds")
+            if not isinstance(broker.get("enabled"), bool) or any(
+                key not in broker for key in required
+            ):
+                raise ValidationFailure(f"profile {profile.id} {broker_name} is incomplete")
+            if broker["enabled"] and not str(broker["introspection_url"]).startswith("https://"):
+                raise ValidationFailure(
+                    f"profile {profile.id} {broker_name} requires an HTTPS introspection URL"
+                )
+        if not isinstance(profile.approval_broker.get("audience"), str) or not profile.approval_broker[
+            "audience"
+        ].strip():
+            raise ValidationFailure(
+                f"profile {profile.id} approval_broker requires a non-empty audience"
+            )
+        investigation_mode = profile.investigation_policy.get("default_mode")
+        if investigation_mode not in {"auto_readonly", "suggest_then_run", "guided", "disabled"}:
+            raise ValidationFailure(
+                f"profile {profile.id} investigation_policy has an invalid default_mode"
+            )
+        auto_readonly = profile.investigation_policy.get("auto_readonly", {})
+        if not isinstance(auto_readonly.get("enabled"), bool):
+            raise ValidationFailure(
+                f"profile {profile.id} auto_readonly policy requires enabled"
+            )
+        max_evidence_age = profile.evidence_policy.get("max_age_seconds")
+        max_future_skew = profile.evidence_policy.get("max_future_skew_seconds")
+        if not isinstance(max_evidence_age, int) or max_evidence_age <= 0:
+            raise ValidationFailure(
+                f"profile {profile.id} evidence_policy requires positive max_age_seconds"
+            )
+        if not isinstance(max_future_skew, int) or max_future_skew < 0:
+            raise ValidationFailure(
+                f"profile {profile.id} evidence_policy requires non-negative max_future_skew_seconds"
+            )
     providers = {
         item_id: _provider_spec(item) for item_id, item in provider_data.items()
     }
@@ -388,10 +502,48 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         )
         for item_id, item in source_data.items()
     }
+    product = ProductSpec(
+        id=product_doc["id"],
+        display_name=product_doc["display_name"],
+        description=product_doc["description"],
+        developer=product_doc["developer"],
+        root_skill_id=product_doc["root_skill_id"],
+        default_profile_id=product_doc["default_profile_id"],
+    )
+    rule_catalogs: dict[str, TeamRuleCatalog] = {}
+    for item_id, item in rule_catalog_data.items():
+        source_items = _unique_by_id(item["sources"], f"rule catalog {item_id} sources")
+        rule_items = _unique_by_id(item["rules"], f"rule catalog {item_id} rules")
+        rule_catalogs[item_id] = TeamRuleCatalog(
+            id=item_id,
+            version=item["version"],
+            profile_id=item["profile_id"],
+            sources={
+                source_id: TeamRuleSource(
+                    id=source_id,
+                    title=source["title"],
+                    url=source["url"],
+                    digest=source["digest"],
+                    topics=tuple(source["topics"]),
+                )
+                for source_id, source in source_items.items()
+            },
+            rules={
+                rule_id: TeamRule(
+                    id=rule_id,
+                    category=rule["category"],
+                    guidance=rule["guidance"],
+                    source_refs=tuple(rule["source_refs"]),
+                    target_refs=tuple(rule["target_refs"]),
+                    capability_refs=tuple(rule["capability_refs"]),
+                )
+                for rule_id, rule in rule_items.items()
+            },
+        )
 
     versioned = [
         *skills.values(), *flows.values(), *policies.values(), *packs.values(),
-        *providers.values(), profile,
+        *providers.values(), *profiles.values(), *rule_catalogs.values(),
         *sources.values(),
     ]
     mismatched = sorted(item.id for item in versioned if item.version != version)
@@ -421,9 +573,66 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
                 raise ValidationFailure(f"flow {flow.id} node {node.id}: self dependency")
             _assert_refs([node.capability], capabilities, f"flow {flow.id} node {node.id} capability")
             _assert_refs(node.policy_refs, policies, f"flow {flow.id} node {node.id} policies")
+            undeclared_required_kinds = sorted(
+                set(node.required_evidence_kinds) - set(node.evidence_kinds)
+            )
+            if undeclared_required_kinds:
+                raise ValidationFailure(
+                    f"flow {flow.id} node {node.id}: required evidence kinds are not allowed: "
+                    + ", ".join(undeclared_required_kinds)
+                )
         _assert_acyclic(flow)
 
-    _assert_refs(profile.policy_refs, policies, f"profile {profile.id} policies")
+    if product.root_skill_id not in skills:
+        raise ValidationFailure(
+            f"product root skill is unknown: {product.root_skill_id}"
+        )
+    if product.default_profile_id not in profiles:
+        raise ValidationFailure(
+            f"product default profile is unknown: {product.default_profile_id}"
+        )
+    for profile in profiles.values():
+        _assert_refs(profile.policy_refs, policies, f"profile {profile.id} policies")
+        _assert_refs(profile.pack_refs, packs, f"profile {profile.id} packs")
+        if profile.rule_catalog_ref is not None:
+            if profile.rule_catalog_ref not in rule_catalogs:
+                raise ValidationFailure(
+                    f"profile {profile.id} rule catalog is unknown: {profile.rule_catalog_ref}"
+                )
+            if rule_catalogs[profile.rule_catalog_ref].profile_id != profile.id:
+                raise ValidationFailure(
+                    f"profile {profile.id} rule catalog targets another profile"
+                )
+    for rule_catalog in rule_catalogs.values():
+        if rule_catalog.profile_id not in profiles:
+            raise ValidationFailure(
+                f"rule catalog {rule_catalog.id} profile is unknown: {rule_catalog.profile_id}"
+            )
+        for source in rule_catalog.sources.values():
+            if (
+                Path(source.url).is_absolute()
+                or source.url.casefold().startswith("file:")
+                or "\\" in source.url
+            ):
+                raise ValidationFailure(
+                    f"rule catalog {rule_catalog.id} source {source.id} uses a local path"
+                )
+        for rule in rule_catalog.rules.values():
+            _assert_refs(
+                rule.source_refs,
+                rule_catalog.sources,
+                f"rule catalog {rule_catalog.id} rule {rule.id} sources",
+            )
+            _assert_refs(
+                rule.target_refs,
+                packs,
+                f"rule catalog {rule_catalog.id} rule {rule.id} targets",
+            )
+            _assert_refs(
+                rule.capability_refs,
+                capabilities,
+                f"rule catalog {rule_catalog.id} rule {rule.id} capabilities",
+            )
     for provider in providers.values():
         _assert_refs(
             provider.capability_ids,
@@ -548,12 +757,14 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
     return Catalog(
         root=root,
         version=version,
+        product=product,
         skills=skills,
         flows=flows,
         policies=policies,
         capabilities=capabilities,
         packs=packs,
-        profiles={profile.id: profile},
+        profiles=profiles,
         providers=providers,
         sources=sources,
+        rule_catalogs=rule_catalogs,
     )

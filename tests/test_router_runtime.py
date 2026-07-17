@@ -62,7 +62,7 @@ class RouterTests(unittest.TestCase):
     def test_every_semantic_kind_has_a_valid_route(self) -> None:
         for kind in ROUTES:
             with self.subTest(kind=kind):
-                decision = route_intent(intent(kind), self.catalog)
+                decision = route_intent(intent(kind), self.catalog, profile_id="default")
                 self.assertEqual("proceed" if kind != "release" else "confirm", decision.decision)
                 if kind == "explain":
                     self.assertEqual([], decision.skill_ids)
@@ -71,7 +71,9 @@ class RouterTests(unittest.TestCase):
                 self.assertIn("safety-core", decision.policy_refs)
 
     def test_low_confidence_asks_without_preloading_a_flow(self) -> None:
-        decision = route_intent(intent("design", confidence=0.4), self.catalog)
+        decision = route_intent(
+            intent("design", confidence=0.4), self.catalog, profile_id="default"
+        )
         self.assertEqual("ask", decision.decision)
         self.assertIsNone(decision.flow_id)
         self.assertEqual(["engineering-assistant"], decision.skill_ids)
@@ -80,6 +82,7 @@ class RouterTests(unittest.TestCase):
         decision = route_intent(
             intent("implement", risks=["production"], actions=["push"]),
             self.catalog,
+            profile_id="default",
         )
         self.assertEqual("confirm", decision.decision)
         self.assertEqual(["push", "production"], decision.approval_required)
@@ -96,6 +99,10 @@ class RuntimeTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def start(self, *args, **kwargs):
+        kwargs.setdefault("profile_id", "default")
+        return self.engine.start(*args, **kwargs)
 
     @staticmethod
     def approval_grant(state, *, grant_id: str = "release-grant") -> RunApprovalGrant:
@@ -125,7 +132,7 @@ class RuntimeTests(unittest.TestCase):
         )
 
     def test_release_waits_for_and_records_explicit_approval(self) -> None:
-        state = self.engine.start("task-release", intent("release"), run_id="release-1")
+        state = self.start("task-release", intent("release"), run_id="release-1")
         self.assertEqual("waiting_for_approval", state.status)
         self.assertEqual("pause_for_approval", self.engine.next(state).decision)
         gate = self.engine.apply_approval(
@@ -154,7 +161,7 @@ class RuntimeTests(unittest.TestCase):
             )
 
     def test_expired_approval_cannot_resume_high_risk_flow(self) -> None:
-        state = self.engine.start("task-expiry", intent("release"), run_id="release-expiry")
+        state = self.start("task-expiry", intent("release"), run_id="release-expiry")
         self.apply_approval(state)
         state.approval_expiries["release-execution"] = (
             datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -164,7 +171,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(["release-execution"], gate.missing_evidence)
 
     def test_run_approval_rejects_forged_or_insufficient_scope_grants(self) -> None:
-        state = self.engine.start(
+        state = self.start(
             "task-forged-approval", intent("release"), run_id="release-forged"
         )
         with self.assertRaisesRegex(ValidationFailure, "external broker grant"):
@@ -220,7 +227,7 @@ class RuntimeTests(unittest.TestCase):
                 )
 
     def test_release_readiness_rejects_stale_or_unrelated_evidence(self) -> None:
-        state = self.engine.start(
+        state = self.start(
             "task-release-evidence", intent("release"), run_id="release-evidence"
         )
         self.apply_approval(state)
@@ -293,7 +300,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("retry", gate.decision)
         self.assertIn("readiness:1:evidence-contract", gate.missing_evidence)
     def test_evidenced_completion_skip_and_resume_are_real_state_transitions(self) -> None:
-        state = self.engine.start("task-design", intent("design"), run_id="design-1")
+        state = self.start("task-design", intent("design"), run_id="design-1")
         self.state_store.create(state)
         previous = state.revision
         gate = self.engine.next(state)
@@ -359,7 +366,7 @@ class RuntimeTests(unittest.TestCase):
         self.state_store.save(resumed, expected_revision=previous)
 
     def test_stale_evidence_can_be_excluded_by_runtime_policy(self) -> None:
-        state = self.engine.start("task-stale", intent("design"), run_id="stale-1")
+        state = self.start("task-stale", intent("design"), run_id="stale-1")
         self.state_store.create(state)
         evidence_file = self.project / "stale.txt"
         evidence_file.write_text("old observation\n", encoding="utf-8")
@@ -385,7 +392,7 @@ class RuntimeTests(unittest.TestCase):
         )
 
     def test_state_store_rejects_stale_writer(self) -> None:
-        state = self.engine.start("task-shape", intent("shape"), run_id="shape-1")
+        state = self.start("task-shape", intent("shape"), run_id="shape-1")
         self.state_store.create(state)
         stale = self.state_store.load(state.run_id)
         fresh = self.state_store.load(state.run_id)

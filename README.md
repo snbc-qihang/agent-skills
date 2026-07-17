@@ -1,12 +1,13 @@
-# agent-skills
+# teamwork-engineering-assistant
 
-`agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex 和 Hermes 提供可组合、可恢复、可验证的工程协作能力。
+`agent-skills` 是 `teamwork-engineering-assistant`（团队研发助手）的统一作者源。产品完整继承 `engineering-assistant` 的 11 个工程原语、运行内核和平台协议，并以默认 `rrq-yq-team` profile 扩展团队交付流程与规范。
 
-- 当前版本：`1.0.0.0-rc.1`
+- 当前版本：`2.0.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes
 - 开发语言：Python 3.9+
 - 默认语言：简体中文，同时保留中英文任务路由能力
+- 产品默认 profile：`rrq-yq-team`；可显式切换通用 `default`
 
 ## 项目定位
 
@@ -15,7 +16,7 @@
 1. 公开 skill：面向用户和模型的稳定工程原语。
 2. 内部 flow：组织多步骤任务的有向无环图。
 3. capability/policy pack：只在相关领域进入范围时加载的专业能力和规则。
-4. runtime kernel：负责路由、状态、证据、门禁、恢复和平台构建。
+4. runtime kernel：负责路由、状态、证据、门禁、恢复和平台构建；CLI、工具名和 artifact 路径保持 `ea`、`engineering_assistant_*` 和 `.run-artifacts/engineering-assistant/` 兼容。
 
 目标是让执行过程可预测，而不是把输出固定成模板。Agent 负责语义判断和工程工作，运行时负责确定性状态与安全边界。
 
@@ -34,7 +35,7 @@
 Codex 可以根据 skill 的名称和描述自动选择能力，也可以通过 `$repo-context`、`$diagnosing-bugs`、`$code-review` 等名称显式调用。Hermes 可以通过自然语言选择 skill，也可以使用限定名：
 
 ```bash
-hermes --skills engineering-assistant:repo-context
+hermes --skills teamwork-engineering-assistant:repo-context
 ```
 
 ### 从仓库安装到本机
@@ -81,9 +82,9 @@ python3 scripts/publish_local.py --platform hermes --yes
 
 ```text
 agent-skills/
-├── catalog/                    # Skill、Flow、Policy、Pack、Provider、来源决策、Profile
+├── catalog/                    # Product、Skill、Flow、Policy、Pack、规则目录、Provider、来源决策、Profile
 ├── skills/                     # 11 个公开 skill 及按需 references
-├── packs/                      # 9 个专业能力与策略包
+├── packs/                      # 17 个专业能力与策略包
 ├── schemas/                    # 核心协议 JSON Schema
 ├── src/engineering_assistant/  # 路由、状态机、证据、编译器和平台 adapter
 ├── evals/                      # Routing、Behavior、State、Replay、Canary
@@ -100,10 +101,12 @@ agent-skills/
 
 | 变更内容 | 修改位置 |
 | --- | --- |
+| 产品身份和默认 profile | `catalog/product.json` |
 | Skill 触发和完成语义 | `catalog/skills/` 与 `skills/` |
 | Flow 节点和依赖 | `catalog/flows/` |
 | 安全、审批和证据规则 | `catalog/policies/` |
 | 专业领域能力 | `catalog/packs/` 与 `packs/` |
+| 团队规则、来源和目标落点 | `catalog/rules/` |
 | 能力提供方及供应链约束 | `catalog/providers/` |
 | 开源能力采用决策与落点 | `catalog/sources/` |
 | 公共数据协议 | `schemas/` 与 `model.py` |
@@ -139,6 +142,7 @@ agent-skills/
 | `review` | 固定比较点 → 代码评审/设计评审 → 结论门禁 |
 | `release` | 发布就绪 → 发布验证 → 复盘 |
 | `evolve` | 反馈摄取 → 知识提炼 → 候选变更 → 质量审计 |
+| `team-delivery` | 需求事实 → 决策/契约 → 架构与按需专项设计 → 可信设计审批 → 切片/TDD/实现 → 六维质量 → 可信代码确认 → 发布审批/外部验证 → 复盘 → TL 规范候选处置 |
 
 Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点、检查审批和证据，并将状态持久化到目标项目。
 
@@ -155,6 +159,16 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 | `release-safety` | 进入发布就绪、验证、回滚或生产观察 |
 | `feedback-evolution` | 反馈可能改变 skill、flow、policy 或 eval |
 | `team-standards` | 仓库或项目 profile 提供团队规则 |
+| `rrq-yq-delivery` | 团队需求、文档、概要/详细设计和知识沉淀规则命中 |
+| `rrq-yq-architecture` | 架构、DDD、JDK、框架和萤启约束命中 |
+| `rrq-yq-api` | 接口、YApi 或异常契约命中 |
+| `rrq-yq-code-quality` | 研发、TDD、质量、安全、日志、监控、幂等或并发命中 |
+| `rrq-yq-frontend` | 影响范围命中前端 |
+| `rrq-yq-database` | 影响范围命中数据库 |
+| `rrq-yq-redis` | 影响范围命中 Redis |
+| `rrq-yq-mq` | 影响范围命中 MQ |
+
+团队规则目录固定包含 105 条规则、8 个来源记录和 8 个目标 packs。每条规则只有一个规范定义；`engineering_assistant_route` 会按任务及影响范围返回启用的团队 packs、规则和来源，即使宿主降级为 `skills_only` 也不会丢失规范上下文。持久化节点只暴露与当前 capability 匹配的规则，运行证据通过 `EvidenceRef.contract_refs` 登记 `rule:<rule-id>`；仓库不保存原始站点 HTML 或附件镜像。
 
 Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → skill → task override。降低安全等级必须有明确授权，不可豁免规则不能被 override。
 
@@ -268,7 +282,7 @@ ea feedback-evolution-export  只读导出已接受反馈的去敏回归提案�
 
 自然语言到 `RouteIntent` 的理解由平台 Agent 完成；核心 Router 只消费结构化输入，`start` 必须在服务端重新计算决策，不能接受调用方构造的 `RouteDecision`。Codex MCP 与 Hermes 工具注册都调用同一个 `RuntimeTools`，不会形成并行路由器；模型工具集合不包含审批、自由文本决定或可信证据导入，后续调用必须使用 RunState 已绑定的 profile。Router 会在同一次响应中披露宿主固定 Host Trust 的执行能力；`ask`、`confirm` 或 `block` 一律返回 `recommended_execution=stop`。只有 `proceed` 的持久化 flow 在缺少外部 evidence/approval broker 时才返回 `skills_only`，Agent 继续执行已选公开 skill，但不重试必然无法完成的 `start`、`next`、`complete` 或 `quality_submit`。
 
-Codex 插件 Hook 的 manifest 使用锚定正则 `^mcp__engineering_assistant__engineering_assistant_.*$`，只匹配本插件工具。普通 Prompt、Stop、Bash、`apply_patch` 和其他 MCP 事件不会启动本插件 Hook，因此普通任务既无采集语义，也无本插件 Hook 进程开销。插件工具调用会建立短生命周期 `UsageObservationPlan`，只采集该次插件工具调用数、输出字节、重复输入、单次大输出和缺失 PostToolUse 等摘要信号；PostToolUse 会等待全部已跟踪调用完成后再尝试汇总匿名 `UsageEfficiencyFeedback`，成功产生信号候选后删除 ledger，无信号时保留有界散列签名供同轮后续插件调用比较。工具失败只保存受控失败分类和哈希化工具或资产引用，不保存原始输入、输出、命令或反馈摘录。12 次工具和 64 KB 输出等值仅作为趋势参考，超过参考值、重复调用或采集失败都不会拒绝工具、阻断任务或要求人工放行。工具事件哈希最多保留最近 256 条，超出后继续累计摘要并标记截断，不限制任务；超过 24 小时的孤儿 ledger 由后续插件调用机会式清理。由于 Codex 当前严格限定为插件工具 matcher，它不声称观察整轮 Bash、代码索引、用户纠正或回复末尾文本；Hermes 只观测插件 adapter 注册的 `engineering-assistant` 工具，并在插件自身 `post_llm_call` 汇总轮次反馈。这些数据只用于持续优化分析，不作为安全门禁；观测或反馈存储失败时平台调用仍然继续。结构化产物优先通过只读 MCP 工具 `engineering_assistant_artifact_validate` 校验，CLI 仅作为开发环境回退。
+Codex 插件 Hook 的 manifest 使用锚定正则 `^mcp__teamwork_engineering_assistant__engineering_assistant_.*$`，只匹配本插件工具。普通 Prompt、Stop、Bash、`apply_patch` 和其他 MCP 事件不会启动本插件 Hook，因此普通任务既无采集语义，也无本插件 Hook 进程开销。插件工具调用会建立短生命周期 `UsageObservationPlan`，只采集该次插件工具调用数、输出字节、重复输入、单次大输出和缺失 PostToolUse 等摘要信号；PostToolUse 会等待全部已跟踪调用完成后再尝试汇总匿名 `UsageEfficiencyFeedback`，成功产生信号候选后删除 ledger，无信号时保留有界散列签名供同轮后续插件调用比较。工具失败只保存受控失败分类和哈希化工具或资产引用，不保存原始输入、输出、命令或反馈摘录。12 次工具和 64 KB 输出等值仅作为趋势参考，超过参考值、重复调用或采集失败都不会拒绝工具、阻断任务或要求人工放行。工具事件哈希最多保留最近 256 条，超出后继续累计摘要并标记截断，不限制任务；超过 24 小时的孤儿 ledger 由后续插件调用机会式清理。由于 Codex 当前严格限定为插件工具 matcher，它不声称观察整轮 Bash、代码索引、用户纠正或回复末尾文本；Hermes 只观测插件 adapter 注册的 `teamwork-engineering-assistant` toolset，并在插件自身 `post_llm_call` 汇总轮次反馈。这些数据只用于持续优化分析，不作为安全门禁；观测或反馈存储失败时平台调用仍然继续。结构化产物优先通过只读 MCP 工具 `engineering_assistant_artifact_validate` 校验，CLI 仅作为开发环境回退。
 
 实现流的强制 `quality` 节点只有在六个质量维度全部为 `pass`、没有 medium 以上 finding、没有未关闭修复项且每个判断引用宿主签发的兼容证据时才能完成。质量快照绑定 run revision、候选源码证据摘要和一小时新鲜度；候选内容改变后旧快照自动失效。模型提交的证据输入固定降级为 `claimed`，不能自行设置 `observed` 或 `verified`。
 
@@ -282,7 +296,7 @@ Codex 插件 Hook 的 manifest 使用锚定正则 `^mcp__engineering_assistant__
 {
   "schema_version": "1.0",
   "profiles": {
-    "default": {
+    "rrq-yq-team": {
       "evidence_broker": {
         "enabled": true,
         "id": "enterprise-evidence",
@@ -292,7 +306,7 @@ Codex 插件 Hook 的 manifest 使用锚定正则 `^mcp__engineering_assistant__
       "approval_broker": {
         "enabled": true,
         "id": "enterprise-approval",
-        "audience": "engineering-assistant",
+        "audience": "teamwork-engineering-assistant",
         "introspection_url": "https://broker.example/v1/approval/introspect",
         "timeout_seconds": 5
       }
@@ -355,8 +369,8 @@ python3 scripts/publish_local.py --platform all --yes
 
 脚本自动执行：仓库测试 → 作者源强校验 → 真实 eval → 11 个公开 skill 的官方 `quick_validate.py` → 平台最终 staging 构建 → 最终 Codex staging 包的官方 plugin validator → 官方校验摘要与 staging 摘要绑定 → 包摘要校验 → 旧插件备份 → 原子替换 → 平台注册 → 安装后验证。官方 validator 通过仓库外 `uv` 隔离环境运行并固定 `PyYAML==6.0.2`；缺少 validator、`uv`、输出超限或校验失败都会使 preflight 失败，不会 soft-pass。失败时自动恢复旧插件。
 
-- Codex：安装到 `~/plugins/engineering-assistant`，维护 personal marketplace 并刷新 Codex 缓存。
-- Hermes：安装到 `~/.hermes/plugins/engineering-assistant`，调用 `hermes plugins enable engineering-assistant`。
+- Codex：安装到 `~/plugins/teamwork-engineering-assistant`，维护 personal marketplace 并刷新 Codex 缓存。
+- Hermes：安装到 `~/.hermes/plugins/teamwork-engineering-assistant`，调用 `hermes plugins enable teamwork-engineering-assistant`。
 
 平台 CLI 按“显式环境变量 → `PATH` → macOS App 内置路径”的顺序发现。Codex App 安装在标准目录时，无需额外配置；自定义位置可以显式指定：
 
