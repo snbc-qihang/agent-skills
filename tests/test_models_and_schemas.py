@@ -121,6 +121,66 @@ class ModelAndSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationFailure):
             validate_instance(evidence, self.schema("evidence-ref.schema.json"), "evidence")
 
+    def test_supported_validation_errors_are_stable_with_every_backend(self) -> None:
+        class AcceptingValidator:
+            def __init__(self, *_args: object, **_kwargs: object) -> None:
+                pass
+
+            def iter_errors(self, _instance: object) -> list[object]:
+                return []
+
+        cases = (
+            (
+                {},
+                {"type": "object", "required": ["intent"]},
+                "payload:$: missing required property intent",
+            ),
+            (
+                {"unknown": True},
+                {"type": "object", "additionalProperties": False},
+                "payload:$: additional property unknown is not allowed",
+            ),
+            (
+                "not-a-date",
+                {"type": "string", "format": "date-time"},
+                "payload:$: string is not an RFC 3339 date-time",
+            ),
+        )
+        with mock.patch(
+            "engineering_assistant.validation.Draft202012Validator",
+            AcceptingValidator,
+        ), mock.patch(
+            "engineering_assistant.validation.FormatChecker",
+            lambda: None,
+        ):
+            for instance, schema, expected in cases:
+                with self.subTest(expected=expected):
+                    with self.assertRaises(ValidationFailure) as raised:
+                        validate_instance(instance, schema, "payload")
+                    self.assertEqual(expected, str(raised.exception))
+
+    def test_builtin_validator_covers_repository_string_and_object_constraints(self) -> None:
+        cases = (
+            ("too-long", {"type": "string", "maxLength": 3}),
+            ({}, {"type": "object", "minProperties": 1}),
+            (
+                {"INVALID": "value"},
+                {
+                    "type": "object",
+                    "propertyNames": {"pattern": "^[a-z]+$"},
+                },
+            ),
+            ("invalid-email", {"type": "string", "format": "email"}),
+        )
+        with mock.patch(
+            "engineering_assistant.validation.Draft202012Validator",
+            None,
+        ):
+            for instance, schema in cases:
+                with self.subTest(instance=instance, schema=schema):
+                    with self.assertRaises(ValidationFailure):
+                        validate_instance(instance, schema, "builtin")
+
     def test_provider_feedback_quality_and_investigation_protocols_are_strict(self) -> None:
         provider = CapabilityProviderSpec(
             id="native-engineering",
