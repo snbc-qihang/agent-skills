@@ -18,6 +18,8 @@ description: 将工程任务路由到最小充分的 skill 或受治理 flow。�
 7. 只有自动评审发现必须由用户决定的产品取舍、风险授权、不可逆动作或无法消除的证据冲突时，才暂停并请求人工判断；将项目原有人工阶段门禁替换为自动评审时，必须已有用户授权或仓库策略依据，不得自行降低既有人工门禁。
 8. 把用户明确给出的工具、查询、文件和范围限制原样传递给选中 skill；插件采集到的工具次数和输出规模只作为优化信号，不得据此停止任务、制造未知项或申请人工放行。
 
+团队设计或研发 flow 必须把 `requirement_id` 与显式 `design_source` 写入 `RouteIntent`。先以只读能力固定外部 HLD、ADR、领域边界、上下文详细设计、模板和治理输入，再生成需求独立评审包；评审稿只能写入目标项目运行产物目录，外部团队负责合并和维护唯一设计源。评审前按目标文档摘要复核，`stale` 时不得进入人工批准。
+
 当前平台尚未选择具体插件 skill 且暴露 `engineering_assistant_route` 时，先调用一次该工具获得 flow、skill 和 policy，再加载选中 skill。平台已经直接选择具体的插件限定 skill 时，该选择即为本轮平台能力选择结果，内联原语不得为了确认 skill 再次调用 `engineering_assistant_route`；它不等同于 Runtime `RouteDecision`，任务确实需要持久化 flow、Runtime 门禁或超出所选原语范围时才进入 Runtime 路由。不得扫描插件目录猜测路由、工作流或 validator。阶段状态审计、自动评审通过条件、blocker 和门禁判断属于 `code-review`，不是通用 `repo-context`。只有用户明确指向历史上下文，或当前仓库事实无法解释状态时，才加载 memory/rollout。
 
 `engineering_assistant_route` 返回的 `execution` 是宿主可信能力边界。`recommended_execution=stop` 时遵守 `ask`、`confirm` 或 `block` 并停止，不得加载或执行建议 skills。只有 `RouteDecision.decision=proceed` 且 `recommended_execution=skills_only` 时，才只执行路由给出的公开 skills，不调用任何需要 active run 的 Runtime 工具，包括 `start`、`next`、`complete`、`quality_submit`、`provider_invoke`、`investigation_*` 或证据导入，也不为未启动的 flow 构造或校验 `step-result`、`quality-snapshot`；把缺失 Host Trust/Broker 记录一次后继续完成当前工程任务，不重试同一确定性边界。只有 `persisted_flow_ready=true` 才启动持久化 flow；`complete` 已经返回下一节点时不再额外调用 `next`，确定性校验失败且输入与外部状态未变化时不得原样重试。该降级只省略当前宿主无法完成的持久化交互，不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁。

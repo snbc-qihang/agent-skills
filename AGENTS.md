@@ -4,7 +4,7 @@
 
 - 本仓库维护 `teamwork-engineering-assistant` 团队版产品；它保持 `engineering-assistant` 的平台无关协议、运行内核和 11 个公开 skills，并扩展团队 flows、profiles、rules 与按需 packs。
 - `catalog/`、`skills/`、`packs/`、`schemas/` 与 `src/` 是作者源；仓库内不得保存发布包、生成镜像或历史过程数据。
-- 产品和公开 skill 使用四段式版本，当前版本为 `2.0.0.0-rc.1`。
+- 产品和公开 skill 使用四段式版本，当前版本为 `2.1.0.0-rc.1`。
 - 开发者信息统一为 `sunliming625@gmail.com`。
 
 ## 修改规则

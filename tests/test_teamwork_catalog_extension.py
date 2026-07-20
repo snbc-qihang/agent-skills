@@ -21,6 +21,7 @@ from engineering_assistant.evidence import EvidenceStore  # noqa: E402
 from engineering_assistant.mcp_server import MCPServer, RuntimeTools  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     CriterionResult,
+    DesignSourceRef,
     EvidenceRef,
     RouteIntent,
     StepResult,
@@ -170,7 +171,7 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         catalog = load_catalog(ROOT)
         rules = catalog.rule_catalogs["rrq-yq-team-rules"]
 
-        self.assertEqual(105, len(rules.rules))
+        self.assertEqual(110, len(rules.rules))
         self.assertEqual(8, len(rules.sources))
         counts: dict[str, int] = {}
         category_counts: dict[str, int] = {}
@@ -182,7 +183,7 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
             self.assertTrue(rule.capability_refs)
         self.assertEqual(
             {
-                "rrq-yq-delivery": 49,
+                "rrq-yq-delivery": 54,
                 "rrq-yq-architecture": 22,
                 "rrq-yq-api": 10,
                 "rrq-yq-code-quality": 12,
@@ -197,7 +198,7 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
             {
                 "架构": 6, "概要设计": 11, "详细设计": 11, "接口": 2,
                 "异常": 2, "幂等并发": 2, "Redis": 2, "MQ": 3,
-                "数据库": 3, "框架选型": 4, "前端": 4, "文档治理": 17,
+                "数据库": 3, "框架选型": 4, "前端": 4, "文档治理": 22,
                 "信息补全": 8, "代码研发": 1, "代码质量": 2, "JDK21": 1,
                 "DDD": 2, "TDD": 1, "框架高级特性": 1, "设计模式": 1,
                 "人人取架构": 1, "人人取通用技术": 2, "人人取日志": 1,
@@ -334,6 +335,11 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
             self._intent(),
             requested_outcome="设计包含 Redis 缓存与接口契约的团队方案",
             scope=["rrq-yq", "Redis", "API"],
+            requirement_id="REQ-TEAM-001",
+            design_source=DesignSourceRef(
+                root="/project/project-inspection",
+                registry="90-design-basis/30-document-governance/04-document-registry.yaml",
+            ),
         )
 
         routed = tools.call(
@@ -343,6 +349,18 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
 
         self.assertEqual("skills_only", routed["execution"]["recommended_execution"])
         context = routed["team_context"]
+        self.assertEqual("ready", context["design_input_status"])
+        self.assertEqual([], context["missing_required_inputs"])
+        self.assertEqual(
+            {
+                "requirement_id": "REQ-TEAM-001",
+                "design_source": {
+                    "root": "/project/project-inspection",
+                    "registry": "90-design-basis/30-document-governance/04-document-registry.yaml",
+                },
+            },
+            context["deterministic_design_input"],
+        )
         self.assertEqual("rrq-yq-team", context["profile_id"])
         self.assertEqual("rrq-yq-team-rules", context["rule_catalog_id"])
         self.assertEqual(
@@ -375,6 +393,14 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         )
         self.assertNotIn("team_context", generic)
 
+        missing = tools.call(
+            "engineering_assistant_route", {"intent": self._intent().to_dict()}
+        )["team_context"]
+        self.assertEqual("missing", missing["design_input_status"])
+        self.assertEqual(
+            ["requirement_id", "design_source"], missing["missing_required_inputs"]
+        )
+
     def test_persisted_node_payload_exposes_only_applicable_rule_contracts(self) -> None:
         catalog = load_catalog(ROOT)
         engine = RuntimeEngine(catalog)
@@ -386,16 +412,14 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         self.assertIsNotNone(payload)
         rules = payload["team_rules"]
         self.assertEqual(
-            {"QIN1", "QIN2", "QIN3", "QIN4", "QIN5", "QIN6", "QIN7", "QIN8"},
+            {"QIN1", "QIN2", "QIN3", "QIN4", "QIN5", "QIN6", "QIN7", "QIN8", "DG23"},
             {rule["id"] for rule in rules},
         )
         self.assertEqual(
-            [f"rule:QIN{index}" for index in range(1, 9)],
+            [*[f"rule:QIN{index}" for index in range(1, 9)], "rule:DG23"],
             payload["rule_contract_refs"],
         )
-        self.assertTrue(
-            all(rule["capability_refs"] == ["repo-context", "decision-interview", "shape-contract"] for rule in rules)
-        )
+        self.assertTrue(all("repo-context" in rule["capability_refs"] for rule in rules))
 
     def test_rule_contract_policy_accepts_test_evidence_for_tdd(self) -> None:
         catalog = load_catalog(ROOT)
@@ -503,7 +527,7 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
                 ),
                 evidence_store=evidence_store,
             )
-            self.assertEqual("decision-convergence", accepted.next_node)
+            self.assertEqual("design-source-snapshot", accepted.next_node)
 
     def test_incomplete_requirements_retry_without_advancing(self) -> None:
         catalog = load_catalog(ROOT)
@@ -573,6 +597,18 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         flow = catalog.flows["team-delivery"]
         nodes = {node.id: node for node in flow.nodes}
         self.assertEqual(
+            ["requirements-facts"], nodes["design-source-snapshot"].depends_on
+        )
+        self.assertEqual(
+            ["review-package-validation"], nodes["design-source-recheck"].depends_on
+        )
+        self.assertEqual(
+            ["design-source-recheck"], nodes["design-approval"].depends_on
+        )
+        self.assertTrue(
+            any("仅当服务边界" in criterion for criterion in nodes["architecture-design"].completion_criteria)
+        )
+        self.assertEqual(
             ["review", "approval"], nodes["design-approval"].required_evidence_kinds
         )
         self.assertEqual(
@@ -617,8 +653,9 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
                     status="completed",
                     criteria_results=[
                         CriterionResult(
-                            "design-approval:1", True, ["design-review-only"]
+                            f"design-approval:{index}", True, ["design-review-only"]
                         )
+                        for index in range(1, 4)
                     ],
                     outputs=["reviewed"],
                     findings=[],

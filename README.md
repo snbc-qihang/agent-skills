@@ -2,7 +2,7 @@
 
 `agent-skills` 是 `teamwork-engineering-assistant`（团队研发助手）的统一作者源。产品完整继承 `engineering-assistant` 的 11 个工程原语、运行内核和平台协议，并以默认 `rrq-yq-team` profile 扩展团队交付流程与规范。
 
-- 当前版本：`2.0.0.0-rc.1`
+- 当前版本：`2.1.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes
 - 开发语言：Python 3.9+
@@ -61,6 +61,8 @@ python3 scripts/publish_local.py --platform hermes --yes
 | 发现并选择公开 skill | 平台可根据任务隐式选择，也支持用户显式指定 |
 | 加载 `SKILL.md` 和按需参考资料 | 选择 skill 后由平台完成 |
 | `route/start/next/complete` | 平台可作为工具调用；`start` 接收 intent 并在服务端重算路由，选择 skill 本身不会隐式启动状态机 |
+| `design-source-resolve/read/check` | 只读固定显式外部设计源、读取已登记文档，并按快照或目标文档摘要检测 `stale` |
+| `review-package-validate` | 只读校验需求独立评审包、`reviewing` 状态、基线元数据和追踪矩阵 |
 | 人工审批与调研选择 | 只接受管理员固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
 | `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
 | Hook 反馈采集 | Codex 仅从本插件 MCP Pre/Post 提升可观测的工具失败和 usage 信号；Hermes 可在插件轮次内补充纠正、阻断、返工和范围变化；两者都记录无原文 capture 元数据并支持独立审计处置 |
@@ -142,7 +144,7 @@ agent-skills/
 | `review` | 固定比较点 → 代码评审/设计评审 → 结论门禁 |
 | `release` | 发布就绪 → 发布验证 → 复盘 |
 | `evolve` | 反馈摄取 → 知识提炼 → 候选变更 → 质量审计 |
-| `team-delivery` | 需求事实 → 决策/契约 → 架构与按需专项设计 → 可信设计审批 → 切片/TDD/实现 → 六维质量 → 可信代码确认 → 发布审批/外部验证 → 复盘 → TL 规范候选处置 |
+| `team-delivery` | 需求事实 → 固定外部设计快照 → 决策/契约 → 完整 HLD/上下文设计评审稿与按需专项设计 → 评审包校验 → 目标摘要复核 → 可信设计审批 → 切片/TDD/实现 → 六维质量 → 发布验证 → 实现偏差与外部基线回写建议 |
 
 Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点、检查审批和证据，并将状态持久化到目标项目。
 
@@ -168,7 +170,13 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 | `rrq-yq-redis` | 影响范围命中 Redis |
 | `rrq-yq-mq` | 影响范围命中 MQ |
 
-团队规则目录固定包含 105 条规则、8 个来源记录和 8 个目标 packs。每条规则只有一个规范定义；`engineering_assistant_route` 会按任务及影响范围返回启用的团队 packs、规则和来源，即使宿主降级为 `skills_only` 也不会丢失规范上下文。持久化节点只暴露与当前 capability 匹配的规则，运行证据通过 `EvidenceRef.contract_refs` 登记 `rule:<rule-id>`；仓库不保存原始站点 HTML 或附件镜像。
+团队规则目录固定包含 110 条规则、8 个来源记录和 8 个目标 packs。每条规则只有一个规范定义；`engineering_assistant_route` 会按任务及影响范围返回启用的团队 packs、规则和来源，即使宿主降级为 `skills_only` 也不会丢失规范上下文。持久化节点只暴露与当前 capability 匹配的规则，运行证据通过 `EvidenceRef.contract_refs` 登记 `rule:<rule-id>`；仓库不保存原始站点 HTML 或附件镜像。
+
+### 确定性设计输入与评审包
+
+团队设计和研发任务显式提交 `requirement_id`、外部设计源绝对根目录及注册表。Runtime 只读解析当前 HLD、ADR、领域边界、上下文详细设计、模板、架构影响规则和维护规范，按本需求固定摘要，不跨任务复用，也不覆盖外部设计源。
+
+普通上下文需求只生成完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才生成完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`。提交评审前按每个目标文档的 `base_digest` 复核；同一目标变化时标记 `stale` 并 rebase，其他上下文可继续并行。外部团队负责评审、合并和维护唯一设计基线。
 
 Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → skill → task override。降低安全等级必须有明确授权，不可豁免规则不能被 override。
 
@@ -246,6 +254,7 @@ python3 -m pip install -e .
 | 分组 | 命令 | 用途 |
 | --- | --- | --- |
 | Runtime 控制面 | `route`、`start`、`next`、`complete`、`quality-submit`、`evidence-import`、`investigation-*`、`mcp-serve` | 供平台 adapter、受信执行器和内核调试调用 |
+| 设计只读工具 | `design-source-resolve`、`design-source-read`、`design-source-check`、`review-package-validate` | 固定外部输入、读取登记文档、检测过期和校验评审包 |
 | 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-audit`、`canary-prepare`、`canary-attestation-import`、`canary-assemble`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
 
 完整命令语义：

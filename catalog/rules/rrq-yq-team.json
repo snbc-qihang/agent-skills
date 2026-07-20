@@ -1,6 +1,6 @@
 {
   "id": "rrq-yq-team-rules",
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "profile_id": "rrq-yq-team",
   "sources": [
     {
@@ -224,7 +224,7 @@
     {
       "id": "H1",
       "category": "概要设计",
-      "guidance": "概要设计必须包含平台概述、系统逻辑视图、系统设计原则、研发视图、核心功能、中间件设计、数据视图；核心功能下保留关键协作摘要，不生成流程图。",
+      "guidance": "概要设计评审稿必须以任务固定的外部 HLD 基线和对应模板为确定性输入，生成结构完整、可直接评审的 reviewing 文档；只有服务边界、数据主权、依赖方向或其他系统级架构变化才允许生成。",
       "source_refs": [
         "rrq-architecture",
         "yq-overview"
@@ -233,7 +233,9 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
+        "design-source-read",
         "architecture-design",
+        "review-package-validation",
         "design-review"
       ]
     },
@@ -320,7 +322,7 @@
     {
       "id": "H7",
       "category": "概要设计",
-      "guidance": "概要设计必须按团队概要设计模板生成，保留版本变更记录、平台概述、系统设计、系统逻辑视图、系统设计原则、研发视图、研发结构定义、核心功能、中间件设计、数据视图；核心功能中的 4.1.2 只写关键协作摘要，不得用通用证据/Findings/门禁决策模板替代正文。",
+      "guidance": "概要设计评审稿必须严格遵守外部事实源中的 HLD 模板并保留完整正文，不得以增量建议、通用 Findings 或门禁摘要替代；元数据必须声明 reviewing、base_document_number、base_version、base_digest 和 requirement_id。",
       "source_refs": [
         "rrq-architecture",
         "yq-overview"
@@ -329,14 +331,16 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
+        "design-source-read",
         "architecture-design",
+        "review-package-validation",
         "design-review"
       ]
     },
     {
       "id": "H8",
       "category": "概要设计",
-      "guidance": "概要设计涉及跨服务协作时必须补充 Mermaid sequenceDiagram 服务间时序图；时序图参与者只允许服务，不允许用户、页面、Controller、数据库、Redis、MQ、表、Mapper 或 Repository。",
+      "guidance": "系统级变更涉及跨服务协作时，概要设计评审稿按外部模板表达服务间时序、异常流和一致性；图表类型、格式和参与者层级以固定模板与维护规范为准。",
       "source_refs": [
         "rrq-architecture",
         "yq-overview"
@@ -352,7 +356,7 @@
     {
       "id": "H9",
       "category": "概要设计",
-      "guidance": "概要设计必须保留原始需求规格或原型引用矩阵，使用稳定 source_id 串联 source_type、source_path_or_url、prototype_page_or_section、requirement_item、design_section 和一致性状态。",
+      "guidance": "概要设计与本次需求的关联只进入元数据、修订记录和独立追踪矩阵；不得把 requirement_id、验收条目或一次性方案写入 HLD 长期架构正文。",
       "source_refs": [
         "rrq-architecture",
         "yq-overview"
@@ -384,7 +388,7 @@
     {
       "id": "H11",
       "category": "概要设计",
-      "guidance": "概要设计不得生成 Mermaid flowchart；关键协作只允许文字摘要与服务间 sequenceDiagram，研发视图和结构定义使用接口层/应用层/领域层/基础设施层等边界语言。",
+      "guidance": "概要设计只表达长期系统级架构；接口字段、DB/MQ/Redis/IAM 资源级细节和当前需求实现步骤进入上下文详细设计、专项设计或专项差异，不得塞入 HLD。",
       "source_refs": [
         "rrq-architecture",
         "yq-overview"
@@ -400,7 +404,7 @@
     {
       "id": "D1",
       "category": "详细设计",
-      "guidance": "模块包含描述、业务流程、时序/交互、数据库设计、接口设计、单元测试设计。",
+      "guidance": "每个受影响上下文必须基于固定的外部上下文详细设计和对应模板，生成结构完整、可直接评审的 reviewing 文档；不得只输出本次变更的零散建议。",
       "source_refs": [
         "yq-overview"
       ],
@@ -408,7 +412,9 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
+        "design-source-read",
         "implementation-contract",
+        "review-package-validation",
         "design-review",
         "work-slicing",
         "implementation"
@@ -1286,7 +1292,7 @@
     {
       "id": "D12",
       "category": "详细设计",
-      "guidance": "详细设计必须保留原始需求规格或原型引用矩阵；每个核心流程、接口、数据对象或规则必须能追溯到 source_id，并说明与规格/原型的一致性或待确认差异。",
+      "guidance": "详细设计评审稿必须通过独立追踪矩阵把每个 requirement_item 映射到 design_document、design_section、design_change，并在研发后补齐 code_targets、test_cases、提交、测试结果和实现偏差。",
       "source_refs": [
         "yq-overview"
       ],
@@ -1295,6 +1301,7 @@
       ],
       "capability_refs": [
         "implementation-contract",
+        "review-package-validation",
         "design-review",
         "work-slicing",
         "implementation"
@@ -1625,6 +1632,46 @@
         "skill-quality",
         "skill-evolution"
       ]
+    },
+    {
+      "id": "DG23",
+      "category": "文档治理",
+      "guidance": "每个需求必须显式提供 requirement_id、外部设计源绝对根目录和注册表；repo-context 只读解析注册表，并固定 HLD、ADR、受影响上下文详细设计、模板及维护规则的编号、版本、状态和摘要，本次快照不得跨需求复用。",
+      "source_refs": ["yq-overview"],
+      "target_refs": ["rrq-yq-delivery"],
+      "capability_refs": ["repo-context", "design-source-read", "shape-contract", "architecture-design"]
+    },
+    {
+      "id": "DG24",
+      "category": "文档治理",
+      "guidance": "每个需求在 .run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中 HLD 和上下文详细设计是符合外部模板的完整 reviewing 评审稿，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
+      "source_refs": ["yq-overview"],
+      "target_refs": ["rrq-yq-delivery"],
+      "capability_refs": ["architecture-design", "implementation-contract", "review-package-validation", "design-review"]
+    },
+    {
+      "id": "DG25",
+      "category": "文档治理",
+      "guidance": "普通上下文需求只生成受影响上下文详细设计评审稿；仅当服务边界、数据主权、依赖方向或其他系统级架构变化时生成 HLD 和适用 ADR 评审内容。",
+      "source_refs": ["yq-overview", "rrq-architecture"],
+      "target_refs": ["rrq-yq-delivery"],
+      "capability_refs": ["design-source-read", "architecture-design", "review-package-validation", "design-review"]
+    },
+    {
+      "id": "DG26",
+      "category": "文档治理",
+      "guidance": "追踪矩阵必须闭合需求条目到设计章节、设计章节到代码目标和测试用例；无需求依据的内容标记为架构治理项或移除，未确认业务规则保留为待决策事项而非正式不变量。",
+      "source_refs": ["yq-overview"],
+      "target_refs": ["rrq-yq-delivery"],
+      "capability_refs": ["decision-interview", "domain-modeling", "implementation-contract", "review-package-validation", "work-slicing", "implementation", "code-review"]
+    },
+    {
+      "id": "DG27",
+      "category": "文档治理",
+      "guidance": "提交评审前必须重新读取相同外部设计源；目标文档摘要与 base_digest 不一致时将评审包标记 stale，阻断批准并基于最新基线 rebase 或重新生成。Git 无冲突不能代替业务不变量、状态和契约冲突判断。",
+      "source_refs": ["yq-overview"],
+      "target_refs": ["rrq-yq-delivery"],
+      "capability_refs": ["design-source-read", "review-package-validation", "design-review", "code-review"]
     },
     {
       "id": "RRQ-ARCH1",

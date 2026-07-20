@@ -740,7 +740,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.0.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("2.1.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -752,9 +752,9 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.0.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("2.1.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"2.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"2.1.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
 
     def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
         output = self.root / "runtime-smoke"
@@ -806,7 +806,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         responses = [json.loads(line) for line in mcp.stdout.splitlines()]
         self.assertEqual([1, 2], [response["id"] for response in responses])
         tool_names = {item["name"] for item in responses[1]["result"]["tools"]}
-        self.assertEqual(11, len(tool_names))
+        self.assertEqual(15, len(tool_names))
         self.assertIn("engineering_assistant_artifact_validate", tool_names)
         self.assertNotIn("engineering_assistant_investigation_decide", tool_names)
 
@@ -1189,7 +1189,7 @@ print(json.dumps({
         spec.loader.exec_module(module)
         context = Context()
         module.register(context)
-        self.assertEqual(11, len(context.tools))
+        self.assertEqual(15, len(context.tools))
         self.assertIn("engineering_assistant_artifact_validate", context.tools)
         self.assertNotIn("engineering_assistant_investigation_decide", context.tools)
         plugin_lines = (output / "plugin.yaml").read_text(encoding="utf-8").splitlines()

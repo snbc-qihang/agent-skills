@@ -1,6 +1,6 @@
 {
   "id": "rrq-yq-team",
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards", "release-safety", "feedback-evolution", "teamwork-delivery-gates", "teamwork-rule-consumption"],
   "pack_refs": ["frontend-product", "database", "redis", "mq", "quality-evidence", "document-governance", "release-safety", "feedback-evolution", "team-standards", "rrq-yq-delivery", "rrq-yq-architecture", "rrq-yq-api", "rrq-yq-code-quality", "rrq-yq-frontend", "rrq-yq-database", "rrq-yq-redis", "rrq-yq-mq"],
   "rule_catalog_ref": "rrq-yq-team-rules",

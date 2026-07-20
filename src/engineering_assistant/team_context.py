@@ -38,25 +38,27 @@ TASK_PACKS = {
 }
 
 TASK_CAPABILITIES = {
-    "context": ("repo-context",),
+    "context": ("repo-context", "design-source-read"),
     "decide": ("decision-interview",),
     "model": ("architecture-design",),
-    "shape": ("repo-context", "decision-interview", "shape-contract"),
+    "shape": ("repo-context", "design-source-read", "decision-interview", "shape-contract"),
     "design": (
         "repo-context",
+        "design-source-read",
         "decision-interview",
         "shape-contract",
         "architecture-design",
         "implementation-contract",
+        "review-package-validation",
         "design-review",
     ),
     "implement": (
-        "work-slicing", "tdd", "implementation", "quality-evidence", "code-review",
+        "design-source-read", "review-package-validation", "work-slicing", "tdd", "implementation", "quality-evidence", "code-review",
     ),
     "diagnose": ("implementation", "quality-evidence", "code-review"),
-    "review": ("design-review", "quality-evidence", "code-review"),
+    "review": ("design-source-read", "review-package-validation", "design-review", "quality-evidence", "code-review"),
     "release": (
-        "release-readiness", "release-verification", "release-retrospective",
+        "design-source-read", "review-package-validation", "release-readiness", "release-verification", "release-retrospective",
     ),
     "evolve": (
         "release-retrospective",
@@ -65,7 +67,7 @@ TASK_CAPABILITIES = {
         "skill-quality",
         "skill-evolution",
     ),
-    "wayfind": ("repo-context", "decision-interview", "shape-contract"),
+    "wayfind": ("repo-context", "design-source-read", "decision-interview", "shape-contract"),
 }
 
 PACK_CAPABILITIES = {
@@ -153,6 +155,11 @@ def team_context_for_intent(
     referenced_source_ids = {
         source_ref for rule in rules for source_ref in rule["source_refs"]
     }
+    missing_design_inputs = []
+    if not intent.requirement_id:
+        missing_design_inputs.append("requirement_id")
+    if intent.design_source is None:
+        missing_design_inputs.append("design_source")
     return {
         "profile_id": profile.id,
         "rule_catalog_id": rule_catalog.id,
@@ -184,6 +191,19 @@ def team_context_for_intent(
         "evidence_requirement": (
             "适用规则必须通过现有 EvidenceRef.contract_refs 登记 rule:<rule-id>。"
         ),
+        "deterministic_design_input": (
+            {
+                "requirement_id": intent.requirement_id,
+                "design_source": {
+                    "root": intent.design_source.root,
+                    "registry": intent.design_source.registry,
+                },
+            }
+            if intent.requirement_id and intent.design_source
+            else None
+        ),
+        "design_input_status": "missing" if missing_design_inputs else "ready",
+        "missing_required_inputs": missing_design_inputs,
     }
 
 

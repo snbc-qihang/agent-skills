@@ -1,6 +1,6 @@
 {
   "id": "default",
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards"],
   "pack_refs": ["frontend-product", "database", "redis", "mq", "quality-evidence", "document-governance", "release-safety", "feedback-evolution", "team-standards"],
   "rule_catalog_ref": null,

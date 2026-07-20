@@ -1,9 +1,9 @@
 {
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "policies": [
     {
       "id": "teamwork-delivery-gates",
-      "version": "2.0.0.0-rc.1",
+      "version": "2.1.0.0-rc.1",
       "policy_class": "team",
       "immutable": false,
       "applies_when": ["rrq-yq-team profile 执行 team-delivery flow"],
@@ -13,14 +13,17 @@
         {"id": "TEAM-GATE-003", "condition": "六维质量门禁失败或代码评审存在 blocker", "effect": "阻断代码确认与发布就绪", "severity": "blocker"},
         {"id": "TEAM-GATE-004", "condition": "代码确认或发布审批缺少受信人工审批", "effect": "进入 waiting_for_human_review，不得执行外部发布", "severity": "blocker"},
         {"id": "TEAM-GATE-005", "condition": "真实发布缺少 Broker 验签的外部状态证据", "effect": "保持等待，不得声称发布或验证完成", "severity": "blocker"},
-        {"id": "TEAM-GATE-006", "condition": "复盘产生规范候选", "effect": "进入 TL 人工处置；接受仅创建独立规则变更任务", "severity": "blocker"}
+        {"id": "TEAM-GATE-006", "condition": "复盘产生规范候选", "effect": "进入 TL 人工处置；接受仅创建独立规则变更任务", "severity": "blocker"},
+        {"id": "TEAM-GATE-007", "condition": "需求未显式提供 requirement_id、设计源绝对根目录或注册表，或固定快照不完整", "effect": "阻断设计生成，保持 waiting_for_input", "severity": "blocker"},
+        {"id": "TEAM-GATE-008", "condition": "需求设计评审包结构、模板、reviewing 状态、基线元数据或追踪矩阵校验失败", "effect": "阻断设计审批和实现", "severity": "blocker"},
+        {"id": "TEAM-GATE-009", "condition": "提交评审前目标 HLD 或上下文详细设计摘要已变化", "effect": "评审包标记 stale，阻断批准并要求基于最新基线 rebase 或重新生成", "severity": "blocker"}
       ],
       "required_evidence": ["source", "test", "build", "ci", "review", "approval", "external_state"],
       "on_violation": "block"
     },
     {
       "id": "teamwork-rule-consumption",
-      "version": "2.0.0.0-rc.1",
+      "version": "2.1.0.0-rc.1",
       "policy_class": "team",
       "immutable": false,
       "applies_when": ["profile 声明 rule_catalog_ref 且任务命中团队规则"],

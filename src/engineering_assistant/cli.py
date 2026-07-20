@@ -28,6 +28,12 @@ from .codec import (
     step_result_from_dict,
 )
 from .compiler import build_package, verify_package
+from .design_source import (
+    check_design_source,
+    read_design_document,
+    resolve_design_source,
+    validate_review_package,
+)
 from .engine import RuntimeEngine
 from .evidence import EvidenceStore
 from .governance import (
@@ -41,7 +47,7 @@ from .feedback import (
     export_feedback_evolution,
     summarize_usage_efficiency,
 )
-from .model import FeedbackDisposition
+from .model import DesignSourceRef, FeedbackDisposition
 from .eval_runner import assemble_canary_result, run_canary_result, run_evals
 from .mcp_server import MCPServer, RuntimeTools, serve_stdio
 from .router import route_intent
@@ -314,6 +320,33 @@ def command_artifact_validate(args: argparse.Namespace) -> int:
         args.kind,
     )
     _emit({"status": "passed", "kind": args.kind, "input": str(args.input)})
+    return 0
+
+
+def _design_source_ref(args: argparse.Namespace) -> DesignSourceRef:
+    return DesignSourceRef(root=args.source_root, registry=args.registry)
+
+
+def command_design_source_resolve(args: argparse.Namespace) -> int:
+    _emit(resolve_design_source(_design_source_ref(args)))
+    return 0
+
+
+def command_design_source_read(args: argparse.Namespace) -> int:
+    _emit(read_design_document(_design_source_ref(args), args.document))
+    return 0
+
+
+def command_design_source_check(args: argparse.Namespace) -> int:
+    report = check_design_source(
+        _design_source_ref(args), args.expected_digest, args.document
+    )
+    _emit(report)
+    return 0 if report["status"] == "current" else 3
+
+
+def command_review_package_validate(args: argparse.Namespace) -> int:
+    _emit(validate_review_package(args.package, args.requirement_id))
     return 0
 
 
@@ -637,6 +670,26 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_validate.add_argument("--kind", choices=sorted(ARTIFACT_SCHEMAS), required=True)
     artifact_validate.add_argument("--input", required=True)
     artifact_validate.set_defaults(handler=command_artifact_validate)
+
+    for command, handler in (
+        ("design-source-resolve", command_design_source_resolve),
+        ("design-source-read", command_design_source_read),
+        ("design-source-check", command_design_source_check),
+    ):
+        design_source = subparsers.add_parser(command)
+        design_source.add_argument("--source-root", required=True)
+        design_source.add_argument("--registry", required=True)
+        if command == "design-source-read":
+            design_source.add_argument("--document", required=True)
+        if command == "design-source-check":
+            design_source.add_argument("--expected-digest", required=True)
+            design_source.add_argument("--document")
+        design_source.set_defaults(handler=handler)
+
+    review_package = subparsers.add_parser("review-package-validate")
+    review_package.add_argument("--package", required=True)
+    review_package.add_argument("--requirement-id", required=True)
+    review_package.set_defaults(handler=command_review_package_validate)
 
     build = subparsers.add_parser("build")
     build.add_argument("--platform", choices=sorted(("codex", "hermes")), required=True)

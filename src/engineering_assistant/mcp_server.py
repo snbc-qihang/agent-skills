@@ -24,6 +24,12 @@ from .codec import (
     step_result_from_dict,
 )
 from .engine import RuntimeEngine
+from .design_source import (
+    check_design_source,
+    read_design_document,
+    resolve_design_source,
+    validate_review_package,
+)
 from .evidence import EvidenceStore
 from .governance import (
     InvestigationStore,
@@ -31,7 +37,7 @@ from .governance import (
     QualityStore,
     investigation_evidence_contract,
 )
-from .model import ProviderResult
+from .model import DesignSourceRef, ProviderResult
 from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
@@ -140,6 +146,87 @@ class RuntimeTools:
                     "destructiveHint": False,
                     "idempotentHint": True,
                     "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_design_source_resolve",
+                "title": "固定外部设计输入",
+                "description": "只读解析显式指定的外部设计注册表，返回 HLD、ADR、领域边界、上下文详细设计、治理文档和模板的固定摘要快照。",
+                "inputSchema": _object_schema(
+                    {
+                        "source_root": {"type": "string", "minLength": 1},
+                        "registry": {"type": "string", "minLength": 1},
+                    },
+                    ["source_root", "registry"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,
+                },
+            },
+            {
+                "name": "engineering_assistant_design_source_read",
+                "title": "读取已登记设计文档",
+                "description": "只读读取外部设计注册表中唯一登记的文档或模板，不允许越过设计源根目录。",
+                "inputSchema": _object_schema(
+                    {
+                        "source_root": {"type": "string", "minLength": 1},
+                        "registry": {"type": "string", "minLength": 1},
+                        "document": {"type": "string", "minLength": 1},
+                    },
+                    ["source_root", "registry", "document"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,
+                },
+            },
+            {
+                "name": "engineering_assistant_design_source_check",
+                "title": "复核外部设计摘要",
+                "description": "提交设计评审前重新读取外部事实源；摘要变化时返回 stale，阻断批准并要求 rebase。",
+                "inputSchema": _object_schema(
+                    {
+                        "source_root": {"type": "string", "minLength": 1},
+                        "registry": {"type": "string", "minLength": 1},
+                        "expected_digest": {
+                            "type": "string",
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                        },
+                        "document": {"type": ["string", "null"], "minLength": 1},
+                    },
+                    ["source_root", "registry", "expected_digest"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,
+                },
+            },
+            {
+                "name": "engineering_assistant_review_package_validate",
+                "title": "校验需求设计评审包",
+                "description": "只读校验评审包结构、reviewing 状态、基线元数据、占位符和需求到设计章节追踪。",
+                "inputSchema": _object_schema(
+                    {
+                        "package_root": {"type": "string", "minLength": 1},
+                        "requirement_id": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+                        },
+                    },
+                    ["package_root", "requirement_id"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,
                 },
             },
             {
@@ -435,6 +522,32 @@ class RuntimeTools:
             schema_root=self.catalog.root / "schemas",
             kind=arguments["kind"],
             artifact=arguments["artifact"],
+        )
+
+    @staticmethod
+    def _design_source_reference(arguments: dict) -> DesignSourceRef:
+        return DesignSourceRef(
+            root=arguments["source_root"], registry=arguments["registry"]
+        )
+
+    def _design_source_resolve(self, arguments: dict) -> dict:
+        return resolve_design_source(self._design_source_reference(arguments))
+
+    def _design_source_read(self, arguments: dict) -> dict:
+        return read_design_document(
+            self._design_source_reference(arguments), arguments["document"]
+        )
+
+    def _design_source_check(self, arguments: dict) -> dict:
+        return check_design_source(
+            self._design_source_reference(arguments),
+            arguments["expected_digest"],
+            arguments.get("document"),
+        )
+
+    def _review_package_validate(self, arguments: dict) -> dict:
+        return validate_review_package(
+            arguments["package_root"], arguments["requirement_id"]
         )
 
     def _start(self, arguments: dict) -> dict:

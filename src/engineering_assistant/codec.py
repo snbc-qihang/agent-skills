@@ -7,6 +7,7 @@ from typing import Any, Mapping
 from .model import (
     CapabilityProviderSpec,
     CriterionResult,
+    DesignSourceRef,
     EvidenceRef,
     FeedbackEvent,
     FeedbackCapture,
@@ -125,7 +126,13 @@ def run_approval_grant_from_dict(data: Mapping[str, Any]) -> RunApprovalGrant:
 
 
 def route_intent_from_dict(data: Mapping[str, Any]) -> RouteIntent:
-    return RouteIntent(**data)
+    design_source = data.get("design_source")
+    return RouteIntent(
+        **{key: value for key, value in data.items() if key != "design_source"},
+        design_source=(
+            DesignSourceRef(**design_source) if design_source is not None else None
+        ),
+    )
 
 
 def route_decision_from_dict(data: Mapping[str, Any]) -> RouteDecision:

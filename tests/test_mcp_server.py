@@ -139,6 +139,10 @@ class MCPServerTests(unittest.TestCase):
             [
                 "engineering_assistant_route",
                 "engineering_assistant_artifact_validate",
+                "engineering_assistant_design_source_resolve",
+                "engineering_assistant_design_source_read",
+                "engineering_assistant_design_source_check",
+                "engineering_assistant_review_package_validate",
                 "engineering_assistant_start",
                 "engineering_assistant_next",
                 "engineering_assistant_complete",

@@ -93,6 +93,12 @@ class PolicySpec(Serializable):
 
 
 @dataclass(frozen=True)
+class DesignSourceRef(Serializable):
+    root: str
+    registry: str
+
+
+@dataclass(frozen=True)
 class RouteIntent(Serializable):
     task_kind: str
     requested_outcome: str
@@ -101,6 +107,8 @@ class RouteIntent(Serializable):
     requested_external_actions: List[str]
     confidence: float
     evidence: List[str]
+    requirement_id: Optional[str] = None
+    design_source: Optional[DesignSourceRef] = None
 
 
 @dataclass(frozen=True)

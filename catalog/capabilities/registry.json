@@ -1,11 +1,13 @@
 {
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "capabilities": [
     {"id": "route-engineering", "kind": "primitive", "owner": "engineering-assistant"},
     {"id": "research", "kind": "primitive", "owner": "research"},
     {"id": "decision-interview", "kind": "primitive", "owner": "decision-interview"},
     {"id": "domain-modeling", "kind": "primitive", "owner": "domain-modeling"},
     {"id": "repo-context", "kind": "primitive", "owner": "repo-context"},
+    {"id": "design-source-read", "kind": "internal", "owner": "flow:team-delivery"},
+    {"id": "review-package-validation", "kind": "internal", "owner": "flow:team-delivery"},
     {"id": "wayfinder", "kind": "primitive", "owner": "wayfinder"},
     {"id": "prototype", "kind": "primitive", "owner": "prototype"},
     {"id": "codebase-design", "kind": "primitive", "owner": "codebase-design"},

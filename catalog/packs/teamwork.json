@@ -1,13 +1,13 @@
 {
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "packs": [
-    {"id": "rrq-yq-delivery", "version": "2.0.0.0-rc.1", "activation": ["rrq-yq-team profile 进入需求、设计、交付、发布或知识沉淀"], "capabilities": [], "policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption", "document-governance"], "source_path": "packs/rrq-yq-delivery.md"},
-    {"id": "rrq-yq-architecture", "version": "2.0.0.0-rc.1", "activation": ["任务涉及架构、DDD、JDK、框架或设计模式"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "team-standards"], "source_path": "packs/rrq-yq-architecture.md"},
-    {"id": "rrq-yq-api", "version": "2.0.0.0-rc.1", "activation": ["任务涉及接口、YApi 或异常契约"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "evidence-quality"], "source_path": "packs/rrq-yq-api.md"},
-    {"id": "rrq-yq-code-quality", "version": "2.0.0.0-rc.1", "activation": ["任务涉及研发、TDD、质量、安全、日志、监控、幂等或并发"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "evidence-quality"], "source_path": "packs/rrq-yq-code-quality.md"},
-    {"id": "rrq-yq-frontend", "version": "2.0.0.0-rc.1", "activation": ["影响范围命中前端"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "frontend-product"], "source_path": "packs/rrq-yq-frontend.md"},
-    {"id": "rrq-yq-database", "version": "2.0.0.0-rc.1", "activation": ["影响范围命中数据库"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-database.md"},
-    {"id": "rrq-yq-redis", "version": "2.0.0.0-rc.1", "activation": ["影响范围命中 Redis"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-redis.md"},
-    {"id": "rrq-yq-mq", "version": "2.0.0.0-rc.1", "activation": ["影响范围命中 MQ"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-mq.md"}
+    {"id": "rrq-yq-delivery", "version": "2.1.0.0-rc.1", "activation": ["rrq-yq-team profile 进入需求、设计、交付、发布或知识沉淀"], "capabilities": [], "policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption", "document-governance"], "source_path": "packs/rrq-yq-delivery.md"},
+    {"id": "rrq-yq-architecture", "version": "2.1.0.0-rc.1", "activation": ["任务涉及架构、DDD、JDK、框架或设计模式"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "team-standards"], "source_path": "packs/rrq-yq-architecture.md"},
+    {"id": "rrq-yq-api", "version": "2.1.0.0-rc.1", "activation": ["任务涉及接口、YApi 或异常契约"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "evidence-quality"], "source_path": "packs/rrq-yq-api.md"},
+    {"id": "rrq-yq-code-quality", "version": "2.1.0.0-rc.1", "activation": ["任务涉及研发、TDD、质量、安全、日志、监控、幂等或并发"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "evidence-quality"], "source_path": "packs/rrq-yq-code-quality.md"},
+    {"id": "rrq-yq-frontend", "version": "2.1.0.0-rc.1", "activation": ["影响范围命中前端"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "frontend-product"], "source_path": "packs/rrq-yq-frontend.md"},
+    {"id": "rrq-yq-database", "version": "2.1.0.0-rc.1", "activation": ["影响范围命中数据库"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-database.md"},
+    {"id": "rrq-yq-redis", "version": "2.1.0.0-rc.1", "activation": ["影响范围命中 Redis"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-redis.md"},
+    {"id": "rrq-yq-mq", "version": "2.1.0.0-rc.1", "activation": ["影响范围命中 MQ"], "capabilities": [], "policy_refs": ["teamwork-rule-consumption", "risk-approval"], "source_path": "packs/rrq-yq-mq.md"}
   ]
 }

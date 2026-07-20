@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/design-source-snapshot.schema.json",
+  "type": "object",
+  "required": ["status", "digest", "registry", "registry_digest", "observed_at", "high_level_design", "architecture_decisions", "domain_designs", "context_detailed_designs", "governance_documents", "governance_inputs", "templates", "documents"],
+  "properties": {
+    "status": {"const": "resolved"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "registry": {"type": "string", "minLength": 1},
+    "registry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "high_level_design": {"$ref": "#/$defs/document"},
+    "architecture_decisions": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "domain_designs": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "context_detailed_designs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/document"}},
+    "governance_documents": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "governance_inputs": {"type": "array", "items": {"$ref": "#/$defs/template"}},
+    "templates": {"type": "array", "items": {"$ref": "#/$defs/template"}},
+    "documents": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/document"}}
+  },
+  "$defs": {
+    "document": {
+      "type": "object",
+      "required": ["document_number", "type", "path", "status", "owner", "version", "digest", "size"],
+      "properties": {
+        "document_number": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "owner": {"type": "string"},
+        "version": {"type": ["string", "null"]},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "template": {
+      "type": "object",
+      "required": ["path", "digest", "size"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
