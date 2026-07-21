@@ -151,7 +151,7 @@ class RuntimeTools:
             {
                 "name": "engineering_assistant_design_source_resolve",
                 "title": "固定外部设计输入",
-                "description": "只读解析显式指定的外部设计注册表，返回全部 HLD、ADR、领域边界、上下文详细设计、治理文档和模板的固定摘要快照；HLD 与上下文详细设计均为 0..N 集合。",
+                "description": "只读解析显式指定的外部设计注册表，返回 HLD、ADR、领域边界、上下文详细设计、治理文档和模板的固定摘要快照。",
                 "inputSchema": _object_schema(
                     {
                         "source_root": {"type": "string", "minLength": 1},

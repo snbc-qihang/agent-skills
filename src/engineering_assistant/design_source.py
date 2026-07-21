@@ -203,7 +203,11 @@ def resolve_design_source(reference: DesignSourceRef) -> dict[str, Any]:
         )
 
     high_levels = [item for item in documents if item["type"] == "high_level_design"]
+    if len(high_levels) != 1:
+        raise ValidationFailure("design source must contain exactly one high-level design")
     contexts = [item for item in documents if item["type"] == "context_detailed_design"]
+    if not contexts:
+        raise ValidationFailure("design source must contain context detailed designs")
 
     templates: list[dict[str, Any]] = []
     template_patterns = (
@@ -269,7 +273,7 @@ def resolve_design_source(reference: DesignSourceRef) -> dict[str, Any]:
         "registry": registry_path.relative_to(root).as_posix(),
         "registry_digest": _sha256(registry_bytes),
         "observed_at": datetime.now(timezone.utc).isoformat(),
-        "high_level_designs": high_levels,
+        "high_level_design": high_levels[0],
         "architecture_decisions": [item for item in documents if item["type"] == "architecture_decision_record"],
         "domain_designs": [item for item in documents if item["type"] == "domain_design"],
         "context_detailed_designs": contexts,
@@ -357,11 +361,7 @@ def validate_review_package(package_root: Path | str, requirement_id: str) -> di
     missing = [name for name in required if not (root / name).is_file()]
     if missing:
         raise ValidationFailure("review package is missing required files: " + ", ".join(missing))
-    high_level_reviews = sorted(root.glob("02-high-level-design.review.md")) + sorted(
-        root.glob("02-*-high-level-design.review.md")
-    )
-    detailed_reviews = sorted(root.glob("03-*-detailed-design.review.md"))
-    reviews = high_level_reviews + detailed_reviews
+    reviews = sorted(root.glob("02-high-level-design.review.md")) + sorted(root.glob("03-*-detailed-design.review.md"))
     if not reviews:
         raise ValidationFailure("review package must contain at least one review design")
     for path in reviews:
@@ -379,7 +379,7 @@ def validate_review_package(package_root: Path | str, requirement_id: str) -> di
         if _PLACEHOLDER.search(content):
             raise ValidationFailure(f"review design contains unresolved placeholder: {path.name}")
 
-    if high_level_reviews:
+    if (root / "02-high-level-design.review.md").is_file():
         impact = (root / "01-impact-assessment.md").read_text(encoding="utf-8")
         if not re.search(r"^system_level_impact:\s*true\s*$", impact, re.MULTILINE):
             raise ValidationFailure("high-level design requires confirmed system-level impact")

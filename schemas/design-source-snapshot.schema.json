@@ -2,21 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agent-skills.local/schemas/design-source-snapshot.schema.json",
   "type": "object",
-  "required": ["status", "digest", "registry", "registry_digest", "observed_at", "high_level_designs", "architecture_decisions", "domain_designs", "context_detailed_designs", "governance_documents", "governance_inputs", "templates", "documents"],
+  "required": ["status", "digest", "registry", "registry_digest", "observed_at", "high_level_design", "architecture_decisions", "domain_designs", "context_detailed_designs", "governance_documents", "governance_inputs", "templates", "documents"],
   "properties": {
     "status": {"const": "resolved"},
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "registry": {"type": "string", "minLength": 1},
     "registry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "observed_at": {"type": "string", "format": "date-time"},
-    "high_level_designs": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "high_level_design": {"$ref": "#/$defs/document"},
     "architecture_decisions": {"type": "array", "items": {"$ref": "#/$defs/document"}},
     "domain_designs": {"type": "array", "items": {"$ref": "#/$defs/document"}},
-    "context_detailed_designs": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "context_detailed_designs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/document"}},
     "governance_documents": {"type": "array", "items": {"$ref": "#/$defs/document"}},
     "governance_inputs": {"type": "array", "items": {"$ref": "#/$defs/template"}},
     "templates": {"type": "array", "items": {"$ref": "#/$defs/template"}},
-    "documents": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/document"}}
+    "documents": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/document"}}
   },
   "$defs": {
     "document": {

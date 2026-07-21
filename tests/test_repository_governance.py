@@ -164,7 +164,6 @@ class RepositoryGovernanceTests(unittest.TestCase):
                 "docs/architecture/overview.md",
                 "docs/operations/canary.md",
                 "docs/operations/local-publish.md",
-                "docs/operations/team-training.md",
             },
             {
                 path.relative_to(ROOT).as_posix()
@@ -172,37 +171,6 @@ class RepositoryGovernanceTests(unittest.TestCase):
                 if path.is_file() and path.name != ".DS_Store"
             },
         )
-
-    def test_team_training_covers_cross_platform_delivery_contract(self) -> None:
-        training = (ROOT / "docs/operations/team-training.md").read_text(encoding="utf-8")
-        for required in (
-            "插件介绍",
-            "Windows 原生",
-            "WSL2",
-            "macOS",
-            "PowerShell",
-            "teamwork-engineering-assistant",
-            "diagnosing-bugs",
-            "code-review",
-            "scripts/publish_local.py --platform codex --dry-run",
-            "--codex-home",
-            "外部 Skills、Plugins 和 MCP",
-            "插件内置",
-            "skill-creator",
-            "plugin-creator",
-            "ui-ux-pro-max",
-            "codex mcp add",
-            "requirement_id",
-            "design_source",
-            "base_digest",
-            "stale",
-            "0..N",
-            "不限制数量",
-            "人工批准",
-            "Git 无文本冲突不能证明",
-        ):
-            self.assertIn(required, training)
-        self.assertNotIn("/Users/sunliming", training)
 
     def test_local_publish_policy_is_current_configuration_not_history(self) -> None:
         policy = json.loads((ROOT / "config/local-publish-policy.json").read_text(encoding="utf-8"))
