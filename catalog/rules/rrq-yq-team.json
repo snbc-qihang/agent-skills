@@ -1636,7 +1636,7 @@
     {
       "id": "DG23",
       "category": "文档治理",
-      "guidance": "每个需求必须显式提供 requirement_id、外部设计源绝对根目录和注册表；repo-context 只读解析注册表，并固定 HLD、ADR、受影响上下文详细设计、模板及维护规则的编号、版本、状态和摘要，本次快照不得跨需求复用。",
+      "guidance": "每个需求必须显式提供 requirement_id、外部设计源绝对根目录和注册表；repo-context 只读解析注册表，并固定全部 HLD、ADR、受影响上下文详细设计、模板及维护规则的编号、版本、状态和摘要，本次快照不得跨需求复用；HLD 与上下文详细设计均按 0..N 集合处理，不设业务数量上限。",
       "source_refs": ["yq-overview"],
       "target_refs": ["rrq-yq-delivery"],
       "capability_refs": ["repo-context", "design-source-read", "shape-contract", "architecture-design"]
@@ -1644,7 +1644,7 @@
     {
       "id": "DG24",
       "category": "文档治理",
-      "guidance": "每个需求在 .run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中 HLD 和上下文详细设计是符合外部模板的完整 reviewing 评审稿，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
+      "guidance": "每个需求在 .run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中每份 HLD 和上下文详细设计都是符合外部模板的完整 reviewing 评审稿，数量由实际影响范围决定且不设业务上限，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
       "source_refs": ["yq-overview"],
       "target_refs": ["rrq-yq-delivery"],
       "capability_refs": ["architecture-design", "implementation-contract", "review-package-validation", "design-review"]
@@ -1652,7 +1652,7 @@
     {
       "id": "DG25",
       "category": "文档治理",
-      "guidance": "普通上下文需求只生成受影响上下文详细设计评审稿；仅当服务边界、数据主权、依赖方向或其他系统级架构变化时生成 HLD 和适用 ADR 评审内容。",
+      "guidance": "普通上下文需求按影响范围生成一份或多份上下文详细设计评审稿；仅当服务边界、数据主权、依赖方向或其他系统级架构变化时，才按影响范围生成一份或多份 HLD 和适用 ADR 评审内容。",
       "source_refs": ["yq-overview", "rrq-architecture"],
       "target_refs": ["rrq-yq-delivery"],
       "capability_refs": ["design-source-read", "architecture-design", "review-package-validation", "design-review"]

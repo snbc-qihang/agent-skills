@@ -40,7 +40,7 @@ hermes --skills teamwork-engineering-assistant:repo-context
 
 ### 从仓库安装到本机
 
-先执行无副作用预演，再显式确认本机发布：
+部署机需要 Git、Python 3.9+、项目依赖、`uv`、目标平台 CLI，以及 Codex 自带的官方 `skill-creator`/`plugin-creator` 校验器。先执行无副作用预演，再显式确认本机发布：
 
 ```bash
 python3 scripts/publish_local.py --platform codex --dry-run
@@ -50,7 +50,18 @@ python3 scripts/publish_local.py --platform hermes --dry-run
 python3 scripts/publish_local.py --platform hermes --yes
 ```
 
-同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
+同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；团队安装、跨平台使用和完整研发演练见 [团队培训教程](docs/operations/team-training.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
+
+macOS 可直接执行以上命令。Windows 使用 WSL2 执行相同脚本，并显式把安装目标指向 Windows Codex Home：
+
+```bash
+python3 scripts/publish_local.py --platform codex --dry-run \
+  --codex-home "/mnt/c/Users/<WindowsUser>/.codex"
+python3 scripts/publish_local.py --platform codex --yes \
+  --codex-home "/mnt/c/Users/<WindowsUser>/.codex"
+```
+
+Windows 原生 PowerShell 不作为本仓库发布环境；安装完成后重启 Windows 桌面端。teamwork 内置的 11 个 skills 和 Runtime MCP 无需重复安装。任务级外部 skills、plugins、Provider 和组织 MCP 的分类、安装方法与降级规则见[团队培训教程的依赖章节](docs/operations/team-training.md#7-外部-skillsplugins-和-mcp)。
 
 ### 当前平台集成边界
 
@@ -174,9 +185,9 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 
 ### 确定性设计输入与评审包
 
-团队设计和研发任务显式提交 `requirement_id`、外部设计源绝对根目录及注册表。Runtime 只读解析当前 HLD、ADR、领域边界、上下文详细设计、模板、架构影响规则和维护规范，按本需求固定摘要，不跨任务复用，也不覆盖外部设计源。
+团队设计和研发任务显式提交 `requirement_id`、外部设计源绝对根目录及注册表。Runtime 只读解析注册表内全部 HLD、ADR、领域边界、上下文详细设计、模板、架构影响规则和维护规范，按本需求固定摘要，不跨任务复用，也不覆盖外部设计源。HLD 和上下文详细设计均采用 `0..N` 集合语义，不设业务数量上限；只保留注册表总体规模的防滥用安全上限。
 
-普通上下文需求只生成完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才生成完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`。提交评审前按每个目标文档的 `base_digest` 复核；同一目标变化时标记 `stale` 并 rebase，其他上下文可继续并行。外部团队负责评审、合并和维护唯一设计基线。
+普通上下文需求按受影响范围生成一份或多份完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才按受影响范围生成一份或多份完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`。多份 HLD 使用 `02-<design-key>-high-level-design.review.md`，单份场景继续兼容 `02-high-level-design.review.md`；详细设计使用 `03-<context>-detailed-design.review.md`。提交评审前按每个目标文档的 `base_digest` 复核；同一目标变化时标记 `stale` 并 rebase，其他目标可继续并行。外部团队负责评审、合并和维护唯一设计基线。
 
 Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → skill → task override。降低安全等级必须有明确授权，不可豁免规则不能被 override。
 
@@ -414,6 +425,7 @@ MAJOR.MINOR.PATCH.BUILD[-PRERELEASE]
 ## 文档
 
 - [当前架构](docs/architecture/overview.md)
+- [团队培训教程（Windows/macOS）](docs/operations/team-training.md)
 - [本机发布](docs/operations/local-publish.md)
 - [真实产品 Canary](docs/operations/canary.md)
 - [版本规范](VERSIONING.md)

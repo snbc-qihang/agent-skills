@@ -6,6 +6,19 @@
 python3 scripts/publish_local.py --platform <codex|hermes|all> <--dry-run|--yes>
 ```
 
+发布主机必须具备 Git、Python 3.9+ 与项目依赖、`uv`、目标平台 CLI，以及 Codex 自带的官方校验器。macOS 可直接执行；Windows 使用 WSL2 执行该入口，因为官方校验信任根和仓库安全文件操作依赖 POSIX 语义。Windows 原生 PowerShell 不是当前受支持的发布环境。
+
+Windows Codex 桌面端安装示例：
+
+```bash
+python3 scripts/publish_local.py --platform codex --dry-run \
+  --codex-home "/mnt/c/Users/<WindowsUser>/.codex"
+python3 scripts/publish_local.py --platform codex --yes \
+  --codex-home "/mnt/c/Users/<WindowsUser>/.codex"
+```
+
+`--codex-home` 必须指向 Windows 用户的 `%USERPROFILE%\.codex`，不能省略为 WSL2 的 `~/.codex`。发布成功后完全退出并重启 Windows 桌面端。完整环境准备、依赖分类和验证步骤见[团队培训教程](team-training.md)。
+
 ## 无副作用预演
 
 ```bash

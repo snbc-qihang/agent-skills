@@ -1,6 +1,8 @@
 # 需求设计评审包
 
-评审包固定在 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`，至少包含影响评估、专项差异、实现测试计划、设计变更摘要、需求设计追踪矩阵和评审清单，并包含一份或多份完整上下文详细设计评审稿。只有命中系统级架构影响时才包含完整 HLD 评审稿。
+评审包固定在 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`，至少包含影响评估、专项差异、实现测试计划、设计变更摘要、需求设计追踪矩阵和评审清单，并按受影响范围包含一份或多份完整设计评审稿。HLD 与上下文详细设计均不设业务数量上限；只有命中系统级架构影响时才允许包含 HLD 评审稿。
+
+多份 HLD 使用 `02-<design-key>-high-level-design.review.md`，单份场景兼容 `02-high-level-design.review.md`；上下文详细设计使用 `03-<context>-detailed-design.review.md`。每份文档独立声明并复核自己的基线元数据。
 
 设计评审稿必须：
 

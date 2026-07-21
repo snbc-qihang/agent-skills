@@ -84,7 +84,7 @@ class DesignSourceTests(unittest.TestCase):
             )
 
             self.assertRegex(snapshot["digest"], r"^sha256:[0-9a-f]{64}$")
-            self.assertEqual("HLD-YQ-001", snapshot["high_level_design"]["document_number"])
+            self.assertEqual("HLD-YQ-001", snapshot["high_level_designs"][0]["document_number"])
             self.assertEqual(1, len(snapshot["context_detailed_designs"]))
             self.assertEqual(2, len(snapshot["templates"]))
             self.assertEqual(1, len(snapshot["governance_inputs"]))
@@ -112,6 +112,60 @@ class DesignSourceTests(unittest.TestCase):
             self.assertEqual(
                 "stale",
                 check_design_source(source, trade_digest, "DDD-YQ-TRADE-001")["status"],
+            )
+
+    def test_snapshot_allows_zero_or_multiple_high_level_and_detailed_designs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._source(root)
+            (root / "10-high-level-design/02-platform-design.md").write_text(
+                "---\ndocument_number: HLD-YQ-002\ndocument_status: reviewing\n"
+                "version: V1.0-reviewing\nowner: platform-architect\n---\n# Platform HLD\n",
+                encoding="utf-8",
+            )
+            (root / "20-context-detailed-design/10-context-designs/02-member-context.md").write_text(
+                "---\ndocument_number: DDD-YQ-MEMBER-001\ndocument_status: reviewing\n"
+                "version: V1.0-reviewing\nowner: member-owner\n---\n# Member\n",
+                encoding="utf-8",
+            )
+            registry = root / source.registry
+            registry.write_text(
+                registry.read_text(encoding="utf-8")
+                + "  - document_number: HLD-YQ-002\n"
+                "    type: high_level_design\n"
+                "    path: ../../10-high-level-design/02-platform-design.md\n"
+                "    status: reviewing\n"
+                "    owner: platform-architect\n"
+                "  - document_number: DDD-YQ-MEMBER-001\n"
+                "    type: context_detailed_design\n"
+                "    path: ../../20-context-detailed-design/10-context-designs/02-member-context.md\n"
+                "    status: reviewing\n"
+                "    owner: member-owner\n",
+                encoding="utf-8",
+            )
+
+            snapshot = resolve_design_source(source)
+            self.assertEqual(2, len(snapshot["high_level_designs"]))
+            self.assertEqual(2, len(snapshot["context_detailed_designs"]))
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self._source(root)
+            registry = root / source.registry
+            content = registry.read_text(encoding="utf-8")
+            registry.write_text(
+                content.replace("type: high_level_design", "type: architecture_decision_record")
+                .replace("type: context_detailed_design", "type: domain_design"),
+                encoding="utf-8",
+            )
+
+            snapshot = resolve_design_source(source)
+            self.assertEqual([], snapshot["high_level_designs"])
+            self.assertEqual([], snapshot["context_detailed_designs"])
+            validate_instance(
+                snapshot,
+                load_json(ROOT / "schemas/design-source-snapshot.schema.json"),
+                "design-source-snapshot",
             )
 
     def test_registry_path_cannot_escape_source_root(self) -> None:
@@ -161,16 +215,26 @@ class DesignSourceTests(unittest.TestCase):
             report = validate_review_package(package, "REQ-1")
             self.assertEqual("passed", report["status"])
 
-            (package / "02-high-level-design.review.md").write_text(
-                (package / "03-trade-detailed-design.review.md").read_text(encoding="utf-8"),
+            review_content = (package / "03-trade-detailed-design.review.md").read_text(
+                encoding="utf-8"
+            )
+            (package / "03-member-detailed-design.review.md").write_text(
+                review_content.replace("DDD-YQ-TRADE-001", "DDD-YQ-MEMBER-001"),
                 encoding="utf-8",
             )
+            for name in (
+                "02-platform-high-level-design.review.md",
+                "02-commerce-high-level-design.review.md",
+            ):
+                (package / name).write_text(review_content, encoding="utf-8")
             with self.assertRaisesRegex(ValidationFailure, "system-level impact"):
                 validate_review_package(package, "REQ-1")
             (package / "01-impact-assessment.md").write_text(
                 "system_level_impact: true\n", encoding="utf-8"
             )
-            self.assertEqual("passed", validate_review_package(package, "REQ-1")["status"])
+            report = validate_review_package(package, "REQ-1")
+            self.assertEqual("passed", report["status"])
+            self.assertEqual(4, len(report["review_documents"]))
 
             review = package / "03-trade-detailed-design.review.md"
             review.write_text(review.read_text(encoding="utf-8").replace("reviewing", "final", 1), encoding="utf-8")
