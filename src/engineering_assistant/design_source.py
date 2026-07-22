@@ -16,12 +16,18 @@ from .validation import ValidationFailure
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_DOCUMENT_BYTES = 8_388_608
 MAX_DOCUMENTS = 512
+_DATABASE_DESIGN_TEMPLATE = Path(
+    "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+)
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _REQUIREMENT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _PLACEHOLDER = re.compile(
     r"<[A-Z][A-Z0-9_-]*>|\{\{[^{}]+\}\}|\b(?:TBD|TODO)\b|待填写",
     re.IGNORECASE,
 )
+_DATABASE_PLACEHOLDER = re.compile(r"\{[^{}\n]+\}|\bYYYY-MM-DD\b")
+_MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+_TABLE_SEPARATOR = re.compile(r"^:?-{3,}:?$")
 
 
 def _sha256(content: bytes) -> str:
@@ -152,6 +158,100 @@ def _read_bounded(path: Path, limit: int, label: str) -> bytes:
     if size > limit:
         raise ValidationFailure(f"{label} exceeds size limit")
     return path.read_bytes()
+
+
+def _default_database_design_template() -> Path:
+    runtime = Path(__file__).resolve()
+    for root in (runtime.parents[2], runtime.parents[3]):
+        candidate = root / _DATABASE_DESIGN_TEMPLATE
+        if candidate.is_file():
+            return candidate
+    raise ValidationFailure("database design template is unavailable")
+
+
+def _markdown_structure(content: str) -> tuple[list[tuple[int, str]], list[tuple[str, ...]]]:
+    lines = content.splitlines()
+    headings: list[tuple[int, str]] = []
+    tables: list[tuple[str, ...]] = []
+    in_fence = False
+    fence = ""
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(("```", "~~~")):
+            marker = stripped[:3]
+            if not in_fence:
+                in_fence = True
+                fence = marker
+            elif marker == fence:
+                in_fence = False
+                fence = ""
+            continue
+        if in_fence:
+            continue
+        heading = _MARKDOWN_HEADING.match(line)
+        if heading:
+            headings.append((len(heading.group(1)), heading.group(2)))
+        if index + 1 >= len(lines) or "|" not in line:
+            continue
+        cells = tuple(cell.strip() for cell in line.strip().strip("|").split("|"))
+        separators = tuple(
+            cell.strip()
+            for cell in lines[index + 1].strip().strip("|").split("|")
+        )
+        if cells and len(cells) == len(separators) and all(
+            _TABLE_SEPARATOR.fullmatch(cell) for cell in separators
+        ):
+            tables.append(cells)
+    return headings, tables
+
+
+def validate_database_design(
+    document_path: Path | str,
+    template_path: Path | str | None = None,
+) -> dict[str, Any]:
+    try:
+        document = Path(document_path).resolve(strict=True)
+        template = (
+            Path(template_path).resolve(strict=True)
+            if template_path is not None
+            else _default_database_design_template().resolve(strict=True)
+        )
+    except OSError as exc:
+        raise ValidationFailure("database design or template is unavailable") from exc
+    if not document.is_file():
+        raise ValidationFailure("database design must be a file")
+    if not template.is_file():
+        raise ValidationFailure("database design template is unavailable")
+    document_bytes = _read_bounded(document, MAX_DOCUMENT_BYTES, "database design")
+    template_bytes = _read_bounded(template, MAX_DOCUMENT_BYTES, "database design template")
+    content = document_bytes.decode("utf-8")
+    template_content = template_bytes.decode("utf-8")
+    headings, tables = _markdown_structure(content)
+    template_headings, template_tables = _markdown_structure(template_content)
+    heading_structure_matches = (
+        len(headings) == len(template_headings)
+        and bool(headings)
+        and headings[0][0] == template_headings[0][0]
+        and headings[1:] == template_headings[1:]
+    )
+    if not heading_structure_matches:
+        raise ValidationFailure("database design heading structure differs from team template")
+    if tables != template_tables:
+        raise ValidationFailure("database design table structure differs from team template")
+    placeholder = _DATABASE_PLACEHOLDER.search(content)
+    if placeholder:
+        raise ValidationFailure(
+            "database design contains unresolved placeholder: " + placeholder.group(0)
+        )
+    return {
+        "status": "passed",
+        "document": str(document),
+        "document_digest": _sha256(document_bytes),
+        "template": str(template),
+        "template_digest": _sha256(template_bytes),
+        "heading_count": len(headings),
+        "table_count": len(tables),
+    }
 
 
 def resolve_design_source(reference: DesignSourceRef) -> dict[str, Any]:
@@ -379,8 +479,18 @@ def validate_review_package(package_root: Path | str, requirement_id: str) -> di
         if _PLACEHOLDER.search(content):
             raise ValidationFailure(f"review design contains unresolved placeholder: {path.name}")
 
+    impact = (root / "01-impact-assessment.md").read_text(encoding="utf-8")
+    database_root = root / "09-database-designs"
+    database_designs = sorted(database_root.glob("*.md")) if database_root.is_dir() else []
+    if re.search(r"^database_impact:\s*true\s*$", impact, re.MULTILINE) and not database_designs:
+        raise ValidationFailure("database impact requires database designs")
+    for path in database_designs:
+        resolved = path.resolve(strict=True)
+        if not _within(root, resolved):
+            raise ValidationFailure("database design must stay within review package")
+        validate_database_design(resolved)
+
     if (root / "02-high-level-design.review.md").is_file():
-        impact = (root / "01-impact-assessment.md").read_text(encoding="utf-8")
         if not re.search(r"^system_level_impact:\s*true\s*$", impact, re.MULTILINE):
             raise ValidationFailure("high-level design requires confirmed system-level impact")
 
@@ -408,5 +518,6 @@ def validate_review_package(package_root: Path | str, requirement_id: str) -> di
         "requirement_id": requirement_id,
         "design_source_digest": digest_match.group(1),
         "review_documents": [path.name for path in reviews],
+        "database_designs": [path.relative_to(root).as_posix() for path in database_designs],
         "files": sorted(path.name for path in root.iterdir() if path.is_file()),
     }

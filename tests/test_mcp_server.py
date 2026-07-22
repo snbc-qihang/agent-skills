@@ -142,6 +142,7 @@ class MCPServerTests(unittest.TestCase):
                 "engineering_assistant_design_source_resolve",
                 "engineering_assistant_design_source_read",
                 "engineering_assistant_design_source_check",
+                "engineering_assistant_database_design_validate",
                 "engineering_assistant_review_package_validate",
                 "engineering_assistant_start",
                 "engineering_assistant_next",

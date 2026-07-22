@@ -62,6 +62,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 | 加载 `SKILL.md` 和按需参考资料 | 选择 skill 后由平台完成 |
 | `route/start/next/complete` | 平台可作为工具调用；`start` 接收 intent 并在服务端重算路由，选择 skill 本身不会隐式启动状态机 |
 | `design-source-resolve/read/check` | 只读固定显式外部设计源、读取已登记文档，并按快照或目标文档摘要检测 `stale` |
+| `database-design-validate` | 只读校验关系型 OLTP 设计是否严格保留团队模板的章节顺序、层级和表头，且无未解析占位符 |
 | `review-package-validate` | 只读校验需求独立评审包、`reviewing` 状态、基线元数据和追踪矩阵 |
 | 人工审批与调研选择 | 只接受管理员固定 HTTPS broker 验证的 opaque grant；不存在自由文本 `approve` CLI |
 | `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
@@ -153,7 +154,7 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 | Pack | 激活条件 |
 | --- | --- |
 | `frontend-product` | 浏览器或应用用户体验发生变化 |
-| `database` | Schema、查询、索引、事务或数据修复进入范围 |
+| `database` | Schema、查询、索引、事务或数据修复进入范围；关系型 OLTP 设计强制使用团队表级模板并通过格式校验 |
 | `redis` | Redis key、缓存、锁或失效逻辑发生变化 |
 | `mq` | Topic、消息体、生产消费、重试或回放发生变化 |
 | `quality-evidence` | 实现、评审或发布需要声明完成 |
@@ -177,6 +178,8 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 团队设计和研发任务显式提交 `requirement_id`、外部设计源绝对根目录及注册表。Runtime 只读解析当前 HLD、ADR、领域边界、上下文详细设计、模板、架构影响规则和维护规范，按本需求固定摘要，不跨任务复用，也不覆盖外部设计源。
 
 普通上下文需求只生成完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才生成完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`。提交评审前按每个目标文档的 `base_digest` 复核；同一目标变化时标记 `stale` 并 rebase，其他上下文可继续并行。外部团队负责评审、合并和维护唯一设计基线。
+
+关系型 OLTP 影响命中时，按单表或强耦合表组在评审包 `09-database-designs/` 下生成数据库设计。除一级标题可使用实际文档名外，文档必须保留 `skills/codebase-design/references/relational-oltp-detailed-design-template.md` 的全部二、三级标题、顺序和表头；不适用章节保留并说明原因。`database-design-validate` 失败或仍有占位符时，数据库设计节点和评审包校验均不通过。未命中数据库时该能力为 `not_applicable`，不会要求普通设计任务生成数据库文档。
 
 Policy 优先级为：不可豁免安全规则 → 项目 profile → flow → skill → task override。降低安全等级必须有明确授权，不可豁免规则不能被 override。
 
@@ -254,7 +257,7 @@ python3 -m pip install -e .
 | 分组 | 命令 | 用途 |
 | --- | --- | --- |
 | Runtime 控制面 | `route`、`start`、`next`、`complete`、`quality-submit`、`evidence-import`、`investigation-*`、`mcp-serve` | 供平台 adapter、受信执行器和内核调试调用 |
-| 设计只读工具 | `design-source-resolve`、`design-source-read`、`design-source-check`、`review-package-validate` | 固定外部输入、读取登记文档、检测过期和校验评审包 |
+| 设计只读工具 | `design-source-resolve`、`design-source-read`、`design-source-check`、`database-design-validate`、`review-package-validate` | 固定外部输入、读取登记文档、检测过期，并校验数据库设计和评审包 |
 | 研发与发布 | `validate`、`artifact-validate`、`eval`、`build`、`verify-package`、`canary-audit`、`canary-prepare`、`canary-attestation-import`、`canary-assemble`、`canary-validate` | 供开发者、CI 和发布门禁调用 |
 
 完整命令语义：
@@ -273,6 +276,7 @@ ea investigation-approval-import  导入外部审批 broker 的签名选择
 ea investigation-start    启动已批准调研
 ea investigation-finish   以已登记证据结束调研
 ea mcp-serve         以 MCP stdio 暴露含受治理 Provider 调用的受限 Runtime 工具
+ea database-design-validate  校验关系型 OLTP 设计是否严格符合团队模板
 ea validate          校验 catalog、schema、引用和作者源
 ea verify-sources    离线核验六个固定 revision checkout 的许可证和代表性证据摘要
 ea artifact-validate 使用当前 Runtime schema 校验 Provider、Feedback、Quality、Investigation、usage 和运行状态 artifact

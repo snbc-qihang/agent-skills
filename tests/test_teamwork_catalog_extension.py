@@ -458,6 +458,26 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         self.assertIn("review-package-validation", ready["capability_refs"])
         self.assertIn("design-review", ready["capability_refs"])
 
+    def test_database_design_route_activates_team_template_capability(self) -> None:
+        tools = RuntimeTools(ROOT)
+        context = tools.call(
+            "engineering_assistant_route",
+            {
+                "intent": replace(
+                    self._intent(),
+                    requested_outcome="为 MySQL OLTP 表设计字段、索引和事务",
+                    scope=["rrq-yq", "database", "schema"],
+                ).to_dict()
+            },
+        )["team_context"]
+
+        self.assertIn("rrq-yq-database", context["pack_refs"])
+        self.assertIn("database-design", context["capability_refs"])
+        database_pack = next(
+            pack for pack in context["packs"] if pack["id"] == "rrq-yq-database"
+        )
+        self.assertEqual("packs/rrq-yq-database.md", database_pack["source_path"])
+
     def test_persisted_node_payload_exposes_only_applicable_rule_contracts(self) -> None:
         catalog = load_catalog(ROOT)
         engine = RuntimeEngine(catalog)

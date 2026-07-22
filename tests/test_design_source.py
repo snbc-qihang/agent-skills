@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from engineering_assistant.design_source import (  # noqa: E402
     check_design_source,
     read_design_document,
     resolve_design_source,
+    validate_database_design,
     validate_review_package,
 )
 from engineering_assistant.model import DesignSourceRef  # noqa: E402
@@ -25,6 +27,14 @@ from engineering_assistant.validation import (  # noqa: E402
 
 
 class DesignSourceTests(unittest.TestCase):
+    def _completed_database_design(self) -> str:
+        template = (
+            ROOT
+            / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+        ).read_text(encoding="utf-8")
+        completed = re.sub(r"\{[^{}\n]+\}", "实际值", template)
+        return completed.replace("YYYY-MM-DD", "2026-07-22")
+
     def _source(self, root: Path) -> DesignSourceRef:
         governance = root / "90-design-basis/30-document-governance"
         hld = root / "10-high-level-design"
@@ -161,6 +171,25 @@ class DesignSourceTests(unittest.TestCase):
             report = validate_review_package(package, "REQ-1")
             self.assertEqual("passed", report["status"])
 
+            (package / "01-impact-assessment.md").write_text(
+                "database_impact: true\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                ValidationFailure, "database impact requires database designs"
+            ):
+                validate_review_package(package, "REQ-1")
+
+            database_designs = package / "09-database-designs"
+            database_designs.mkdir()
+            database_design = database_designs / "trade.review.md"
+            database_design.write_text(
+                self._completed_database_design(), encoding="utf-8"
+            )
+            self.assertEqual(
+                ["09-database-designs/trade.review.md"],
+                validate_review_package(package, "REQ-1")["database_designs"],
+            )
+
             (package / "02-high-level-design.review.md").write_text(
                 (package / "03-trade-detailed-design.review.md").read_text(encoding="utf-8"),
                 encoding="utf-8",
@@ -168,7 +197,8 @@ class DesignSourceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationFailure, "system-level impact"):
                 validate_review_package(package, "REQ-1")
             (package / "01-impact-assessment.md").write_text(
-                "system_level_impact: true\n", encoding="utf-8"
+                "system_level_impact: true\ndatabase_impact: true\n",
+                encoding="utf-8",
             )
             self.assertEqual("passed", validate_review_package(package, "REQ-1")["status"])
 
@@ -176,6 +206,52 @@ class DesignSourceTests(unittest.TestCase):
             review.write_text(review.read_text(encoding="utf-8").replace("reviewing", "final", 1), encoding="utf-8")
             with self.assertRaisesRegex(ValidationFailure, "must stay reviewing"):
                 validate_review_package(package, "REQ-1")
+
+    def test_database_design_requires_exact_template_structure_and_resolved_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            document = Path(temporary) / "trade.md"
+            document.write_text(
+                self._completed_database_design(), encoding="utf-8"
+            )
+
+            report = validate_database_design(document)
+            self.assertEqual("passed", report["status"])
+            self.assertEqual(63, report["heading_count"])
+            self.assertGreater(report["table_count"], 30)
+
+            document.write_text(
+                self._completed_database_design().replace(
+                    "### 6.8 幂等键与重复请求\n", "", 1
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValidationFailure, "heading structure differs"
+            ):
+                validate_database_design(document)
+
+            document.write_text(
+                self._completed_database_design().replace(
+                    "| 索引名 | 类型 | 字段（顺序敏感） | 唯一 | 服务场景 | 备注 |",
+                    "| 索引名 | 类型 | 字段 | 唯一 | 场景 |",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValidationFailure, "table structure differs"
+            ):
+                validate_database_design(document)
+
+            template = (
+                ROOT
+                / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+            ).read_text(encoding="utf-8")
+            document.write_text(template, encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValidationFailure, "unresolved placeholder"
+            ):
+                validate_database_design(document)
 
     def test_read_only_mcp_tools_expose_snapshot_and_staleness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -203,8 +279,19 @@ class DesignSourceTests(unittest.TestCase):
                 "engineering_assistant_design_source_read",
                 "engineering_assistant_design_source_check",
                 "engineering_assistant_review_package_validate",
+                "engineering_assistant_database_design_validate",
             ):
                 self.assertTrue(definitions[name]["annotations"]["readOnlyHint"])
+
+            database_document = Path(temporary) / "database-design.md"
+            database_document.write_text(
+                self._completed_database_design(), encoding="utf-8"
+            )
+            database_report = tools.call(
+                "engineering_assistant_database_design_validate",
+                {"document_path": str(database_document)},
+            )
+            self.assertEqual("passed", database_report["status"])
 
 
 if __name__ == "__main__":

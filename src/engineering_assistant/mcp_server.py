@@ -28,6 +28,7 @@ from .design_source import (
     check_design_source,
     read_design_document,
     resolve_design_source,
+    validate_database_design,
     validate_review_package,
 )
 from .evidence import EvidenceStore
@@ -200,6 +201,21 @@ class RuntimeTools:
                         "document": {"type": ["string", "null"], "minLength": 1},
                     },
                     ["source_root", "registry", "expected_digest"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": True,
+                },
+            },
+            {
+                "name": "engineering_assistant_database_design_validate",
+                "title": "校验关系型 OLTP 详细设计",
+                "description": "只读校验数据库设计是否严格保留团队模板的章节、顺序和表列，且已清除占位符。",
+                "inputSchema": _object_schema(
+                    {"document_path": {"type": "string", "minLength": 1}},
+                    ["document_path"],
                 ),
                 "annotations": {
                     "readOnlyHint": True,
@@ -549,6 +565,9 @@ class RuntimeTools:
         return validate_review_package(
             arguments["package_root"], arguments["requirement_id"]
         )
+
+    def _database_design_validate(self, arguments: dict) -> dict:
+        return validate_database_design(arguments["document_path"])
 
     def _start(self, arguments: dict) -> dict:
         profile_id = self._profile_id(arguments)

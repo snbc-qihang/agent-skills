@@ -32,6 +32,7 @@ from .design_source import (
     check_design_source,
     read_design_document,
     resolve_design_source,
+    validate_database_design,
     validate_review_package,
 )
 from .engine import RuntimeEngine
@@ -347,6 +348,11 @@ def command_design_source_check(args: argparse.Namespace) -> int:
 
 def command_review_package_validate(args: argparse.Namespace) -> int:
     _emit(validate_review_package(args.package, args.requirement_id))
+    return 0
+
+
+def command_database_design_validate(args: argparse.Namespace) -> int:
+    _emit(validate_database_design(args.document))
     return 0
 
 
@@ -690,6 +696,10 @@ def build_parser() -> argparse.ArgumentParser:
     review_package.add_argument("--package", required=True)
     review_package.add_argument("--requirement-id", required=True)
     review_package.set_defaults(handler=command_review_package_validate)
+
+    database_design = subparsers.add_parser("database-design-validate")
+    database_design.add_argument("--document", required=True)
+    database_design.set_defaults(handler=command_database_design_validate)
 
     build = subparsers.add_parser("build")
     build.add_argument("--platform", choices=sorted(("codex", "hermes")), required=True)

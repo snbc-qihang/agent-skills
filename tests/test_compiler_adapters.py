@@ -169,6 +169,18 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertFalse((codex / "engineering-assistant/generator").exists())
         self.assertFalse(any(path.name == ".DS_Store" for path in codex.rglob("*")))
         self.assertFalse(any(path.name == ".DS_Store" for path in hermes.rglob("*")))
+        for package in (codex, hermes):
+            self.assertEqual(
+                (
+                    ROOT
+                    / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+                ).read_bytes(),
+                (
+                    package
+                    / "skills/codebase-design/references/"
+                    "relational-oltp-detailed-design-template.md"
+                ).read_bytes(),
+            )
         verify_package(codex)
         verify_package(hermes)
 
@@ -778,6 +790,38 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertFalse(report["simulation"])
         self.assertGreaterEqual(report["routing"]["case_count"], 100)
 
+        template = (
+            ROOT
+            / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+        ).read_text(encoding="utf-8")
+        database_design = self.root / "database-design.md"
+        database_design.write_text(
+            re.sub(r"\{[^{}\n]+\}", "实际值", template).replace(
+                "YYYY-MM-DD", "2026-07-22"
+            ),
+            encoding="utf-8",
+        )
+        database_validation = subprocess.run(
+            [
+                str(launcher),
+                "database-design-validate",
+                "--document",
+                str(database_design),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(
+            0,
+            database_validation.returncode,
+            database_validation.stdout + database_validation.stderr,
+        )
+        self.assertEqual(
+            "sha256:297527d885672eb039bc2829945f7c8c89eee6e92d9cd9a4fa13c49f4963f70f",
+            json.loads(database_validation.stdout)["template_digest"],
+        )
+
         messages = "\n".join(
             json.dumps(message)
             for message in [
@@ -806,7 +850,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         responses = [json.loads(line) for line in mcp.stdout.splitlines()]
         self.assertEqual([1, 2], [response["id"] for response in responses])
         tool_names = {item["name"] for item in responses[1]["result"]["tools"]}
-        self.assertEqual(15, len(tool_names))
+        self.assertEqual(16, len(tool_names))
         self.assertIn("engineering_assistant_artifact_validate", tool_names)
         self.assertNotIn("engineering_assistant_investigation_decide", tool_names)
 
@@ -1189,7 +1233,7 @@ print(json.dumps({
         spec.loader.exec_module(module)
         context = Context()
         module.register(context)
-        self.assertEqual(15, len(context.tools))
+        self.assertEqual(16, len(context.tools))
         self.assertIn("engineering_assistant_artifact_validate", context.tools)
         self.assertNotIn("engineering_assistant_investigation_decide", context.tools)
         plugin_lines = (output / "plugin.yaml").read_text(encoding="utf-8").splitlines()

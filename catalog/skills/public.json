@@ -148,10 +148,12 @@
       "inputs": ["repo-context", "change-goal", "detailed-design-review", "requirement-traceability"],
       "completion_criteria": [
         {"id": "interface-small", "description": "所提接口只暴露调用方必须知道的内容。", "evidence_kinds": ["source", "review"]},
-        {"id": "seam-real", "description": "每个新增 seam 都有真实变化原因，而非假设性扩展。", "evidence_kinds": ["source", "test"]}
+        {"id": "seam-real", "description": "每个新增 seam 都有真实变化原因，而非假设性扩展。", "evidence_kinds": ["source", "test"]},
+        {"id": "database-template-conformant", "description": "关系型 OLTP 设计严格符合团队模板并通过确定性校验；未命中数据库时为不适用。", "evidence_kinds": ["source", "test", "review"]}
       ],
       "context_pointers": [
-        {"when": "存在多个可行接口方案", "path": "references/design-it-twice.md", "purpose": "在选择前比较实质不同的接口设计。"}
+        {"when": "存在多个可行接口方案", "path": "references/design-it-twice.md", "purpose": "在选择前比较实质不同的接口设计。"},
+        {"when": "任务涉及关系型 OLTP 数据库设计", "path": "references/relational-oltp-detailed-design-template.md", "purpose": "严格保留团队表级详细设计的章节、顺序和表头。"}
       ],
       "policy_refs": ["scope-control", "evidence-quality", "team-standards"],
       "risk_class": "read_only",

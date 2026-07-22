@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -123,6 +124,37 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("`human_review_status`", review)
         self.assertIn("不得用技术 `blocked` 覆盖待人工批准", review)
         self.assertIn("技术问题关闭后仍恢复到原人工门禁", review)
+
+    def test_relational_database_design_uses_the_canonical_team_template(self) -> None:
+        design_skill = (
+            ROOT / "skills/codebase-design/SKILL.md"
+        ).read_text(encoding="utf-8")
+        database_pack = (ROOT / "packs/database.md").read_text(encoding="utf-8")
+        team_pack = (ROOT / "packs/rrq-yq-database.md").read_text(
+            encoding="utf-8"
+        )
+        template = (
+            ROOT
+            / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
+        ).read_text(encoding="utf-8")
+
+        for source in (design_skill, database_pack, team_pack):
+            self.assertIn(
+                "relational-oltp-detailed-design-template.md", source
+            )
+            self.assertIn("engineering_assistant_database_design_validate", source)
+        self.assertIn("不得删除、合并、改名或重排", database_pack)
+        self.assertIn("不适用", database_pack)
+        self.assertEqual(
+            "# 关系型（OLTP）表级详细设计文档模板",
+            template.splitlines()[0],
+        )
+        self.assertIn("### 6.2 强制前置条件（Mandatory Conditions）", template)
+        self.assertIn("### 11.2 兼容性说明（MySQL / PostgreSQL）", template)
+        self.assertEqual(
+            "297527d885672eb039bc2829945f7c8c89eee6e92d9cd9a4fa13c49f4963f70f",
+            hashlib.sha256(template.encode("utf-8")).hexdigest(),
+        )
 
     def test_security_seam_references_close_observed_high_risk_boundaries(self) -> None:
         tdd_skill = (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8")
