@@ -3,7 +3,7 @@ name: 核心验证
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, teamwork]
 
 permissions:
   contents: read
@@ -19,6 +19,23 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      - name: 准备固定版本官方校验器
+        shell: bash
+        run: |
+          set -euo pipefail
+          quick_validate="$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py"
+          plugin_validate="$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py"
+          mkdir -p "$(dirname "$quick_validate")" "$(dirname "$plugin_validate")"
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/openai/skills/49f948faa9258a0c61caceaf225e179651397431/skills/.system/skill-creator/scripts/quick_validate.py" \
+            --output "$quick_validate"
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/openai/codex/963cda85aa2a4cfb85e52d771d22d9f3069951fa/codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py" \
+            --output "$plugin_validate"
+          echo "6cc9dc3199c935916cf6f73fcbbbb0e3bb1b58c8f5109fefa499978908164f51  $quick_validate" | sha256sum --check --strict
+          echo "ebda00d55d7518b127f675f062fb5c6e7a1ffdc0a99df1a55ac594400d7d3228  $plugin_validate" | sha256sum --check --strict
+          python -m pip install --user "uv==0.11.7"
+          "$HOME/.local/bin/uv" --version
       - name: 安装开发包
         run: python -m pip install -e .
       - name: 运行回归测试
