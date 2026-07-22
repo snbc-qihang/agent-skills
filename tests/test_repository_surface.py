@@ -19,6 +19,39 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 
 
 class RepositorySurfaceTests(unittest.TestCase):
+    def test_ci_bootstraps_pinned_official_validators_for_clean_runner(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("branches: [main, teamwork]", workflow)
+        self.assertIn(
+            "openai/skills/49f948faa9258a0c61caceaf225e179651397431/"
+            "skills/.system/skill-creator/scripts/quick_validate.py",
+            workflow,
+        )
+        self.assertIn(
+            "openai/codex/963cda85aa2a4cfb85e52d771d22d9f3069951fa/"
+            "codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py",
+            workflow,
+        )
+        self.assertIn(
+            "6cc9dc3199c935916cf6f73fcbbbb0e3bb1b58c8f5109fefa499978908164f51",
+            workflow,
+        )
+        self.assertIn(
+            "ebda00d55d7518b127f675f062fb5c6e7a1ffdc0a99df1a55ac594400d7d3228",
+            workflow,
+        )
+        self.assertIn(
+            '$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py',
+            workflow,
+        )
+        self.assertIn(
+            '$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py',
+            workflow,
+        )
+        self.assertIn('uv==0.11.7', workflow)
+        self.assertIn('"$HOME/.local/bin/uv" --version', workflow)
+
     def test_repository_contains_only_current_product_surfaces(self) -> None:
         catalog = load_catalog(ROOT, require_sources=True)
         absent = [
