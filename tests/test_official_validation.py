@@ -163,6 +163,47 @@ class OfficialValidationTests(unittest.TestCase):
 
         self.assertEqual("passed", report["status"])
 
+    def test_trusted_uv_identity_accepts_linux_target_only_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, tools = self.fixture(root)
+
+            report = validate_with_official_tools(
+                root / "repository",
+                package,
+                runner=lambda command, **_kwargs: SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "uv 0.11.7 (x86_64-unknown-linux-gnu)\n"
+                        if command[1:] == ["--version"]
+                        else "passed\n"
+                    ),
+                ),
+                **tools,
+            )
+
+        self.assertEqual("passed", report["status"])
+
+    def test_trusted_uv_identity_rejects_unstructured_parenthetical_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package, tools = self.fixture(root)
+
+            with self.assertRaisesRegex(ValidationFailure, "trusted uv identity check"):
+                validate_with_official_tools(
+                    root / "repository",
+                    package,
+                    runner=lambda command, **_kwargs: SimpleNamespace(
+                        returncode=0,
+                        stdout=(
+                            "uv 0.11.7 (unexpected)\n"
+                            if command[1:] == ["--version"]
+                            else "passed\n"
+                        ),
+                    ),
+                    **tools,
+                )
+
     def test_streaming_output_limit_does_not_limit_validator_file_writes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
