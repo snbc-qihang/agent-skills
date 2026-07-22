@@ -401,6 +401,63 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
             ["requirement_id", "design_source"], missing["missing_required_inputs"]
         )
 
+    def test_ordinary_code_review_does_not_require_design_inputs(self) -> None:
+        tools = RuntimeTools(ROOT)
+        ordinary = tools.call(
+            "engineering_assistant_route",
+            {
+                "intent": replace(
+                    self._intent("review"),
+                    requested_outcome="对固定分支进行普通代码走查",
+                    scope=["rrq-yq", "code diff"],
+                ).to_dict()
+            },
+        )
+
+        self.assertEqual("review", ordinary["decision"]["flow_id"])
+        context = ordinary["team_context"]
+        self.assertEqual("not_applicable", context["design_input_status"])
+        self.assertEqual([], context["missing_required_inputs"])
+        self.assertIn("code-review", context["capability_refs"])
+        self.assertNotIn("design-source-read", context["capability_refs"])
+        self.assertNotIn("review-package-validation", context["capability_refs"])
+        self.assertNotIn("design-review", context["capability_refs"])
+
+        requested = tools.call(
+            "engineering_assistant_route",
+            {
+                "intent": replace(
+                    self._intent("review"),
+                    requested_outcome="执行设计到实现追踪代码走查",
+                ).to_dict()
+            },
+        )["team_context"]
+        self.assertEqual("missing", requested["design_input_status"])
+        self.assertEqual(
+            ["requirement_id", "design_source"],
+            requested["missing_required_inputs"],
+        )
+        self.assertIn("design-source-read", requested["capability_refs"])
+
+        ready = tools.call(
+            "engineering_assistant_route",
+            {
+                "intent": replace(
+                    self._intent("review"),
+                    requested_outcome="执行设计到实现追踪代码走查",
+                    requirement_id="REQ-REVIEW-001",
+                    design_source=DesignSourceRef(
+                        root="/project/project-inspection",
+                        registry="90-design-basis/30-document-governance/04-document-registry.yaml",
+                    ),
+                ).to_dict()
+            },
+        )["team_context"]
+        self.assertEqual("ready", ready["design_input_status"])
+        self.assertEqual([], ready["missing_required_inputs"])
+        self.assertIn("review-package-validation", ready["capability_refs"])
+        self.assertIn("design-review", ready["capability_refs"])
+
     def test_persisted_node_payload_exposes_only_applicable_rule_contracts(self) -> None:
         catalog = load_catalog(ROOT)
         engine = RuntimeEngine(catalog)
@@ -614,6 +671,18 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
         self.assertEqual(
             ["review", "approval"], nodes["code-confirmation"].required_evidence_kinds
         )
+        self.assertTrue(
+            any(
+                "正式 Markdown 走查报告" in criterion
+                for criterion in nodes["code-confirmation"].completion_criteria
+            )
+        )
+        self.assertTrue(
+            any(
+                "代码异味专项" in criterion
+                for criterion in nodes["code-confirmation"].completion_criteria
+            )
+        )
         self.assertEqual(
             ["source", "review", "ci", "approval"],
             nodes["release-readiness"].required_evidence_kinds,
@@ -764,7 +833,18 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
                             status="completed",
                             criteria_results=[
                                 CriterionResult(
-                                    f"{node_id}:1", True, evidence_ids
+                                    f"{node_id}:{index}", True, evidence_ids
+                                )
+                                for index in range(
+                                    1,
+                                    len(
+                                        next(
+                                            node
+                                            for node in catalog.flows["team-delivery"].nodes
+                                            if node.id == node_id
+                                        ).completion_criteria
+                                    )
+                                    + 1,
                                 )
                             ],
                             outputs=["ready for approval"],

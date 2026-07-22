@@ -202,22 +202,25 @@
       "id": "code-review",
       "version": "2.1.0.0-rc.1",
       "invocation_mode": "model",
-      "description": "针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更。",
+      "description": "针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审，并交付正式走查报告。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更；仅在明确请求设计评审或设计到实现追踪时启用设计源与评审包门禁。",
       "leading_words": ["固定比较点", "阶段审计", "自动门禁", "规范轴", "需求轴"],
       "capabilities": ["code-review"],
-      "inputs": ["fixed-point", "diff", "standards", "specification", "design-review-package", "design-source-snapshot"],
+      "inputs": ["fixed-point", "diff", "standards", "specification"],
       "completion_criteria": [
         {"id": "axes-independent", "description": "规范问题和需求问题先独立评估，再合并结论。", "evidence_kinds": ["source", "review"]},
         {"id": "findings-actionable", "description": "每项问题都包含证据、影响和级别，且不重复确定性工具输出。", "evidence_kinds": ["source", "test", "ci", "review"]},
-        {"id": "design-trace-current", "description": "设计评审包符合外部模板，目标摘要未过期，需求到设计、代码和测试可追溯。", "evidence_kinds": ["source", "test", "review"]}
+        {"id": "code-smells-covered", "description": "代码异味专项逐类记录结论和证据，未发现或未评估项也显式列出。", "evidence_kinds": ["source", "test", "review"]},
+        {"id": "report-delivered", "description": "正式 Markdown 走查报告已写入目标项目 .run-artifacts 并在最终答复中链接。", "evidence_kinds": ["review"]},
+        {"id": "design-trace-current", "description": "仅在设计追踪被明确激活时，设计评审包符合外部模板，目标摘要未过期，需求到设计、代码和测试可追溯；未激活时为不适用。", "evidence_kinds": ["source", "test", "review"]}
       ],
       "context_pointers": [
+        {"when": "进行任一代码走查", "path": "references/code-review-report.md", "purpose": "按固定章节交付正式报告、代码异味专项和条件化设计追踪状态。"},
         {"when": "仓库规范缺失或不完整", "path": "references/smell-baseline.md", "purpose": "使用明确标记的启发式基线，但不把主观判断当作硬性违规。"},
         {"when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同", "path": "references/security-seams.md", "purpose": "用最小适用反例矩阵闭合异步终止、组合编码、真实事务与持久化事实源。"},
         {"when": "评审需求设计稿或设计到实现追踪", "path": "references/design-review-package.md", "purpose": "校验完整评审包、reviewing 状态、追踪矩阵和目标摘要。"}
       ],
       "policy_refs": ["evidence-quality", "team-standards", "risk-approval"],
-      "risk_class": "read_only",
+      "risk_class": "reversible_write",
       "source_path": "skills/code-review"
     }
   ]

@@ -56,7 +56,7 @@ TASK_CAPABILITIES = {
         "design-source-read", "review-package-validation", "work-slicing", "tdd", "implementation", "quality-evidence", "code-review",
     ),
     "diagnose": ("implementation", "quality-evidence", "code-review"),
-    "review": ("design-source-read", "review-package-validation", "design-review", "quality-evidence", "code-review"),
+    "review": ("quality-evidence", "code-review"),
     "release": (
         "design-source-read", "review-package-validation", "release-readiness", "release-verification", "release-retrospective",
     ),
@@ -69,6 +69,22 @@ TASK_CAPABILITIES = {
     ),
     "wayfind": ("repo-context", "design-source-read", "decision-interview", "shape-contract"),
 }
+
+DESIGN_TRACKING_CAPABILITIES = (
+    "design-source-read",
+    "review-package-validation",
+    "design-review",
+)
+
+DESIGN_TRACKING_KEYWORDS = (
+    "设计评审",
+    "设计追踪",
+    "设计到实现",
+    "评审包",
+    "design review",
+    "design trace",
+    "traceability",
+)
 
 PACK_CAPABILITIES = {
     "rrq-yq-architecture": (
@@ -137,6 +153,14 @@ def team_context_for_intent(
     searchable = " ".join((intent.requested_outcome, *intent.scope))
     selected = set(TASK_PACKS.get(intent.task_kind, ()))
     active_capabilities = set(TASK_CAPABILITIES.get(intent.task_kind, ()))
+    design_tracking_applicable = (
+        intent.task_kind != "review"
+        or intent.requirement_id is not None
+        or intent.design_source is not None
+        or _matches(searchable, DESIGN_TRACKING_KEYWORDS)
+    )
+    if intent.task_kind == "review" and design_tracking_applicable:
+        active_capabilities.update(DESIGN_TRACKING_CAPABILITIES)
     for pack_id, keywords in PACK_KEYWORDS.items():
         if _matches(searchable, keywords):
             selected.add(pack_id)
@@ -156,10 +180,18 @@ def team_context_for_intent(
         source_ref for rule in rules for source_ref in rule["source_refs"]
     }
     missing_design_inputs = []
-    if not intent.requirement_id:
-        missing_design_inputs.append("requirement_id")
-    if intent.design_source is None:
-        missing_design_inputs.append("design_source")
+    if design_tracking_applicable:
+        if not intent.requirement_id:
+            missing_design_inputs.append("requirement_id")
+        if intent.design_source is None:
+            missing_design_inputs.append("design_source")
+    design_input_status = (
+        "not_applicable"
+        if not design_tracking_applicable
+        else "missing"
+        if missing_design_inputs
+        else "ready"
+    )
     return {
         "profile_id": profile.id,
         "rule_catalog_id": rule_catalog.id,
@@ -202,7 +234,7 @@ def team_context_for_intent(
             if intent.requirement_id and intent.design_source
             else None
         ),
-        "design_input_status": "missing" if missing_design_inputs else "ready",
+        "design_input_status": design_input_status,
         "missing_required_inputs": missing_design_inputs,
     }
 

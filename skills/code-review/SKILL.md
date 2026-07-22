@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更。
+description: 针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审，并交付正式走查报告。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更；仅在明确请求设计评审或设计到实现追踪时启用设计源与评审包门禁。
 ---
 
 # 代码评审
@@ -9,13 +9,15 @@ description: 针对固定 diff、阶段状态或自动门禁，分别依据仓�
 
 ## 操作流程
 
-1. 确认 base、head、diff 范围、requirement_id、固定设计源摘要、需求说明、设计评审包、测试证据和用户明确给出的范围限制；插件采集参考值不限制评审继续进行。
+1. 确认 base、head、merge-base、diff 范围、需求说明、测试证据和用户明确给出的范围限制；插件采集参考值不限制评审继续进行。普通代码走查不得把 `requirement_id`、设计源或设计评审包当作前置条件。
 2. 使用一次最聚焦的索引或 diff 查询定位风险面，再检查规范和确定性工具失败；不要用全仓库扫描重复同一发现，也不要重复抄写工具输出。
-3. 根据需求说明检查行为、边界情况、数据和失败路径，并独立校验需求条目到设计章节、代码目标和测试用例的追踪闭环。
-4. 对正确性、复杂度、冗余、性能、架构和测试质量逐项形成证据判断，特别检查无调用方层级、复制逻辑、过度读取和重复计算。
-5. 只报告可执行的问题，并包含证据、影响、级别和位置。
-6. 设计评审时读取 [references/design-review-package.md](references/design-review-package.md)，校验模板、基线元数据、reviewing 状态、专项差异、变更摘要和追踪矩阵，并按目标 `base_digest` 重查外部源；`stale` 评审包不得批准。
-7. 把两个评审轴合并为六维质量门禁；告警、失败、未评估或未关闭修复项不得通过。只有当前存在可执行的 active persisted quality node 时才提交 Runtime `QualitySnapshot`，否则只内联合并六维判断，不构造或反复校验形式化 flow 产物。
+3. 根据需求说明检查行为、边界情况、数据和失败路径。
+4. 独立执行代码异味走查，至少覆盖职责与复杂度、隐藏状态、异常和空值语义、重复事实源、死代码、魔法值和隐式状态机、命名与注释噪声、跨层或跨服务契约复制、无界读取或重试。优先使用仓库规范；规范缺失或未覆盖某类异味时读取 [references/smell-baseline.md](references/smell-baseline.md) 并把补充判断标为启发式。没有发现时也要在报告中记录已检查范围和证据，不得只写 `pass`。
+5. 对正确性、复杂度、冗余、性能、架构和测试质量逐项形成证据判断，特别检查无调用方层级、复制逻辑、过度读取和重复计算。
+6. 只报告可执行的问题，并包含证据、影响、级别和位置。
+7. 仅在用户明确请求设计评审或设计到实现追踪、当前 persisted node 明确需要设计评审包/设计源快照，或任务已提供任一设计追踪输入时，激活设计追踪。激活后读取 [references/design-review-package.md](references/design-review-package.md)，校验需求条目到设计章节、代码目标和测试用例的追踪闭环，并按目标 `base_digest` 重查外部源；输入不全时把设计追踪标为 `waiting_for_input`，仍完成代码走查报告。未激活时标为 `not_applicable`，不得追问或阻断普通代码走查。
+8. 把两个评审轴合并为六维质量门禁；告警、失败、未评估或未关闭修复项不得通过。只有当前存在可执行的 active persisted quality node 时才提交 Runtime `QualitySnapshot`，否则只在报告中合并六维判断，不构造或反复校验形式化 flow 产物。
+9. 每次走查都读取 [references/code-review-report.md](references/code-review-report.md)，把正式 Markdown 报告写入目标项目 `.run-artifacts/engineering-assistant/code-reviews/<REVIEW-ID>/code-review-report.md`，并在最终答复中链接该文件。除该报告和 Runtime 明确要求的结构化证据外，不得修改被评审源码。报告无法写入时必须标记 `waiting_for_input` 并内联同等内容，不得宣称走查已完整交付。
 
 默认只打开能支持或推翻一个具体结论的最小证据集。索引已经返回的源码不得重复读取；除非被评审对象就是插件，否则不得扫描插件实现、validator、memory 或历史 rollout。用户明确限制导致证据不足时标记未评估；仅超过插件采集参考值时继续补齐关键证据并记录原因。
 

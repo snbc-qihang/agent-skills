@@ -36,7 +36,7 @@
         {"id": "red-green", "capability": "tdd", "depends_on": ["select-slice"], "when": "存在稳定 seam", "completion_criteria": ["同一行为同时具备红灯和绿灯证据"], "policy_refs": ["evidence-quality", "team-standards"]},
         {"id": "implementation", "capability": "implementation", "depends_on": ["select-slice"], "when": "always", "completion_criteria": ["实现保持在批准范围内并能够映射到验收标准"], "policy_refs": ["scope-control", "risk-approval"]},
         {"id": "quality", "capability": "quality-evidence", "depends_on": ["red-green", "implementation"], "when": "always", "completion_criteria": ["所有必需质量命令都有实际观察结果"], "policy_refs": ["evidence-quality"]},
-        {"id": "review", "capability": "code-review", "depends_on": ["quality"], "when": "always", "completion_criteria": ["规范轴和需求轴均不存在未解决阻断项"], "policy_refs": ["team-standards", "risk-approval"]}
+        {"id": "review", "capability": "code-review", "depends_on": ["quality"], "when": "always", "completion_criteria": ["规范轴和需求轴均不存在未解决阻断项", "代码异味专项已有逐类证据", "正式 Markdown 走查报告已写入目标项目 .run-artifacts"], "policy_refs": ["team-standards", "risk-approval"]}
       ],
       "terminal_conditions": ["所选切片的验收和质量证据均已通过"],
       "policy_refs": ["safety-core", "scope-control", "evidence-quality", "risk-approval"]
@@ -47,11 +47,11 @@
       "entry_conditions": ["存在固定的设计或代码比较点"],
       "nodes": [
         {"id": "fixed-point", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["评审范围和固定比较点没有歧义"], "policy_refs": ["evidence-quality"]},
-        {"id": "review", "capability": "code-review", "depends_on": ["fixed-point"], "when": "存在代码 diff", "completion_criteria": ["规范问题和需求问题彼此独立且都有证据"], "policy_refs": ["team-standards"]},
+        {"id": "review", "capability": "code-review", "depends_on": ["fixed-point"], "when": "存在代码 diff", "completion_criteria": ["规范问题和需求问题彼此独立且都有证据", "代码异味专项已有逐类证据", "正式 Markdown 走查报告已写入目标项目 .run-artifacts", "设计追踪仅在明确激活时校验，未激活时为 not_applicable"], "policy_refs": ["team-standards"]},
         {"id": "design-review", "capability": "design-review", "depends_on": ["fixed-point"], "when": "评审对象是设计产物", "completion_criteria": ["已评审设计边界、风险和验收标准"], "policy_refs": ["team-standards", "risk-approval"]},
         {"id": "gate", "capability": "quality-evidence", "depends_on": ["review", "design-review"], "when": "适用评审节点已经完成", "completion_criteria": ["门禁决定已反映所有 blocker 和 major 问题"], "policy_refs": ["evidence-quality", "risk-approval"]}
       ],
-      "terminal_conditions": ["已生成附有证据的门禁决定"],
+      "terminal_conditions": ["已交付正式 Markdown 走查报告和附有证据的门禁决定"],
       "policy_refs": ["safety-core", "evidence-quality", "team-standards"]
     },
     {

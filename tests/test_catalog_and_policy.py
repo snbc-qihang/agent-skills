@@ -81,6 +81,23 @@ class CatalogTests(unittest.TestCase):
             )
         self.assertEqual(("implement", ("tdd", "code-review")), ROUTES["implement"])
 
+    def test_code_review_catalog_requires_report_and_keeps_design_trace_conditional(self) -> None:
+        review = self.catalog.skills["code-review"]
+        criterion_ids = {criterion.id for criterion in review.completion_criteria}
+
+        self.assertEqual("reversible_write", review.risk_class)
+        self.assertNotIn("design-review-package", review.inputs)
+        self.assertNotIn("design-source-snapshot", review.inputs)
+        self.assertIn("code-smells-covered", criterion_ids)
+        self.assertIn("report-delivered", criterion_ids)
+        self.assertIn("design-trace-current", criterion_ids)
+        self.assertTrue(
+            any(
+                pointer.path == "references/code-review-report.md"
+                for pointer in review.context_pointers
+            )
+        )
+
     def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
         sourced = load_catalog(ROOT, require_sources=True)
         self.assertEqual(set(self.catalog.skills), set(sourced.skills))

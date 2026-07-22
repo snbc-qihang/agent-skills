@@ -92,10 +92,27 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("`provider_invoke`、`investigation_*`", router)
         self.assertIn("不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁", router)
         self.assertIn("否则只内联报告六维判断", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
-        self.assertIn("否则只内联合并六维判断", review)
+        self.assertIn("否则只在报告中合并六维判断", review)
         self.assertIn("精确区间", context)
         self.assertIn("不得输出大目录清单", context)
         self.assertIn("证据充分后立即停止", review)
+
+    def test_teamwork_code_review_delivers_report_without_forcing_design_tracking(self) -> None:
+        review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
+        report = (
+            ROOT / "skills/code-review/references/code-review-report.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("普通代码走查不得把 `requirement_id`", review)
+        self.assertIn("未激活时标为 `not_applicable`", review)
+        self.assertIn("不得追问或阻断普通代码走查", review)
+        self.assertIn("独立执行代码异味走查", review)
+        self.assertIn("不得只写 `pass`", review)
+        self.assertIn("references/code-review-report.md", review)
+        self.assertIn("code-reviews/<REVIEW-ID>/code-review-report.md", review)
+        self.assertIn("聊天摘要不能替代报告文件", report)
+        self.assertIn("代码异味专项", report)
+        self.assertIn("设计追踪状态", report)
 
     def test_review_separates_blocker_confidence_from_human_review_state(self) -> None:
         review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
