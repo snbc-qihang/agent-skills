@@ -171,6 +171,38 @@ class LocalPublishTests(unittest.TestCase):
                 )
             )
 
+    def test_hermes_registration_is_noninteractive_and_uses_the_selected_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            hermes_home = root / "isolated-hermes-home"
+            calls: list[tuple[list[str], dict[str, str] | None]] = []
+
+            def register(command: list[str], environment=None) -> dict:
+                calls.append((command, environment))
+                return {"status": "passed"}
+
+            _publish_one(
+                ROOT,
+                "hermes",
+                codex_home=root / ".codex",
+                hermes_home=hermes_home,
+                dry_run=False,
+                register=register,
+                official_validate=self.official_validation,
+            )
+
+            self.assertEqual(
+                [
+                    "hermes",
+                    "plugins",
+                    "enable",
+                    "teamwork-engineering-assistant",
+                    "--no-allow-tool-override",
+                ],
+                calls[0][0],
+            )
+            self.assertEqual(str(hermes_home), calls[0][1]["HERMES_HOME"])
+
     def test_codex_publish_rolls_back_when_registration_does_not_install_the_built_cache(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -633,7 +633,16 @@ def _publish_one(
             else:
                 environment = dict(os.environ)
                 environment["HERMES_HOME"] = str(hermes_home)
-                registration = register(["hermes", "plugins", "enable", PLUGIN_NAME], environment)
+                registration = register(
+                    [
+                        "hermes",
+                        "plugins",
+                        "enable",
+                        PLUGIN_NAME,
+                        "--no-allow-tool-override",
+                    ],
+                    environment,
+                )
             installed = verify_package(target)
         except Exception as original_error:
             if platform == "codex" and marketplace_changed:
