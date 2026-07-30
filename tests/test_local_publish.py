@@ -196,7 +196,7 @@ class LocalPublishTests(unittest.TestCase):
                     "hermes",
                     "plugins",
                     "enable",
-                    "teamwork-engineering-assistant",
+                    "engineering-assistant",
                     "--no-allow-tool-override",
                 ],
                 calls[0][0],
