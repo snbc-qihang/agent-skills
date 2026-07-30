@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["version", "hld", "context_index", "capability_design_root", "change_root", "deployment_catalog", "owners"],
+  "properties": {
+    "version": {"const": "1"},
+    "hld": {"type": "string", "minLength": 1, "maxLength": 512},
+    "context_index": {"type": "string", "minLength": 1, "maxLength": 512},
+    "capability_design_root": {"type": "string", "minLength": 1, "maxLength": 512},
+    "change_root": {"type": "string", "minLength": 1, "maxLength": 512},
+    "deployment_catalog": {"type": "string", "minLength": 1, "maxLength": 512},
+    "owners": {
+      "type": "object",
+      "required": ["business", "architecture"],
+      "properties": {
+        "business": {"type": "string", "minLength": 1, "maxLength": 128},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 128}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

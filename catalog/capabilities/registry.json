@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0.0-rc.1",
+  "version": "1.2.0.0-rc.2",
   "capabilities": [
     {"id": "route-engineering", "kind": "primitive", "owner": "engineering-assistant"},
     {"id": "research", "kind": "primitive", "owner": "research"},
@@ -31,6 +31,12 @@
     {"id": "feedback-ingest", "kind": "pack", "owner": "pack:feedback-evolution"},
     {"id": "knowledge-mining", "kind": "pack", "owner": "pack:feedback-evolution"},
     {"id": "skill-evolution", "kind": "pack", "owner": "pack:feedback-evolution"},
-    {"id": "skill-quality", "kind": "pack", "owner": "pack:feedback-evolution"}
+    {"id": "skill-quality", "kind": "pack", "owner": "pack:feedback-evolution"},
+    {"id": "domain-design-source", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "context-topology", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "boundary-validation", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "capability-detailed-design", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "domain-baseline-approval", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "domain-integration", "kind": "pack", "owner": "pack:domain-integration"}
   ]
 }

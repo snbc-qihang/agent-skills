@@ -20,6 +20,15 @@ SIGNATURES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("evolve", (r"改进.*(?:skill|agent|流程)", r"(?:skill|agent).*改进", r"演进.*(?:skill|agent)", r"复盘.*(?:skill|agent|助手)", r"evolve.*(?:skill|agent)", r"improve.*(?:skill|agent)", r"retrospective.*assistant")),
     ("wayfind", (r"长期任务", r"多会话", r"路线图", r"当前前沿", r"multi-session", r"long-running", r"wayfind", r"current frontier", r"roadmap", r"evidence frontier")),
     ("research", (r"调研", r"研究.*(?:开源|项目|技术|标准)", r"官方文档", r"research", r"compare.*(?:library|project|standard)", r"primary sources")),
+    ("domain-design", (
+        r"领域驱动设计", r"ddd.*(?:战略|战术|领域设计)", r"(?:战略|战术)设计.*(?:领域|ddd)",
+        r"领域.*(?:子域|限界上下文|部署单元|能力详细设计)", r"(?:子域|限界上下文).*(?:部署|拓扑)",
+        r"ddd.*(?:反向建模|hld|详细设计)", r"领域设计流程", r"跨限界上下文.*(?:契约|集成|一致性)",
+        r"domain-driven design", r"ddd.*(?:strategic|tactical|domain design)",
+        r"(?:strategic|tactical) design.*(?:ddd|domain)", r"domain.*(?:subdomain|bounded context|deployment topology)",
+        r"(?:reverse engineer|legacy).*ddd", r"domain design flow", r"cross-bounded-context.*(?:contract|integration|consistency)",
+        r"classify.*subdomain", r"core.*supporting.*generic.*subdomain",
+    )),
     ("model", (
         r"领域模型", r"统一术语", r"业务术语", r"术语.*歧义", r"限界上下文", r"上下文映射",
         r"聚合(?:边界|根)", r"实体.*值对象", r"领域事件", r"生命周期.*(?:状态|转换|不变量)",

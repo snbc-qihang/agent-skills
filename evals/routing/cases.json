@@ -73,6 +73,23 @@
       ]
     },
     {
+      "task_kind": "domain-design",
+      "requests": [
+        {"language": "zh-CN", "request": "为交易系统从头做领域驱动设计，覆盖战略设计、战术设计和实施边界。"},
+        {"language": "zh-CN", "request": "梳理订单、支付和履约的子域、限界上下文、上下文地图与部署拓扑。"},
+        {"language": "zh-CN", "request": "对存量系统做 DDD 反向建模，形成系统 HLD 和各上下文的能力详细设计。"},
+        {"language": "zh-CN", "request": "设计跨限界上下文的领域契约、集成事件和最终一致性治理。"},
+        {"language": "zh-CN", "request": "把这项需求按领域设计流程拆成战略设计、BC 模型和能力级详细设计。"},
+        {"language": "zh-CN", "request": "分析会员与营销领域的核心、支撑和通用子域，并映射限界上下文。"},
+        {"language": "en", "request": "Create a domain-driven design from scratch with strategic and tactical design."},
+        {"language": "en", "request": "Map subdomains, bounded contexts, context relationships, and deployment topology."},
+        {"language": "en", "request": "Reverse engineer the legacy system into a DDD HLD and capability detailed designs."},
+        {"language": "en", "request": "Design cross-bounded-context contracts and eventual consistency governance."},
+        {"language": "en", "request": "Run the domain design flow for strategic design, BC models, and capability designs."},
+        {"language": "en", "request": "Classify core, supporting, and generic subdomains for the membership platform."}
+      ]
+    },
+    {
       "task_kind": "shape",
       "requests": [
         {"language": "zh-CN", "request": "对这项需求做准入检查并补齐验收标准。"},

@@ -146,6 +146,7 @@ def step_result_from_dict(data: Mapping[str, Any]) -> StepResult:
         findings=[Finding(**item) for item in data["findings"]],
         open_questions=list(data["open_questions"]),
         requested_transition=data["requested_transition"],
+        required_approvals=list(data.get("required_approvals", [])),
     )
 
 

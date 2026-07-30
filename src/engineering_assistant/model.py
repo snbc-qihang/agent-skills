@@ -419,6 +419,7 @@ class StepResult(Serializable):
     findings: List[Finding]
     open_questions: List[str]
     requested_transition: str
+    required_approvals: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

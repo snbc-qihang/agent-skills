@@ -24,6 +24,7 @@ from .codec import (
     step_result_from_dict,
 )
 from .engine import RuntimeEngine
+from .design_sources import validate_design_source_registry
 from .evidence import EvidenceStore
 from .governance import (
     InvestigationStore,
@@ -150,6 +151,7 @@ class RuntimeTools:
                             "items": {"type": "string", "minLength": 1},
                             "uniqueItems": True,
                         },
+                        "design_source_ref": {"type": "string", "minLength": 1},
                     },
                     ["intent", "task_id", "project_root"],
                 ),
@@ -440,12 +442,20 @@ class RuntimeTools:
                 "persisted flow approvals require an administrator-bound approval "
                 "broker; stop and do not retry unchanged"
             )
+        design_source_ref = arguments.get("design_source_ref")
+        if design_source_ref:
+            validate_design_source_registry(
+                arguments["project_root"],
+                design_source_ref,
+                self.catalog.root / "schemas",
+            )
         state = RuntimeEngine(self.catalog).start(
             arguments["task_id"],
             route_intent_from_dict(arguments["intent"]),
             profile_id=profile_id,
             run_id=arguments.get("run_id"),
             context_refs=arguments.get("context_refs", []),
+            design_source_ref=design_source_ref,
         )
         state_store, _ = self._stores(
             arguments["project_root"], profile_id

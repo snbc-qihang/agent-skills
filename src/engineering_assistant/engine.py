@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any, Mapping
 from uuid import uuid4
 
 from .catalog import Catalog
@@ -41,6 +42,7 @@ class RuntimeEngine:
         profile_id: str = "default",
         run_id: str | None = None,
         context_refs: list[str] | None = None,
+        design_source_ref: str | None = None,
     ) -> RunState:
         if profile_id not in self.catalog.profiles:
             raise ValidationFailure(f"unknown profile {profile_id}")
@@ -60,7 +62,15 @@ class RuntimeEngine:
         approvals: list[str] = []
         required = list(decision.approval_required)
         missing = [item for item in required if item not in approvals]
-        status = "waiting_for_approval" if missing else "initialized"
+        missing_design_source = decision.flow_id == "domain-design" and not design_source_ref
+        status = (
+            "waiting_for_input"
+            if missing_design_source
+            else "waiting_for_approval" if missing else "initialized"
+        )
+        resolved_context_refs = list(dict.fromkeys(context_refs or []))
+        if design_source_ref:
+            resolved_context_refs.append(f"design-source:{design_source_ref}")
         state = RunState(
             run_id=run_id or f"run-{uuid4().hex[:16]}",
             task_id=task_id,
@@ -70,7 +80,7 @@ class RuntimeEngine:
             current_node=None,
             completed_nodes=[],
             skipped_nodes=[],
-            context_refs=list(dict.fromkeys(context_refs or [])),
+            context_refs=list(dict.fromkeys(resolved_context_refs)),
             evidence_refs=[],
             open_questions=[],
             required_approvals=required,
@@ -78,7 +88,11 @@ class RuntimeEngine:
             approval_expiries={},
             approval_records=[],
             transition_history=[],
-            next_actions=[f"obtain approval: {item}" for item in missing],
+            next_actions=(
+                ["provide design_source_ref: project-relative registry path"]
+                if missing_design_source
+                else [f"obtain approval: {item}" for item in missing]
+            ),
             revision=0,
         )
         self._record(state, "start", status, decision.reason, bump=False)
@@ -138,6 +152,20 @@ class RuntimeEngine:
 
     def next(self, state: RunState) -> GateDecision:
         self._assert_not_terminal(state)
+        if state.flow_id == "domain-design" and not any(
+            ref.startswith("design-source:") for ref in state.context_refs
+        ):
+            state.status = "waiting_for_input"
+            state.next_actions = ["provide design_source_ref: project-relative registry path"]
+            gate = GateDecision(
+                "pause_for_input",
+                [],
+                ["design_source_ref"],
+                "A domain-design run requires a DesignSourceRegistry.",
+                None,
+            )
+            self._validate_gate(gate)
+            return gate
         missing_approvals = self._missing_approvals(state)
         if missing_approvals:
             state.status = "waiting_for_approval"
@@ -260,15 +288,32 @@ class RuntimeEngine:
             return self._advance_after_resolution(state, node, "Node skipped because its condition is not applicable.")
         if result.status == "blocked" or result.requested_transition == "block":
             return self._terminal_gate(state, "blocked", "block", node, "Step reported a blocking condition.")
+        if result.requested_transition == "rework":
+            return self._rework_domain_boundary(state, node, result)
         if result.status == "waiting" or result.requested_transition in {"pause_for_input", "pause_for_approval"}:
             transition = result.requested_transition
             if transition not in {"pause_for_input", "pause_for_approval"}:
                 transition = "pause_for_input"
             status = "waiting_for_input" if transition == "pause_for_input" else "waiting_for_approval"
+            if result.required_approvals:
+                self._register_required_approvals(state, node, result.required_approvals)
+                transition = "pause_for_approval"
+                status = "waiting_for_approval"
+            missing_approvals = self._missing_approvals(state)
             state.status = status
-            state.next_actions = list(result.open_questions)
+            state.next_actions = (
+                [f"obtain approval: {item}" for item in missing_approvals]
+                if transition == "pause_for_approval" and missing_approvals
+                else list(result.open_questions)
+            )
             self._record(state, "pause", status, "Step requested a pause.")
-            gate = GateDecision(transition, list(node.policy_refs), [], "Step requested a pause.", node.id)
+            gate = GateDecision(
+                transition,
+                list(node.policy_refs),
+                missing_approvals if transition == "pause_for_approval" else [],
+                "Step requested a pause.",
+                node.id,
+            )
             self._validate_gate(gate)
             return gate
         if result.status == "failed" or result.requested_transition == "retry":
@@ -282,6 +327,26 @@ class RuntimeEngine:
         blocker = next((finding for finding in result.findings if finding.severity == "blocker"), None)
         if blocker:
             return self._terminal_gate(state, "blocked", "block", node, blocker.summary)
+        if state.flow_id == "domain-design" and node.id == "baseline-approval":
+            self._register_required_approvals(
+                state,
+                node,
+                ["domain-business-owner", "domain-architecture-owner"],
+            )
+            missing_approvals = self._missing_approvals(state)
+            if missing_approvals:
+                state.status = "waiting_for_approval"
+                state.next_actions = [f"obtain approval: {item}" for item in missing_approvals]
+                self._record(state, "pause", "waiting_for_approval", "Baseline promotion requires dual approval.")
+                gate = GateDecision(
+                    "pause_for_approval",
+                    list(node.policy_refs),
+                    missing_approvals,
+                    "Baseline promotion requires business and architecture approval.",
+                    node.id,
+                )
+                self._validate_gate(gate)
+                return gate
         if state.flow_id == "implement" and node.id == "quality":
             quality_snapshot = QualityStore(
                 evidence_store.state_store, evidence_store
@@ -424,6 +489,69 @@ class RuntimeEngine:
             if node.id not in resolved and set(node.depends_on).issubset(resolved)
         ]
 
+    def _register_required_approvals(
+        self,
+        state: RunState,
+        node: FlowNode,
+        required_approvals: list[str],
+    ) -> None:
+        required = ["domain-business-owner", "domain-architecture-owner"]
+        if state.flow_id != "domain-design" or node.id != "baseline-approval":
+            raise ValidationFailure("step results may request approvals only at domain-design baseline approval")
+        if set(required_approvals) != set(required):
+            raise ValidationFailure("domain-design baseline approval requires business and architecture owners")
+        state.required_approvals = list(dict.fromkeys(state.required_approvals + required))
+
+    def _rework_domain_boundary(
+        self,
+        state: RunState,
+        node: FlowNode,
+        result: StepResult,
+    ) -> GateDecision:
+        if state.flow_id != "domain-design" or node.id != "boundary-validation":
+            raise ValidationFailure("rework is allowed only at domain-design boundary-validation")
+        if result.status != "failed":
+            raise ValidationFailure("boundary rework must report a failed validation")
+        findings = [
+            finding
+            for finding in result.findings
+            if finding.severity in {"major", "blocker"} and finding.evidence_ids
+        ]
+        if not findings:
+            raise ValidationFailure(
+                "boundary rework requires a major or blocker finding with registered evidence"
+            )
+        flow = self.catalog.flows[state.flow_id]
+        start_index = next(
+            index for index, item in enumerate(flow.nodes) if item.id == "strategic-design"
+        )
+        invalidated = [item.id for item in flow.nodes[start_index:]]
+        state.completed_nodes = [item for item in state.completed_nodes if item not in invalidated]
+        state.skipped_nodes = [item for item in state.skipped_nodes if item not in invalidated]
+        state.current_node = "strategic-design"
+        state.status = "running"
+        state.next_actions = ["execute node: strategic-design"]
+        self._record(
+            state,
+            "boundary-rework",
+            "running",
+            "Boundary validation failed; strategic design must be revised.",
+            metadata={
+                "target_node": "strategic-design",
+                "finding_ids": [finding.id for finding in findings],
+                "invalidated_nodes": invalidated,
+            },
+        )
+        gate = GateDecision(
+            "continue",
+            list(node.policy_refs),
+            [],
+            "Boundary validation failed; return to strategic design.",
+            "strategic-design",
+        )
+        self._validate_gate(gate)
+        return gate
+
     def _node(self, state: RunState, node_id: str) -> FlowNode:
         for node in self.catalog.flows[state.flow_id].nodes:
             if node.id == node_id:
@@ -458,14 +586,23 @@ class RuntimeEngine:
         validate_instance(gate.to_dict(), load_json(self.catalog.root / "schemas/gate-decision.schema.json"), "gate")
 
     @staticmethod
-    def _record(state: RunState, event: str, status: str, detail: str, *, bump: bool = True) -> None:
-        state.transition_history.append(
-            {
-                "at": datetime.now(timezone.utc).isoformat(),
-                "event": event,
-                "status": status,
-                "detail": detail,
-            }
-        )
+    def _record(
+        state: RunState,
+        event: str,
+        status: str,
+        detail: str,
+        *,
+        bump: bool = True,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        record = {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "event": event,
+            "status": status,
+            "detail": detail,
+        }
+        if metadata:
+            record.update(metadata)
+        state.transition_history.append(record)
         if bump:
             state.revision += 1

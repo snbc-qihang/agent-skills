@@ -46,8 +46,8 @@ class ModelAndSchemaTests(unittest.TestCase):
 
     def test_four_part_version_and_platform_mapping(self) -> None:
         parsed = CanonicalVersion.parse(CANONICAL_VERSION)
-        self.assertEqual("1.1.0.0-rc.1", parsed.canonical())
-        self.assertEqual("1.1.0-rc.1+build.0", parsed.semver())
+        self.assertEqual("1.2.0.0-rc.2", parsed.canonical())
+        self.assertEqual("1.2.0-rc.2+build.0", parsed.semver())
         self.assertEqual("1.2.3+build.4", platform_version("1.2.3.4", supports_four_part=False))
         with self.assertRaises(ValueError):
             CanonicalVersion.parse("4.0.0")

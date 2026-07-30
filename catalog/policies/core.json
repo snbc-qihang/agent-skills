@@ -1,9 +1,9 @@
 {
-  "version": "1.1.0.0-rc.1",
+  "version": "1.2.0.0-rc.2",
   "policies": [
     {
       "id": "safety-core",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "safety",
       "immutable": true,
       "applies_when": ["always"],
@@ -17,7 +17,7 @@
     },
     {
       "id": "risk-approval",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "risk",
       "immutable": false,
       "applies_when": ["任务包含写入、发布、安全、跨系统或外部动作"],
@@ -31,7 +31,7 @@
     },
     {
       "id": "evidence-quality",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "evidence",
       "immutable": false,
       "applies_when": ["生成结论、状态转换或完成声明"],
@@ -45,7 +45,7 @@
     },
     {
       "id": "document-governance",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "document",
       "immutable": false,
       "applies_when": ["任务创建或提升文档"],
@@ -59,7 +59,7 @@
     },
     {
       "id": "scope-control",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "risk",
       "immutable": false,
       "applies_when": ["任务设计或修改代码"],
@@ -73,7 +73,7 @@
     },
     {
       "id": "frontend-product",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "capability",
       "immutable": false,
       "applies_when": ["任务交付 Web 或应用用户界面"],
@@ -87,7 +87,7 @@
     },
     {
       "id": "release-safety",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "safety",
       "immutable": true,
       "applies_when": ["任务包含发布、生产验证或回滚"],
@@ -100,7 +100,7 @@
     },
     {
       "id": "feedback-evolution",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "evidence",
       "immutable": false,
       "applies_when": ["反馈可能改变 rule、skill、flow 或 eval"],
@@ -113,8 +113,27 @@
       "on_violation": "block"
     },
     {
+      "id": "domain-design-governance",
+      "version": "1.2.0.0-rc.2",
+      "policy_class": "capability",
+      "immutable": false,
+      "applies_when": ["任务创建、修订或提升跨限界上下文的领域设计"],
+      "rules": [
+        {"id": "DDD-001", "condition": "DesignSourceRegistry 无法定位当前需求、源码或既有设计证据", "effect": "保持 reviewing 或 waiting_for_input，不得形成正式设计基线", "severity": "blocker"},
+        {"id": "DDD-002", "condition": "系统 HLD、限界上下文模型、能力详细设计或变更包混为同一层次", "effect": "按战略基线、上下文模型、能力详细设计和增量包重新分层", "severity": "major"},
+        {"id": "DDD-003", "condition": "把限界上下文等同于部署单元、数据库、仓库或一个详细设计", "effect": "记录语义边界、部署映射和不成立原因，不得假定一对一", "severity": "major"},
+        {"id": "DDD-004", "condition": "正式领域设计准备提升为基线", "effect": "要求业务负责人和架构负责人对该运行范围作出独立批准", "severity": "blocker"},
+        {"id": "DDD-005", "condition": "聚合、事件或一致性模式没有业务不变量、生命周期或真实协作依据", "effect": "移除猜测性模式，或补充场景与证据", "severity": "major"},
+        {"id": "DDD-006", "condition": "将场景或能力旅程机械等同于一次请求、一个 API 或一个实现方法", "effect": "以业务价值和可追溯场景重新切分，再由契约选择适当交互形式", "severity": "major"},
+        {"id": "DDD-007", "condition": "上下文拓扑没有通过模型语境、目标、权属、变化、集成和清晰边界校验", "effect": "在同一运行中回到战略设计；不得进入能力详细设计", "severity": "blocker"},
+        {"id": "DDD-008", "condition": "通用子域的 make/buy 倾向没有考虑合规、数据、集成和运营成本", "effect": "保持待决并补充业务与架构证据", "severity": "major"}
+      ],
+      "required_evidence": ["source", "review", "approval"],
+      "on_violation": "block"
+    },
+    {
       "id": "team-standards",
-      "version": "1.1.0.0-rc.1",
+      "version": "1.2.0.0-rc.2",
       "policy_class": "team",
       "immutable": false,
       "applies_when": ["项目 profile 指定了团队规范"],

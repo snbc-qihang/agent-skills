@@ -29,6 +29,7 @@ from .codec import (
 )
 from .compiler import build_package, verify_package
 from .engine import RuntimeEngine
+from .design_sources import validate_design_source_registry
 from .evidence import EvidenceStore
 from .governance import (
     InvestigationStore,
@@ -90,12 +91,19 @@ def command_start(args: argparse.Namespace) -> int:
     catalog = load_catalog(args.repository_root)
     payload = _json_input(args.intent)
     validate_instance(payload, load_json(catalog.root / "schemas/route-intent.schema.json"), "route-intent")
+    if args.design_source_ref:
+        validate_design_source_registry(
+            args.project_root,
+            args.design_source_ref,
+            catalog.root / "schemas",
+        )
     state = RuntimeEngine(catalog).start(
         args.task_id,
         route_intent_from_dict(payload),
         profile_id=args.profile,
         run_id=args.run_id,
         context_refs=args.context_ref,
+        design_source_ref=args.design_source_ref,
     )
     state_store, _ = _stores(args, catalog)
     path = state_store.create(state)
@@ -543,6 +551,7 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--run-id")
     start.add_argument("--project-root", default=".")
     start.add_argument("--context-ref", action="append", default=[])
+    start.add_argument("--design-source-ref")
     start.set_defaults(handler=command_start)
 
     next_command = subparsers.add_parser("next")

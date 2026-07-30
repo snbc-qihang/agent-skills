@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 
-CANONICAL_VERSION = "1.1.0.0-rc.1"
+CANONICAL_VERSION = "1.2.0.0-rc.2"
 STABLE_VERSION = "1.1.0.0"
 _VERSION = re.compile(
     r"^(?P<major>0|[1-9]\d*)\."

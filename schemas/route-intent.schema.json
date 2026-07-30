@@ -3,7 +3,7 @@
   "type": "object",
   "required": ["task_kind", "requested_outcome", "scope", "risk_signals", "requested_external_actions", "confidence", "evidence"],
   "properties": {
-    "task_kind": {"enum": ["explain", "context", "research", "decide", "model", "shape", "prototype", "design", "implement", "diagnose", "review", "release", "evolve", "wayfind"]},
+    "task_kind": {"enum": ["explain", "context", "research", "decide", "model", "domain-design", "shape", "prototype", "design", "implement", "diagnose", "review", "release", "evolve", "wayfind"]},
     "requested_outcome": {"type": "string", "minLength": 1},
     "scope": {"type": "array", "items": {"type": "string"}},
     "risk_signals": {"type": "array", "items": {"type": "string"}},

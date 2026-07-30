@@ -24,11 +24,11 @@ class CatalogTests(unittest.TestCase):
 
     def test_catalog_has_the_approved_public_surface(self) -> None:
         self.assertEqual(11, len(self.catalog.skills))
-        self.assertEqual(6, len(self.catalog.flows))
-        self.assertEqual(9, len(self.catalog.packs))
+        self.assertEqual(7, len(self.catalog.flows))
+        self.assertEqual(10, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("1.1.0.0-rc.1", self.catalog.version)
+        self.assertEqual("1.2.0.0-rc.2", self.catalog.version)
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}
@@ -101,6 +101,8 @@ class CatalogTests(unittest.TestCase):
                 "references/strategic-modeling.md",
                 "references/tactical-modeling.md",
                 "references/model-artifact.md",
+                "references/design-governance.md",
+                "references/integration-consistency.md",
                 "references/adr-format.md",
             },
             {pointer.path for pointer in skill.context_pointers},

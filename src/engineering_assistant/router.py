@@ -16,6 +16,10 @@ ROUTES = {
     "research": (None, ("research",)),
     "decide": (None, ("decision-interview",)),
     "model": (None, ("domain-modeling",)),
+    "domain-design": (
+        "domain-design",
+        ("repo-context", "domain-modeling", "decision-interview", "codebase-design", "code-review"),
+    ),
     "shape": ("shape", ("repo-context", "domain-modeling", "decision-interview")),
     "prototype": (None, ("prototype",)),
     "design": ("design", ("repo-context", "domain-modeling", "codebase-design")),
