@@ -60,10 +60,16 @@
         {"language": "zh-CN", "request": "统一产品文档和代码中的业务术语。"},
         {"language": "zh-CN", "request": "梳理会员权益的领域模型和不变量。"},
         {"language": "zh-CN", "request": "解决门店、商户和组织三个术语的歧义。"},
+        {"language": "zh-CN", "request": "划分计费和客服的限界上下文并建立上下文映射。"},
+        {"language": "zh-CN", "request": "识别订单的聚合根、值对象和领域事件。"},
+        {"language": "zh-CN", "request": "明确预约生命周期中的合法与非法状态转换。"},
         {"language": "en", "request": "Build a domain model for order fulfillment."},
         {"language": "en", "request": "Create ubiquitous language for memberships and benefits."},
         {"language": "en", "request": "Resolve inconsistent domain terminology across code and docs."},
-        {"language": "en", "request": "Model the lifecycle and invariants of a reservation."}
+        {"language": "en", "request": "Model the lifecycle and invariants of a reservation."},
+        {"language": "en", "request": "Define the bounded contexts and context map for billing and support."},
+        {"language": "en", "request": "Identify the aggregate roots, value objects, and domain events for orders."},
+        {"language": "en", "request": "Separate entities and value objects in the membership model."}
       ]
     },
     {

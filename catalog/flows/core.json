@@ -7,7 +7,8 @@
       "entry_conditions": ["请求结果尚未达到决策完备状态"],
       "nodes": [
         {"id": "discover-facts", "capability": "repo-context", "depends_on": [], "when": "仓库事实可能回答待解决问题", "completion_criteria": ["可调查事实均已记录并附有证据"], "policy_refs": ["evidence-quality"]},
-        {"id": "resolve-decisions", "capability": "decision-interview", "depends_on": ["discover-facts"], "when": "仍有重大产品或设计决策", "completion_criteria": ["每项重大决策已有答案或保持阻断"], "policy_refs": ["risk-approval"]},
+        {"id": "domain-model", "capability": "domain-modeling", "depends_on": ["discover-facts"], "when": "术语、上下文、业务规则、所有权、不变量或生命周期歧义会改变范围、验收或风险", "completion_criteria": ["相关术语在限界上下文内闭合，跨上下文差异已显式记录", "影响需求契约的规则、所有权、不变量和生命周期已经场景验证；待决产品选择已传递给后续决策访谈"], "policy_refs": ["evidence-quality", "document-governance", "scope-control"]},
+        {"id": "resolve-decisions", "capability": "decision-interview", "depends_on": ["domain-model"], "when": "仍有重大产品或设计决策", "completion_criteria": ["每项重大决策已有答案或保持阻断"], "policy_refs": ["risk-approval"]},
         {"id": "shape-contract", "capability": "shape-contract", "depends_on": ["resolve-decisions"], "when": "always", "completion_criteria": ["目标、范围、非目标、验收、依赖和风险均已决策完备"], "policy_refs": ["scope-control", "document-governance"]}
       ],
       "terminal_conditions": ["需求塑形契约完整且不存在阻断决策"],
@@ -20,7 +21,8 @@
       "nodes": [
         {"id": "repo-context", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["模块、接口、数据、依赖和影响范围均有证据"], "policy_refs": ["evidence-quality", "scope-control"]},
         {"id": "prototype", "capability": "prototype", "depends_on": ["repo-context"], "when": "使用具体原型回答界面或逻辑问题的成本更低", "completion_criteria": ["原型已回答既定问题并明确后续处理方式"], "policy_refs": ["frontend-product", "scope-control"]},
-        {"id": "architecture", "capability": "architecture-design", "depends_on": ["repo-context"], "when": "always", "completion_criteria": ["边界、流程、失败模式和风险均已明确"], "policy_refs": ["team-standards", "scope-control"]},
+        {"id": "domain-model", "capability": "domain-modeling", "depends_on": ["prototype"], "when": "架构边界依赖领域语义、上下文关系、聚合、一致性、生命周期或领域事件", "completion_criteria": ["战略和战术模型由当前业务场景及仓库证据支持", "聚合、不变量、生命周期和跨上下文协作边界已闭合；不能闭合的产品选择保持等待或阻断"], "policy_refs": ["evidence-quality", "document-governance", "scope-control"]},
+        {"id": "architecture", "capability": "architecture-design", "depends_on": ["domain-model"], "when": "always", "completion_criteria": ["边界、流程、失败模式和风险均已明确"], "policy_refs": ["team-standards", "scope-control"]},
         {"id": "implementation-contract", "capability": "implementation-contract", "depends_on": ["architecture"], "when": "预期进入实现阶段", "completion_criteria": ["接口、状态、行为、测试、任务和回滚均已决策完备"], "policy_refs": ["evidence-quality", "document-governance"]},
         {"id": "design-review", "capability": "design-review", "depends_on": ["implementation-contract"], "when": "设计准备进入实现", "completion_criteria": ["阻断问题已关闭或被明确否决"], "policy_refs": ["risk-approval", "team-standards"]}
       ],

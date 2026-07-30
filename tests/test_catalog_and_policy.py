@@ -81,6 +81,36 @@ class CatalogTests(unittest.TestCase):
             )
         self.assertEqual(("implement", ("tdd", "code-review")), ROUTES["implement"])
 
+    def test_domain_modeling_combines_context_scoped_contract_and_team_traceability(self) -> None:
+        skill = self.catalog.skills["domain-modeling"]
+        criterion_ids = {criterion.id for criterion in skill.completion_criteria}
+
+        self.assertTrue(
+            {
+                "terms-resolved",
+                "context-bounded",
+                "language-resolved",
+                "behavior-validated",
+                "consistency-owned",
+                "patterns-justified",
+                "implementation-reconciled",
+                "requirements-traced",
+                "adr-sparse",
+            }.issubset(criterion_ids)
+        )
+        self.assertIn("design-source-snapshot", skill.inputs)
+        self.assertIn("requirement-traceability", skill.inputs)
+        self.assertEqual(
+            {
+                "references/strategic-modeling.md",
+                "references/tactical-modeling.md",
+                "references/model-artifact.md",
+                "references/adr-format.md",
+            },
+            {pointer.path for pointer in skill.context_pointers},
+        )
+        self.assertIn("scope-control", skill.policy_refs)
+
     def test_code_review_catalog_requires_report_and_keeps_design_trace_conditional(self) -> None:
         review = self.catalog.skills["code-review"]
         criterion_ids = {criterion.id for criterion in review.completion_criteria}

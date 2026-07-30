@@ -677,6 +677,13 @@ class TeamworkCatalogExtensionTests(unittest.TestCase):
             ["requirements-facts"], nodes["design-source-snapshot"].depends_on
         )
         self.assertEqual(
+            ["decision-convergence"], nodes["domain-model"].depends_on
+        )
+        self.assertEqual(
+            ["domain-model"], nodes["requirements-contract"].depends_on
+        )
+        self.assertIn("外部设计源保持只读", " ".join(nodes["domain-model"].completion_criteria))
+        self.assertEqual(
             ["review-package-validation"], nodes["design-source-recheck"].depends_on
         )
         self.assertEqual(

@@ -78,6 +78,20 @@ class RouterTests(unittest.TestCase):
         self.assertIsNone(decision.flow_id)
         self.assertEqual(["engineering-assistant"], decision.skill_ids)
 
+    def test_shape_and_design_routes_include_domain_modeling(self) -> None:
+        self.assertEqual(
+            ("shape", ("repo-context", "domain-modeling", "decision-interview")),
+            ROUTES["shape"],
+        )
+        self.assertEqual(
+            ("design", ("repo-context", "domain-modeling", "codebase-design")),
+            ROUTES["design"],
+        )
+        self.assertEqual(
+            ["domain-modeling"],
+            route_intent(intent("model"), self.catalog, profile_id="default").skill_ids,
+        )
+
     def test_high_risk_and_external_actions_never_proceed_unconfirmed(self) -> None:
         decision = route_intent(
             intent("implement", risks=["production"], actions=["push"]),
@@ -362,6 +376,30 @@ class RuntimeTests(unittest.TestCase):
             evidence_store=self.evidence_store,
         )
         self.assertIn("prototype", resumed.skipped_nodes)
+        self.assertEqual("domain-model", gate.next_node)
+        self.assertEqual(
+            "domain-modeling",
+            self.engine.node_payload(resumed)["capability"],
+        )
+        self.state_store.save(resumed, expected_revision=previous)
+
+        resumed = self.state_store.load(state.run_id)
+        previous = resumed.revision
+        gate = self.engine.complete_step(
+            resumed,
+            StepResult(
+                run_id=resumed.run_id,
+                node_id="domain-model",
+                status="skipped",
+                criteria_results=[],
+                outputs=["Domain modeling is not applicable to this bounded infrastructure design."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertIn("domain-model", resumed.skipped_nodes)
         self.assertEqual("architecture", gate.next_node)
         self.state_store.save(resumed, expected_revision=previous)
 

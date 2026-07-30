@@ -63,18 +63,28 @@
       "id": "domain-modeling",
       "version": "2.1.0.0-rc.1",
       "invocation_mode": "model",
-      "description": "构建或澄清领域术语、关系和难以逆转的决策。适用于产品语言模糊、含义过载或与代码不一致的场景。",
-      "leading_words": ["统一语言", "业务场景"],
+      "description": "在明确的限界上下文中建立统一语言、业务规则、生命周期及战略和战术模型。适用于语义冲突、业务规则复杂、聚合或一致性边界不清，以及代码与业务语言不一致的场景。",
+      "leading_words": ["限界上下文", "统一语言", "聚合不变量"],
       "capabilities": ["domain-modeling"],
-      "inputs": ["domain-statements", "repository-context", "existing-glossary", "design-source-snapshot"],
+      "inputs": ["domain-statements", "business-scenarios", "repository-context", "existing-domain-model", "existing-glossary", "design-source-snapshot", "requirement-traceability"],
       "completion_criteria": [
-        {"id": "terms-resolved", "description": "每个变更术语都有唯一规范含义，并已记录冲突用法、Owner、聚合和不变量。", "evidence_kinds": ["source", "review"]},
+        {"id": "terms-resolved", "description": "每个变更术语在所属限界上下文内有唯一规范含义，并已记录冲突用法、Owner、聚合和不变量。", "evidence_kinds": ["source", "review"]},
+        {"id": "context-bounded", "description": "建模范围、子域和限界上下文明确；跨上下文关系、方向、翻译责任和与固定设计源边界的差异已记录或明确不适用。", "evidence_kinds": ["source", "review"]},
+        {"id": "language-resolved", "description": "同义词、禁用含义、历史别名和跨上下文同名异义均已记录，且不形成第二事实源。", "evidence_kinds": ["source", "review"]},
+        {"id": "behavior-validated", "description": "代表性的成功、失败和非法场景能够映射到命令、状态转换、领域事件和不变量。", "evidence_kinds": ["source", "review"]},
+        {"id": "consistency-owned", "description": "每项不变量都有业务所有者和执行边界；聚合内强一致及跨聚合一致性策略已明确。", "evidence_kinds": ["source", "review"]},
+        {"id": "patterns-justified", "description": "每种战术模式均有身份、生命周期、行为或协作依据；不强制填满全部 DDD 模式。", "evidence_kinds": ["source", "review"]},
+        {"id": "implementation-reconciled", "description": "代码、API、数据和文档中的冲突用法已分类为当前规则、历史别名、技术债或待决事项。", "evidence_kinds": ["source", "review"]},
+        {"id": "requirements-traced", "description": "需求引起的边界、不变量和生命周期变化已映射到具体 requirement_item 和评审包的相关设计章节，外部设计源保持只读。", "evidence_kinds": ["source", "review"]},
         {"id": "adr-sparse", "description": "只为难以逆转、反直觉且真实存在的取舍创建 ADR。", "evidence_kinds": ["review"]}
       ],
       "context_pointers": [
+        {"when": "存在多个子域、团队边界、同名异义或跨系统协作", "path": "references/strategic-modeling.md", "purpose": "建立限界上下文和上下文映射，避免强制全局统一模型。"},
+        {"when": "任务涉及聚合、不变量、生命周期或实现映射", "path": "references/tactical-modeling.md", "purpose": "按业务语义选择实体、值对象、聚合、事件、服务和持久化模式。"},
+        {"when": "创建或更新本次评审包中的正式领域模型", "path": "references/model-artifact.md", "purpose": "使用统一的文档章节、规范表格、需求追踪和实现对照契约，并保持外部设计源只读。"},
         {"when": "某项决策确实需要 ADR", "path": "references/adr-format.md", "purpose": "记录决策与备选方案，同时避免把术语表写成规格说明。"}
       ],
-      "policy_refs": ["document-governance", "evidence-quality"],
+      "policy_refs": ["document-governance", "evidence-quality", "scope-control"],
       "risk_class": "reversible_write",
       "source_path": "skills/domain-modeling"
     },
