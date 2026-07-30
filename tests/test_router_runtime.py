@@ -84,6 +84,20 @@ class RouterTests(unittest.TestCase):
         self.assertEqual("confirm", decision.decision)
         self.assertEqual(["push", "production"], decision.approval_required)
 
+    def test_shape_and_design_routes_include_domain_modeling(self) -> None:
+        self.assertEqual(
+            ("shape", ("repo-context", "domain-modeling", "decision-interview")),
+            ROUTES["shape"],
+        )
+        self.assertEqual(
+            ("design", ("repo-context", "domain-modeling", "codebase-design")),
+            ROUTES["design"],
+        )
+        self.assertEqual(
+            ["domain-modeling"],
+            route_intent(intent("model"), self.catalog).skill_ids,
+        )
+
 
 class RuntimeTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -355,8 +369,66 @@ class RuntimeTests(unittest.TestCase):
             evidence_store=self.evidence_store,
         )
         self.assertIn("prototype", resumed.skipped_nodes)
+        self.assertEqual("domain-model", gate.next_node)
+        self.assertEqual(
+            "domain-modeling",
+            self.engine.node_payload(resumed)["capability"],
+        )
+        self.state_store.save(resumed, expected_revision=previous)
+        resumed = self.state_store.load(resumed.run_id)
+        previous = resumed.revision
+        gate = self.engine.complete_step(
+            resumed,
+            StepResult(
+                run_id=resumed.run_id,
+                node_id="domain-model",
+                status="skipped",
+                criteria_results=[],
+                outputs=["Domain modeling is not applicable to this bounded infrastructure design."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertIn("domain-model", resumed.skipped_nodes)
         self.assertEqual("architecture", gate.next_node)
         self.state_store.save(resumed, expected_revision=previous)
+
+    def test_shape_domain_model_precedes_decision_interview_and_can_be_skipped(self) -> None:
+        state = self.engine.start("task-shape-domain", intent("shape"), run_id="shape-domain-1")
+        gate = self.engine.next(state)
+        self.assertEqual("discover-facts", gate.next_node)
+        gate = self.engine.complete_step(
+            state,
+            StepResult(
+                run_id=state.run_id,
+                node_id="discover-facts",
+                status="skipped",
+                criteria_results=[],
+                outputs=["The request provides all repository facts needed for shaping."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertEqual("domain-model", gate.next_node)
+        gate = self.engine.complete_step(
+            state,
+            StepResult(
+                run_id=state.run_id,
+                node_id="domain-model",
+                status="skipped",
+                criteria_results=[],
+                outputs=["No domain ambiguity changes scope, acceptance, or risk."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertEqual("resolve-decisions", gate.next_node)
 
     def test_stale_evidence_can_be_excluded_by_runtime_policy(self) -> None:
         state = self.engine.start("task-stale", intent("design"), run_id="stale-1")

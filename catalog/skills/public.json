@@ -1,9 +1,9 @@
 {
-  "version": "1.0.0.0-rc.1",
+  "version": "1.1.0.0-rc.1",
   "skills": [
     {
       "id": "engineering-assistant",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "both",
       "description": "将工程任务路由到最小充分的 skill 或受治理 flow。适用于请求跨越上下文、设计、实现、评审、发布或长期任务协调的场景。",
       "leading_words": ["最小充分", "路由决策"],
@@ -23,7 +23,7 @@
     },
     {
       "id": "research",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于一手资料研究工程问题，并输出有引用、有边界的结论。适用于外部项目、API、标准或不熟悉的技术事实。",
       "leading_words": ["一手资料", "来源追踪"],
@@ -42,7 +42,7 @@
     },
     {
       "id": "decision-interview",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在查明仓库事实后，与用户一起解决相互依赖的产品或设计决策。适用于范围、取舍或验收标准仍不明确的场景。",
       "leading_words": ["决策树", "事实优先"],
@@ -61,26 +61,33 @@
     },
     {
       "id": "domain-modeling",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
-      "description": "构建或澄清领域术语、关系和难以逆转的决策。适用于产品语言模糊、含义过载或与代码不一致的场景。",
-      "leading_words": ["统一语言", "业务场景"],
+      "description": "在明确的限界上下文中建立统一语言、业务规则、生命周期及战略和战术模型。适用于语义冲突、业务规则复杂、聚合或一致性边界不清，以及代码与业务语言不一致的场景。",
+      "leading_words": ["限界上下文", "统一语言", "聚合不变量"],
       "capabilities": ["domain-modeling"],
-      "inputs": ["domain-statements", "repository-context", "existing-glossary"],
+      "inputs": ["domain-statements", "business-scenarios", "repository-context", "existing-domain-model", "existing-glossary"],
       "completion_criteria": [
-        {"id": "terms-resolved", "description": "每个变更术语都有唯一规范含义，并已记录冲突用法。", "evidence_kinds": ["source", "review"]},
-        {"id": "adr-sparse", "description": "只为难以逆转、反直觉且真实存在的取舍创建 ADR。", "evidence_kinds": ["review"]}
+        {"id": "context-bounded", "description": "建模范围、子域和限界上下文明确；跨上下文关系、方向和翻译责任已记录或明确不适用。", "evidence_kinds": ["source", "review"]},
+        {"id": "language-resolved", "description": "术语在所属上下文内具有唯一含义；同义词、禁用含义、历史别名和跨上下文同名异义均已记录。", "evidence_kinds": ["source", "review"]},
+        {"id": "behavior-validated", "description": "代表性的成功、失败和非法场景能够映射到命令、状态转换、领域事件和不变量。", "evidence_kinds": ["source", "review"]},
+        {"id": "consistency-owned", "description": "每项不变量都有业务所有者和执行边界；聚合内强一致及跨聚合一致性策略已明确。", "evidence_kinds": ["source", "review"]},
+        {"id": "patterns-justified", "description": "每种战术模式均有身份、生命周期、行为或协作依据；不强制填满全部 DDD 模式。", "evidence_kinds": ["source", "review"]},
+        {"id": "implementation-reconciled", "description": "代码、API、数据和文档中的冲突用法已分类为当前规则、历史别名、技术债或待决事项。", "evidence_kinds": ["source", "review"]}
       ],
       "context_pointers": [
+        {"when": "存在多个子域、团队边界、同名异义或跨系统协作", "path": "references/strategic-modeling.md", "purpose": "建立限界上下文和上下文映射，避免强制全局统一模型。"},
+        {"when": "任务涉及聚合、不变量、生命周期或实现映射", "path": "references/tactical-modeling.md", "purpose": "按业务语义选择实体、值对象、聚合、事件、服务和持久化模式。"},
+        {"when": "创建或更新正式领域模型文档", "path": "references/model-artifact.md", "purpose": "使用统一的文档章节、规范表格和实现对照契约。"},
         {"when": "某项决策确实需要 ADR", "path": "references/adr-format.md", "purpose": "记录决策与备选方案，同时避免把术语表写成规格说明。"}
       ],
-      "policy_refs": ["document-governance", "evidence-quality"],
+      "policy_refs": ["document-governance", "evidence-quality", "scope-control"],
       "risk_class": "reversible_write",
       "source_path": "skills/domain-modeling"
     },
     {
       "id": "repo-context",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于源码证据梳理仓库模块、接口、数据、依赖、可复用能力和影响范围。适用于设计或大范围变更分析之前。",
       "leading_words": ["影响范围", "源码追踪"],
@@ -99,7 +106,7 @@
     },
     {
       "id": "wayfinder",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "both",
       "description": "把大型或高不确定性工程任务整理为目标、当前前沿和待决策事项。适用于工作超过一次会话或尚不能安全切片的场景。",
       "leading_words": ["目标", "当前前沿", "认知迷雾"],
@@ -118,7 +125,7 @@
     },
     {
       "id": "prototype",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "构建明确可丢弃的逻辑或界面原型，用于回答一个设计问题。适用于具体交互验证比继续抽象讨论成本更低的场景。",
       "leading_words": ["可丢弃", "只回答一个问题"],
@@ -138,7 +145,7 @@
     },
     {
       "id": "codebase-design",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "设计小接口、高杠杆、变更局部化的深模块和清晰 seam。适用于架构边界、可测试性或重构结构设计。",
       "leading_words": ["深模块", "seam", "局部性"],
@@ -157,7 +164,7 @@
     },
     {
       "id": "tdd",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在确认的公共 seam 上使用红绿循环纵向切片实现一个行为。适用于测试优先的功能、修复和回归覆盖。",
       "leading_words": ["seam", "红绿循环", "tracer bullet"],
@@ -177,7 +184,7 @@
     },
     {
       "id": "diagnosing-bugs",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "通过复现、最小化、可证伪假设、定向观测、修复和回归证据诊断疑难缺陷或性能退化。",
       "leading_words": ["紧反馈环", "可复现失败", "可证伪"],
@@ -198,7 +205,7 @@
     },
     {
       "id": "code-review",
-      "version": "1.0.0.0-rc.1",
+      "version": "1.1.0.0-rc.1",
       "invocation_mode": "model",
       "description": "针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更。",
       "leading_words": ["固定比较点", "阶段审计", "自动门禁", "规范轴", "需求轴"],

@@ -12,21 +12,21 @@ MAJOR.MINOR.PATCH.BUILD[-PRERELEASE]
 - `BUILD`：不改变产品契约的构建、评测或发布修订。
 - `PRERELEASE`：使用 `alpha.N`、`beta.N` 或 `rc.N`。
 
-当前 canonical version 为 `1.0.0.0-rc.1`。
+当前 canonical version 为 `1.1.0.0-rc.1`。
 
 ## 平台映射
 
 Catalog、公开 SkillSpec 和构建清单使用完整四段式版本。平台只接受 SemVer 时，adapter 映射为：
 
 ```text
-1.0.0.0-rc.1 -> 1.0.0-rc.1+build.0
+1.1.0.0-rc.1 -> 1.1.0-rc.1+build.0
 1.2.3.4      -> 1.2.3+build.4
 ```
 
 本机 Codex 发布会将构建元数据替换为唯一 cachebuster：
 
 ```text
-1.0.0-rc.1+codex.local-YYYYMMDD-HHMMSS
+1.1.0-rc.1+codex.local-YYYYMMDD-HHMMSS
 ```
 
 `package-manifest.json` 必须始终记录 canonical version、全部 skill 版本和文件摘要，平台版本不能覆盖产品版本事实。

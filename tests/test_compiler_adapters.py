@@ -737,7 +737,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.0.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("1.1.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -749,9 +749,17 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.0.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("1.1.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"1.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"1.1.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        for name in (
+            "strategic-modeling.md",
+            "tactical-modeling.md",
+            "model-artifact.md",
+        ):
+            relative = f"skills/domain-modeling/references/{name}"
+            self.assertTrue((output / relative).is_file())
+            self.assertIn(relative, build_manifest["payload_files"])
 
     def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
         output = self.root / "runtime-smoke"

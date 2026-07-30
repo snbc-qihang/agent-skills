@@ -28,7 +28,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(9, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("1.0.0.0-rc.1", self.catalog.version)
+        self.assertEqual("1.1.0.0-rc.1", self.catalog.version)
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}
@@ -82,6 +82,33 @@ class CatalogTests(unittest.TestCase):
     def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
         sourced = load_catalog(ROOT, require_sources=True)
         self.assertEqual(set(self.catalog.skills), set(sourced.skills))
+
+    def test_domain_modeling_exposes_the_full_context_scoped_contract(self) -> None:
+        skill = self.catalog.skills["domain-modeling"]
+        self.assertEqual(
+            [
+                "context-bounded",
+                "language-resolved",
+                "behavior-validated",
+                "consistency-owned",
+                "patterns-justified",
+                "implementation-reconciled",
+            ],
+            [criterion.id for criterion in skill.completion_criteria],
+        )
+        self.assertEqual(
+            {
+                "references/strategic-modeling.md",
+                "references/tactical-modeling.md",
+                "references/model-artifact.md",
+                "references/adr-format.md",
+            },
+            {pointer.path for pointer in skill.context_pointers},
+        )
+        self.assertEqual(
+            ["document-governance", "evidence-quality", "scope-control"],
+            skill.policy_refs,
+        )
 
     def test_entry_version_conflict_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

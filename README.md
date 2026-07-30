@@ -2,7 +2,7 @@
 
 `agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex 和 Hermes 提供可组合、可恢复、可验证的工程协作能力。
 
-- 当前版本：`1.0.0.0-rc.1`
+- 当前版本：`1.1.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes
 - 开发语言：Python 3.9+
@@ -118,7 +118,7 @@ agent-skills/
 | `engineering-assistant` | 将复杂工程请求路由到最小充分的 skill 或 flow |
 | `research` | 基于一手资料研究外部项目、API、标准和技术事实 |
 | `decision-interview` | 在事实调查后收敛范围、取舍和验收决策 |
-| `domain-modeling` | 澄清领域术语、关系和难以逆转的决策 |
+| `domain-modeling` | 建立限界上下文、统一语言、业务规则和战略/战术领域模型 |
 | `repo-context` | 从源码提取模块、接口、数据、依赖和影响范围 |
 | `wayfinder` | 管理大型任务的目标、当前前沿和待决事项 |
 | `prototype` | 用可丢弃的逻辑或界面原型回答一个设计问题 |
