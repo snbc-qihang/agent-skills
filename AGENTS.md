@@ -4,7 +4,7 @@
 
 - 本仓库维护 `engineering-assistant` 的平台无关协议、运行内核、公开 skills、内部 flows、按需 packs、评测和平台 adapter。
 - `catalog/`、`skills/`、`packs/`、`schemas/` 与 `src/` 是作者源；仓库内不得保存发布包、生成镜像或历史过程数据。
-- 产品和公开 skill 使用四段式版本，当前版本为 `1.2.0.0-rc.2`。
+- 产品和公开 skill 使用四段式版本，当前版本为 `1.3.0.0-rc.1`。
 - 开发者信息统一为 `sunliming625@gmail.com`。
 
 ## 修改规则

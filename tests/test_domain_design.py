@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.artifact_validation import validate_artifact_payload  # noqa: E402
 from engineering_assistant.catalog import load_catalog  # noqa: E402
+from engineering_assistant.design_sources import validate_design_source_registry  # noqa: E402
 from engineering_assistant.engine import RuntimeEngine  # noqa: E402
 from engineering_assistant.evidence import EvidenceStore  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
@@ -51,6 +53,34 @@ class DomainDesignTests(unittest.TestCase):
             evidence=["user request"],
         )
 
+    @staticmethod
+    def registry_v1() -> dict:
+        return {
+            "version": "1",
+            "hld": "docs/architecture/hld.md",
+            "context_index": "docs/architecture/contexts.md",
+            "capability_design_root": "docs/architecture/capabilities",
+            "change_root": "docs/architecture/changes",
+            "deployment_catalog": "docs/architecture/deployments.md",
+            "owners": {
+                "business": "domain-business-owner",
+                "architecture": "domain-architecture-owner",
+            },
+        }
+
+    @classmethod
+    def registry_v2(cls) -> dict:
+        registry = cls.registry_v1() | {"version": "2"}
+        registry["sources"] = [
+            {"id": "requirements", "kind": "requirements", "path": "docs/requirements.md", "status": "available", "reason": "当前需求基线。"},
+            {"id": "repository", "kind": "repository", "path": "src", "status": "available", "reason": "当前实现。"},
+            {"id": "existing-design", "kind": "existing-design", "path": None, "status": "not_applicable", "reason": "项目尚无既有设计。"},
+            {"id": "interfaces", "kind": "interfaces", "path": None, "status": "unknown", "reason": "待确认外部契约位置。"},
+            {"id": "data", "kind": "data", "path": None, "status": "unknown", "reason": "待确认数据契约位置。"},
+            {"id": "deployment", "kind": "deployment", "path": None, "status": "unknown", "reason": "待确认部署证据位置。"},
+        ]
+        return registry
+
     def test_catalog_routes_domain_design_through_the_governed_flow(self) -> None:
         decision = route_intent(self.intent(), self.catalog)
         self.assertEqual("domain-design", decision.flow_id)
@@ -67,6 +97,8 @@ class DomainDesignTests(unittest.TestCase):
                 "resolve-domain-decisions",
                 "context-topology",
                 "boundary-validation",
+                "context-slicing",
+                "tactical-modeling",
                 "capability-detailed-design",
                 "integration-consistency",
                 "design-conformance-review",
@@ -77,25 +109,87 @@ class DomainDesignTests(unittest.TestCase):
         self.assertIn("domain-integration", self.catalog.packs)
         self.assertIn("domain-design-governance", self.catalog.policies)
 
-    def test_design_source_registry_requires_topology_and_formal_locations(self) -> None:
-        artifact = {
-            "version": "1",
-            "hld": "docs/architecture/hld.md",
-            "context_index": "docs/architecture/contexts.md",
-            "capability_design_root": "docs/architecture/capabilities",
-            "change_root": "docs/architecture/changes",
-            "deployment_catalog": "docs/architecture/deployments.md",
-            "owners": {
-                "business": "domain-business-owner",
-                "architecture": "domain-architecture-owner",
-            },
-        }
+    def test_design_source_registry_v2_requires_typed_input_coverage(self) -> None:
+        artifact = self.registry_v2()
         self.assertEqual(
             {"status": "passed", "kind": "design-source-registry"},
             validate_artifact_payload(
                 schema_root=ROOT / "schemas", kind="design-source-registry", artifact=artifact
             ),
         )
+
+    def test_v1_registry_is_read_compatible_but_new_runs_require_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "docs").mkdir()
+            (project / "docs" / "requirements.md").write_text("需求", encoding="utf-8")
+            (project / "src").mkdir()
+            registry_path = project / "docs" / "design-sources.json"
+            registry_path.write_text(
+                json.dumps(self.registry_v1()), encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(ValidationFailure, "version 2"):
+                validate_design_source_registry(project, "docs/design-sources.json", ROOT / "schemas")
+            legacy = validate_design_source_registry(
+                project, "docs/design-sources.json", ROOT / "schemas", allow_legacy=True
+            )
+            self.assertEqual("1", legacy["version"])
+
+            registry_path.write_text(
+                json.dumps(self.registry_v2()), encoding="utf-8"
+            )
+            current = validate_design_source_registry(
+                project, "docs/design-sources.json", ROOT / "schemas"
+            )
+            self.assertEqual("2", current["version"])
+
+    def test_v2_registry_rejects_unavailable_required_sources_and_unsafe_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "docs").mkdir()
+            registry = self.registry_v2()
+            registry["sources"][0]["path"] = "../requirements.md"
+            registry_path = project / "docs" / "design-sources.json"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            with self.assertRaisesRegex(ValidationFailure, "source path"):
+                validate_design_source_registry(project, "docs/design-sources.json", ROOT / "schemas")
+
+            registry = self.registry_v2()
+            registry["sources"][0]["status"] = "unknown"
+            registry["sources"][0]["path"] = None
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            with self.assertRaisesRegex(ValidationFailure, "requirements"):
+                validate_design_source_registry(project, "docs/design-sources.json", ROOT / "schemas")
+
+    def test_context_slicing_and_tactical_modeling_are_mandatory(self) -> None:
+        flow = self.catalog.flows["domain-design"]
+        nodes = {node.id: node for node in flow.nodes}
+        self.assertEqual(["boundary-validation"], nodes["context-slicing"].depends_on)
+        self.assertEqual(["context-slicing"], nodes["tactical-modeling"].depends_on)
+        self.assertEqual(["tactical-modeling"], nodes["capability-detailed-design"].depends_on)
+        self.assertEqual("always", nodes["context-slicing"].when)
+        self.assertEqual("always", nodes["tactical-modeling"].when)
+
+    def test_old_rc_state_selects_new_context_slicing_node_before_completion(self) -> None:
+        engine = RuntimeEngine(self.catalog)
+        state = engine.start(
+            "domain-task",
+            self.intent(),
+            run_id="domain-old-rc",
+            design_source_ref="docs/design-sources-v1.json",
+        )
+        state.completed_nodes = [
+            "resolve-design-sources",
+            "discover-domain-facts",
+            "strategic-design",
+            "resolve-domain-decisions",
+            "context-topology",
+            "boundary-validation",
+        ]
+        gate = engine.next(state)
+        self.assertEqual("continue", gate.decision)
+        self.assertEqual("context-slicing", gate.next_node)
 
     def test_missing_design_source_waits_without_selecting_a_flow_node(self) -> None:
         state = RuntimeEngine(self.catalog).start("domain-task", self.intent(), run_id="domain-1")

@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0.0-rc.2",
+  "version": "1.3.0.0-rc.1",
   "capabilities": [
     {"id": "route-engineering", "kind": "primitive", "owner": "engineering-assistant"},
     {"id": "research", "kind": "primitive", "owner": "research"},
@@ -35,6 +35,7 @@
     {"id": "domain-design-source", "kind": "internal", "owner": "flow:domain-design"},
     {"id": "context-topology", "kind": "internal", "owner": "flow:domain-design"},
     {"id": "boundary-validation", "kind": "internal", "owner": "flow:domain-design"},
+    {"id": "context-slicing", "kind": "internal", "owner": "flow:domain-design"},
     {"id": "capability-detailed-design", "kind": "internal", "owner": "flow:domain-design"},
     {"id": "domain-baseline-approval", "kind": "internal", "owner": "flow:domain-design"},
     {"id": "domain-integration", "kind": "pack", "owner": "pack:domain-integration"}

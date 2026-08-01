@@ -81,12 +81,18 @@
         {"language": "zh-CN", "request": "设计跨限界上下文的领域契约、集成事件和最终一致性治理。"},
         {"language": "zh-CN", "request": "把这项需求按领域设计流程拆成战略设计、BC 模型和能力级详细设计。"},
         {"language": "zh-CN", "request": "分析会员与营销领域的核心、支撑和通用子域，并映射限界上下文。"},
+        {"language": "zh-CN", "request": "为订单履约领域设计完成场景切片，追溯创建、取消和非法转换到各限界上下文。"},
+        {"language": "zh-CN", "request": "为遗留会员系统完成领域设计，不能把数据库表和 API 直接当作聚合边界。"},
+        {"language": "zh-CN", "request": "完成营销与权益的领域设计，证明一个 API 可以承载多个业务场景。"},
         {"language": "en", "request": "Create a domain-driven design from scratch with strategic and tactical design."},
         {"language": "en", "request": "Map subdomains, bounded contexts, context relationships, and deployment topology."},
         {"language": "en", "request": "Reverse engineer the legacy system into a DDD HLD and capability detailed designs."},
         {"language": "en", "request": "Design cross-bounded-context contracts and eventual consistency governance."},
         {"language": "en", "request": "Run the domain design flow for strategic design, BC models, and capability designs."},
-        {"language": "en", "request": "Classify core, supporting, and generic subdomains for the membership platform."}
+        {"language": "en", "request": "Classify core, supporting, and generic subdomains for the membership platform."},
+        {"language": "en", "request": "Run domain design with scenario slices for order creation, cancellation, and illegal transitions."},
+        {"language": "en", "request": "Create a legacy domain-driven design without deriving aggregate boundaries from tables or APIs."},
+        {"language": "en", "request": "Design bounded contexts where one contract supports several business scenarios."}
       ]
     },
     {

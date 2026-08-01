@@ -2,7 +2,7 @@
 
 `agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex 和 Hermes 提供可组合、可恢复、可验证的工程协作能力。
 
-- 当前版本：`1.2.0.0-rc.2`
+- 当前版本：`1.3.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes
 - 开发语言：Python 3.9+

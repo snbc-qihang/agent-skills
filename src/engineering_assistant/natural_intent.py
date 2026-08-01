@@ -23,10 +23,10 @@ SIGNATURES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("domain-design", (
         r"领域驱动设计", r"ddd.*(?:战略|战术|领域设计)", r"(?:战略|战术)设计.*(?:领域|ddd)",
         r"领域.*(?:子域|限界上下文|部署单元|能力详细设计)", r"(?:子域|限界上下文).*(?:部署|拓扑)",
-        r"ddd.*(?:反向建模|hld|详细设计)", r"领域设计流程", r"跨限界上下文.*(?:契约|集成|一致性)",
+        r"ddd.*(?:反向建模|hld|详细设计)", r"领域设计流程", r"领域设计.*(?:场景切片|数据库表|多个业务场景)", r"跨限界上下文.*(?:契约|集成|一致性)",
         r"domain-driven design", r"ddd.*(?:strategic|tactical|domain design)",
         r"(?:strategic|tactical) design.*(?:ddd|domain)", r"domain.*(?:subdomain|bounded context|deployment topology)",
-        r"(?:reverse engineer|legacy).*ddd", r"domain design flow", r"cross-bounded-context.*(?:contract|integration|consistency)",
+        r"(?:reverse engineer|legacy).*ddd", r"(?:legacy )?domain design.*(?:scenario slice|contract)", r"domain design flow", r"design bounded contexts.*(?:contract|scenario)", r"cross-bounded-context.*(?:contract|integration|consistency)",
         r"classify.*subdomain", r"core.*supporting.*generic.*subdomain",
     )),
     ("model", (

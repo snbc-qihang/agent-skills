@@ -20,6 +20,7 @@ description: 在明确的限界上下文中建立统一语言、业务规则、�
 任务涉及聚合、不变量、生命周期或实现映射时读取 [references/tactical-modeling.md](references/tactical-modeling.md)。
 创建或更新正式领域模型文档时读取 [references/model-artifact.md](references/model-artifact.md)。
 请求覆盖战略设计、多个限界上下文、部署拓扑或能力级详细设计时读取 [references/design-governance.md](references/design-governance.md)。
+请求正式领域设计、上下文切片或能力级详细设计时读取 [references/scenario-traceability.md](references/scenario-traceability.md)。
 存在跨限界上下文或外部模型协作时读取 [references/integration-consistency.md](references/integration-consistency.md)。
 只有决策确实需要 ADR 时才读取 [references/adr-format.md](references/adr-format.md)。
 

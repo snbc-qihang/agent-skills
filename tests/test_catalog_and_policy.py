@@ -28,7 +28,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(10, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("1.2.0.0-rc.2", self.catalog.version)
+        self.assertEqual("1.3.0.0-rc.1", self.catalog.version)
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}
@@ -102,6 +102,7 @@ class CatalogTests(unittest.TestCase):
                 "references/tactical-modeling.md",
                 "references/model-artifact.md",
                 "references/design-governance.md",
+                "references/scenario-traceability.md",
                 "references/integration-consistency.md",
                 "references/adr-format.md",
             },
@@ -110,6 +111,12 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(
             ["document-governance", "evidence-quality", "scope-control"],
             skill.policy_refs,
+        )
+        domain_policy = self.catalog.policies["domain-design-governance"]
+        self.assertTrue(
+            {"DDD-009", "DDD-010", "DDD-011"}.issubset(
+                {rule.id for rule in domain_policy.rules}
+            )
         )
 
     def test_entry_version_conflict_is_rejected(self) -> None:
