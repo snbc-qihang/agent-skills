@@ -27,7 +27,6 @@ from .model import (
     UsageObservationLedger,
 )
 from .usage_observation import UsageObservationController
-from .trust import parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
 
@@ -39,6 +38,11 @@ MAX_FEEDBACK_ARTIFACT_BYTES = 65_536
 MAX_DISPOSITION_CLOCK_SKEW_SECONDS = 300
 MAX_SUMMARY_RECURRENCE_KEYS = 256
 MAX_EVOLUTION_EXPORT_ITEMS = 1000
+
+
+def parse_time(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 _SECRET_PATTERNS = [
     re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}"),
@@ -161,7 +165,13 @@ class CaptureResult:
 
 
 class FeedbackStore:
-    def __init__(self, project_root: Path | str, schema_root: Path | str) -> None:
+    def __init__(
+        self,
+        project_root: Path | str,
+        schema_root: Path | str,
+        *,
+        allow_author_repository: bool = False,
+    ) -> None:
         self.project_root = Path(project_root).resolve()
         self.schema_root = Path(schema_root).resolve()
         self.root = self.project_root / FEEDBACK_ROOT
@@ -170,7 +180,13 @@ class FeedbackStore:
             self.root,
             lock_timeout_seconds=HOOK_LOCK_TIMEOUT_SECONDS,
         )
-        self.artifacts.assert_runtime_target(self.schema_root)
+        author_mode = allow_author_repository or os.environ.get(
+            "ENGINEERING_ASSISTANT_AUTHOR_MODE"
+        ) == "1"
+        self.artifacts.assert_runtime_target(
+            self.schema_root,
+            allow_author_repository=author_mode,
+        )
         self.artifacts.path()
 
     def capture_path(self, capture_id: str) -> Path:
@@ -735,13 +751,17 @@ class FeedbackCollector:
         ).hexdigest()[:24]
         observed_at = datetime.now(timezone.utc).isoformat()
         _, redaction_count = self._redact(response_summary)
+        run_id, task_id, flow_id, node_id = self._runtime_context(
+            payload.get("tool_response")
+        )
         event = None
         if mode == "candidates":
             event = FeedbackEvent(
                 event_id=event_id,
-                run_id=f"hook-{session_ref}",
-                task_id=f"hook-{session_ref}",
-                node_id=None,
+                run_id=run_id or f"hook-{session_ref}",
+                task_id=task_id or run_id or f"hook-{session_ref}",
+                node_id=node_id,
+                flow_id=flow_id,
                 turn_id=turn_ref,
                 event_type="tool_failure",
                 severity="info",
@@ -858,11 +878,12 @@ class FeedbackCollector:
             status = "metadata_only"
             signal = None
         elif signal is None:
-            status = "no_signal"
+            return CaptureResult(None, None)
         else:
             status = "candidate_created"
 
         observed_at = datetime.now(timezone.utc).isoformat()
+        runtime_context = self._active_run_context(project_root)
         event = self._event(
             signal=signal,
             event_name=event_name,
@@ -871,6 +892,7 @@ class FeedbackCollector:
             turn_ref=turn_ref,
             observed_at=observed_at,
             affected_asset_refs=self._asset_refs(content),
+            runtime_context=runtime_context,
         )
         capture = FeedbackCapture(
             capture_id=capture_id,
@@ -903,6 +925,7 @@ class FeedbackCollector:
         turn_ref: str,
         observed_at: str,
         affected_asset_refs: list[str],
+        runtime_context: tuple[str, str, str, str | None] | None,
     ) -> FeedbackEvent | None:
         if signal is None:
             return None
@@ -914,11 +937,16 @@ class FeedbackCollector:
             f"{capture_id}\0{recurrence_key}".encode("utf-8")
         ).hexdigest()[:24]
         is_human = event_name == "UserPromptSubmit"
+        run_id = runtime_context[0] if runtime_context else f"hook-{session_ref}"
+        task_id = runtime_context[1] if runtime_context else f"hook-{session_ref}"
+        flow_id = runtime_context[2] if runtime_context else None
+        node_id = runtime_context[3] if runtime_context else None
         return FeedbackEvent(
             event_id=event_id,
-            run_id=f"hook-{session_ref}",
-            task_id=f"hook-{session_ref}",
-            node_id=None,
+            run_id=run_id,
+            task_id=task_id,
+            node_id=node_id,
+            flow_id=flow_id,
             turn_id=turn_ref,
             event_type=event_type,
             severity=severity,
@@ -1020,6 +1048,73 @@ class FeedbackCollector:
         return "tool-error" if tool_error else None
 
     @staticmethod
+    def _runtime_context(
+        response: object,
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        pending = [response]
+        visited = 0
+        while pending and visited < 64:
+            current = pending.pop()
+            visited += 1
+            if isinstance(current, str):
+                try:
+                    decoded = json.loads(current)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                pending.append(decoded)
+                continue
+            if isinstance(current, list):
+                pending.extend(current)
+                continue
+            if not isinstance(current, Mapping):
+                continue
+            state = current.get("state")
+            if isinstance(state, Mapping) and isinstance(state.get("run_id"), str):
+                return (
+                    state["run_id"],
+                    state.get("task_id") if isinstance(state.get("task_id"), str) else None,
+                    state.get("flow_id") if isinstance(state.get("flow_id"), str) else None,
+                    state.get("current_node") if isinstance(state.get("current_node"), str) else None,
+                )
+            pending.extend(current.values())
+        return None, None, None, None
+
+    @staticmethod
+    def _active_run_context(
+        project_root: Path | str,
+    ) -> tuple[str, str, str, str | None] | None:
+        run_root = Path(project_root).resolve() / ".run-artifacts/engineering-assistant"
+        if not run_root.is_dir():
+            return None
+        active = []
+        try:
+            for path in sorted(run_root.glob("*/run-state.json"))[:256]:
+                if path.stat().st_size > 262_144:
+                    continue
+                state = json.loads(path.read_text(encoding="utf-8"))
+                if (
+                    state.get("schema_version") == "2"
+                    and state.get("status") not in {"blocked", "cancelled", "completed"}
+                    and all(
+                        isinstance(state.get(key), str) and state.get(key)
+                        for key in ("run_id", "task_id", "flow_id")
+                    )
+                ):
+                    active.append(state)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+        if len(active) != 1:
+            return None
+        state = active[0]
+        node_id = state.get("current_node")
+        return (
+            state["run_id"],
+            state["task_id"],
+            state["flow_id"],
+            node_id if isinstance(node_id, str) else None,
+        )
+
+    @staticmethod
     def _tool_category(tool_name: str) -> str:
         lowered = tool_name.casefold()
         if lowered == "bash":
@@ -1092,6 +1187,7 @@ def summarize_feedback_events(
     schema_root: Path | str = DEFAULT_REPOSITORY_ROOT / "schemas",
     *,
     item_limit: int = 100,
+    run_id: str | None = None,
 ) -> dict:
     if item_limit < 0 or item_limit > 1000:
         raise ValidationFailure("feedback summary item limit must be between 0 and 1000")
@@ -1109,6 +1205,8 @@ def summarize_feedback_events(
     for event in store.iter_feedback_events():
         if event is None:
             skipped_invalid_event_count += 1
+            continue
+        if run_id is not None and event.get("run_id") != run_id:
             continue
         event_count += 1
         event_type_counts[event["event_type"]] = event_type_counts.get(event["event_type"], 0) + 1

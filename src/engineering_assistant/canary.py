@@ -1,4 +1,4 @@
-"""Prepare unsigned, reproducible canary evidence bundles for external attestation."""
+"""Prepare reproducible, locally audited canary evidence bundles."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from .artifact_io import (
 )
 from . import canary_limits
 from .canary_protocol import audit_canary_protocol, canonical_digest
-from .trust import TrustVerifier, canary_observation_claims, parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
 
@@ -79,6 +78,17 @@ DELEGATION_ABLATION_ARMS = frozenset(
         "full_local_control",
     }
 )
+
+
+def _parse_time(value: str):
+    from datetime import datetime, timezone
+
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
+def _observation_claims(observation: Mapping[str, Any]) -> dict[str, Any]:
+    return {"canary_observation": {"digest": canonical_digest(observation)}}
 
 
 def validate_canary_measurements(payload: Mapping[str, Any]) -> None:
@@ -1060,10 +1070,8 @@ def prepare_canary_bundle(
     output_root: Path | str,
     *,
     repository_root: Path | str,
-    evidence_broker_id: str,
-    host_trust_config_digest: str,
 ) -> dict[str, Any]:
-    """Copy raw artifacts and emit unsigned claims; never emits an attestation."""
+    """Copy raw artifacts and emit local, non-attested audit observations."""
 
     manifest_path = Path(manifest_path)
     if manifest_path.is_symlink():
@@ -1091,11 +1099,6 @@ def prepare_canary_bundle(
         load_json(schema_root / "preparation-manifest.schema.json"),
         "canary-preparation-manifest",
     )
-    trust_provenance = {
-        "evidence_broker_id": evidence_broker_id,
-        "host_trust_config_digest": host_trust_config_digest,
-    }
-
     staging_name = f".{output_root.name}.staging-{secrets.token_hex(6)}"
     _staging_path, staging_fd, staging_metadata = (
         output_io.create_directory_exclusive_open(staging_name)
@@ -1119,7 +1122,7 @@ def prepare_canary_bundle(
                     f"duplicate canary preparation run for {key[0]} {key[1]}"
                 )
             seen.add(key)
-            if parse_time(run["finished_at"]) < parse_time(run["started_at"]):
+            if _parse_time(run["finished_at"]) < _parse_time(run["started_at"]):
                 raise ValidationFailure("canary run finishes before it starts")
             validate_canary_measurements(run)
             if set(run["artifact_paths"]) != set(run["artifact_measurements"]):
@@ -1196,7 +1199,7 @@ def prepare_canary_bundle(
                 "product_repository": manifest["product_repository"],
                 **{field: run[field] for field in OBSERVATION_FIELDS if field in run},
                 "artifact_refs": artifact_refs,
-                "trust_provenance": trust_provenance,
+                "assurance": "local_unattested",
             }
             if promotion_projection is not None:
                 for field in (*ALL_MEASUREMENT_FIELDS, *PROMOTION_BINDING_FIELDS):
@@ -1210,13 +1213,13 @@ def prepare_canary_bundle(
             missing_fields = sorted(
                 field for field in required_measurements if field not in observation
             )
-            status = "incomplete" if missing_fields else "awaiting_attestation"
+            status = "incomplete" if missing_fields else "ready_local_audit"
             draft = {
                 "schema_version": "1.0",
                 "status": status,
                 "observation": observation,
                 "missing_fields": missing_fields,
-                "claims": canary_observation_claims(observation),
+                "claims": _observation_claims(observation),
             }
             validate_instance(
                 draft,
@@ -1242,11 +1245,11 @@ def prepare_canary_bundle(
 
         report = {
             "schema_version": "1.0",
-            "status": "incomplete" if incomplete_runs else "awaiting_attestation",
+            "status": "incomplete" if incomplete_runs else "ready_local_audit",
+            "assurance": "local_unattested",
             "draft_count": len(draft_refs),
             "draft_refs": draft_refs,
             "incomplete_runs": incomplete_runs,
-            "attestation_source": "external_evidence_broker_only",
             "canary_result_generated": False,
         }
         staging_io.write_bytes_exclusive(
@@ -1294,120 +1297,3 @@ def prepare_canary_bundle(
         except Exception:
             pass
         raise
-
-
-def import_canary_attestation(
-    evidence_root: Path | str,
-    draft_ref: str,
-    response_ref: str,
-    output_ref: str,
-    *,
-    trust_verifier: TrustVerifier | None,
-    evidence_broker_id: str,
-    host_trust_config_digest: str,
-    repository_root: Path | str,
-) -> dict[str, Any]:
-    """Verify an external receipt against an unchanged draft and persist evidence."""
-
-    if trust_verifier is None:
-        raise ValidationFailure("canary attestation import requires an external evidence broker")
-    evidence_root = Path(evidence_root).resolve()
-    repository_root = Path(repository_root).resolve()
-    artifacts = ArtifactIO(evidence_root, ".")
-    artifacts.assert_runtime_target(repository_root / "schemas")
-    draft_parts = Path(draft_ref).parts
-    response_parts = Path(response_ref).parts
-    output_parts = Path(output_ref).parts
-    draft, draft_raw = artifacts.read_json_limited(
-        canary_limits.MAX_OBSERVATION_BYTES,
-        *draft_parts,
-    )
-    response, _response_raw = artifacts.read_json_limited(
-        canary_limits.MAX_ATTESTATION_RESPONSE_BYTES,
-        *response_parts,
-    )
-    schema_root = repository_root / "evals/canary"
-    validate_instance(
-        draft,
-        load_json(schema_root / "observation-draft.schema.json"),
-        "canary-observation-draft",
-    )
-    validate_canary_measurements(draft["observation"])
-    validate_measurement_evidence_coverage(
-        draft["observation"],
-        (
-            item["measurement_kinds"]
-            for item in draft["observation"]["artifact_refs"]
-        ),
-    )
-    artifact_refs = draft["observation"]["artifact_refs"]
-    unique_artifact_keys = {
-        (artifact["path"], artifact["digest"])
-        for artifact in artifact_refs
-    }
-    if len(unique_artifact_keys) > canary_limits.MAX_TOTAL_ARTIFACTS:
-        raise ValidationFailure("canary attestation import has too many artifacts")
-    imported_artifacts = []
-    artifact_payloads: dict[tuple[str, str], bytes] = {}
-    total_artifact_bytes = 0
-    for artifact in artifact_refs:
-        key = (artifact["path"], artifact["digest"])
-        raw = artifact_payloads.get(key)
-        if raw is None:
-            raw = artifacts.read_bytes_limited(
-                canary_limits.MAX_ARTIFACT_BYTES,
-                *Path(artifact["path"]).parts,
-            )
-            if _sha256_bytes(raw) != artifact["digest"]:
-                raise ValidationFailure("canary artifact digest does not match")
-            total_artifact_bytes += len(raw)
-            if total_artifact_bytes > canary_limits.MAX_TOTAL_ARTIFACT_BYTES:
-                raise ValidationFailure(
-                    "canary attestation import exceeds the total artifact bytes limit"
-                )
-            artifact_payloads[key] = raw
-        imported_artifacts.append((artifact, raw))
-    validate_ablation_artifact_bindings(
-        draft["observation"], imported_artifacts, schema_root=schema_root
-    )
-    validate_instance(
-        response,
-        load_json(schema_root / "attestation-response.schema.json"),
-        "canary-attestation-response",
-    )
-    if _sha256_bytes(draft_raw) != response["draft_digest"]:
-        raise ValidationFailure("canary attestation response targets a different draft")
-    if draft["status"] != "awaiting_attestation" or draft["missing_fields"]:
-        raise ValidationFailure("incomplete canary observation cannot be attested")
-    expected_claims = canary_observation_claims(draft["observation"])
-    if draft["claims"] != expected_claims:
-        raise ValidationFailure("canary draft claims do not match its observation")
-    expected_provenance = {
-        "evidence_broker_id": evidence_broker_id,
-        "host_trust_config_digest": host_trust_config_digest,
-    }
-    if draft["observation"].get("trust_provenance") != expected_provenance:
-        raise ValidationFailure(
-            "canary draft was prepared under a different host trust binding"
-        )
-    observation = {**draft["observation"], "attestation": response["attestation"]}
-    validate_instance(
-        observation,
-        load_json(schema_root / "run-evidence.schema.json"),
-        "canary-run-evidence",
-    )
-    if not trust_verifier.verify_canary_observation(observation):
-        raise ValidationFailure("canary observation attestation is not trusted")
-    try:
-        path, created = artifacts.create_immutable_json_with_status(
-            observation,
-            *output_parts,
-            existing_max_bytes=canary_limits.MAX_OBSERVATION_BYTES,
-        )
-    except ArtifactConflict as exc:
-        raise ValidationFailure("canary run evidence already exists with different content") from exc
-    return {
-        "status": "imported" if created else "already_imported",
-        "evidence_ref": path.relative_to(evidence_root).as_posix(),
-        "draft_digest": response["draft_digest"],
-    }

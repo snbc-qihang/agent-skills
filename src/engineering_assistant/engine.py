@@ -12,14 +12,13 @@ from .governance import QualityGate, QualityStore
 from .model import (
     FlowNode,
     GateDecision,
+    ApprovalRecord,
     QualitySnapshot,
     RouteIntent,
-    RunApprovalGrant,
     RunState,
     StepResult,
 )
 from .router import route_intent
-from .trust import TrustVerifier, parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
 
@@ -59,19 +58,22 @@ class RuntimeEngine:
             )
         if decision.decision in {"ask", "block"}:
             raise ValidationFailure(f"cannot start a run from route decision {decision.decision}")
-        approvals: list[str] = []
-        required = list(decision.approval_required)
-        missing = [item for item in required if item not in approvals]
+        if decision.decision != "proceed":
+            raise ValidationFailure(
+                f"cannot start a run from route decision {decision.decision}"
+            )
+        required: list[str] = []
         missing_design_source = decision.flow_id == "domain-design" and not design_source_ref
         status = (
             "waiting_for_input"
             if missing_design_source
-            else "waiting_for_approval" if missing else "initialized"
+            else "initialized"
         )
         resolved_context_refs = list(dict.fromkeys(context_refs or []))
         if design_source_ref:
             resolved_context_refs.append(f"design-source:{design_source_ref}")
         state = RunState(
+            schema_version="2",
             run_id=run_id or f"run-{uuid4().hex[:16]}",
             task_id=task_id,
             profile_id=profile_id,
@@ -84,14 +86,11 @@ class RuntimeEngine:
             evidence_refs=[],
             open_questions=[],
             required_approvals=required,
-            approvals=approvals,
-            approval_expiries={},
-            approval_records=[],
             transition_history=[],
             next_actions=(
                 ["provide design_source_ref: project-relative registry path"]
                 if missing_design_source
-                else [f"obtain approval: {item}" for item in missing]
+                else []
             ),
             revision=0,
         )
@@ -99,58 +98,53 @@ class RuntimeEngine:
         self._validate_state(state)
         return state
 
-    def apply_approval(
+    def apply_approval_record(
         self,
         state: RunState,
-        grant: RunApprovalGrant,
+        record: ApprovalRecord,
         *,
-        verifier: TrustVerifier | None,
-        expected_broker_id: str,
-        expected_audience: str,
+        approval_records: list[ApprovalRecord],
     ) -> GateDecision:
         self._assert_not_terminal(state)
         validate_instance(
-            grant.to_dict(),
-            load_json(self.catalog.root / "schemas/run-approval-grant.schema.json"),
-            "run-approval-grant",
+            record.to_dict(),
+            load_json(self.catalog.root / "schemas/approval-record.schema.json"),
+            "approval-record",
         )
-        if verifier is None or not verifier.verify_run_approval(grant):
-            raise ValidationFailure("run approval requires a valid external broker grant")
-        if grant.broker_id != expected_broker_id:
-            raise ValidationFailure("run approval grant has the wrong broker")
-        if grant.audience != expected_audience:
-            raise ValidationFailure("run approval grant has the wrong audience")
-        if grant.run_id != state.run_id or grant.run_revision != state.revision:
-            raise ValidationFailure("run approval grant targets a different or stale run")
-        now = datetime.now(timezone.utc)
-        if parse_time(grant.issued_at) > now or parse_time(grant.expires_at) <= now:
-            raise ValidationFailure("run approval grant is not currently valid")
-        if grant.approval_id not in state.required_approvals:
+        if record.run_id != state.run_id or record.run_revision != state.revision:
+            raise ValidationFailure("approval record targets a different or stale run")
+        if record.approval_id not in state.required_approvals:
             raise ValidationFailure(
-                f"approval {grant.approval_id} is not required by this run"
+                f"approval {record.approval_id} is not required by this run"
             )
         required_scope = {
             f"flow:{state.flow_id}",
-            f"approval:{grant.approval_id}",
+            f"approval:{record.approval_id}",
         }
-        if not required_scope.issubset(grant.scope):
-            raise ValidationFailure("run approval grant has insufficient scope")
-        if grant.approval_id not in state.approvals:
-            state.approvals.append(grant.approval_id)
-        state.approval_expiries[grant.approval_id] = grant.expires_at
-        approval_record = grant.to_dict()
-        approval_record.pop("token", None)
-        state.approval_records.append(approval_record)
-        missing = self._missing_approvals(state)
+        if not required_scope.issubset(record.scope):
+            raise ValidationFailure("approval record has insufficient scope")
+        if record.decision == "rejected":
+            state.status = "blocked"
+            state.next_actions = []
+            self._record(state, "approval-rejected", "blocked", record.reason)
+            gate = GateDecision("block", [], [], "Approval was rejected.", None)
+            self._validate_gate(gate)
+            return gate
+        missing = self._missing_approvals(state, [*approval_records, record])
         state.next_actions = [f"obtain approval: {item}" for item in missing]
         state.status = "waiting_for_approval" if missing else "initialized"
-        self._record(state, "approval", state.status, grant.grant_id)
+        self._record(state, "approval", state.status, record.record_id)
         decision = "pause_for_approval" if missing else "continue"
         gate = GateDecision(decision, [], missing, "Approval recorded.", None)
         self._validate_gate(gate)
         return gate
 
-    def next(self, state: RunState) -> GateDecision:
+    def next(
+        self,
+        state: RunState,
+        *,
+        approval_records: list[ApprovalRecord] | None = None,
+    ) -> GateDecision:
         self._assert_not_terminal(state)
         if state.flow_id == "domain-design" and not any(
             ref.startswith("design-source:") for ref in state.context_refs
@@ -166,7 +160,7 @@ class RuntimeEngine:
             )
             self._validate_gate(gate)
             return gate
-        missing_approvals = self._missing_approvals(state)
+        missing_approvals = self._missing_approvals(state, approval_records or [])
         if missing_approvals:
             state.status = "waiting_for_approval"
             state.next_actions = [f"obtain approval: {item}" for item in missing_approvals]
@@ -215,6 +209,7 @@ class RuntimeEngine:
         *,
         evidence_store: EvidenceStore,
         evidence_max_age_seconds: int | None = None,
+        approval_records: list[ApprovalRecord] | None = None,
     ) -> GateDecision:
         self._assert_not_terminal(state)
         validate_instance(
@@ -247,9 +242,9 @@ class RuntimeEngine:
                 raise ValidationFailure(
                     f"step references unregistered evidence: {evidence_id}"
                 ) from exc
-            if item.trust_level not in {"observed", "verified"}:
+            if item.provenance not in {"runtime_observed", "user_confirmed"}:
                 raise ValidationFailure(
-                    f"step evidence {evidence_id} must be observed or verified"
+                    f"step evidence {evidence_id} must be runtime_observed or user_confirmed"
                 )
             evidence[evidence_id] = item
         profile_evidence = self.catalog.profiles[state.profile_id].evidence_policy
@@ -265,7 +260,7 @@ class RuntimeEngine:
         now = datetime.now(timezone.utc)
         stale_or_future = []
         for evidence_id, item in evidence.items():
-            age = (now - parse_time(item.observed_at)).total_seconds()
+            age = (now - self._parse_time(item.observed_at)).total_seconds()
             if age > effective_max_age or age < -max_future_skew:
                 stale_or_future.append(evidence_id)
         if stale_or_future:
@@ -285,7 +280,12 @@ class RuntimeEngine:
             if not result.outputs:
                 raise ValidationFailure(f"skipped node {node.id} must record why its condition is not applicable")
             state.skipped_nodes.append(node.id)
-            return self._advance_after_resolution(state, node, "Node skipped because its condition is not applicable.")
+            return self._advance_after_resolution(
+                state,
+                node,
+                "Node skipped because its condition is not applicable.",
+                approval_records=approval_records or [],
+            )
         if result.status == "blocked" or result.requested_transition == "block":
             return self._terminal_gate(state, "blocked", "block", node, "Step reported a blocking condition.")
         if result.requested_transition == "rework":
@@ -299,7 +299,9 @@ class RuntimeEngine:
                 self._register_required_approvals(state, node, result.required_approvals)
                 transition = "pause_for_approval"
                 status = "waiting_for_approval"
-            missing_approvals = self._missing_approvals(state)
+            missing_approvals = self._missing_approvals(
+                state, approval_records or []
+            )
             state.status = status
             state.next_actions = (
                 [f"obtain approval: {item}" for item in missing_approvals]
@@ -333,7 +335,9 @@ class RuntimeEngine:
                 node,
                 ["domain-business-owner", "domain-architecture-owner"],
             )
-            missing_approvals = self._missing_approvals(state)
+            missing_approvals = self._missing_approvals(
+                state, approval_records or []
+            )
             if missing_approvals:
                 state.status = "waiting_for_approval"
                 state.next_actions = [f"obtain approval: {item}" for item in missing_approvals]
@@ -392,7 +396,7 @@ class RuntimeEngine:
         referenced_kinds = {
             evidence[evidence_id].kind for evidence_id in criterion_evidence_ids
         }
-        if not self._missing_approvals(state) and state.required_approvals:
+        if not self._missing_approvals(state, approval_records or []) and state.required_approvals:
             referenced_kinds.add("approval")
         missing_policy_evidence = []
         for policy_id in node.policy_refs:
@@ -422,7 +426,12 @@ class RuntimeEngine:
             self._validate_gate(gate)
             return gate
         state.completed_nodes.append(node.id)
-        return self._advance_after_resolution(state, node, "Step completion criteria passed with registered evidence.")
+        return self._advance_after_resolution(
+            state,
+            node,
+            "Step completion criteria passed with registered evidence.",
+            approval_records=approval_records or [],
+        )
 
     def _evaluate_quality_snapshot(
         self,
@@ -463,12 +472,19 @@ class RuntimeEngine:
         payload["criterion_ids"] = criterion_ids(node)
         return payload
 
-    def _advance_after_resolution(self, state: RunState, node: FlowNode, reason: str) -> GateDecision:
+    def _advance_after_resolution(
+        self,
+        state: RunState,
+        node: FlowNode,
+        reason: str,
+        *,
+        approval_records: list[ApprovalRecord],
+    ) -> GateDecision:
         state.current_node = None
         state.status = "running"
         state.next_actions = []
         self._record(state, "resolve-node", "running", reason)
-        gate = self.next(state)
+        gate = self.next(state, approval_records=approval_records)
         if gate.decision == "continue":
             return GateDecision("continue", list(node.policy_refs), [], reason, gate.next_node)
         return gate
@@ -559,20 +575,39 @@ class RuntimeEngine:
         raise ValidationFailure(f"flow {state.flow_id} has no node {node_id}")
 
     @staticmethod
-    def _missing_approvals(state: RunState) -> list[str]:
-        now = datetime.now(timezone.utc)
-        missing = []
-        for item in state.required_approvals:
-            expiry_text = state.approval_expiries.get(item)
-            try:
-                expiry = datetime.fromisoformat(expiry_text) if expiry_text else None
-                if expiry is not None and expiry.tzinfo is None:
-                    expiry = expiry.replace(tzinfo=timezone.utc)
-            except ValueError:
-                expiry = None
-            if item not in state.approvals or expiry is None or expiry <= now:
-                missing.append(item)
-        return missing
+    def _missing_approvals(
+        state: RunState,
+        approval_records: list[ApprovalRecord],
+    ) -> list[str]:
+        matching = [
+            record
+            for record in approval_records
+            if record.run_id == state.run_id
+            and record.decision == "approved"
+            and f"flow:{state.flow_id}" in record.scope
+            and f"approval:{record.approval_id}" in record.scope
+        ]
+        approved = {record.approval_id for record in matching}
+        dual_owner_ids = {"domain-business-owner", "domain-architecture-owner"}
+        if state.flow_id == "domain-design" and dual_owner_ids.issubset(
+            state.required_approvals
+        ):
+            owner_records = {
+                record.approval_id: record
+                for record in matching
+                if record.approval_id in dual_owner_ids
+            }
+            if (
+                len(owner_records) == 2
+                and len({record.actor_ref for record in owner_records.values()}) != 2
+            ):
+                approved.discard("domain-architecture-owner")
+        return [item for item in state.required_approvals if item not in approved]
+
+    @staticmethod
+    def _parse_time(value: str) -> datetime:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
     @staticmethod
     def _assert_not_terminal(state: RunState) -> None:

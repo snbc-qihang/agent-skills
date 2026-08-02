@@ -74,6 +74,7 @@ def normalize_request(request: str) -> RouteIntent:
         scope=[],
         risk_signals=risks,
         requested_external_actions=actions,
+        confirmed_actions=[],
         confidence=confidence,
         evidence=["自然语言请求由确定性 eval adapter 规范化"],
     )

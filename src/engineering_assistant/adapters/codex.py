@@ -96,6 +96,9 @@ class CodexAdapter:
             json.dumps(
                 {
                     "hooks": {
+                        "UserPromptSubmit": [
+                            {"hooks": [hook_handler]}
+                        ],
                         "PreToolUse": [
                             {
                                 "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
@@ -107,6 +110,9 @@ class CodexAdapter:
                                 "matcher": "^mcp__engineering_assistant__engineering_assistant_.*$",
                                 "hooks": [hook_handler],
                             }
+                        ],
+                        "Stop": [
+                            {"hooks": [hook_handler]}
                         ],
                     }
                 },

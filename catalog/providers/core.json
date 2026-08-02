@@ -1,9 +1,9 @@
 {
-  "version": "1.3.0.0-rc.1",
+  "version": "2.0.0.0-rc.1",
   "providers": [
     {
       "id": "native-engineering",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "mode": "native",
       "capability_ids": [
         "route-engineering", "research", "decision-interview", "domain-modeling",
@@ -28,7 +28,7 @@
     },
     {
       "id": "ui-ux-pro-max",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "mode": "external_cli",
       "capability_ids": ["frontend-design", "product-prototype-review"],
       "input_schema_ref": "schemas/provider-invocation.schema.json",

@@ -1,9 +1,9 @@
 {
-  "version": "1.3.0.0-rc.1",
+  "version": "2.0.0.0-rc.1",
   "packs": [
     {
       "id": "frontend-product",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务改变浏览器或应用用户体验"],
       "capabilities": ["frontend-design", "frontend-implementation", "product-prototype-review"],
       "policy_refs": ["frontend-product", "evidence-quality"],
@@ -11,7 +11,7 @@
     },
     {
       "id": "database",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务改变 schema、查询、索引、事务、迁移或数据修复"],
       "capabilities": ["database-design"],
       "policy_refs": ["risk-approval", "evidence-quality"],
@@ -19,7 +19,7 @@
     },
     {
       "id": "redis",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务改变 Redis key、缓存、锁或失效逻辑"],
       "capabilities": ["redis-design"],
       "policy_refs": ["risk-approval", "evidence-quality"],
@@ -27,7 +27,7 @@
     },
     {
       "id": "mq",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务改变 topic、消息 schema、生产者、消费者、重试或回放"],
       "capabilities": ["mq-design"],
       "policy_refs": ["risk-approval", "evidence-quality"],
@@ -35,7 +35,7 @@
     },
     {
       "id": "quality-evidence",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["flow 声明实现、评审或发布完成"],
       "capabilities": ["quality-evidence"],
       "policy_refs": ["evidence-quality", "team-standards"],
@@ -43,7 +43,7 @@
     },
     {
       "id": "document-governance",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务创建、提升或废弃正式项目文档"],
       "capabilities": [],
       "policy_refs": ["document-governance"],
@@ -51,7 +51,7 @@
     },
     {
       "id": "release-safety",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["任务进入发布就绪、验证、回滚或生产观察"],
       "capabilities": ["release-readiness", "release-verification"],
       "policy_refs": ["release-safety", "risk-approval"],
@@ -59,7 +59,7 @@
     },
     {
       "id": "feedback-evolution",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["有证据反馈可能改变 skill、flow、policy 或 eval"],
       "capabilities": ["release-retrospective", "feedback-ingest", "knowledge-mining", "skill-evolution", "skill-quality"],
       "policy_refs": ["feedback-evolution", "evidence-quality"],
@@ -67,7 +67,7 @@
     },
     {
       "id": "domain-integration",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["领域设计识别到跨限界上下文协作或外部模型边界"],
       "capabilities": ["domain-integration"],
       "policy_refs": ["domain-design-governance", "evidence-quality", "scope-control"],
@@ -75,7 +75,7 @@
     },
     {
       "id": "team-standards",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "activation": ["仓库或项目 profile 提供团队规则"],
       "capabilities": [],
       "policy_refs": ["team-standards"],

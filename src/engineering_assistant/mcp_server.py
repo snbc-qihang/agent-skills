@@ -16,6 +16,8 @@ from .artifact_validation import ARTIFACT_SCHEMAS, validate_artifact_payload
 from .catalog import DEFAULT_REPOSITORY_ROOT, load_catalog
 from .artifact_io import ArtifactConflict
 from .codec import (
+    approval_record_from_dict,
+    investigation_decision_record_from_dict,
     investigation_request_from_dict,
     quality_snapshot_from_dict,
     provider_invocation_from_dict,
@@ -32,11 +34,10 @@ from .governance import (
     QualityStore,
     investigation_evidence_contract,
 )
-from .model import ProviderResult
+from .model import ApprovalRecord, InvestigationDecisionRecord, ProviderResult
 from .provider_runtime import ProviderExecutor
-from .router import route_intent
-from .state_store import StateStore
-from .trust import TrustVerifier
+from .router import ROUTES, route_intent
+from .state_store import ApprovalStore, StateStore
 from .validation import ValidationFailure, load_json, validate_instance
 from .version import CANONICAL_VERSION
 
@@ -61,37 +62,21 @@ class RuntimeTools:
     def __init__(
         self,
         repository_root: Path | str = DEFAULT_REPOSITORY_ROOT,
-        *,
-        trust_verifier: TrustVerifier | None = None,
-        evidence_broker_enabled: bool = False,
-        approval_broker_enabled: bool = False,
     ) -> None:
         self.catalog = load_catalog(repository_root)
-        self.trust_verifier = trust_verifier
-        self.evidence_broker_enabled = bool(
-            trust_verifier is not None and evidence_broker_enabled
-        )
-        self.approval_broker_enabled = bool(
-            trust_verifier is not None and approval_broker_enabled
-        )
         schemas = self.catalog.root / "schemas"
         self._route_intent_schema = load_json(schemas / "route-intent.schema.json")
         self._step_result_schema = load_json(schemas / "step-result.schema.json")
         self._evidence_schema = load_json(schemas / "evidence-ref.schema.json")
-        self._evidence_claim_schema = _object_schema(
-            {
-                "id": {"type": "string", "minLength": 1},
-                "kind": self._evidence_schema["properties"]["kind"],
-                "uri": {"type": "string", "minLength": 1},
-                "scope": {"type": "string", "minLength": 1},
-            },
-            ["id", "kind", "uri", "scope"],
-        )
         self._quality_snapshot_schema = load_json(schemas / "quality-snapshot.schema.json")
         self._provider_invocation_schema = load_json(
             schemas / "provider-invocation.schema.json"
         )
         self._investigation_request_schema = load_json(schemas / "investigation-request.schema.json")
+        self._approval_record_schema = load_json(schemas / "approval-record.schema.json")
+        self._investigation_decision_schema = load_json(
+            schemas / "investigation-decision-record.schema.json"
+        )
         self._definitions = self._build_definitions()
 
     def _build_definitions(self) -> list[dict]:
@@ -127,6 +112,25 @@ class RuntimeTools:
                         "artifact": {"type": "object"},
                     },
                     ["kind", "artifact"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_feedback_summary",
+                "title": "读取反馈汇总",
+                "description": "按当前项目和可选 run 读取结构化反馈汇总；不会修改正式资产。",
+                "inputSchema": _object_schema(
+                    {
+                        "project_root": project_root,
+                        "run_id": {"type": ["string", "null"], "minLength": 1},
+                        "limit": {"type": "integer", "minimum": 0, "maximum": 1000},
+                    },
+                    ["project_root"],
                 ),
                 "annotations": {
                     "readOnlyHint": True,
@@ -182,19 +186,100 @@ class RuntimeTools:
                 },
             },
             {
+                "name": "engineering_assistant_runs_list",
+                "title": "列出持久化运行",
+                "description": "分页读取项目中的运行；默认只返回未终止运行。",
+                "inputSchema": _object_schema(
+                    {
+                        "project_root": project_root,
+                        "profile": profile,
+                        "include_terminal": {"type": "boolean", "default": False},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "after_run_id": {"type": ["string", "null"]},
+                    },
+                    ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_run_status",
+                "title": "读取运行状态",
+                "description": "读取一个运行的当前状态、节点和执行指导。",
+                "inputSchema": _object_schema(
+                    {
+                        "run_id": {"type": "string", "minLength": 1},
+                        "project_root": project_root,
+                        "profile": profile,
+                    },
+                    ["run_id", "project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_evidence_register",
+                "title": "登记本地运行证据",
+                "description": "登记证据；项目内文件由 Runtime 校验边界并计算摘要，远程引用固定为 agent_reported。",
+                "inputSchema": _object_schema(
+                    {
+                        "run_id": {"type": "string", "minLength": 1},
+                        "project_root": project_root,
+                        "evidence_id": {"type": "string", "minLength": 1},
+                        "kind": self._evidence_schema["properties"]["kind"],
+                        "uri": {"type": "string", "minLength": 1},
+                        "producer": {"type": "string", "minLength": 1},
+                        "scope": {"type": "string", "minLength": 1},
+                        "scope_tags": self._evidence_schema["properties"]["scope_tags"],
+                        "contract_refs": self._evidence_schema["properties"]["contract_refs"],
+                        "subject_digest": self._evidence_schema["properties"]["subject_digest"],
+                        "profile": profile,
+                    },
+                    ["run_id", "project_root", "evidence_id", "kind", "uri", "producer", "scope", "scope_tags", "contract_refs"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_approval_record",
+                "title": "记录用户审批决定",
+                "description": "记录对话中的明确用户决定；只提供本地追溯，不声明身份验签。",
+                "inputSchema": _object_schema(
+                    {
+                        key: value
+                        for key, value in self._approval_record_schema["properties"].items()
+                        if key != "recorded_at"
+                    } | {"project_root": project_root, "profile": profile},
+                    [key for key in self._approval_record_schema["required"] if key != "recorded_at"] + ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
                 "name": "engineering_assistant_complete",
                 "title": "提交节点结果",
-                "description": "验证节点结果及宿主登记证据，执行门禁并持久化下一状态；模型不能通过 evidence_claims 登记完成证据，失败不会被口头放行。",
+                "description": "验证节点结果及已登记证据，执行门禁并持久化下一状态。",
                 "inputSchema": _object_schema(
                     {
                         "run_id": {"type": "string", "minLength": 1},
                         "project_root": project_root,
                         "result": self._step_result_schema,
-                        "evidence_claims": {
-                            "type": "array",
-                            "items": self._evidence_claim_schema,
-                            "description": "兼容字段；非空输入会在任何写入前被拒绝，证据必须由宿主导入。",
-                        },
                         "evidence_max_age_seconds": {"type": ["integer", "null"], "minimum": 1},
                         "profile": profile,
                     },
@@ -287,6 +372,25 @@ class RuntimeTools:
                 },
             },
             {
+                "name": "engineering_assistant_investigation_decide",
+                "title": "记录调研决定",
+                "description": "记录用户对调研范围、模式和成本的明确决定；不执行身份验签。",
+                "inputSchema": _object_schema(
+                    {
+                        key: value
+                        for key, value in self._investigation_decision_schema["properties"].items()
+                        if key != "recorded_at"
+                    } | {"project_root": project_root, "profile": profile},
+                    [key for key in self._investigation_decision_schema["required"] if key != "recorded_at"] + ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
                 "name": "engineering_assistant_investigation_start",
                 "title": "启动已批准调研",
                 "description": "仅把已由人工批准的调研置为运行中；未批准提议会被门禁拒绝。",
@@ -321,7 +425,6 @@ class RuntimeTools:
                             "uniqueItems": True,
                             "items": {"type": "string", "minLength": 1},
                         },
-                        "evidence_claims": {"type": "array", "items": self._evidence_claim_schema},
                         "project_root": project_root,
                         "profile": profile,
                     },
@@ -357,7 +460,64 @@ class RuntimeTools:
             self.catalog.root / "schemas",
             profile.store["run_root"],
         )
-        return state_store, EvidenceStore(state_store, self.trust_verifier)
+        return state_store, EvidenceStore(state_store)
+
+    def _guidance(self, state, node: dict | None, gate: dict) -> dict | None:
+        if node is None:
+            return None
+        capability_id = node["capability"]
+        skill = self.catalog.skill_for_capability(capability_id)
+        if skill is None:
+            fallback_skill_ids = next(
+                (
+                    skill_ids
+                    for flow_id, skill_ids in ROUTES.values()
+                    if flow_id == state.flow_id
+                ),
+                (),
+            )
+            skill = (
+                self.catalog.skills.get(fallback_skill_ids[0])
+                if fallback_skill_ids
+                else None
+            )
+        policy_rules = []
+        for policy_id in node.get("policy_refs", []):
+            policy = self.catalog.policies[policy_id]
+            policy_rules.extend(
+                {
+                    "policy_id": policy_id,
+                    "rule_id": rule.id,
+                    "condition": rule.condition,
+                    "effect": rule.effect,
+                    "severity": rule.severity,
+                }
+                for rule in policy.rules
+            )
+        return {
+            "capability": capability_id,
+            "skill": skill.id if skill is not None else None,
+            "skill_source": skill.source_path if skill is not None else None,
+            "node_goal": node["completion_criteria"],
+            "completion_criteria": [
+                {"id": criterion_id, "description": description}
+                for criterion_id, description in zip(
+                    node["criterion_ids"], node["completion_criteria"]
+                )
+            ],
+            "condition": node["when"],
+            "evidence_contract": {
+                "kinds": node.get("evidence_kinds", []),
+                "scope_tags": node.get("evidence_scope_tags", []),
+                "requires_registered_evidence": True,
+            },
+            "policy_rules": policy_rules,
+            "next_action": (
+                state.next_actions[0]
+                if state.next_actions
+                else gate.get("reason", "inspect run status")
+            ),
+        }
 
     @staticmethod
     def _load_state(state_store: StateStore, run_id: str, profile_id: str):
@@ -375,14 +535,8 @@ class RuntimeTools:
             profile_id=arguments.get("profile", "default"),
         )
         has_flow = bool(decision.flow_id)
-        approval_ready = (
-            not decision.approval_required or self.approval_broker_enabled
-        )
         persisted_flow_ready = bool(
-            decision.decision in {"proceed", "confirm"}
-            and has_flow
-            and self.evidence_broker_enabled
-            and approval_ready
+            decision.decision == "proceed" and has_flow
         )
         if decision.decision != "proceed":
             recommended_execution = "stop"
@@ -394,24 +548,12 @@ class RuntimeTools:
         elif not has_flow:
             recommended_execution = "inline"
             reason = "no_persisted_flow"
-        elif not self.evidence_broker_enabled:
-            recommended_execution = "skills_only"
-            reason = (
-                "host_trust_unavailable"
-                if self.trust_verifier is None
-                else "evidence_broker_unavailable"
-            )
-        elif not approval_ready:
-            recommended_execution = "skills_only"
-            reason = "approval_broker_unavailable"
         else:
             recommended_execution = "persisted_flow"
-            reason = "host_trust_ready"
+            reason = "local_persistence_ready"
         return {
             "decision": decision.to_dict(),
             "execution": {
-                "external_approval_available": self.approval_broker_enabled,
-                "external_evidence_available": self.evidence_broker_enabled,
                 "persisted_flow_ready": persisted_flow_ready,
                 "recommended_execution": recommended_execution,
                 "reason": reason,
@@ -425,6 +567,17 @@ class RuntimeTools:
             artifact=arguments["artifact"],
         )
 
+    def _feedback_summary(self, arguments: dict) -> dict:
+        # Keep the MCP runtime usable when optional feedback collection is unavailable.
+        from .feedback import summarize_feedback_events
+
+        return summarize_feedback_events(
+            arguments["project_root"],
+            self.catalog.root / "schemas",
+            item_limit=arguments.get("limit", 100),
+            run_id=arguments.get("run_id"),
+        )
+
     def _start(self, arguments: dict) -> dict:
         profile_id = arguments.get("profile", "default")
         decision = route_intent(
@@ -432,15 +585,9 @@ class RuntimeTools:
             self.catalog,
             profile_id=profile_id,
         )
-        if not self.evidence_broker_enabled:
+        if decision.decision != "proceed":
             raise ValidationFailure(
-                "persisted flow requires an administrator-bound evidence broker; "
-                "use the routed skills only and do not retry unchanged"
-            )
-        if decision.approval_required and not self.approval_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow approvals require an administrator-bound approval "
-                "broker; stop and do not retry unchanged"
+                f"cannot start route decision {decision.decision}; resolve it first"
             )
         design_source_ref = arguments.get("design_source_ref")
         if design_source_ref:
@@ -449,9 +596,11 @@ class RuntimeTools:
                 design_source_ref,
                 self.catalog.root / "schemas",
             )
-        state = RuntimeEngine(self.catalog).start(
+        intent = route_intent_from_dict(arguments["intent"])
+        engine = RuntimeEngine(self.catalog)
+        state = engine.start(
             arguments["task_id"],
-            route_intent_from_dict(arguments["intent"]),
+            intent,
             profile_id=profile_id,
             run_id=arguments.get("run_id"),
             context_refs=arguments.get("context_refs", []),
@@ -460,15 +609,51 @@ class RuntimeTools:
         state_store, _ = self._stores(
             arguments["project_root"], profile_id
         )
-        path = state_store.create(state)
-        return {"state": state.to_dict(), "state_path": str(path)}
+        manifest = {
+            "schema_version": "2",
+            "product_version": CANONICAL_VERSION,
+            "build_version": os.environ.get(
+                "ENGINEERING_ASSISTANT_BUILD_VERSION", CANONICAL_VERSION
+            ),
+            "run_id": state.run_id,
+            "task_id": state.task_id,
+            "intent": intent.to_dict(),
+            "route_decision": decision.to_dict(),
+            "profile_id": profile_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        path = state_store.create(state, manifest=manifest)
+        approval_store = ApprovalStore(state_store)
+        for index, action in enumerate(intent.confirmed_actions, start=1):
+            approval_store.save(
+                ApprovalRecord(
+                    record_id=f"route-confirmation-{index}",
+                    run_id=state.run_id,
+                    run_revision=state.revision,
+                    approval_id=action,
+                    decision="approved",
+                    scope=[f"flow:{state.flow_id}", f"approval:{action}"],
+                    actor_ref="conversation-user",
+                    reason="Action was explicitly confirmed in RouteIntent.confirmed_actions.",
+                    recorded_at=datetime.now(timezone.utc).isoformat(),
+                    source="user_confirmation",
+                )
+            )
+        previous_revision = state.revision
+        gate = engine.next(state, approval_records=[])
+        if state.revision != previous_revision:
+            state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        gate_payload = gate.to_dict()
+        return {
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
+            "state": state.to_dict(),
+            "state_path": str(path),
+        }
 
     def _next(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow is unavailable without an administrator-bound "
-                "evidence broker; do not retry unchanged"
-            )
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -477,26 +662,113 @@ class RuntimeTools:
         )
         previous_revision = state.revision
         engine = RuntimeEngine(self.catalog)
-        gate = engine.next(state)
+        gate = engine.next(
+            state,
+            approval_records=ApprovalStore(state_store).list(state.run_id),
+        )
         if state.revision != previous_revision:
             state_store.save(state, expected_revision=previous_revision)
+        gate_payload = gate.to_dict()
+        node = engine.node_payload(state)
         return {
-            "gate": gate.to_dict(),
-            "node": engine.node_payload(state),
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
             "state": state.to_dict(),
         }
 
+    def _runs_list(self, arguments: dict) -> dict:
+        state_store, _ = self._stores(
+            arguments["project_root"], arguments.get("profile", "default")
+        )
+        states, cursor = state_store.list_states(
+            include_terminal=arguments.get("include_terminal", False),
+            limit=arguments.get("limit", 50),
+            after_run_id=arguments.get("after_run_id"),
+        )
+        return {
+            "runs": [state.to_dict() for state in states],
+            "next_cursor": cursor,
+        }
+
+    def _run_status(self, arguments: dict) -> dict:
+        profile_id = arguments.get("profile", "default")
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        engine = RuntimeEngine(self.catalog)
+        node = engine.node_payload(state)
+        gate = {
+            "decision": "continue" if node else "inspect",
+            "evaluated_policies": node.get("policy_refs", []) if node else [],
+            "missing_evidence": [],
+            "reason": "Recovered current persisted run state.",
+            "next_node": state.current_node,
+        }
+        return {
+            "state": state.to_dict(),
+            "node": node,
+            "guidance": self._guidance(state, node, gate),
+        }
+
+    def _evidence_register(self, arguments: dict) -> dict:
+        profile_id = arguments.get("profile", "default")
+        state_store, evidence_store = self._stores(
+            arguments["project_root"], profile_id
+        )
+        self._load_state(state_store, arguments["run_id"], profile_id)
+        evidence = evidence_store.register(
+            arguments["run_id"],
+            evidence_id=arguments["evidence_id"],
+            kind=arguments["kind"],
+            uri=arguments["uri"],
+            producer=arguments["producer"],
+            scope=arguments["scope"],
+            scope_tags=arguments["scope_tags"],
+            contract_refs=arguments["contract_refs"],
+            subject_digest=arguments.get("subject_digest"),
+        )
+        return {"evidence": evidence.to_dict()}
+
+    def _approval_record(self, arguments: dict) -> dict:
+        profile_id = arguments.get("profile", "default")
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        record_payload = {
+            key: value
+            for key, value in arguments.items()
+            if key not in {"project_root", "profile"}
+        }
+        record_payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        record = approval_record_from_dict(record_payload)
+        existing = ApprovalStore(state_store).list(state.run_id)
+        previous_revision = state.revision
+        engine = RuntimeEngine(self.catalog)
+        gate = engine.apply_approval_record(
+            state,
+            record,
+            approval_records=existing,
+        )
+        ApprovalStore(state_store).save(record)
+        state_store.save(state, expected_revision=previous_revision)
+        if gate.decision == "continue" and state.current_node is None:
+            previous_revision = state.revision
+            gate = engine.next(
+                state,
+                approval_records=[*existing, record],
+            )
+            if state.revision != previous_revision:
+                state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        gate_payload = gate.to_dict()
+        return {
+            "record": record.to_dict(),
+            "gate": gate_payload,
+            "state": state.to_dict(),
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
+        }
+
     def _complete(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow is unavailable without an administrator-bound "
-                "evidence broker; do not retry unchanged"
-            )
-        if arguments.get("evidence_claims"):
-            raise ValidationFailure(
-                "model evidence_claims cannot register completion evidence; import "
-                "host-observed evidence and do not retry unchanged"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -513,20 +785,25 @@ class RuntimeTools:
             result,
             evidence_store=evidence_store,
             evidence_max_age_seconds=arguments.get("evidence_max_age_seconds"),
+            approval_records=ApprovalStore(state_store).list(state.run_id),
         )
-        state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        state_store.save_with_step(
+            state,
+            expected_revision=previous_revision,
+            result=result.to_dict(),
+            gate=gate.to_dict(),
+            node_output=node,
+        )
+        gate_payload = gate.to_dict()
         return {
-            "gate": gate.to_dict(),
-            "node": engine.node_payload(state),
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
             "state": state.to_dict(),
         }
 
     def _quality_submit(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted quality flow is unavailable without an administrator-bound "
-                "evidence broker; report inline quality findings instead"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -543,11 +820,6 @@ class RuntimeTools:
         return {"snapshot": saved.to_dict(), "gate": QualityGate.evaluate(saved).to_dict()}
 
     def _provider_invoke(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "provider invocation is unavailable without an administrator-bound "
-                "evidence broker; use native skills and do not retry unchanged"
-            )
         profile_id = arguments.get("profile", "default")
         state_store, _ = self._stores(arguments["project_root"], profile_id)
         invocation = provider_invocation_from_dict(arguments["invocation"])
@@ -828,7 +1100,6 @@ class RuntimeTools:
         return expected is None or current == expected
 
     def _investigation_propose(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -848,7 +1119,6 @@ class RuntimeTools:
         }
 
     def _investigation_list(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -869,8 +1139,26 @@ class RuntimeTools:
             "next_after_id": next_after_id,
         }
 
+    def _investigation_decide(self, arguments: dict) -> dict:
+        profile_id = arguments.get("profile", "default")
+        state_store, evidence_store = self._stores(
+            arguments["project_root"], profile_id
+        )
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        payload = {
+            key: value
+            for key, value in arguments.items()
+            if key not in {"project_root", "profile"}
+        }
+        payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        decision = investigation_decision_record_from_dict(payload)
+        record = InvestigationStore(state_store, evidence_store).apply_decision(
+            decision,
+            current_run_revision=state.revision,
+        )
+        return {"decision": decision.to_dict(), "record": record.to_dict()}
+
     def _investigation_start(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -886,12 +1174,6 @@ class RuntimeTools:
         }
 
     def _investigation_finish(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
-        if arguments.get("evidence_claims"):
-            raise ValidationFailure(
-                "model evidence_claims cannot register investigation evidence; "
-                "import host-observed evidence and do not retry unchanged"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], arguments.get("profile", "default")
         )
@@ -908,14 +1190,6 @@ class RuntimeTools:
             "record": record.to_dict(),
             "evidence_contract": investigation_evidence_contract(record),
         }
-
-    def _require_investigation_broker(self) -> None:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted investigation is unavailable without an administrator-bound "
-                "evidence broker; report inline findings and do not retry unchanged"
-            )
-
 
 class MCPServer:
     def __init__(self, tools: RuntimeTools | None = None) -> None:

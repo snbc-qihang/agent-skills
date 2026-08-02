@@ -186,15 +186,7 @@
       },
       "additionalProperties": false
     },
-    "broker": {
-      "type": "object",
-      "required": ["status"],
-      "properties": {
-        "status": {"enum": ["unavailable", "configured", "attested"]},
-        "broker_id": {"type": "string", "minLength": 1}
-      },
-      "additionalProperties": false
-    },
+    "assurance": {"const": "local_unattested"},
     "billing": {
       "type": "object",
       "required": ["status"],
@@ -217,7 +209,7 @@
           "product_repository", "git_ref",
           "treatment_digest", "prompt_digest", "prompt_artifact", "execution_config_digest", "environment_digest",
           "quality_rubric_digest", "root_thread_id", "platform_transcript", "gate_receipts", "usage",
-          "treatment_observation", "broker", "billing", "outcome_artifact"
+          "treatment_observation", "assurance", "billing", "outcome_artifact"
         ],
         "properties": {"schema_version": {"const": "2.0"}}
       }
@@ -225,10 +217,6 @@
     {
       "if": {"properties": {"evidence_status": {"const": "legacy_unverifiable"}}},
       "then": {"required": ["legacy_reason"]}
-    },
-    {
-      "if": {"properties": {"broker": {"properties": {"status": {"const": "attested"}}}}},
-      "then": {"properties": {"broker": {"required": ["broker_id"]}}}
     },
     {
       "if": {"properties": {"billing": {"properties": {"status": {"const": "collected"}}}}},

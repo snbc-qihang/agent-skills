@@ -191,16 +191,19 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertIn("provides_hooks:", hermes_manifest)
         hooks = json.loads((codex / "hooks/hooks.json").read_text(encoding="utf-8"))
         self.assertEqual(
-            {"PreToolUse", "PostToolUse"},
+            {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
             set(hooks["hooks"]),
         )
-        for groups in hooks["hooks"].values():
+        for event_name in ("PreToolUse", "PostToolUse"):
+            groups = hooks["hooks"][event_name]
             self.assertEqual(
                 "^mcp__engineering_assistant__engineering_assistant_.*$",
                 groups[0]["matcher"],
             )
             command = groups[0]["hooks"][0]["command"]
             self.assertIn("${PLUGIN_ROOT}/hooks/feedback_capture.py", command)
+        for event_name in ("UserPromptSubmit", "Stop"):
+            self.assertNotIn("matcher", hooks["hooks"][event_name][0])
 
         hook_source = (codex / "hooks/feedback_capture.py").read_text(encoding="utf-8")
         self.assertLess(
@@ -531,20 +534,25 @@ class CompilerAdapterTests(unittest.TestCase):
         codex = self.root / "codex-scoped-hook"
         build_package(ROOT, "codex", codex)
         hooks = json.loads((codex / "hooks/hooks.json").read_text(encoding="utf-8"))
-        self.assertEqual({"PreToolUse", "PostToolUse"}, set(hooks["hooks"]))
+        self.assertEqual(
+            {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+            set(hooks["hooks"]),
+        )
         self.assertEqual(
             {
                 "^mcp__engineering_assistant__engineering_assistant_.*$",
             },
             {
                 group["matcher"]
-                for groups in hooks["hooks"].values()
+                for event_name in ("PreToolUse", "PostToolUse")
+                for groups in (hooks["hooks"][event_name],)
                 for group in groups
             },
         )
         matcher = next(
             group["matcher"]
-            for groups in hooks["hooks"].values()
+            for event_name in ("PreToolUse", "PostToolUse")
+            for groups in (hooks["hooks"][event_name],)
             for group in groups
         )
         self.assertIsNotNone(
@@ -737,7 +745,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.3.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("2.0.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -749,9 +757,9 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("1.3.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("2.0.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"1.3.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"2.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
         for name in (
             "strategic-modeling.md",
             "tactical-modeling.md",
@@ -812,73 +820,39 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         responses = [json.loads(line) for line in mcp.stdout.splitlines()]
         self.assertEqual([1, 2], [response["id"] for response in responses])
         tool_names = {item["name"] for item in responses[1]["result"]["tools"]}
-        self.assertEqual(11, len(tool_names))
+        self.assertEqual(17, len(tool_names))
         self.assertIn("engineering_assistant_artifact_validate", tool_names)
-        self.assertNotIn("engineering_assistant_investigation_decide", tool_names)
+        self.assertIn("engineering_assistant_investigation_decide", tool_names)
 
-    def test_packaged_hermes_runtime_consumes_fixed_host_trust_binding(self) -> None:
+    def test_packaged_hermes_runtime_has_no_host_trust_binding(self) -> None:
         output = self.root / "hermes-host-trust"
         build_package(ROOT, "hermes", output)
-        config = self.root / "host-trust.json"
-        config.write_text(
-            json.dumps(
-                {
-                    "schema_version": "1.0",
-                    "profiles": {
-                        "default": {
-                            "evidence_broker": {
-                                "enabled": True,
-                                "id": "enterprise-evidence",
-                                "introspection_url": "https://broker.example/evidence",
-                                "timeout_seconds": 5,
-                            },
-                            "approval_broker": {
-                                "enabled": False,
-                                "id": "enterprise-approval",
-                                "audience": "engineering-assistant",
-                                "introspection_url": "https://broker.example/approval",
-                                "timeout_seconds": 5,
-                            },
-                        }
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-        config.chmod(0o600)
         script = r"""
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-config = Path(sys.argv[2]).resolve()
 sys.path.insert(0, str(root / 'engineering-assistant/runtime'))
-import engineering_assistant.trust as trust
-trust._host_trust_config_path = lambda: config
-trust._trusted_host_owner_uid = lambda: os.geteuid()
 spec = importlib.util.spec_from_file_location('hermes_host_trust_fixture', root / '__init__.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps({
-    'broker_id': module._TRUST.evidence_broker['id'],
-    'config_digest': module._TRUST.config_digest,
-    'verifier': type(module._TOOLS.trust_verifier).__name__,
+    'has_trust': hasattr(module, '_TRUST'),
+    'tools_has_trust_verifier': hasattr(module._TOOLS, 'trust_verifier'),
 }))
 """
         result = subprocess.run(
-            [sys.executable, "-c", script, str(output), str(config)],
+            [sys.executable, "-c", script, str(output)],
             text=True,
             capture_output=True,
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         loaded = json.loads(result.stdout)
-        self.assertEqual("enterprise-evidence", loaded["broker_id"])
-        self.assertTrue(loaded["config_digest"].startswith("sha256:"))
-        self.assertEqual("ExternalTrustVerifier", loaded["verifier"])
+        self.assertFalse(loaded["has_trust"])
+        self.assertFalse(loaded["tools_has_trust_verifier"])
 
     def test_packaged_hermes_tools_emit_nonblocking_efficiency_feedback(self) -> None:
         output = self.root / "hermes-efficiency"
@@ -914,6 +888,7 @@ print(json.dumps({
                 "scope": ["diff"],
                 "risk_signals": [],
                 "requested_external_actions": [],
+                "confirmed_actions": [],
                 "confidence": 0.99,
                 "evidence": ["用户请求"],
             }
@@ -1195,9 +1170,9 @@ print(json.dumps({
         spec.loader.exec_module(module)
         context = Context()
         module.register(context)
-        self.assertEqual(11, len(context.tools))
+        self.assertEqual(17, len(context.tools))
         self.assertIn("engineering_assistant_artifact_validate", context.tools)
-        self.assertNotIn("engineering_assistant_investigation_decide", context.tools)
+        self.assertIn("engineering_assistant_investigation_decide", context.tools)
         plugin_lines = (output / "plugin.yaml").read_text(encoding="utf-8").splitlines()
         start = plugin_lines.index("provides_tools:") + 1
         end = plugin_lines.index("provides_hooks:")
@@ -1213,6 +1188,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1269,6 +1245,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1306,6 +1283,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1344,6 +1322,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }

@@ -51,8 +51,6 @@ class ProjectProfile:
     version: str
     policy_refs: tuple[str, ...]
     store: Mapping[str, Any]
-    evidence_broker: Mapping[str, Any]
-    approval_broker: Mapping[str, Any]
     investigation_policy: Mapping[str, Any]
     evidence_policy: Mapping[str, Any]
     adapter_preferences: tuple[str, ...]
@@ -334,25 +332,10 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         version=profile_doc["version"],
         policy_refs=tuple(profile_doc["policy_refs"]),
         store=profile_doc["store"],
-        evidence_broker=profile_doc["evidence_broker"],
-        approval_broker=profile_doc["approval_broker"],
         investigation_policy=profile_doc["investigation_policy"],
         evidence_policy=profile_doc["evidence_policy"],
         adapter_preferences=tuple(profile_doc["adapter_preferences"]),
     )
-    for broker_name, broker in (
-        ("evidence_broker", profile.evidence_broker),
-        ("approval_broker", profile.approval_broker),
-    ):
-        required = ("enabled", "id", "introspection_url", "timeout_seconds")
-        if not isinstance(broker.get("enabled"), bool) or any(key not in broker for key in required):
-            raise ValidationFailure(f"profile {broker_name} is incomplete")
-        if broker["enabled"] and not str(broker["introspection_url"]).startswith("https://"):
-            raise ValidationFailure(f"profile {broker_name} requires an HTTPS introspection URL")
-    if not isinstance(profile.approval_broker.get("audience"), str) or not profile.approval_broker[
-        "audience"
-    ].strip():
-        raise ValidationFailure("profile approval_broker requires a non-empty audience")
     investigation_mode = profile.investigation_policy.get("default_mode")
     if investigation_mode not in {"auto_readonly", "suggest_then_run", "guided", "disabled"}:
         raise ValidationFailure("profile investigation_policy has an invalid default_mode")

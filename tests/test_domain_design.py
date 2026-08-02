@@ -4,7 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -18,23 +18,15 @@ from engineering_assistant.engine import RuntimeEngine  # noqa: E402
 from engineering_assistant.evidence import EvidenceStore  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     CriterionResult,
+    ApprovalRecord,
     EvidenceRef,
     Finding,
     RouteIntent,
-    RunApprovalGrant,
     StepResult,
 )
 from engineering_assistant.router import route_intent  # noqa: E402
 from engineering_assistant.state_store import StateStore  # noqa: E402
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
-
-
-class Trust:
-    def verify_evidence(self, _run_id, _evidence) -> bool:
-        return True
-
-    def verify_run_approval(self, grant) -> bool:
-        return grant.token.startswith("approved:")
 
 
 class DomainDesignTests(unittest.TestCase):
@@ -49,6 +41,7 @@ class DomainDesignTests(unittest.TestCase):
             scope=["repository"],
             risk_signals=[],
             requested_external_actions=[],
+            confirmed_actions=[],
             confidence=0.95,
             evidence=["user request"],
         )
@@ -210,7 +203,7 @@ class DomainDesignTests(unittest.TestCase):
             )
             state.current_node = "baseline-approval"
             store = StateStore(project, ROOT / "schemas")
-            evidence_store = EvidenceStore(store, Trust())
+            evidence_store = EvidenceStore(store)
             gate = engine.complete_step(
                 state,
                 StepResult(
@@ -232,30 +225,35 @@ class DomainDesignTests(unittest.TestCase):
                 state.required_approvals,
             )
 
-            for approval_id in state.required_approvals:
-                grant = RunApprovalGrant(
-                    grant_id=f"grant-{approval_id}",
-                    broker_id="test-broker",
-                    audience="engineering-assistant",
-                    action="run.approve",
+            records = []
+            for index, approval_id in enumerate(state.required_approvals, start=1):
+                record = ApprovalRecord(
+                    record_id=f"record-{approval_id}",
                     run_id=state.run_id,
                     run_revision=state.revision,
                     approval_id=approval_id,
+                    decision="approved",
                     scope=["flow:domain-design", f"approval:{approval_id}"],
-                    issued_at=datetime.now(timezone.utc).isoformat(),
-                    expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-                    actor_ref="opaque-human",
-                    nonce="0123456789abcdef",
-                    token=f"approved:{approval_id}",
+                    actor_ref=f"opaque-owner-{index}",
+                    reason="explicit owner approval",
+                    recorded_at=datetime.now(timezone.utc).isoformat(),
+                    source="user_confirmation",
                 )
-                engine.apply_approval(
+                engine.apply_approval_record(
                     state,
-                    grant,
-                    verifier=Trust(),
-                    expected_broker_id="test-broker",
-                    expected_audience="engineering-assistant",
+                    record,
+                    approval_records=records,
                 )
+                records.append(record)
             self.assertEqual("initialized", state.status)
+            same_actor_records = [
+                ApprovalRecord(**{**record.to_dict(), "actor_ref": "same-owner"})
+                for record in records
+            ]
+            self.assertEqual(
+                ["domain-architecture-owner"],
+                engine._missing_approvals(state, same_actor_records),
+            )
 
     def test_boundary_rework_returns_to_strategic_design_and_keeps_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -276,7 +274,8 @@ class DomainDesignTests(unittest.TestCase):
             ]
             state.current_node = "boundary-validation"
             store = StateStore(project, ROOT / "schemas")
-            evidence_store = EvidenceStore(store, Trust())
+            evidence_store = EvidenceStore(store)
+            (project / "boundary-review.md").write_text("boundary conflict\n")
             evidence_store.save(
                 state.run_id,
                 EvidenceRef(
@@ -285,7 +284,7 @@ class DomainDesignTests(unittest.TestCase):
                     uri="boundary-review.md",
                     producer="domain-review",
                     observed_at=datetime.now(timezone.utc).isoformat(),
-                    trust_level="observed",
+                    provenance="runtime_observed",
                     scope="domain boundary validation",
                 ),
             )
@@ -331,7 +330,7 @@ class DomainDesignTests(unittest.TestCase):
                 design_source_ref="docs/design-sources.json",
             )
             state.current_node = "context-topology"
-            evidence_store = EvidenceStore(StateStore(Path(temporary), ROOT / "schemas"), Trust())
+            evidence_store = EvidenceStore(StateStore(Path(temporary), ROOT / "schemas"))
             with self.assertRaisesRegex(ValidationFailure, "boundary-validation"):
                 engine.complete_step(
                     state,
@@ -358,7 +357,7 @@ class DomainDesignTests(unittest.TestCase):
                 design_source_ref="docs/design-sources.json",
             )
             state.current_node = "boundary-validation"
-            evidence_store = EvidenceStore(StateStore(Path(temporary), ROOT / "schemas"), Trust())
+            evidence_store = EvidenceStore(StateStore(Path(temporary), ROOT / "schemas"))
             with self.assertRaisesRegex(ValidationFailure, "major or blocker"):
                 engine.complete_step(
                     state,

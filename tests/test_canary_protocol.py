@@ -174,9 +174,9 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             "build_format_version": "1.0",
             "status": "built",
             "platform": "codex",
-            "canonical_version": "1.3.0.0-rc.1",
+            "canonical_version": "2.0.0.0-rc.1",
             "skill_versions": {
-                skill_id: "1.3.0.0-rc.1" for skill_id in self.plugin_skill_digests
+                skill_id: "2.0.0.0-rc.1" for skill_id in self.plugin_skill_digests
             },
             "skill_count": len(self.plugin_skill_digests),
             "flow_count": 0,
@@ -342,7 +342,6 @@ class CanaryProtocolAuditTests(unittest.TestCase):
         arm: dict,
         repeat_index: int,
         *,
-        broker_status: str = "unavailable",
         billing_status: str = "not_collected",
         run_id_override: str | None = None,
         risk_hypotheses: tuple[str, ...] = (),
@@ -747,7 +746,7 @@ class CanaryProtocolAuditTests(unittest.TestCase):
                     else []
                 ),
             },
-            "broker": {"status": broker_status},
+            "assurance": "local_unattested",
             "billing": (
                 {
                     "status": "collected",
@@ -1954,13 +1953,12 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             report["failures"],
         )
 
-    def test_local_structural_broker_and_billing_status_are_fixed(self) -> None:
+    def test_local_assurance_and_billing_status_are_fixed(self) -> None:
         records = self.complete_records()
-        records[0]["broker"] = {"status": "configured"}
+        records[0]["assurance"] = "externally_attested"
         records[1]["billing"] = {"status": "unavailable"}
-        report = self.audit(records)
-        self.assertIn(f"broker_status_nonlocal:{records[0]['run_id']}", report["failures"])
-        self.assertIn(f"billing_status_nonlocal:{records[1]['run_id']}", report["failures"])
+        with self.assertRaises(ValidationFailure):
+            self.audit(records)
 
     def test_unexposed_read_capture_cannot_claim_paths(self) -> None:
         records = self.complete_records()
@@ -2741,9 +2739,9 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             f"exclusion_reason_mismatch:{record['run_id']}", report["failures"]
         )
 
-    def test_attested_and_collected_claims_require_provenance_fields(self) -> None:
+    def test_local_assurance_and_collected_billing_require_valid_fields(self) -> None:
         records = self.complete_records()
-        records[0]["broker"] = {"status": "attested"}
+        records[0]["assurance"] = "externally_attested"
         with self.assertRaises(ValidationFailure):
             self.audit(records)
         records = self.complete_records()
@@ -2774,11 +2772,11 @@ class CanaryProtocolAuditTests(unittest.TestCase):
         }
         self.assertIn(f"legacy_unverifiable:{records[0]['run_id']}", excluded[records[0]["run_id"]])
 
-    def test_local_without_broker_or_billing_has_explicit_nonpromotion_status(self) -> None:
+    def test_local_without_billing_has_explicit_nonpromotion_status(self) -> None:
         records = self.complete_records()
         report = self.audit(records)
         self.assertEqual("local_structural", report["status"])
-        self.assertEqual("unavailable", report["broker_status"])
+        self.assertEqual("local_unattested", report["assurance"])
         self.assertEqual("not_collected", report["billing_status"])
         self.assertFalse(report["promotion_eligible"])
         self.assertEqual([], report["failures"])
@@ -2892,7 +2890,6 @@ class CanaryProtocolAuditTests(unittest.TestCase):
 
             for record, path in zip(records, record_paths):
                 record["treatment_observation"]["route_call_count"] = 1
-                record["broker"] = {"status": "attested", "broker_id": "broker-1"}
                 record["billing"] = {
                     "status": "collected",
                     "source": "provider-ledger",

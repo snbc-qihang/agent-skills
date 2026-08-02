@@ -32,7 +32,6 @@ from .validation import ValidationFailure
 PLUGIN_NAME = "engineering-assistant"
 DEFAULT_POLICY = "config/local-publish-policy.json"
 CODEX_CACHE_MARKETPLACE = "personal"
-MAX_PRESERVED_CODEX_CACHE_VERSIONS = 8
 MAX_CODEX_CACHE_CANDIDATES = 512
 MAX_CODEX_CACHE_ENTRIES = 4096
 MAX_CODEX_CACHE_TOTAL_BYTES = 256 * 1024 * 1024
@@ -384,7 +383,7 @@ def _snapshot_codex_caches(codex_home: Path, snapshot_root: Path) -> list[str]:
                             candidate_io.close()
                     except (OSError, ValidationFailure):
                         continue
-        selected = sorted(candidates, reverse=True)[:MAX_PRESERVED_CODEX_CACHE_VERSIONS]
+        selected = sorted(candidates, reverse=True)
         for _mtime, name in sorted(selected, key=lambda item: item[1]):
             with cache_io.open_directory(name) as source_fd:
                 source_io = ArtifactIO.from_open_directory_fd(
@@ -551,6 +550,74 @@ def _verify_codex_registered_cache(codex_home: Path, target: Path) -> dict:
         raise ValidationFailure(f"Codex 注册 cache 不是安全目录：{cache}") from exc
 
 
+def _codex_plugin_entry(payload: object) -> dict | None:
+    pending = [payload]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, list):
+            pending.extend(current)
+        elif isinstance(current, dict):
+            name = current.get("name") or current.get("plugin_name")
+            if name == PLUGIN_NAME:
+                return current
+            pending.extend(current.values())
+    return None
+
+
+def _verify_selected_codex_version(payload: object, expected_version: str) -> dict:
+    entry = _codex_plugin_entry(payload)
+    if entry is None:
+        raise ValidationFailure("codex plugin list 未返回本次插件")
+    selected = entry.get("version") or entry.get("plugin_version")
+    if selected != expected_version:
+        raise ValidationFailure(
+            f"Codex 选择版本不一致：expected={expected_version}, actual={selected}"
+        )
+    return entry
+
+
+def _prune_codex_cache_versions(codex_home: Path, keep_version: str) -> list[str]:
+    cache_root = _codex_cache_root(codex_home)
+    if not cache_root.is_dir():
+        raise ValidationFailure("Codex 注册后缺少插件 cache 根目录")
+    cache_io = ArtifactIO(cache_root, ".")
+    removed = []
+    try:
+        for path in sorted(cache_root.iterdir()):
+            if path.name == keep_version:
+                if path.is_symlink() or not path.is_dir():
+                    raise ValidationFailure("Codex 选中 cache 版本不是安全目录")
+                continue
+            if path.is_symlink() or not path.is_dir():
+                raise ValidationFailure(
+                    f"Codex cache 根目录包含不安全历史项：{path.name}"
+                )
+            if cache_io.remove_tree(path.name):
+                removed.append(path.name)
+    finally:
+        cache_io.close()
+    return removed
+
+
+def _active_codex_cache_versions(codex_home: Path) -> list[str]:
+    cache_root = _codex_cache_root(codex_home)
+    if not cache_root.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in cache_root.iterdir()
+        if path.is_dir() and not path.is_symlink() and _package_version(path) == path.name
+    )
+
+
+def _hooks_changed(previous: Path, candidate: Path) -> bool:
+    old = previous / "hooks/hooks.json"
+    new = candidate / "hooks/hooks.json"
+    if not new.is_file():
+        return False
+    return not old.is_file() or old.read_bytes() != new.read_bytes()
+
+
 def _publish_one(
     repository_root: Path,
     platform: str,
@@ -573,7 +640,9 @@ def _publish_one(
     staging.rmdir()
     cache_snapshot: Path | None = None
     preserved_cache_versions: list[str] = []
-    restored_cache_versions: list[str] = []
+    removed_cache_versions: list[str] = []
+    active_cache_versions: list[str] = []
+    selected_version_verified = False
     codex_environment = dict(os.environ)
     codex_environment["CODEX_HOME"] = str(codex_home)
     try:
@@ -609,13 +678,18 @@ def _publish_one(
                 "payload_digest": build["payload_digest"],
                 "skill_count": build["skill_count"],
                 "official_validation": official_validation,
+                "restart_required": platform == "codex",
+                "hooks_review_required": platform == "codex",
             }
 
         marketplace_path = codex_home.parent / ".agents/plugins/marketplace.json"
         marketplace_previous = None
         marketplace_changed = False
-        registration_attempted = False
+        was_registered = False
+        removed_previous = False
+        add_attempted = False
         registered_cache = None
+        hooks_review_required = _hooks_changed(target, staging) if platform == "codex" else False
         if platform == "codex":
             cache_snapshot = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-cache-snapshot-"))
             preserved_cache_versions = _snapshot_codex_caches(codex_home, cache_snapshot)
@@ -623,13 +697,38 @@ def _publish_one(
         try:
             if platform == "codex":
                 marketplace_previous, marketplace_changed = _update_personal_marketplace(marketplace_path)
-                registration_attempted = True
+                listed_before = register(
+                    ["codex", "plugin", "list", "--json"],
+                    codex_environment,
+                )
+                was_registered = _codex_plugin_entry(listed_before) is not None
+                if was_registered:
+                    register(
+                        ["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"],
+                        codex_environment,
+                    )
+                    removed_previous = True
+                add_attempted = True
                 registration = register(
                     ["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"],
                     codex_environment,
                 )
                 registered_cache = _verify_codex_registered_cache(codex_home, target)
-                restored_cache_versions = _restore_codex_cache_snapshots(codex_home, cache_snapshot)
+                plugin_version = _installed_platform_version(target, platform)
+                listed_after = register(
+                    ["codex", "plugin", "list", "--json"],
+                    codex_environment,
+                )
+                _verify_selected_codex_version(listed_after, plugin_version)
+                selected_version_verified = True
+                removed_cache_versions = _prune_codex_cache_versions(
+                    codex_home, plugin_version
+                )
+                active_cache_versions = _active_codex_cache_versions(codex_home)
+                if active_cache_versions != [plugin_version]:
+                    raise ValidationFailure(
+                        "Codex 活动 cache 必须只保留本次已验证版本"
+                    )
             else:
                 environment = dict(os.environ)
                 environment["HERMES_HOME"] = str(hermes_home)
@@ -649,24 +748,32 @@ def _publish_one(
                 _restore_file(marketplace_path, marketplace_previous)
             _roll_back(target, backup, stamp)
             if platform == "codex" and cache_snapshot is not None:
-                try:
-                    if registration_attempted:
-                        if backup is not None and _marketplace_contains_plugin(marketplace_previous):
+                compensation_errors = []
+                if add_attempted:
+                    try:
+                        register(
+                            ["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"],
+                            codex_environment,
+                        )
+                    except Exception as exc:
+                        compensation_errors.append(f"remove={exc}")
+                    if removed_previous:
+                        try:
                             register(
                                 ["codex", "plugin", "add", f"{PLUGIN_NAME}@personal", "--json"],
                                 codex_environment,
                             )
-                        else:
-                            register(
-                                ["codex", "plugin", "remove", f"{PLUGIN_NAME}@personal", "--json"],
-                                codex_environment,
-                            )
+                        except Exception as exc:
+                            compensation_errors.append(f"add_previous={exc}")
+                try:
                     _restore_codex_cache_snapshots(codex_home, cache_snapshot)
-                except Exception as compensation_error:
+                except Exception as exc:
+                    compensation_errors.append(f"cache_restore={exc}")
+                if compensation_errors:
                     raise ValidationFailure(
                         "Codex 发布失败且注册补偿未完成："
-                        f"publish={original_error}; compensation={compensation_error}"
-                    ) from compensation_error
+                        f"publish={original_error}; compensation={'; '.join(compensation_errors)}"
+                    ) from original_error
             raise
         return {
             "status": "published",
@@ -680,8 +787,11 @@ def _publish_one(
             "official_validation": official_validation,
             "registration": registration,
             "registered_cache": registered_cache,
-            "preserved_cache_versions": preserved_cache_versions,
-            "restored_cache_versions": restored_cache_versions,
+            "active_cache_versions": active_cache_versions,
+            "removed_cache_versions": removed_cache_versions,
+            "selected_version_verified": selected_version_verified,
+            "restart_required": platform == "codex",
+            "hooks_review_required": hooks_review_required,
         }
     finally:
         if staging.exists():

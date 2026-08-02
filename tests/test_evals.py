@@ -15,13 +15,6 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-CANARY_BROKER_ID = "enterprise-evidence"
-CANARY_HOST_CONFIG_DIGEST = "sha256:" + "c" * 64
-VALIDATION_TRUST = {
-    "expected_evidence_broker_id": CANARY_BROKER_ID,
-    "expected_host_trust_config_digest": CANARY_HOST_CONFIG_DIGEST,
-}
-
 from engineering_assistant.eval_runner import (  # noqa: E402
     _canary_metrics,
     _cell_signature,
@@ -42,10 +35,6 @@ from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
 class EvalTests(unittest.TestCase):
-    class CanaryVerifier:
-        def verify_canary_observation(self, observation) -> bool:
-            return observation.get("attestation") == "trusted-canary-receipt"
-
     def test_delegation_ablation_rejects_cross_task_run_record_reuse(self) -> None:
         digest = "sha256:" + "a" * 64
         observations = []
@@ -188,11 +177,7 @@ class EvalTests(unittest.TestCase):
                     "measurement_kinds": ["experiment_protocol"],
                 }
             ],
-            "trust_provenance": {
-                "evidence_broker_id": CANARY_BROKER_ID,
-                "host_trust_config_digest": CANARY_HOST_CONFIG_DIGEST,
-            },
-            "attestation": "trusted-canary-receipt",
+            "assurance": "local_unattested",
         }
 
     @staticmethod
@@ -312,8 +297,6 @@ class EvalTests(unittest.TestCase):
             loaded = _load_canary_observations(
                 artifacts,
                 list(observations),
-                self.CanaryVerifier(),
-                **VALIDATION_TRUST,
             )
 
         self.assertEqual(2, len(loaded))
@@ -370,8 +353,6 @@ class EvalTests(unittest.TestCase):
             _load_canary_observations(
                 FakeArtifacts(),
                 list(observations),
-                self.CanaryVerifier(),
-                **VALIDATION_TRUST,
             )
 
         self.assertEqual(2, formal_validator.call_count)
@@ -506,8 +487,6 @@ class EvalTests(unittest.TestCase):
                         _load_canary_observations(
                             FakeArtifacts(observations),
                             list(observations),
-                            self.CanaryVerifier(),
-                            **VALIDATION_TRUST,
                         )
 
     def test_all_included_repeats_contribute_to_efficiency_metrics(self) -> None:
@@ -556,7 +535,7 @@ class EvalTests(unittest.TestCase):
             unfavorable["overhead_fields"],
         )
 
-    def test_cli_exposes_canary_assembly_as_external_attestation_consumer(self) -> None:
+    def test_cli_exposes_local_canary_assembly(self) -> None:
         args = build_parser().parse_args(
             [
                 "canary-assemble",
@@ -590,9 +569,6 @@ class EvalTests(unittest.TestCase):
                 evidence_root=str(root),
                 evidence_ref=["baseline.json", "candidate.json"],
                 output="canary-result.json",
-                trust_verifier=self.CanaryVerifier(),
-                evidence_broker={"enabled": True, "id": CANARY_BROKER_ID},
-                host_trust_config_digest=CANARY_HOST_CONFIG_DIGEST,
             )
             with patch(
                 "engineering_assistant.cli.assemble_canary_result",
@@ -605,26 +581,9 @@ class EvalTests(unittest.TestCase):
                 (root / "canary-result.json").read_text(encoding="utf-8"),
             )
 
-    def test_canary_cli_requires_an_administrator_bound_broker(self) -> None:
-        args = SimpleNamespace(
-            repository_root=str(ROOT),
-            evidence_root="/tmp/canary-bundle",
-            evidence_ref=["baseline.json", "candidate.json"],
-            output="canary-result.json",
-            trust_verifier=self.CanaryVerifier(),
-            evidence_broker={"enabled": True, "id": CANARY_BROKER_ID},
-            host_trust_config_digest=None,
-        )
-
-        with self.assertRaisesRegex(ValidationFailure, "administrator-bound"):
-            command_canary_assemble(args)
-
     def test_canary_validate_returns_nonzero_when_thresholds_fail(self) -> None:
         args = SimpleNamespace(
             result="/tmp/canary-result.json",
-            trust_verifier=self.CanaryVerifier(),
-            evidence_broker={"enabled": True, "id": CANARY_BROKER_ID},
-            host_trust_config_digest=CANARY_HOST_CONFIG_DIGEST,
         )
         with redirect_stdout(io.StringIO()):
             with patch(
@@ -718,9 +677,6 @@ class EvalTests(unittest.TestCase):
                 evidence_root=str(author),
                 evidence_ref=["baseline.json", "candidate.json"],
                 output="canary-result.json",
-                trust_verifier=self.CanaryVerifier(),
-                evidence_broker={"enabled": True, "id": CANARY_BROKER_ID},
-                host_trust_config_digest=CANARY_HOST_CONFIG_DIGEST,
             )
 
             with self.assertRaisesRegex(
@@ -776,11 +732,9 @@ class EvalTests(unittest.TestCase):
             with self.assertRaises(ValidationFailure):
                 run_canary_result(
                     path,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
 
-    def test_attested_paired_canary_cannot_be_promoted(self) -> None:
+    def test_legacy_paired_canary_cannot_be_promoted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             evidence_refs = []
@@ -845,11 +799,7 @@ class EvalTests(unittest.TestCase):
                                         ],
                                     }
                                 ],
-                                "trust_provenance": {
-                                    "evidence_broker_id": CANARY_BROKER_ID,
-                                    "host_trust_config_digest": CANARY_HOST_CONFIG_DIGEST,
-                                },
-                                "attestation": "trusted-canary-receipt",
+                                "assurance": "local_unattested",
                             }
                         ),
                         encoding="utf-8",
@@ -859,8 +809,6 @@ class EvalTests(unittest.TestCase):
                 assemble_canary_result(
                     root,
                     evidence_refs,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             return
             self.assertEqual("product", assembled["product_repository"])
@@ -889,13 +837,6 @@ class EvalTests(unittest.TestCase):
             )
             self.assertAlmostEqual(0, assembled["wall_time_reduction_ratio"])
             self.assertAlmostEqual(0.27, assembled["cost_reduction_ratio"])
-            self.assertEqual(
-                {
-                    "evidence_broker_id": CANARY_BROKER_ID,
-                    "host_trust_config_digest": CANARY_HOST_CONFIG_DIGEST,
-                },
-                assembled["trust_provenance"],
-            )
             with patch(
                 "engineering_assistant.canary_limits.MAX_TOTAL_ARTIFACTS",
                 9,
@@ -903,19 +844,7 @@ class EvalTests(unittest.TestCase):
                 assemble_canary_result(
                     root,
                     evidence_refs,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
-            with self.assertRaisesRegex(ValidationFailure, "different host trust"):
-                assemble_canary_result(
-                    root,
-                    evidence_refs,
-                    trust_verifier=self.CanaryVerifier(),
-                    expected_evidence_broker_id=CANARY_BROKER_ID,
-                    expected_host_trust_config_digest="sha256:" + "d" * 64,
-                )
-            with self.assertRaisesRegex(ValidationFailure, "external evidence broker"):
-                assemble_canary_result(root, evidence_refs, **VALIDATION_TRUST)
 
             incomplete_mapping_path = root / "candidate-0.json"
             original_mapping_payload = incomplete_mapping_path.read_text(
@@ -935,8 +864,6 @@ class EvalTests(unittest.TestCase):
                 assemble_canary_result(
                     root,
                     evidence_refs,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             incomplete_mapping_path.write_text(
                 original_mapping_payload, encoding="utf-8"
@@ -955,8 +882,6 @@ class EvalTests(unittest.TestCase):
                 assemble_canary_result(
                     root,
                     evidence_refs,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             for evidence_ref, payload in originals.items():
                 (root / evidence_ref).write_text(payload, encoding="utf-8")
@@ -965,8 +890,6 @@ class EvalTests(unittest.TestCase):
             result.write_text(json.dumps(assembled), encoding="utf-8")
             report = run_canary_result(
                 result,
-                trust_verifier=self.CanaryVerifier(),
-                **VALIDATION_TRUST,
             )
             self.assertEqual("passed", report["status"])
             self.assertEqual(5, report["task_count"])
@@ -1005,8 +928,6 @@ class EvalTests(unittest.TestCase):
             inflated_result = assemble_canary_result(
                 root,
                 evidence_refs,
-                trust_verifier=self.CanaryVerifier(),
-                **VALIDATION_TRUST,
             )
             self.assertGreater(
                 inflated_result["total_input_token_reduction_ratio"], 0
@@ -1023,8 +944,6 @@ class EvalTests(unittest.TestCase):
             )
             inflated_report = run_canary_result(
                 inflated_result_path,
-                trust_verifier=self.CanaryVerifier(),
-                **VALIDATION_TRUST,
             )
             self.assertEqual("failed", inflated_report["status"])
             self.assertIn(
@@ -1053,17 +972,12 @@ class EvalTests(unittest.TestCase):
                 inflated_candidate_original, encoding="utf-8"
             )
 
-            with self.assertRaisesRegex(ValidationFailure, "external evidence broker"):
-                run_canary_result(result, **VALIDATION_TRUST)
-
             artifact = root / "candidate-0.log"
             original_artifact = artifact.read_text(encoding="utf-8")
             artifact.write_text("tampered\n", encoding="utf-8")
             with self.assertRaisesRegex(ValidationFailure, "digest"):
                 run_canary_result(
                     result,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             artifact.write_text(original_artifact, encoding="utf-8")
 
@@ -1075,8 +989,6 @@ class EvalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationFailure, "execution config"):
                 run_canary_result(
                     result,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             observation_path.write_text(original_observation, encoding="utf-8")
 
@@ -1086,8 +998,6 @@ class EvalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationFailure, "git refs"):
                 run_canary_result(
                     result,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
             observation_path.write_text(original_observation, encoding="utf-8")
 
@@ -1097,8 +1007,6 @@ class EvalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationFailure, "does not match"):
                 run_canary_result(
                     result,
-                    trust_verifier=self.CanaryVerifier(),
-                    **VALIDATION_TRUST,
                 )
 
 

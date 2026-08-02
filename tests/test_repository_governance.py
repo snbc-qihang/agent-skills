@@ -52,9 +52,9 @@ class RepositoryGovernanceTests(unittest.TestCase):
 
         canary = (ROOT / "docs/operations/canary.md").read_text(encoding="utf-8")
         self.assertIn("盲评 Blocker、盲评 Major、未闭合矩阵单元格", canary)
-        self.assertIn("进入 broker 签名 claims", canary)
-        self.assertIn("`delegation_ablation`", canary)
-        self.assertIn("主/子 Agent 证据重叠", canary)
+        self.assertIn("`assurance=local_unattested`", canary)
+        self.assertIn("三臂闭包", canary)
+        self.assertIn("不提供独立身份、抗篡改或跨主机信任证明", canary)
 
     def test_canary_efficiency_rules_prevent_duplicate_routing_and_evidence_dumping(self) -> None:
         router = (ROOT / "skills/engineering-assistant/SKILL.md").read_text(
@@ -87,10 +87,10 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("一次拼接多份整文件输出", review)
         self.assertIn("不得为了减少调用次数扩大单次输出", review)
         self.assertIn("不得再用 shell 读取自己的 `SKILL.md`", review)
-        self.assertIn("`recommended_execution=skills_only`", router)
-        self.assertIn("不调用任何需要 active run 的 Runtime 工具", router)
-        self.assertIn("`provider_invoke`、`investigation_*`", router)
-        self.assertIn("不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁", router)
+        self.assertIn("返回 `persisted_flow`", router)
+        self.assertIn("直接 primitive skill 保持内联，不创建 run", router)
+        self.assertIn("evidence-register", router)
+        self.assertIn("Runtime 返回的 capability、skill、目标、完成标准", router)
         self.assertIn("否则只内联报告六维判断", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
         self.assertIn("否则只内联合并六维判断", review)
         self.assertIn("精确区间", context)

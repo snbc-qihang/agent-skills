@@ -1,23 +1,10 @@
 {
   "id": "default",
-  "version": "1.3.0.0-rc.1",
+  "version": "2.0.0.0-rc.1",
   "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards"],
   "store": {
     "run_root": ".run-artifacts/engineering-assistant",
     "formal_document_roots": ["docs/architecture", "docs/design", "docs/decisions", "docs/release"]
-  },
-  "evidence_broker": {
-    "enabled": false,
-    "id": "platform-evidence-broker",
-    "introspection_url": "https://broker.invalid/v1/evidence/introspect",
-    "timeout_seconds": 5
-  },
-  "approval_broker": {
-    "enabled": false,
-    "id": "platform-approval-broker",
-    "audience": "engineering-assistant",
-    "introspection_url": "https://broker.invalid/v1/approval/introspect",
-    "timeout_seconds": 5
   },
   "investigation_policy": {
     "default_mode": "suggest_then_run",

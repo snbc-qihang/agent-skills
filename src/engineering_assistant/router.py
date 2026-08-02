@@ -80,12 +80,15 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
     if intent.task_kind == "release":
         approval_required.append("release-execution")
     approval_required = _ordered_unique(approval_required)
+    missing_confirmations = [
+        action for action in approval_required if action not in intent.confirmed_actions
+    ]
 
     if "forbidden" in risk_signals or "authorization-denied" in risk_signals:
         decision_name = "block"
         persistence = "blocked"
         reason = "请求路由包含明确的禁止或授权拒绝信号。"
-    elif approval_required:
+    elif missing_confirmations:
         decision_name = "confirm"
         persistence = "target_repo" if flow_id else "ephemeral"
         reason = "路由已经明确，但高风险或外部动作需要范围独立的审批。"
@@ -109,7 +112,7 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
         policy_refs=list(effective.policy_ids),
         evidence_level=evidence_level,
         persistence_mode=persistence,
-        approval_required=approval_required,
+        approval_required=missing_confirmations,
         reason=reason,
     )
     _validate_decision(decision, catalog)

@@ -4,7 +4,7 @@
   "required": ["schema_version", "status", "observation", "missing_fields", "claims"],
   "properties": {
     "schema_version": {"const": "1.0"},
-    "status": {"enum": ["incomplete", "awaiting_attestation"]},
+    "status": {"enum": ["incomplete", "ready_local_audit"]},
     "observation": {
       "type": "object",
       "required": [
@@ -12,7 +12,7 @@
         "task_id", "workload_digest", "variant",
         "product_repository", "git_ref", "treatment_digest", "execution_config_digest",
         "environment_digest", "quality_rubric_digest", "evaluator_id",
-        "started_at", "finished_at", "artifact_refs", "trust_provenance"
+        "started_at", "finished_at", "artifact_refs", "assurance"
       ],
       "properties": {
         "simulation": {"const": false},
@@ -81,15 +81,7 @@
             "additionalProperties": false
           }
         },
-        "trust_provenance": {
-          "type": "object",
-          "required": ["evidence_broker_id", "host_trust_config_digest"],
-          "properties": {
-            "evidence_broker_id": {"type": "string", "minLength": 1},
-            "host_trust_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-          },
-          "additionalProperties": false
-        }
+        "assurance": {"const": "local_unattested"}
       },
       "allOf": [
         {

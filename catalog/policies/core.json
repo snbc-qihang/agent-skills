@@ -1,9 +1,9 @@
 {
-  "version": "1.3.0.0-rc.1",
+  "version": "2.0.0.0-rc.1",
   "policies": [
     {
       "id": "safety-core",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "safety",
       "immutable": true,
       "applies_when": ["always"],
@@ -17,7 +17,7 @@
     },
     {
       "id": "risk-approval",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "risk",
       "immutable": false,
       "applies_when": ["任务包含写入、发布、安全、跨系统或外部动作"],
@@ -31,7 +31,7 @@
     },
     {
       "id": "evidence-quality",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "evidence",
       "immutable": false,
       "applies_when": ["生成结论、状态转换或完成声明"],
@@ -45,7 +45,7 @@
     },
     {
       "id": "document-governance",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "document",
       "immutable": false,
       "applies_when": ["任务创建或提升文档"],
@@ -59,7 +59,7 @@
     },
     {
       "id": "scope-control",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "risk",
       "immutable": false,
       "applies_when": ["任务设计或修改代码"],
@@ -73,7 +73,7 @@
     },
     {
       "id": "frontend-product",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "capability",
       "immutable": false,
       "applies_when": ["任务交付 Web 或应用用户界面"],
@@ -87,7 +87,7 @@
     },
     {
       "id": "release-safety",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "safety",
       "immutable": true,
       "applies_when": ["任务包含发布、生产验证或回滚"],
@@ -100,7 +100,7 @@
     },
     {
       "id": "feedback-evolution",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "evidence",
       "immutable": false,
       "applies_when": ["反馈可能改变 rule、skill、flow 或 eval"],
@@ -114,7 +114,7 @@
     },
     {
       "id": "domain-design-governance",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "capability",
       "immutable": false,
       "applies_when": ["任务创建、修订或提升跨限界上下文的领域设计"],
@@ -136,7 +136,7 @@
     },
     {
       "id": "team-standards",
-      "version": "1.3.0.0-rc.1",
+      "version": "2.0.0.0-rc.1",
       "policy_class": "team",
       "immutable": false,
       "applies_when": ["项目 profile 指定了团队规范"],

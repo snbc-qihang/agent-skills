@@ -46,8 +46,8 @@ class ModelAndSchemaTests(unittest.TestCase):
 
     def test_four_part_version_and_platform_mapping(self) -> None:
         parsed = CanonicalVersion.parse(CANONICAL_VERSION)
-        self.assertEqual("1.3.0.0-rc.1", parsed.canonical())
-        self.assertEqual("1.3.0-rc.1+build.0", parsed.semver())
+        self.assertEqual("2.0.0.0-rc.1", parsed.canonical())
+        self.assertEqual("2.0.0-rc.1+build.0", parsed.semver())
         self.assertEqual("1.2.3+build.4", platform_version("1.2.3.4", supports_four_part=False))
         with self.assertRaises(ValueError):
             CanonicalVersion.parse("4.0.0")
@@ -100,6 +100,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             scope=["module-a"],
             risk_signals=[],
             requested_external_actions=[],
+            confirmed_actions=[],
             confidence=0.9,
             evidence=["user requested design"],
         ).to_dict()
@@ -115,7 +116,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             uri="source.py",
             producer="test",
             observed_at="not-a-date",
-            trust_level="observed",
+            provenance="runtime_observed",
             scope="date-time validation",
         ).to_dict()
         with self.assertRaises(ValidationFailure):
@@ -357,12 +358,13 @@ class ModelAndSchemaTests(unittest.TestCase):
             "quality-snapshot.schema.json",
             "investigation-request.schema.json",
             "investigation-record.schema.json",
-            "investigation-decision-grant.schema.json",
-            "run-approval-grant.schema.json",
+            "investigation-decision-record.schema.json",
+            "approval-record.schema.json",
+            "run-manifest.schema.json",
+            "step-record.schema.json",
             "provider-invocation.schema.json",
             "provider-result.schema.json",
             "usage-efficiency-feedback.schema.json",
-            "host-trust-config.schema.json",
         }
         self.assertTrue(expected.issubset({path.name for path in (ROOT / "schemas").glob("*.json")}))
         for name in expected:

@@ -30,11 +30,16 @@ PLUGIN_TOOL_NAMES = frozenset(
         "engineering_assistant_artifact_validate",
         "engineering_assistant_start",
         "engineering_assistant_next",
+        "engineering_assistant_runs_list",
+        "engineering_assistant_run_status",
+        "engineering_assistant_evidence_register",
+        "engineering_assistant_approval_record",
         "engineering_assistant_complete",
         "engineering_assistant_quality_submit",
         "engineering_assistant_provider_invoke",
         "engineering_assistant_investigation_propose",
         "engineering_assistant_investigation_list",
+        "engineering_assistant_investigation_decide",
         "engineering_assistant_investigation_start",
         "engineering_assistant_investigation_finish",
     }
@@ -287,7 +292,26 @@ def should_load_runtime(payload: Mapping[str, object]) -> bool:
     session_ref = hashed_ref("session-", session_id, 16)
     turn_ref = hashed_ref("turn-", turn_id, 16)
     marker = Path(cwd).resolve() / OBSERVATION_ROOT / session_ref / f"{turn_ref}.json"
-    return marker.is_file()
+    if marker.is_file():
+        return True
+    run_root = Path(cwd).resolve() / ".run-artifacts/engineering-assistant"
+    if not run_root.is_dir():
+        return False
+    try:
+        candidates = sorted(run_root.glob("*/run-state.json"))[:256]
+        for candidate in candidates:
+            if candidate.stat().st_size > 262_144:
+                continue
+            state = json.loads(candidate.read_text(encoding="utf-8"))
+            if state.get("schema_version") == "2" and state.get("status") not in {
+                "blocked", "cancelled", "completed"
+            }:
+                return True
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return False
+
+
 def read_gate_input(input_stream: TextIO) -> tuple[bool, str]:
     raw = input_stream.read(MAX_HOOK_INPUT_CHARS + 1)
     if len(raw) > MAX_HOOK_INPUT_CHARS:
