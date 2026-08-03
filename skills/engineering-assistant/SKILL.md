@@ -22,7 +22,7 @@ description: 将工程任务路由到最小充分的 skill 或受治理 flow。�
 
 当前平台尚未选择具体插件 skill 且暴露 `engineering_assistant_route` 时，先调用一次该工具获得 flow、skill 和 policy，再加载选中 skill。平台已经直接选择具体的插件限定 skill 时，该选择即为本轮平台能力选择结果，内联原语不得为了确认 skill 再次调用 `engineering_assistant_route`；它不等同于 Runtime `RouteDecision`，任务确实需要持久化 flow、Runtime 门禁或超出所选原语范围时才进入 Runtime 路由。不得扫描插件目录猜测路由、工作流或 validator。阶段状态审计、自动评审通过条件、blocker 和门禁判断属于 `code-review`，不是通用 `repo-context`。只有用户明确指向历史上下文，或当前仓库事实无法解释状态时，才加载 memory/rollout。
 
-`engineering_assistant_route` 返回的 `execution` 是宿主可信能力边界。`recommended_execution=stop` 时遵守 `ask`、`confirm` 或 `block` 并停止，不得加载或执行建议 skills。`recommended_execution=inline` 时只执行路由给出的公开 skill；`recommended_execution=persisted_flow` 时才可启动、推进、完成运行并登记证据或审批记录。`complete` 已经返回下一节点时不再额外调用 `next`，确定性校验失败且输入与外部状态未变化时不得原样重试。审批记录必须由 profile 名单内人员提交；本地记录不等同于外部验签。不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁。
+`engineering_assistant_route` 返回的 `execution` 是宿主可信能力边界。`recommended_execution=stop` 时遵守 `ask`、`confirm` 或 `block` 并停止，不得加载或执行建议 skills。`recommended_execution=inline` 时只执行路由给出的公开 skill：直接 primitive skill 保持内联，不创建 run。`recommended_execution=persisted_flow` 时才可启动、推进、完成运行并以 `evidence-register` 登记证据或提交审批记录。Runtime 返回的 capability、skill、目标、完成标准直接作为当前节点的执行合同。`complete` 已经返回下一节点时不再额外调用 `next`，确定性校验失败且输入与外部状态未变化时不得原样重试。审批记录必须由 profile 名单内人员提交；本地记录不等同于外部验签。不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁。
 
 用户未明确限制时，一次 Runtime 路由、一次代码索引查询、八个证据文件和六个 shell 命令仅作为采集参考值，不是执行上限。路由结果已经给出的 flow、skill、policy 直接使用，不得再读取 catalog 验证。优先检查用户点名的阶段结果、自测、代码评审和运行证据；索引查询还应覆盖当前 diff 中的鉴权、秘密、持久化和外部动作高风险路径。超过参考值时继续以完成任务所需的最小充分证据推进，并把超出原因留作持续优化输入，不得自动阻断或要求人工批准。
 
