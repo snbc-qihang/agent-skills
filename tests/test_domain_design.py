@@ -26,7 +26,7 @@ from engineering_assistant.model import (  # noqa: E402
 )
 from engineering_assistant.router import route_intent  # noqa: E402
 from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.validation import ValidationFailure, validate_instance  # noqa: E402
 
 
 class DomainDesignTests(unittest.TestCase):
@@ -47,9 +47,8 @@ class DomainDesignTests(unittest.TestCase):
         )
 
     @staticmethod
-    def registry_v1() -> dict:
+    def registry_base() -> dict:
         return {
-            "version": "1",
             "hld": "docs/architecture/hld.md",
             "context_index": "docs/architecture/contexts.md",
             "capability_design_root": "docs/architecture/capabilities",
@@ -63,7 +62,7 @@ class DomainDesignTests(unittest.TestCase):
 
     @classmethod
     def registry_v2(cls) -> dict:
-        registry = cls.registry_v1() | {"version": "2"}
+        registry = cls.registry_base() | {"version": "2"}
         registry["sources"] = [
             {"id": "requirements", "kind": "requirements", "path": "docs/requirements.md", "status": "available", "reason": "当前需求基线。"},
             {"id": "repository", "kind": "repository", "path": "src", "status": "available", "reason": "当前实现。"},
@@ -111,7 +110,23 @@ class DomainDesignTests(unittest.TestCase):
             ),
         )
 
-    def test_v1_registry_is_read_compatible_but_new_runs_require_v2(self) -> None:
+    def test_registry_schema_accepts_only_declared_v2_fields(self) -> None:
+        schema = json.loads((ROOT / "schemas" / "design-source-registry.schema.json").read_text())
+        validate_instance(self.registry_v2(), schema, "design-source-registry")
+        with self.assertRaises(ValidationFailure):
+            validate_instance(
+                self.registry_base() | {"version": "1"},
+                schema,
+                "design-source-registry",
+            )
+        with self.assertRaises(ValidationFailure):
+            validate_instance(
+                self.registry_v2() | {"unexpected": "field"},
+                schema,
+                "design-source-registry",
+            )
+
+    def test_registry_requires_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
             (project / "docs").mkdir()
@@ -119,15 +134,11 @@ class DomainDesignTests(unittest.TestCase):
             (project / "src").mkdir()
             registry_path = project / "docs" / "design-sources.json"
             registry_path.write_text(
-                json.dumps(self.registry_v1()), encoding="utf-8"
+                json.dumps(self.registry_base() | {"version": "1"}), encoding="utf-8"
             )
 
-            with self.assertRaisesRegex(ValidationFailure, "version 2"):
+            with self.assertRaises(ValidationFailure):
                 validate_design_source_registry(project, "docs/design-sources.json", ROOT / "schemas")
-            legacy = validate_design_source_registry(
-                project, "docs/design-sources.json", ROOT / "schemas", allow_legacy=True
-            )
-            self.assertEqual("1", legacy["version"])
 
             registry_path.write_text(
                 json.dumps(self.registry_v2()), encoding="utf-8"
@@ -170,7 +181,7 @@ class DomainDesignTests(unittest.TestCase):
             "domain-task",
             self.intent(),
             run_id="domain-old-rc",
-            design_source_ref="docs/design-sources-v1.json",
+            design_source_ref="docs/design-sources.json",
         )
         state.completed_nodes = [
             "resolve-design-sources",

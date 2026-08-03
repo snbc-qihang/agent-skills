@@ -1,9 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "oneOf": [
-    {"$ref": "#/$defs/v1"},
-    {"$ref": "#/$defs/v2"}
-  ],
+  "$ref": "#/$defs/v2",
   "$defs": {
     "owners": {
       "type": "object",
@@ -26,15 +23,6 @@
         "deployment_catalog": {"type": "string", "minLength": 1, "maxLength": 512},
         "owners": {"$ref": "#/$defs/owners"}
       }
-    },
-    "v1": {
-      "allOf": [
-        {"$ref": "#/$defs/base"},
-        {
-          "properties": {"version": {"const": "1"}},
-          "additionalProperties": false
-        }
-      ]
     },
     "source": {
       "type": "object",
@@ -68,10 +56,10 @@
               "maxItems": 6,
               "items": {"$ref": "#/$defs/source"}
             }
-          },
-          "additionalProperties": false
+          }
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     }
   }
 }

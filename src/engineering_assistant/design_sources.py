@@ -11,8 +11,6 @@ def validate_design_source_registry(
     project_root: Path | str,
     design_source_ref: str,
     schema_root: Path | str,
-    *,
-    allow_legacy: bool = False,
 ) -> dict:
     root = Path(project_root).resolve()
     relative = Path(design_source_ref)
@@ -29,10 +27,6 @@ def validate_design_source_registry(
         load_json(Path(schema_root) / "design-source-registry.schema.json"),
         "design-source-registry",
     )
-    if registry["version"] == "1":
-        if not allow_legacy:
-            raise ValidationFailure("new domain-design runs require DesignSourceRegistry version 2")
-        return registry
     _validate_v2_sources(root, registry["sources"])
     return registry
 
