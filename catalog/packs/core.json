@@ -1,77 +1,157 @@
 {
-  "version": "2.1.0.0-rc.1",
+  "version": "3.0.0.0-rc.1",
   "packs": [
     {
       "id": "frontend-product",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务改变浏览器或应用用户体验"],
-      "capabilities": ["frontend-design", "frontend-implementation", "product-prototype-review"],
-      "policy_refs": ["frontend-product", "evidence-quality"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务改变浏览器或应用用户体验"
+      ],
+      "capabilities": [
+        "frontend-design",
+        "frontend-implementation",
+        "product-prototype-review"
+      ],
+      "policy_refs": [
+        "frontend-product",
+        "evidence-quality"
+      ],
       "source_path": "packs/frontend-product.md"
     },
     {
       "id": "database",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务改变 schema、查询、索引、事务、迁移或数据修复"],
-      "capabilities": ["database-design"],
-      "policy_refs": ["risk-approval", "evidence-quality"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务改变 schema、查询、索引、事务、迁移或数据修复"
+      ],
+      "capabilities": [
+        "database-design"
+      ],
+      "policy_refs": [
+        "risk-approval",
+        "evidence-quality"
+      ],
       "source_path": "packs/database.md"
     },
     {
       "id": "redis",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务改变 Redis key、缓存、锁或失效逻辑"],
-      "capabilities": ["redis-design"],
-      "policy_refs": ["risk-approval", "evidence-quality"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务改变 Redis key、缓存、锁或失效逻辑"
+      ],
+      "capabilities": [
+        "redis-design"
+      ],
+      "policy_refs": [
+        "risk-approval",
+        "evidence-quality"
+      ],
       "source_path": "packs/redis.md"
     },
     {
       "id": "mq",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务改变 topic、消息 schema、生产者、消费者、重试或回放"],
-      "capabilities": ["mq-design"],
-      "policy_refs": ["risk-approval", "evidence-quality"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务改变 topic、消息 schema、生产者、消费者、重试或回放"
+      ],
+      "capabilities": [
+        "mq-design"
+      ],
+      "policy_refs": [
+        "risk-approval",
+        "evidence-quality"
+      ],
       "source_path": "packs/mq.md"
     },
     {
       "id": "quality-evidence",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["flow 声明实现、评审或发布完成"],
-      "capabilities": ["quality-evidence"],
-      "policy_refs": ["evidence-quality", "team-standards"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "flow 声明实现、评审或发布完成"
+      ],
+      "capabilities": [
+        "quality-evidence"
+      ],
+      "policy_refs": [
+        "evidence-quality",
+        "team-standards"
+      ],
       "source_path": "packs/quality-evidence.md"
     },
     {
       "id": "document-governance",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务创建、提升或废弃正式项目文档"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务创建、提升或废弃正式项目文档"
+      ],
       "capabilities": [],
-      "policy_refs": ["document-governance"],
+      "policy_refs": [
+        "document-governance"
+      ],
       "source_path": "packs/document-governance.md"
     },
     {
       "id": "release-safety",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["任务进入发布就绪、验证、回滚或生产观察"],
-      "capabilities": ["release-readiness", "release-verification"],
-      "policy_refs": ["release-safety", "risk-approval"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "任务进入发布就绪、验证、回滚或生产观察"
+      ],
+      "capabilities": [
+        "release-readiness",
+        "release-verification"
+      ],
+      "policy_refs": [
+        "release-safety",
+        "risk-approval"
+      ],
       "source_path": "packs/release-safety.md"
     },
     {
       "id": "feedback-evolution",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["有证据反馈可能改变 skill、flow、policy 或 eval"],
-      "capabilities": ["release-retrospective", "feedback-ingest", "knowledge-mining", "skill-evolution", "skill-quality"],
-      "policy_refs": ["feedback-evolution", "evidence-quality"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "有证据反馈可能改变 skill、flow、policy 或 eval"
+      ],
+      "capabilities": [
+        "release-retrospective",
+        "feedback-ingest",
+        "knowledge-mining",
+        "skill-evolution",
+        "skill-quality"
+      ],
+      "policy_refs": [
+        "feedback-evolution",
+        "evidence-quality"
+      ],
       "source_path": "packs/feedback-evolution.md"
     },
     {
       "id": "team-standards",
-      "version": "2.1.0.0-rc.1",
-      "activation": ["仓库或项目 profile 提供团队规则"],
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "仓库或项目 profile 提供团队规则"
+      ],
       "capabilities": [],
-      "policy_refs": ["team-standards"],
+      "policy_refs": [
+        "team-standards"
+      ],
       "source_path": "packs/team-standards.md"
+    },
+    {
+      "id": "domain-integration",
+      "version": "3.0.0.0-rc.1",
+      "activation": [
+        "领域设计识别到跨限界上下文协作或外部模型边界"
+      ],
+      "capabilities": [
+        "domain-integration"
+      ],
+      "policy_refs": [
+        "domain-design-governance",
+        "evidence-quality",
+        "scope-control"
+      ],
+      "source_path": "packs/domain-integration.md"
     }
   ]
 }

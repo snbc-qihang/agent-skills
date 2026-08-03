@@ -36,7 +36,12 @@
       }
     },
     "open_questions": {"type": "array", "items": {"type": "string"}},
-    "requested_transition": {"enum": ["continue", "pause_for_input", "pause_for_approval", "retry", "block", "complete", "cancel"]}
+    "requested_transition": {"enum": ["continue", "pause_for_input", "pause_for_approval", "retry", "rework", "block", "complete", "cancel"]},
+    "required_approvals": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
   },
   "additionalProperties": false
 }

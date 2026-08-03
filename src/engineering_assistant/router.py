@@ -16,6 +16,10 @@ ROUTES = {
     "research": (None, ("research",)),
     "decide": (None, ("decision-interview",)),
     "model": (None, ("domain-modeling",)),
+    "domain-design": (
+        "domain-design",
+        ("repo-context", "domain-modeling", "decision-interview", "codebase-design", "code-review"),
+    ),
     "shape": ("shape", ("repo-context", "domain-modeling", "decision-interview")),
     "prototype": (None, ("prototype",)),
     "design": ("design", ("repo-context", "domain-modeling", "codebase-design")),
@@ -43,13 +47,8 @@ def _ordered_unique(values: Sequence[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def route_intent(
-    intent: RouteIntent,
-    catalog: Catalog,
-    *,
-    profile_id: str | None = None,
-) -> RouteDecision:
-    profile_id = profile_id or catalog.product.default_profile_id
+def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str | None = None) -> RouteDecision:
+    profile_id = profile_id or "default"
     validate_instance(
         intent.to_dict(),
         load_json(catalog.root / "schemas/route-intent.schema.json"),
@@ -57,12 +56,10 @@ def route_intent(
     )
     if intent.task_kind not in ROUTES:
         raise ValidationFailure(f"unsupported task kind {intent.task_kind}")
-    if profile_id not in catalog.profiles:
-        raise ValidationFailure(f"unknown profile {profile_id}")
 
     flow_id, skill_ids = ROUTES[intent.task_kind]
     if (
-        catalog.profiles[profile_id].rule_catalog_ref is not None
+        profile_id == "rrq-yq-team"
         and intent.task_kind in TEAM_DELIVERY_TASKS
     ):
         flow_id = "team-delivery"
@@ -90,12 +87,15 @@ def route_intent(
     if intent.task_kind == "release":
         approval_required.append("release-execution")
     approval_required = _ordered_unique(approval_required)
+    missing_confirmations = [
+        action for action in approval_required if action not in intent.confirmed_actions
+    ]
 
     if "forbidden" in risk_signals or "authorization-denied" in risk_signals:
         decision_name = "block"
         persistence = "blocked"
         reason = "请求路由包含明确的禁止或授权拒绝信号。"
-    elif approval_required:
+    elif missing_confirmations:
         decision_name = "confirm"
         persistence = "target_repo" if flow_id else "ephemeral"
         reason = "路由已经明确，但高风险或外部动作需要范围独立的审批。"
@@ -119,7 +119,7 @@ def route_intent(
         policy_refs=list(effective.policy_ids),
         evidence_level=evidence_level,
         persistence_mode=persistence,
-        approval_required=approval_required,
+        approval_required=missing_confirmations,
         reason=reason,
     )
     _validate_decision(decision, catalog)

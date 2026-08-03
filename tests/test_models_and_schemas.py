@@ -13,12 +13,11 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.codec import feedback_event_from_dict, route_intent_from_dict  # noqa: E402
+from engineering_assistant.codec import feedback_event_from_dict  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     CapabilityProviderSpec,
     CompletionCriterion,
     ContextPointer,
-    DesignSourceRef,
     EvidenceRef,
     FeedbackEvent,
     Finding,
@@ -47,8 +46,8 @@ class ModelAndSchemaTests(unittest.TestCase):
 
     def test_four_part_version_and_platform_mapping(self) -> None:
         parsed = CanonicalVersion.parse(CANONICAL_VERSION)
-        self.assertEqual("2.1.0.0-rc.1", parsed.canonical())
-        self.assertEqual("2.1.0-rc.1+build.0", parsed.semver())
+        self.assertEqual("3.0.0.0-rc.1", parsed.canonical())
+        self.assertEqual("3.0.0-rc.1+build.0", parsed.semver())
         self.assertEqual("1.2.3+build.4", platform_version("1.2.3.4", supports_four_part=False))
         with self.assertRaises(ValueError):
             CanonicalVersion.parse("4.0.0")
@@ -101,6 +100,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             scope=["module-a"],
             risk_signals=[],
             requested_external_actions=[],
+            confirmed_actions=[],
             confidence=0.9,
             evidence=["user requested design"],
         ).to_dict()
@@ -109,25 +109,6 @@ class ModelAndSchemaTests(unittest.TestCase):
         with self.assertRaises(ValidationFailure):
             validate_instance(intent, self.schema("route-intent.schema.json"), "intent")
 
-    def test_route_intent_carries_explicit_deterministic_design_input(self) -> None:
-        intent = RouteIntent(
-            task_kind="design",
-            requested_outcome="生成可评审详细设计",
-            scope=["trade-context"],
-            risk_signals=[],
-            requested_external_actions=[],
-            confidence=1.0,
-            evidence=["REQ-123"],
-            requirement_id="REQ-123",
-            design_source=DesignSourceRef(
-                root="/project/project-inspection",
-                registry="90-design-basis/30-document-governance/04-document-registry.yaml",
-            ),
-        )
-        payload = intent.to_dict()
-        validate_instance(payload, self.schema("route-intent.schema.json"), "intent")
-        self.assertEqual(intent, route_intent_from_dict(payload))
-
     def test_evidence_date_time_is_validated_by_every_backend(self) -> None:
         evidence = EvidenceRef(
             id="source-1",
@@ -135,7 +116,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             uri="source.py",
             producer="test",
             observed_at="not-a-date",
-            trust_level="observed",
+            provenance="runtime_observed",
             scope="date-time validation",
         ).to_dict()
         with self.assertRaises(ValidationFailure):
@@ -377,12 +358,13 @@ class ModelAndSchemaTests(unittest.TestCase):
             "quality-snapshot.schema.json",
             "investigation-request.schema.json",
             "investigation-record.schema.json",
-            "investigation-decision-grant.schema.json",
-            "run-approval-grant.schema.json",
+            "investigation-decision-record.schema.json",
+            "approval-record.schema.json",
+            "run-manifest.schema.json",
+            "step-record.schema.json",
             "provider-invocation.schema.json",
             "provider-result.schema.json",
             "usage-efficiency-feedback.schema.json",
-            "host-trust-config.schema.json",
         }
         self.assertTrue(expected.issubset({path.name for path in (ROOT / "schemas").glob("*.json")}))
         for name in expected:

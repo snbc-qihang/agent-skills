@@ -24,13 +24,11 @@ class CatalogTests(unittest.TestCase):
 
     def test_catalog_has_the_approved_public_surface(self) -> None:
         self.assertEqual(11, len(self.catalog.skills))
-        self.assertEqual(7, len(self.catalog.flows))
-        self.assertEqual(11, len(self.catalog.policies))
-        self.assertEqual(17, len(self.catalog.packs))
-        self.assertEqual(2, len(self.catalog.profiles))
+        self.assertEqual(8, len(self.catalog.flows))
+        self.assertEqual(18, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("2.1.0.0-rc.1", self.catalog.version)
+        self.assertEqual("3.0.0.0-rc.1", self.catalog.version)
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}
@@ -81,12 +79,14 @@ class CatalogTests(unittest.TestCase):
             )
         self.assertEqual(("implement", ("tdd", "code-review")), ROUTES["implement"])
 
-    def test_domain_modeling_combines_context_scoped_contract_and_team_traceability(self) -> None:
-        skill = self.catalog.skills["domain-modeling"]
-        criterion_ids = {criterion.id for criterion in skill.completion_criteria}
+    def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
+        sourced = load_catalog(ROOT, require_sources=True)
+        self.assertEqual(set(self.catalog.skills), set(sourced.skills))
 
-        self.assertTrue(
-            {
+    def test_domain_modeling_exposes_the_full_context_scoped_contract(self) -> None:
+        skill = self.catalog.skills["domain-modeling"]
+        self.assertEqual(
+            [
                 "terms-resolved",
                 "context-bounded",
                 "language-resolved",
@@ -96,41 +96,31 @@ class CatalogTests(unittest.TestCase):
                 "implementation-reconciled",
                 "requirements-traced",
                 "adr-sparse",
-            }.issubset(criterion_ids)
+            ],
+            [criterion.id for criterion in skill.completion_criteria],
         )
-        self.assertIn("design-source-snapshot", skill.inputs)
-        self.assertIn("requirement-traceability", skill.inputs)
         self.assertEqual(
             {
                 "references/strategic-modeling.md",
                 "references/tactical-modeling.md",
                 "references/model-artifact.md",
+                "references/design-governance.md",
+                "references/scenario-traceability.md",
+                "references/integration-consistency.md",
                 "references/adr-format.md",
             },
             {pointer.path for pointer in skill.context_pointers},
         )
-        self.assertIn("scope-control", skill.policy_refs)
-
-    def test_code_review_catalog_requires_report_and_keeps_design_trace_conditional(self) -> None:
-        review = self.catalog.skills["code-review"]
-        criterion_ids = {criterion.id for criterion in review.completion_criteria}
-
-        self.assertEqual("reversible_write", review.risk_class)
-        self.assertNotIn("design-review-package", review.inputs)
-        self.assertNotIn("design-source-snapshot", review.inputs)
-        self.assertIn("code-smells-covered", criterion_ids)
-        self.assertIn("report-delivered", criterion_ids)
-        self.assertIn("design-trace-current", criterion_ids)
+        self.assertEqual(
+            ["document-governance", "evidence-quality", "scope-control"],
+            skill.policy_refs,
+        )
+        domain_policy = self.catalog.policies["domain-design-governance"]
         self.assertTrue(
-            any(
-                pointer.path == "references/code-review-report.md"
-                for pointer in review.context_pointers
+            {"DDD-009", "DDD-010", "DDD-011"}.issubset(
+                {rule.id for rule in domain_policy.rules}
             )
         )
-
-    def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
-        sourced = load_catalog(ROOT, require_sources=True)
-        self.assertEqual(set(self.catalog.skills), set(sourced.skills))
 
     def test_entry_version_conflict_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

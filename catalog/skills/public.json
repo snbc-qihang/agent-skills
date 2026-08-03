@@ -1,237 +1,734 @@
 {
-  "version": "2.1.0.0-rc.1",
+  "version": "3.0.0.0-rc.1",
   "skills": [
     {
       "id": "engineering-assistant",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "both",
       "description": "将工程任务路由到最小充分的 skill 或受治理 flow。适用于请求跨越上下文、设计、实现、评审、发布或长期任务协调的场景。",
-      "leading_words": ["最小充分", "路由决策"],
-      "capabilities": ["route-engineering"],
-      "inputs": ["user-request", "project-profile", "capability-health", "requirement-id", "design-source"],
+      "leading_words": [
+        "最小充分",
+        "路由决策"
+      ],
+      "capabilities": [
+        "route-engineering"
+      ],
+      "inputs": [
+        "user-request",
+        "project-profile",
+        "capability-health",
+        "design-source-ref"
+      ],
       "completion_criteria": [
-        {"id": "route-explained", "description": "已说明所选 flow 或原语及其风险和授权边界。", "evidence_kinds": ["source", "approval"]},
-        {"id": "minimum-context", "description": "只加载所选 skill 及其直接引用的 policy。", "evidence_kinds": ["source"]}
+        {
+          "id": "route-explained",
+          "description": "已说明所选 flow 或原语及其风险和授权边界。",
+          "evidence_kinds": [
+            "source",
+            "approval"
+          ]
+        },
+        {
+          "id": "minimum-context",
+          "description": "只加载所选 skill 及其直接引用的 policy。",
+          "evidence_kinds": [
+            "source"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "任务跨越多个 flow 或无法在单次会话内完成", "path": "references/wayfinding.md", "purpose": "在不预先规划未知工作的前提下选择长期任务路径。"},
-        {"when": "路由包含写入、发布或外部动作", "path": "references/authorization.md", "purpose": "加载授权和审批规则。"}
+        {
+          "when": "任务跨越多个 flow 或无法在单次会话内完成",
+          "path": "references/wayfinding.md",
+          "purpose": "在不预先规划未知工作的前提下选择长期任务路径。"
+        },
+        {
+          "when": "路由包含写入、发布或外部动作",
+          "path": "references/authorization.md",
+          "purpose": "加载授权和审批规则。"
+        }
       ],
-      "policy_refs": ["safety-core", "risk-approval", "evidence-quality"],
+      "policy_refs": [
+        "safety-core",
+        "risk-approval",
+        "evidence-quality"
+      ],
       "risk_class": "read_only",
       "source_path": "skills/engineering-assistant"
     },
     {
       "id": "research",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于一手资料研究工程问题，并输出有引用、有边界的结论。适用于外部项目、API、标准或不熟悉的技术事实。",
-      "leading_words": ["一手资料", "来源追踪"],
-      "capabilities": ["research"],
-      "inputs": ["research-question", "source-boundary"],
+      "leading_words": [
+        "一手资料",
+        "来源追踪"
+      ],
+      "capabilities": [
+        "research"
+      ],
+      "inputs": [
+        "research-question",
+        "source-boundary"
+      ],
       "completion_criteria": [
-        {"id": "claims-cited", "description": "每项重要结论都有一手资料支撑，或已明确标记为推断。", "evidence_kinds": ["source"]},
-        {"id": "scope-bounded", "description": "研究已回答既定问题，并记录尚未解决的不确定性。", "evidence_kinds": ["source"]}
+        {
+          "id": "claims-cited",
+          "description": "每项重要结论都有一手资料支撑，或已明确标记为推断。",
+          "evidence_kinds": [
+            "source"
+          ]
+        },
+        {
+          "id": "scope-bounded",
+          "description": "研究已回答既定问题，并记录尚未解决的不确定性。",
+          "evidence_kinds": [
+            "source"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "研究对象是 GitHub 仓库", "path": "references/github-research.md", "purpose": "检查源码、生命周期、测试和仓库规则。"}
+        {
+          "when": "研究对象是 GitHub 仓库",
+          "path": "references/github-research.md",
+          "purpose": "检查源码、生命周期、测试和仓库规则。"
+        }
       ],
-      "policy_refs": ["evidence-quality", "document-governance"],
+      "policy_refs": [
+        "evidence-quality",
+        "document-governance"
+      ],
       "risk_class": "read_only",
       "source_path": "skills/research"
     },
     {
       "id": "decision-interview",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在查明仓库事实后，与用户一起解决相互依赖的产品或设计决策。适用于范围、取舍或验收标准仍不明确的场景。",
-      "leading_words": ["决策树", "事实优先"],
-      "capabilities": ["decision-interview"],
-      "inputs": ["open-decisions", "discovered-facts"],
+      "leading_words": [
+        "决策树",
+        "事实优先"
+      ],
+      "capabilities": [
+        "decision-interview"
+      ],
+      "inputs": [
+        "open-decisions",
+        "discovered-facts"
+      ],
       "completion_criteria": [
-        {"id": "facts-discovered", "description": "在询问用户前，已先调查可从现有资料回答的问题。", "evidence_kinds": ["source"]},
-        {"id": "decisions-owned", "description": "重大取舍已有明确的人工决定，或仍保持阻断。", "evidence_kinds": ["approval"]}
+        {
+          "id": "facts-discovered",
+          "description": "在询问用户前，已先调查可从现有资料回答的问题。",
+          "evidence_kinds": [
+            "source"
+          ]
+        },
+        {
+          "id": "decisions-owned",
+          "description": "重大取舍已有明确的人工决定，或仍保持阻断。",
+          "evidence_kinds": [
+            "approval"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "缺失事实彼此独立", "path": "references/batch-facts.md", "purpose": "一次性分组收集相互独立的事实输入。"}
+        {
+          "when": "缺失事实彼此独立",
+          "path": "references/batch-facts.md",
+          "purpose": "一次性分组收集相互独立的事实输入。"
+        }
       ],
-      "policy_refs": ["risk-approval", "evidence-quality"],
+      "policy_refs": [
+        "risk-approval",
+        "evidence-quality"
+      ],
       "risk_class": "read_only",
       "source_path": "skills/decision-interview"
     },
     {
       "id": "domain-modeling",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在明确的限界上下文中建立统一语言、业务规则、生命周期及战略和战术模型。适用于语义冲突、业务规则复杂、聚合或一致性边界不清，以及代码与业务语言不一致的场景。",
-      "leading_words": ["限界上下文", "统一语言", "聚合不变量"],
-      "capabilities": ["domain-modeling"],
-      "inputs": ["domain-statements", "business-scenarios", "repository-context", "existing-domain-model", "existing-glossary", "design-source-snapshot", "requirement-traceability"],
+      "leading_words": [
+        "限界上下文",
+        "统一语言",
+        "聚合不变量"
+      ],
+      "capabilities": [
+        "domain-modeling"
+      ],
+      "inputs": [
+        "domain-statements",
+        "business-scenarios",
+        "repository-context",
+        "existing-domain-model",
+        "existing-glossary",
+        "design-source-registry",
+        "requirement-traceability"
+      ],
       "completion_criteria": [
-        {"id": "terms-resolved", "description": "每个变更术语在所属限界上下文内有唯一规范含义，并已记录冲突用法、Owner、聚合和不变量。", "evidence_kinds": ["source", "review"]},
-        {"id": "context-bounded", "description": "建模范围、子域和限界上下文明确；跨上下文关系、方向、翻译责任和与固定设计源边界的差异已记录或明确不适用。", "evidence_kinds": ["source", "review"]},
-        {"id": "language-resolved", "description": "同义词、禁用含义、历史别名和跨上下文同名异义均已记录，且不形成第二事实源。", "evidence_kinds": ["source", "review"]},
-        {"id": "behavior-validated", "description": "代表性的成功、失败和非法场景能够映射到命令、状态转换、领域事件和不变量。", "evidence_kinds": ["source", "review"]},
-        {"id": "consistency-owned", "description": "每项不变量都有业务所有者和执行边界；聚合内强一致及跨聚合一致性策略已明确。", "evidence_kinds": ["source", "review"]},
-        {"id": "patterns-justified", "description": "每种战术模式均有身份、生命周期、行为或协作依据；不强制填满全部 DDD 模式。", "evidence_kinds": ["source", "review"]},
-        {"id": "implementation-reconciled", "description": "代码、API、数据和文档中的冲突用法已分类为当前规则、历史别名、技术债或待决事项。", "evidence_kinds": ["source", "review"]},
-        {"id": "requirements-traced", "description": "需求引起的边界、不变量和生命周期变化已映射到具体 requirement_item 和评审包的相关设计章节，外部设计源保持只读。", "evidence_kinds": ["source", "review"]},
-        {"id": "adr-sparse", "description": "只为难以逆转、反直觉且真实存在的取舍创建 ADR。", "evidence_kinds": ["review"]}
+        {
+          "id": "terms-resolved",
+          "description": "每个变更术语在所属限界上下文内有唯一规范含义，并已记录冲突用法、Owner、聚合和不变量。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "context-bounded",
+          "description": "建模范围、子域和限界上下文明确；跨上下文关系、方向、翻译责任和与固定设计源边界的差异已记录或明确不适用。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "language-resolved",
+          "description": "同义词、禁用含义、历史别名和跨上下文同名异义均已记录，且不形成第二事实源。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "behavior-validated",
+          "description": "代表性的成功、失败和非法场景能够映射到命令、状态转换、领域事件和不变量。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "consistency-owned",
+          "description": "每项不变量都有业务所有者和执行边界；聚合内强一致及跨聚合一致性策略已明确。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "patterns-justified",
+          "description": "每种战术模式均有身份、生命周期、行为或协作依据；不强制填满全部 DDD 模式。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "implementation-reconciled",
+          "description": "代码、API、数据和文档中的冲突用法已分类为当前规则、历史别名、技术债或待决事项。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "requirements-traced",
+          "description": "需求引起的边界、不变量和生命周期变化已映射到具体 requirement_item 和评审包的相关设计章节，外部设计源保持只读。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "adr-sparse",
+          "description": "只为难以逆转、反直觉且真实存在的取舍创建 ADR。",
+          "evidence_kinds": [
+            "review"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "存在多个子域、团队边界、同名异义或跨系统协作", "path": "references/strategic-modeling.md", "purpose": "建立限界上下文和上下文映射，避免强制全局统一模型。"},
-        {"when": "任务涉及聚合、不变量、生命周期或实现映射", "path": "references/tactical-modeling.md", "purpose": "按业务语义选择实体、值对象、聚合、事件、服务和持久化模式。"},
-        {"when": "创建或更新本次评审包中的正式领域模型", "path": "references/model-artifact.md", "purpose": "使用统一的文档章节、规范表格、需求追踪和实现对照契约，并保持外部设计源只读。"},
-        {"when": "某项决策确实需要 ADR", "path": "references/adr-format.md", "purpose": "记录决策与备选方案，同时避免把术语表写成规格说明。"}
+        {
+          "when": "存在多个子域、团队边界、同名异义或跨系统协作",
+          "path": "references/strategic-modeling.md",
+          "purpose": "建立限界上下文和上下文映射，避免强制全局统一模型。"
+        },
+        {
+          "when": "任务涉及聚合、不变量、生命周期或实现映射",
+          "path": "references/tactical-modeling.md",
+          "purpose": "按业务语义选择实体、值对象、聚合、事件、服务和持久化模式。"
+        },
+        {
+          "when": "创建或更新本次评审包中的正式领域模型",
+          "path": "references/model-artifact.md",
+          "purpose": "使用统一的文档章节、规范表格、需求追踪和实现对照契约，并保持外部设计源只读。"
+        },
+        {
+          "when": "某项决策确实需要 ADR",
+          "path": "references/adr-format.md",
+          "purpose": "记录决策与备选方案，同时避免把术语表写成规格说明。"
+        },
+        {
+          "when": "请求覆盖战略设计、多个限界上下文、部署拓扑或能力级详细设计",
+          "path": "references/design-governance.md",
+          "purpose": "按战略基线、上下文模型、能力详细设计和变更增量的顺序治理正式领域设计。"
+        },
+        {
+          "when": "请求正式领域设计、上下文切片或能力级详细设计",
+          "path": "references/scenario-traceability.md",
+          "purpose": "从业务场景切分上下文，并保持场景、模型元素和实现对照的多对多追溯。"
+        },
+        {
+          "when": "存在跨限界上下文或外部模型协作",
+          "path": "references/integration-consistency.md",
+          "purpose": "定义上下文关系、翻译责任、发布语言与按需一致性策略。"
+        }
       ],
-      "policy_refs": ["document-governance", "evidence-quality", "scope-control"],
+      "policy_refs": [
+        "document-governance",
+        "evidence-quality",
+        "scope-control"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/domain-modeling"
     },
     {
       "id": "repo-context",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于源码证据梳理仓库模块、接口、数据、依赖、可复用能力和影响范围。适用于设计或大范围变更分析之前。",
-      "leading_words": ["影响范围", "源码追踪"],
-      "capabilities": ["repo-context"],
-      "inputs": ["repository", "task-boundary", "requirement-id", "design-source"],
+      "leading_words": [
+        "影响范围",
+        "源码追踪"
+      ],
+      "capabilities": [
+        "repo-context"
+      ],
+      "inputs": [
+        "repository",
+        "task-boundary",
+        "requirement-id",
+        "design-source-registry"
+      ],
       "completion_criteria": [
-        {"id": "scope-complete", "description": "范围内每个模块、外部边界和受影响设计上下文都有证据，或已明确标记为未知。", "evidence_kinds": ["source"]},
-        {"id": "design-input-fixed", "description": "本需求的外部设计注册表、文档和模板已只读固定摘要，且未跨任务复用。", "evidence_kinds": ["source"]},
-        {"id": "reuse-identified", "description": "已明确列出现有可复用能力和禁止改动边界。", "evidence_kinds": ["source"]}
+        {
+          "id": "scope-complete",
+          "description": "范围内每个模块、外部边界和受影响设计上下文都有证据，或已明确标记为未知。",
+          "evidence_kinds": [
+            "source"
+          ]
+        },
+        {
+          "id": "design-input-fixed",
+          "description": "本需求的外部设计注册表、文档和模板已只读固定摘要，且未跨任务复用。",
+          "evidence_kinds": [
+            "source"
+          ]
+        },
+        {
+          "id": "reuse-identified",
+          "description": "已明确列出现有可复用能力和禁止改动边界。",
+          "evidence_kinds": [
+            "source"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "检测到数据库、Redis、MQ 或前端变更", "path": "references/specialist-context.md", "purpose": "只加载相关专业领域的证据检查项。"},
-        {"when": "任务提供 requirement_id 与外部 design_source", "path": "references/deterministic-design-input.md", "purpose": "固定唯一设计事实源并按目标文档摘要处理并发冲突。"}
+        {
+          "when": "检测到数据库、Redis、MQ 或前端变更",
+          "path": "references/specialist-context.md",
+          "purpose": "只加载相关专业领域的证据检查项。"
+        },
+        {
+          "when": "任务提供 requirement_id 与外部 design_source",
+          "path": "references/deterministic-design-input.md",
+          "purpose": "固定唯一设计事实源并按目标文档摘要处理并发冲突。"
+        }
       ],
-      "policy_refs": ["evidence-quality", "scope-control"],
+      "policy_refs": [
+        "evidence-quality",
+        "scope-control"
+      ],
       "risk_class": "read_only",
       "source_path": "skills/repo-context"
     },
     {
       "id": "wayfinder",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "both",
       "description": "把大型或高不确定性工程任务整理为目标、当前前沿和待决策事项。适用于工作超过一次会话或尚不能安全切片的场景。",
-      "leading_words": ["目标", "当前前沿", "认知迷雾"],
-      "capabilities": ["wayfinder"],
-      "inputs": ["destination", "known-decisions", "current-frontier"],
+      "leading_words": [
+        "目标",
+        "当前前沿",
+        "认知迷雾"
+      ],
+      "capabilities": [
+        "wayfinder"
+      ],
+      "inputs": [
+        "destination",
+        "known-decisions",
+        "current-frontier"
+      ],
       "completion_criteria": [
-        {"id": "destination-bounded", "description": "目标和范围外边界已经明确。", "evidence_kinds": ["review"]},
-        {"id": "frontier-actionable", "description": "每个前沿事项都足够明确，可以继续调查或决策，而无需臆造未知工作。", "evidence_kinds": ["source", "review"]}
+        {
+          "id": "destination-bounded",
+          "description": "目标和范围外边界已经明确。",
+          "evidence_kinds": [
+            "review"
+          ]
+        },
+        {
+          "id": "frontier-actionable",
+          "description": "每个前沿事项都足够明确，可以继续调查或决策，而无需臆造未知工作。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "前沿事项需要人工判断", "path": "references/hitl.md", "purpose": "区分人工决策与 agent 可独立执行的调查任务。"}
+        {
+          "when": "前沿事项需要人工判断",
+          "path": "references/hitl.md",
+          "purpose": "区分人工决策与 agent 可独立执行的调查任务。"
+        }
       ],
-      "policy_refs": ["scope-control", "document-governance", "risk-approval"],
+      "policy_refs": [
+        "scope-control",
+        "document-governance",
+        "risk-approval"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/wayfinder"
     },
     {
       "id": "prototype",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "构建明确可丢弃的逻辑或界面原型，用于回答一个设计问题。适用于具体交互验证比继续抽象讨论成本更低的场景。",
-      "leading_words": ["可丢弃", "只回答一个问题"],
-      "capabilities": ["prototype"],
-      "inputs": ["design-question", "project-conventions"],
+      "leading_words": [
+        "可丢弃",
+        "只回答一个问题"
+      ],
+      "capabilities": [
+        "prototype"
+      ],
+      "inputs": [
+        "design-question",
+        "project-conventions"
+      ],
       "completion_criteria": [
-        {"id": "question-answered", "description": "原型已为既定设计问题产生可观察证据。", "evidence_kinds": ["browser", "test", "review"]},
-        {"id": "disposition-known", "description": "决策完成后，原型已明确标记为删除或正式吸收。", "evidence_kinds": ["review"]}
+        {
+          "id": "question-answered",
+          "description": "原型已为既定设计问题产生可观察证据。",
+          "evidence_kinds": [
+            "browser",
+            "test",
+            "review"
+          ]
+        },
+        {
+          "id": "disposition-known",
+          "description": "决策完成后，原型已明确标记为删除或正式吸收。",
+          "evidence_kinds": [
+            "review"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "问题与界面有关", "path": "references/ui.md", "purpose": "在真实应用外壳中构建可比较的方案。"},
-        {"when": "问题与状态或逻辑有关", "path": "references/logic.md", "purpose": "构建可运行的小型状态探索器。"}
+        {
+          "when": "问题与界面有关",
+          "path": "references/ui.md",
+          "purpose": "在真实应用外壳中构建可比较的方案。"
+        },
+        {
+          "when": "问题与状态或逻辑有关",
+          "path": "references/logic.md",
+          "purpose": "构建可运行的小型状态探索器。"
+        }
       ],
-      "policy_refs": ["scope-control", "frontend-product", "evidence-quality"],
+      "policy_refs": [
+        "scope-control",
+        "frontend-product",
+        "evidence-quality"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/prototype"
     },
     {
       "id": "codebase-design",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "设计小接口、高杠杆、变更局部化的深模块和清晰 seam。适用于架构边界、可测试性或重构结构设计。",
-      "leading_words": ["深模块", "seam", "局部性"],
-      "capabilities": ["codebase-design"],
-      "inputs": ["repo-context", "change-goal", "detailed-design-review", "requirement-traceability"],
+      "leading_words": [
+        "深模块",
+        "seam",
+        "局部性"
+      ],
+      "capabilities": [
+        "codebase-design"
+      ],
+      "inputs": [
+        "repo-context",
+        "change-goal",
+        "detailed-design-review",
+        "requirement-traceability"
+      ],
       "completion_criteria": [
-        {"id": "interface-small", "description": "所提接口只暴露调用方必须知道的内容。", "evidence_kinds": ["source", "review"]},
-        {"id": "seam-real", "description": "每个新增 seam 都有真实变化原因，而非假设性扩展。", "evidence_kinds": ["source", "test"]},
-        {"id": "database-template-conformant", "description": "关系型 OLTP 设计严格符合团队模板并通过确定性校验；未命中数据库时为不适用。", "evidence_kinds": ["source", "test", "review"]}
+        {
+          "id": "interface-small",
+          "description": "所提接口只暴露调用方必须知道的内容。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "seam-real",
+          "description": "每个新增 seam 都有真实变化原因，而非假设性扩展。",
+          "evidence_kinds": [
+            "source",
+            "test"
+          ]
+        },
+        {
+          "id": "database-template-conformant",
+          "description": "关系型 OLTP 设计严格符合团队模板并通过确定性校验；未命中数据库时为不适用。",
+          "evidence_kinds": [
+            "source",
+            "test",
+            "review"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "存在多个可行接口方案", "path": "references/design-it-twice.md", "purpose": "在选择前比较实质不同的接口设计。"},
-        {"when": "任务涉及关系型 OLTP 数据库设计", "path": "references/relational-oltp-detailed-design-template.md", "purpose": "严格保留团队表级详细设计的章节、顺序和表头。"}
+        {
+          "when": "存在多个可行接口方案",
+          "path": "references/design-it-twice.md",
+          "purpose": "在选择前比较实质不同的接口设计。"
+        },
+        {
+          "when": "任务涉及关系型 OLTP 数据库设计",
+          "path": "references/relational-oltp-detailed-design-template.md",
+          "purpose": "严格保留团队表级详细设计的章节、顺序和表头。"
+        }
       ],
-      "policy_refs": ["scope-control", "evidence-quality", "team-standards"],
+      "policy_refs": [
+        "scope-control",
+        "evidence-quality",
+        "team-standards"
+      ],
       "risk_class": "read_only",
       "source_path": "skills/codebase-design"
     },
     {
       "id": "tdd",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在确认的公共 seam 上使用红绿循环纵向切片实现一个行为。适用于测试优先的功能、修复和回归覆盖。",
-      "leading_words": ["seam", "红绿循环", "tracer bullet"],
-      "capabilities": ["tdd"],
-      "inputs": ["accepted-behavior", "confirmed-seam", "quality-command"],
+      "leading_words": [
+        "seam",
+        "红绿循环",
+        "tracer bullet"
+      ],
+      "capabilities": [
+        "tdd"
+      ],
+      "inputs": [
+        "accepted-behavior",
+        "confirmed-seam",
+        "quality-command"
+      ],
       "completion_criteria": [
-        {"id": "red-observed", "description": "实现前，测试已因预期缺失或损坏行为而失败。", "evidence_kinds": ["test"]},
-        {"id": "green-observed", "description": "最小实现后，同一测试和相关回归套件均已通过。", "evidence_kinds": ["test"]}
+        {
+          "id": "red-observed",
+          "description": "实现前，测试已因预期缺失或损坏行为而失败。",
+          "evidence_kinds": [
+            "test"
+          ]
+        },
+        {
+          "id": "green-observed",
+          "description": "最小实现后，同一测试和相关回归套件均已通过。",
+          "evidence_kinds": [
+            "test"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "需要替换依赖边界", "path": "references/mocking.md", "purpose": "只在真实 seam 上使用 fake 或 mock。"},
-        {"when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同", "path": "references/security-seams.md", "purpose": "用最小适用反例矩阵、组合编码与真实生产 adapter 合同生成高风险回归。"}
+        {
+          "when": "需要替换依赖边界",
+          "path": "references/mocking.md",
+          "purpose": "只在真实 seam 上使用 fake 或 mock。"
+        },
+        {
+          "when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同",
+          "path": "references/security-seams.md",
+          "purpose": "用最小适用反例矩阵、组合编码与真实生产 adapter 合同生成高风险回归。"
+        }
       ],
-      "policy_refs": ["scope-control", "evidence-quality", "team-standards"],
+      "policy_refs": [
+        "scope-control",
+        "evidence-quality",
+        "team-standards"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/tdd"
     },
     {
       "id": "diagnosing-bugs",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "通过复现、最小化、可证伪假设、定向观测、修复和回归证据诊断疑难缺陷或性能退化。",
-      "leading_words": ["紧反馈环", "可复现失败", "可证伪"],
-      "capabilities": ["diagnosing-bugs"],
-      "inputs": ["reported-symptom", "runtime-access", "repository"],
+      "leading_words": [
+        "紧反馈环",
+        "可复现失败",
+        "可证伪"
+      ],
+      "capabilities": [
+        "diagnosing-bugs"
+      ],
+      "inputs": [
+        "reported-symptom",
+        "runtime-access",
+        "repository"
+      ],
       "completion_criteria": [
-        {"id": "loop-red-capable", "description": "一个快速命令可以复现或检测用户报告的准确症状。", "evidence_kinds": ["test", "source", "external_state"]},
-        {"id": "cause-falsified", "description": "证据能够区分已接受根因与其他竞争假设。", "evidence_kinds": ["test", "source"]},
-        {"id": "regression-closed", "description": "清理诊断代码后，原始反馈环和回归证据均已通过。", "evidence_kinds": ["test"]}
+        {
+          "id": "loop-red-capable",
+          "description": "一个快速命令可以复现或检测用户报告的准确症状。",
+          "evidence_kinds": [
+            "test",
+            "source",
+            "external_state"
+          ]
+        },
+        {
+          "id": "cause-falsified",
+          "description": "证据能够区分已接受根因与其他竞争假设。",
+          "evidence_kinds": [
+            "test",
+            "source"
+          ]
+        },
+        {
+          "id": "regression-closed",
+          "description": "清理诊断代码后，原始反馈环和回归证据均已通过。",
+          "evidence_kinds": [
+            "test"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "症状具有非确定性", "path": "references/flaky-bugs.md", "purpose": "诊断前先提高并测量复现率。"},
-        {"when": "症状属于性能问题", "path": "references/performance.md", "purpose": "优先测量和分析，而不是添加大范围日志。"}
+        {
+          "when": "症状具有非确定性",
+          "path": "references/flaky-bugs.md",
+          "purpose": "诊断前先提高并测量复现率。"
+        },
+        {
+          "when": "症状属于性能问题",
+          "path": "references/performance.md",
+          "purpose": "优先测量和分析，而不是添加大范围日志。"
+        }
       ],
-      "policy_refs": ["evidence-quality", "scope-control", "risk-approval"],
+      "policy_refs": [
+        "evidence-quality",
+        "scope-control",
+        "risk-approval"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/diagnosing-bugs"
     },
     {
       "id": "code-review",
-      "version": "2.1.0.0-rc.1",
+      "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
       "description": "针对固定 diff、阶段状态或自动门禁，分别依据仓库规范和原始需求进行评审，并交付正式走查报告。适用于分支、Pull Request、阶段审计、blocker 判断或开发中的变更；仅在明确请求设计评审或设计到实现追踪时启用设计源与评审包门禁。",
-      "leading_words": ["固定比较点", "阶段审计", "自动门禁", "规范轴", "需求轴"],
-      "capabilities": ["code-review"],
-      "inputs": ["fixed-point", "diff", "standards", "specification"],
+      "leading_words": [
+        "固定比较点",
+        "阶段审计",
+        "自动门禁",
+        "规范轴",
+        "需求轴"
+      ],
+      "capabilities": [
+        "code-review"
+      ],
+      "inputs": [
+        "fixed-point",
+        "diff",
+        "standards",
+        "specification"
+      ],
       "completion_criteria": [
-        {"id": "axes-independent", "description": "规范问题和需求问题先独立评估，再合并结论。", "evidence_kinds": ["source", "review"]},
-        {"id": "findings-actionable", "description": "每项问题都包含证据、影响和级别，且不重复确定性工具输出。", "evidence_kinds": ["source", "test", "ci", "review"]},
-        {"id": "code-smells-covered", "description": "代码异味专项逐类记录结论和证据，未发现或未评估项也显式列出。", "evidence_kinds": ["source", "test", "review"]},
-        {"id": "report-delivered", "description": "正式 Markdown 走查报告已写入目标项目 .run-artifacts 并在最终答复中链接。", "evidence_kinds": ["review"]},
-        {"id": "design-trace-current", "description": "仅在设计追踪被明确激活时，设计评审包符合外部模板，目标摘要未过期，需求到设计、代码和测试可追溯；未激活时为不适用。", "evidence_kinds": ["source", "test", "review"]}
+        {
+          "id": "axes-independent",
+          "description": "规范问题和需求问题先独立评估，再合并结论。",
+          "evidence_kinds": [
+            "source",
+            "review"
+          ]
+        },
+        {
+          "id": "findings-actionable",
+          "description": "每项问题都包含证据、影响和级别，且不重复确定性工具输出。",
+          "evidence_kinds": [
+            "source",
+            "test",
+            "ci",
+            "review"
+          ]
+        },
+        {
+          "id": "code-smells-covered",
+          "description": "代码异味专项逐类记录结论和证据，未发现或未评估项也显式列出。",
+          "evidence_kinds": [
+            "source",
+            "test",
+            "review"
+          ]
+        },
+        {
+          "id": "report-delivered",
+          "description": "正式 Markdown 走查报告已写入目标项目 .run-artifacts 并在最终答复中链接。",
+          "evidence_kinds": [
+            "review"
+          ]
+        },
+        {
+          "id": "design-trace-current",
+          "description": "仅在设计追踪被明确激活时，设计评审包符合外部模板，目标摘要未过期，需求到设计、代码和测试可追溯；未激活时为不适用。",
+          "evidence_kinds": [
+            "source",
+            "test",
+            "review"
+          ]
+        }
       ],
       "context_pointers": [
-        {"when": "进行任一代码走查", "path": "references/code-review-report.md", "purpose": "按固定章节交付正式报告、代码异味专项和条件化设计追踪状态。"},
-        {"when": "仓库规范缺失或不完整", "path": "references/smell-baseline.md", "purpose": "使用明确标记的启发式基线，但不把主观判断当作硬性违规。"},
-        {"when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同", "path": "references/security-seams.md", "purpose": "用最小适用反例矩阵闭合异步终止、组合编码、真实事务与持久化事实源。"},
-        {"when": "评审需求设计稿或设计到实现追踪", "path": "references/design-review-package.md", "purpose": "校验完整评审包、reviewing 状态、追踪矩阵和目标摘要。"}
+        {
+          "when": "进行任一代码走查",
+          "path": "references/code-review-report.md",
+          "purpose": "按固定章节交付正式报告、代码异味专项和条件化设计追踪状态。"
+        },
+        {
+          "when": "仓库规范缺失或不完整",
+          "path": "references/smell-baseline.md",
+          "purpose": "使用明确标记的启发式基线，但不把主观判断当作硬性违规。"
+        },
+        {
+          "when": "行为触及身份或授权状态、认证或秘密解析、编码归一化、审计或持久化 adapter 合同",
+          "path": "references/security-seams.md",
+          "purpose": "用最小适用反例矩阵闭合异步终止、组合编码、真实事务与持久化事实源。"
+        },
+        {
+          "when": "评审需求设计稿或设计到实现追踪",
+          "path": "references/design-review-package.md",
+          "purpose": "校验完整评审包、reviewing 状态、追踪矩阵和目标摘要。"
+        }
       ],
-      "policy_refs": ["evidence-quality", "team-standards", "risk-approval"],
+      "policy_refs": [
+        "evidence-quality",
+        "team-standards",
+        "risk-approval"
+      ],
       "risk_class": "reversible_write",
       "source_path": "skills/code-review"
     }

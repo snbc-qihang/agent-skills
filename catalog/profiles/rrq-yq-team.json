@@ -1,30 +1,87 @@
 {
   "id": "rrq-yq-team",
-  "version": "2.1.0.0-rc.1",
-  "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards", "release-safety", "feedback-evolution", "teamwork-delivery-gates", "teamwork-rule-consumption"],
-  "pack_refs": ["frontend-product", "database", "redis", "mq", "quality-evidence", "document-governance", "release-safety", "feedback-evolution", "team-standards", "rrq-yq-delivery", "rrq-yq-architecture", "rrq-yq-api", "rrq-yq-code-quality", "rrq-yq-frontend", "rrq-yq-database", "rrq-yq-redis", "rrq-yq-mq"],
+  "version": "3.0.0.0-rc.1",
+  "policy_refs": [
+    "safety-core",
+    "risk-approval",
+    "evidence-quality",
+    "document-governance",
+    "scope-control",
+    "team-standards",
+    "release-safety",
+    "feedback-evolution",
+    "teamwork-delivery-gates",
+    "teamwork-rule-consumption",
+    "domain-design-governance"
+  ],
+  "pack_refs": [
+    "frontend-product",
+    "database",
+    "redis",
+    "mq",
+    "quality-evidence",
+    "document-governance",
+    "release-safety",
+    "feedback-evolution",
+    "team-standards",
+    "rrq-yq-delivery",
+    "rrq-yq-architecture",
+    "rrq-yq-api",
+    "rrq-yq-code-quality",
+    "rrq-yq-frontend",
+    "rrq-yq-database",
+    "rrq-yq-redis",
+    "rrq-yq-mq",
+    "domain-integration"
+  ],
   "rule_catalog_ref": "rrq-yq-team-rules",
   "store": {
     "run_root": ".run-artifacts/engineering-assistant",
-    "formal_document_roots": ["docs/requirements", "docs/architecture", "docs/design", "docs/decisions", "docs/release", "docs/knowledge"]
-  },
-  "evidence_broker": {
-    "enabled": false,
-    "id": "team-evidence-broker",
-    "introspection_url": "https://broker.invalid/v1/evidence/introspect",
-    "timeout_seconds": 5
-  },
-  "approval_broker": {
-    "enabled": false,
-    "id": "team-approval-broker",
-    "audience": "teamwork-engineering-assistant",
-    "introspection_url": "https://broker.invalid/v1/approval/introspect",
-    "timeout_seconds": 5
+    "formal_document_roots": [
+      "docs/requirements",
+      "docs/architecture",
+      "docs/design",
+      "docs/decisions",
+      "docs/release",
+      "docs/knowledge"
+    ]
   },
   "investigation_policy": {
     "default_mode": "suggest_then_run",
-    "auto_readonly": {"enabled": false, "authorization_id": "rrq-yq-no-auto-authorization", "allowed_source_scope": [], "max_cost": "low"}
+    "auto_readonly": {
+      "enabled": false,
+      "authorization_id": "rrq-yq-no-auto-authorization",
+      "allowed_source_scope": [],
+      "max_cost": "low"
+    }
   },
-  "evidence_policy": {"max_age_seconds": 3600, "max_future_skew_seconds": 300},
-  "adapter_preferences": ["codex", "hermes"]
+  "evidence_policy": {
+    "max_age_seconds": 3600,
+    "max_future_skew_seconds": 300
+  },
+  "adapter_preferences": [
+    "codex",
+    "hermes"
+  ],
+  "local_approval": {
+    "domain-business-owner": [
+      "business-owner"
+    ],
+    "domain-architecture-owner": [
+      "architecture-owner"
+    ],
+    "design-approval": [
+      "architecture-owner",
+      "business-owner"
+    ],
+    "code-confirmation": [
+      "tech-lead"
+    ],
+    "release-readiness": [
+      "release-manager"
+    ],
+    "tl-disposition": [
+      "tech-lead"
+    ]
+  }
 }

@@ -15,18 +15,16 @@ class HermesAdapter:
     def write_platform_files(self, package_root: Path, catalog: Catalog) -> list[Path]:
         plugin_yaml = package_root / "plugin.yaml"
         version = platform_version(catalog.version, supports_four_part=False)
-        product = catalog.product
-        mcp_namespace = product.id.replace("-", "_")
         provides_tools = "".join(
             f"  - {tool['name']}\n" for tool in RuntimeTools(catalog.root).definitions()
         )
         plugin_yaml.write_text(
-            f"name: {product.id}\n"
+            f"name: {catalog.product.id}\n"
             f'version: "{version}"\n'
             f'canonical_version: "{catalog.version}"\n'
-            'skill_versions_source: "engineering-assistant/catalog/skills/public.json"\n'
-            f'description: "{product.description}"\n'
-            f'author: "{product.developer}"\n'
+            f'skill_versions_source: "{catalog.product.id}/catalog/skills/public.json"\n'
+            'description: "基于证据的工程原语、受治理流程、状态恢复和人工审批门禁。"\n'
+            'author: "sunliming625@gmail.com"\n'
             "kind: standalone\n"
             "provides_tools:\n"
             + provides_tools
@@ -40,7 +38,7 @@ class HermesAdapter:
         )
         entrypoint = package_root / "__init__.py"
         entrypoint.write_text(
-            f'"""Generated Hermes adapter for {product.id}."""\n\n'
+            '"""Generated Hermes adapter for engineering-assistant."""\n\n'
             "import json\n"
             "import os\n"
             "import secrets\n"
@@ -49,14 +47,14 @@ class HermesAdapter:
             "import time\n"
             "from pathlib import Path\n\n"
             "_ROOT = Path(__file__).resolve().parent\n"
-            "sys.path.insert(0, str(_ROOT / 'engineering-assistant/runtime'))\n"
+            f"os.environ.setdefault('ENGINEERING_ASSISTANT_PLUGIN_ID', '{catalog.product.id}')\n"
+            f"sys.path.insert(0, str(_ROOT / '{catalog.product.id}/runtime'))\n"
             "from engineering_assistant.catalog import load_catalog\n"
             "from engineering_assistant.mcp_server import RuntimeTools\n"
-            "from engineering_assistant.trust import trust_bindings_from_host\n"
             "try:\n"
             "    from engineering_assistant.feedback import FeedbackCollector\n"
             "    from engineering_assistant.hook_gate import is_explicit_plugin_request\n"
-            "    _FEEDBACK = FeedbackCollector(_ROOT / 'engineering-assistant/schemas')\n"
+            f"    _FEEDBACK = FeedbackCollector(_ROOT / '{catalog.product.id}/schemas')\n"
             "except Exception:\n"
             "    _FEEDBACK = None\n"
             "    def is_explicit_plugin_request(_prompt):\n"
@@ -64,19 +62,13 @@ class HermesAdapter:
             "try:\n"
             "    from engineering_assistant.usage_observation import UsageObservationController\n"
             "    _OBSERVER = UsageObservationController(\n"
-            "        _ROOT / 'engineering-assistant/schemas',\n"
+            f"        _ROOT / '{catalog.product.id}/schemas',\n"
             "        coverage=('hermes_plugin_tool',),\n"
             "    )\n"
             "except Exception:\n"
             "    _OBSERVER = None\n\n"
-            "_CATALOG = load_catalog(_ROOT / 'engineering-assistant')\n"
-            "_TRUST = trust_bindings_from_host(_CATALOG.default_profile, _ROOT / 'engineering-assistant/schemas')\n"
-            "_TOOLS = RuntimeTools(\n"
-            "    _ROOT / 'engineering-assistant',\n"
-            "    trust_verifier=_TRUST.verifier,\n"
-            "    evidence_broker_enabled=bool(_TRUST.evidence_broker.get('enabled')),\n"
-            "    approval_broker_enabled=bool(_TRUST.approval_broker.get('enabled')),\n"
-            ")\n\n\n"
+            f"_CATALOG = load_catalog(_ROOT / '{catalog.product.id}')\n"
+            f"_TOOLS = RuntimeTools(_ROOT / '{catalog.product.id}')\n\n\n"
             "_ACTIVE_TURNS = {}\n"
             "_ACTIVE_TURNS_LOCK = threading.RLock()\n"
             "_MAX_ACTIVE_TURNS = 1024\n\n\n"
@@ -118,7 +110,7 @@ class HermesAdapter:
             "        return None\n"
             "    payload = {\n"
             "        **context, 'hook_event_name': 'PreToolUse',\n"
-            f"        'tool_name': f'mcp__{mcp_namespace}__{{name}}',\n"
+            "        'tool_name': f'mcp__engineering_assistant__{name}',\n"
             "        'tool_input': args, 'tool_use_id': secrets.token_hex(12),\n"
             "    }\n"
             "    _OBSERVER.handle(payload, os.environ)\n"
@@ -147,7 +139,7 @@ class HermesAdapter:
             "                if _FEEDBACK is not None and context is not None:\n"
             "                    mode = kwargs.get('feedback_mode') or os.environ.get('ENGINEERING_ASSISTANT_FEEDBACK_MODE', 'candidates')\n"
             "                    _FEEDBACK.collect_tool_result(\n"
-            f"                        {{**context, 'tool_name': f'mcp__{mcp_namespace}__{{name}}', 'tool_response': {{'error': 'ToolExecutionError', 'status': 'failed'}}}},\n"
+            "                        {**context, 'tool_name': f'mcp__engineering_assistant__{name}', 'tool_response': {'error': 'ToolExecutionError', 'status': 'failed'}},\n"
             "                        mode=mode, platform='hermes',\n"
             "                    )\n"
             "            except Exception:\n"
@@ -164,7 +156,7 @@ class HermesAdapter:
             "        if _FEEDBACK is None:\n"
             "            return None\n"
             "        key = _turn_key(session_id, kwargs)\n"
-            "        explicitly_requested = isinstance(user_message, str) and is_explicit_plugin_request(user_message)\n"
+            f"        explicitly_requested = isinstance(user_message, str) and is_explicit_plugin_request(user_message, plugin_id='{catalog.product.id}')\n"
             "        now = time.monotonic()\n"
             "        with _ACTIVE_TURNS_LOCK:\n"
             "            state = _ACTIVE_TURNS.get(key)\n"
@@ -219,7 +211,7 @@ class HermesAdapter:
             "            'parameters': tool['inputSchema'],\n"
             "        }\n"
             "        ctx.register_tool(\n"
-            f"            name=tool['name'], toolset='{product.id}',\n"
+            f"            name=tool['name'], toolset='{catalog.product.id}',\n"
             "            schema=schema, handler=_handler(tool['name']),\n"
             "        )\n"
             "    if _FEEDBACK is not None:\n"

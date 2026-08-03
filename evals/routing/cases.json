@@ -73,6 +73,29 @@
       ]
     },
     {
+      "task_kind": "domain-design",
+      "requests": [
+        {"language": "zh-CN", "request": "为交易系统从头做领域驱动设计，覆盖战略设计、战术设计和实施边界。"},
+        {"language": "zh-CN", "request": "梳理订单、支付和履约的子域、限界上下文、上下文地图与部署拓扑。"},
+        {"language": "zh-CN", "request": "对存量系统做 DDD 反向建模，形成系统 HLD 和各上下文的能力详细设计。"},
+        {"language": "zh-CN", "request": "设计跨限界上下文的领域契约、集成事件和最终一致性治理。"},
+        {"language": "zh-CN", "request": "把这项需求按领域设计流程拆成战略设计、BC 模型和能力级详细设计。"},
+        {"language": "zh-CN", "request": "分析会员与营销领域的核心、支撑和通用子域，并映射限界上下文。"},
+        {"language": "zh-CN", "request": "为订单履约领域设计完成场景切片，追溯创建、取消和非法转换到各限界上下文。"},
+        {"language": "zh-CN", "request": "为遗留会员系统完成领域设计，不能把数据库表和 API 直接当作聚合边界。"},
+        {"language": "zh-CN", "request": "完成营销与权益的领域设计，证明一个 API 可以承载多个业务场景。"},
+        {"language": "en", "request": "Create a domain-driven design from scratch with strategic and tactical design."},
+        {"language": "en", "request": "Map subdomains, bounded contexts, context relationships, and deployment topology."},
+        {"language": "en", "request": "Reverse engineer the legacy system into a DDD HLD and capability detailed designs."},
+        {"language": "en", "request": "Design cross-bounded-context contracts and eventual consistency governance."},
+        {"language": "en", "request": "Run the domain design flow for strategic design, BC models, and capability designs."},
+        {"language": "en", "request": "Classify core, supporting, and generic subdomains for the membership platform."},
+        {"language": "en", "request": "Run domain design with scenario slices for order creation, cancellation, and illegal transitions."},
+        {"language": "en", "request": "Create a legacy domain-driven design without deriving aggregate boundaries from tables or APIs."},
+        {"language": "en", "request": "Design bounded contexts where one contract supports several business scenarios."}
+      ]
+    },
+    {
       "task_kind": "shape",
       "requests": [
         {"language": "zh-CN", "request": "对这项需求做准入检查并补齐验收标准。"},
@@ -82,8 +105,7 @@
         {"language": "en", "request": "Shape this feature request into a decision-complete contract."},
         {"language": "en", "request": "Clarify the requirement, scope, non-goals, and risks."},
         {"language": "en", "request": "Define acceptance criteria for this feature request."},
-      {"language": "en", "request": "Shape the request before any implementation work begins."}
-      ,{"language": "zh-CN", "request": "为萤启新需求补齐事实、范围、非目标和验收标准。"}
+        {"language": "en", "request": "Shape the request before any implementation work begins."}
       ]
     },
     {
@@ -109,8 +131,7 @@
         {"language": "en", "request": "Create an architecture design for the inventory reservation change."},
         {"language": "en", "request": "Produce a detailed design for this bounded refactor."},
         {"language": "en", "request": "Design the module interface and failure flow."},
-      {"language": "en", "request": "Design the system boundaries for the new payment path."}
-      ,{"language": "zh-CN", "request": "按人人取团队规范给出萤启系统改造的架构方案。"}
+        {"language": "en", "request": "Design the system boundaries for the new payment path."}
       ]
     },
     {
@@ -123,8 +144,7 @@
         {"language": "en", "request": "Implement the accepted endpoint behavior."},
         {"language": "en", "request": "Build the feature as one vertical slice."},
         {"language": "en", "request": "Change the code to support the new response field."},
-      {"language": "en", "request": "Implement the fix in production and push the branch."}
-      ,{"language": "zh-CN", "request": "实现已经评审通过的萤启服务功能并完成六维质量检查。"}
+        {"language": "en", "request": "Implement the fix in production and push the branch."}
       ]
     },
     {
@@ -165,8 +185,7 @@
         {"language": "en", "request": "Prepare the release readiness and rollback plan."},
         {"language": "en", "request": "Verify whether the rollout is ready to execute."},
         {"language": "en", "request": "Plan the production deployment and monitoring."},
-      {"language": "en", "request": "Validate the release outcome using production evidence."}
-      ,{"language": "zh-CN", "request": "准备萤启团队发布审批、外部执行证据验证和回滚方案。"}
+        {"language": "en", "request": "Validate the release outcome using production evidence."}
       ]
     },
     {
@@ -179,8 +198,7 @@
         {"language": "en", "request": "Evolve the skill using this evidenced failure."},
         {"language": "en", "request": "Improve the agent routing behavior and add a regression case."},
         {"language": "en", "request": "Run a retrospective on the assistant failure."},
-      {"language": "en", "request": "Evolve the agent policy from verified feedback."}
-      ,{"language": "zh-CN", "request": "复盘研发助手为何未遵守萤启团队规范并提炼候选。"}
+        {"language": "en", "request": "Evolve the agent policy from verified feedback."}
       ]
     },
     {

@@ -180,7 +180,7 @@ def _compile_package(
 ) -> dict:
     output = _BuildPath(output_io)
     _copy_tree(repository_root / "skills", output / "skills")
-    runtime_root = output / "engineering-assistant"
+    runtime_root = output / catalog.product.id
     _copy_tree(repository_root / "catalog", runtime_root / "catalog")
     _copy_tree(repository_root / "schemas", runtime_root / "schemas")
     _copy_tree(repository_root / "packs", runtime_root / "packs")

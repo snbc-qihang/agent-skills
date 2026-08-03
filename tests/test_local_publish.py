@@ -43,7 +43,7 @@ class LocalPublishTests(unittest.TestCase):
 
     def test_repository_preflight_requires_source_and_official_validation(self) -> None:
         evaluation = {
-            "version": "2.1.0.0-rc.1",
+            "version": "3.0.0.0-rc.1",
             "simulation": False,
             "canary": {
                 "status": "not_run",
@@ -51,7 +51,7 @@ class LocalPublishTests(unittest.TestCase):
                 "simulation_results_accepted": False,
             },
             "routing": {
-                "case_count": 114,
+                "case_count": 120,
                 "top1_accuracy": 1.0,
                 "unconfirmed_high_risk_writes": 0,
             },
@@ -117,16 +117,30 @@ class LocalPublishTests(unittest.TestCase):
             build_package(ROOT, "codex", output, codex_cachebuster="local-test-1")
             verify_package(output)
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-            self.assertEqual("2.1.0-rc.1+codex.local-test-1", manifest["version"])
+            self.assertEqual("3.0.0-rc.1+codex.local-test-1", manifest["version"])
 
     def test_codex_registration_uses_the_selected_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / "isolated-codex-home"
             environments: list[dict[str, str] | None] = []
+            installed = False
+            installed_version: str | None = None
 
-            def register(_command: list[str], environment=None) -> dict:
+            def register(command: list[str], environment=None) -> dict:
+                nonlocal installed, installed_version
                 environments.append(environment)
+                action = command[2]
+                if action == "list":
+                    entries = []
+                    if installed:
+                        entries.append(
+                            {"name": "teamwork-engineering-assistant", "version": installed_version}
+                        )
+                    return {"installed": entries}
+                if action == "remove":
+                    installed = False
+                    return {"status": "removed"}
                 target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
@@ -138,7 +152,9 @@ class LocalPublishTests(unittest.TestCase):
                 )
                 cache.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(target, cache)
-                return {"status": "passed"}
+                installed = True
+                installed_version = version
+                return {"status": "added", "version": version}
 
             report = _publish_one(
                 ROOT,
@@ -237,7 +253,21 @@ class LocalPublishTests(unittest.TestCase):
             root = Path(temporary)
             codex_home = root / ".codex"
 
-            def register(_command: list[str], _environment=None) -> dict:
+            installed_version: str | None = None
+
+            def register(command: list[str], _environment=None) -> dict:
+                nonlocal installed_version
+                if command[2] == "list":
+                    return {
+                        "installed": (
+                            [{"name": "teamwork-engineering-assistant", "version": installed_version}]
+                            if installed_version
+                            else []
+                        )
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    return {"status": "removed"}
                 target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
@@ -252,7 +282,8 @@ class LocalPublishTests(unittest.TestCase):
                 registered_hook = cache / "hooks/hooks.json"
                 registered_hook.unlink()
                 registered_hook.symlink_to(target / "hooks/hooks.json")
-                return {"status": "passed"}
+                installed_version = version
+                return {"status": "added"}
 
             with self.assertRaises(ValidationFailure):
                 _publish_one(
@@ -271,8 +302,21 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             registered_cache: Path | None = None
 
-            def register(_command: list[str], _environment=None) -> dict:
-                nonlocal registered_cache
+            installed_version: str | None = None
+
+            def register(command: list[str], _environment=None) -> dict:
+                nonlocal registered_cache, installed_version
+                if command[2] == "list":
+                    return {
+                        "installed": (
+                            [{"name": "teamwork-engineering-assistant", "version": installed_version}]
+                            if installed_version
+                            else []
+                        )
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    return {"status": "removed"}
                 target = root / "plugins/teamwork-engineering-assistant"
                 version = json.loads(
                     (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
@@ -284,7 +328,8 @@ class LocalPublishTests(unittest.TestCase):
                 )
                 registered_cache.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(target, registered_cache)
-                return {"status": "passed"}
+                installed_version = version
+                return {"status": "added"}
 
             original_hash = ArtifactIO.sha256_file_digests
             replaced = False
@@ -324,7 +369,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-corrupted-active"
+            old_version = "3.0.0-rc.1+codex.local-corrupted-active"
             build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
             old_cache = (
                 codex_home
@@ -334,13 +379,25 @@ class LocalPublishTests(unittest.TestCase):
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
             registration_calls = 0
+            installed_version: str | None = old_version
 
-            def register(_command: list[str], _environment=None) -> dict:
-                nonlocal registration_calls
+            def register(command: list[str], _environment=None) -> dict:
+                nonlocal registration_calls, installed_version
                 registration_calls += 1
-                if registration_calls == 1:
+                if command[2] == "list":
                     (old_cache / "hooks/hooks.json").write_text("{}\n", encoding="utf-8")
-                return {"status": "passed"}
+                    return {
+                        "installed": [
+                            {"name": "teamwork-engineering-assistant", "version": installed_version}
+                        ]
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    return {"status": "removed"}
+                installed_version = json.loads(
+                    (target / ".codex-plugin/plugin.json").read_text(encoding="utf-8")
+                )["version"]
+                return {"status": "added", "version": installed_version}
 
             with self.assertRaisesRegex(ValidationFailure, "cache|缓存"):
                 _publish_one(
@@ -353,7 +410,7 @@ class LocalPublishTests(unittest.TestCase):
                     official_validate=self.official_validation,
                 )
 
-            self.assertEqual(2, registration_calls)
+            self.assertEqual(5, registration_calls)
             verify_package(old_cache)
             self.assertEqual(
                 old_version,
@@ -366,11 +423,11 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-active-thread"
+            version = "3.0.0-rc.1+codex.local-active-thread"
             cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
-            runtime_cache = cache / "engineering-assistant/runtime/engineering_assistant/__pycache__"
+            runtime_cache = cache / "teamwork-engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
             (runtime_cache / "feedback.cpython-314.pyc").write_bytes(b"runtime-derived")
             snapshot = root / "snapshot"
@@ -386,7 +443,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-previous-contract"
+            version = "3.0.0-rc.1+codex.local-previous-contract"
             cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(
@@ -415,7 +472,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-unsafe-snapshot"
+            version = "3.0.0-rc.1+codex.local-unsafe-snapshot"
             cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
@@ -433,7 +490,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-unsafe-manifest"
+            version = "3.0.0-rc.1+codex.local-unsafe-manifest"
             cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
@@ -455,9 +512,9 @@ class LocalPublishTests(unittest.TestCase):
             target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
             backup = target.parent / ".teamwork-engineering-assistant.backup-test"
-            version = "2.1.0-rc.1+codex.local-repair"
+            version = "3.0.0-rc.1+codex.local-repair"
             build_package(ROOT, "codex", backup, codex_cachebuster="local-repair")
-            runtime_cache = backup / "engineering-assistant/runtime/engineering_assistant/__pycache__"
+            runtime_cache = backup / "teamwork-engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
             (runtime_cache / "feedback.cpython-314.pyc").write_bytes(b"runtime-derived")
 
@@ -469,26 +526,37 @@ class LocalPublishTests(unittest.TestCase):
             )
             self.assertTrue((repaired / "hooks/feedback_capture.py").is_file())
 
-    def test_publish_restores_cache_deleted_by_codex_registration(self) -> None:
+    def test_successful_publish_keeps_only_the_selected_cache_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
             target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-old-thread"
+            old_version = "3.0.0-rc.1+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
             old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
 
+            installed_version: str | None = old_version
+
             def register(command: list[str], _environment=None) -> dict:
+                nonlocal installed_version
                 cache_root = old_cache.parent
-                if cache_root.exists():
-                    shutil.rmtree(cache_root)
-                cache_root.mkdir(parents=True)
+                if command[2] == "list":
+                    return {
+                        "installed": [
+                            {"name": "teamwork-engineering-assistant", "version": installed_version}
+                        ] if installed_version else []
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    return {"status": "removed"}
                 version = json.loads((target / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
+                cache_root.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(target, cache_root / version)
+                installed_version = version
                 return {"version": version}
 
             report = _publish_one(
@@ -501,11 +569,13 @@ class LocalPublishTests(unittest.TestCase):
                 official_validate=self.official_validation,
             )
 
-            self.assertIn(old_version, report["preserved_cache_versions"])
-            self.assertIn(old_version, report["restored_cache_versions"])
-            self.assertTrue((old_cache / "hooks/feedback_capture.py").is_file())
+            self.assertEqual([report["plugin_version"]], report["active_cache_versions"])
+            self.assertTrue(report["selected_version_verified"])
+            self.assertIn(old_version, report["removed_cache_versions"])
+            self.assertFalse(old_cache.exists())
+            self.assertNotIn("restored_cache_versions", report)
 
-    def test_cache_preservation_is_bounded_to_eight_recent_versions(self) -> None:
+    def test_failure_snapshot_preserves_all_valid_active_versions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
@@ -514,7 +584,7 @@ class LocalPublishTests(unittest.TestCase):
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
-                version = f"2.1.0-rc.1+codex.{cachebuster}"
+                version = f"3.0.0-rc.1+codex.{cachebuster}"
                 cache = cache_root / version
                 build_package(ROOT, "codex", cache, codex_cachebuster=cachebuster)
                 os.utime(cache, ns=(index + 1, index + 1))
@@ -528,8 +598,8 @@ class LocalPublishTests(unittest.TestCase):
 
             preserved = _snapshot_codex_caches(codex_home, snapshot)
 
-            self.assertEqual(8, len(preserved))
-            self.assertNotIn(versions[0], preserved)
+            self.assertEqual(9, len(preserved))
+            self.assertIn(versions[0], preserved)
             self.assertIn(versions[-1], preserved)
 
     def test_registration_side_effect_then_error_is_compensated(self) -> None:
@@ -539,21 +609,34 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-partial-registration"
+            old_version = "3.0.0-rc.1+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
             old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
             registered_versions: list[str] = []
+            installed_version: str | None = old_version
 
             def register(command: list[str], _environment=None) -> dict:
+                nonlocal installed_version
                 cache_root = old_cache.parent
-                if cache_root.exists():
-                    shutil.rmtree(cache_root)
-                cache_root.mkdir(parents=True)
+                if command[2] == "list":
+                    return {
+                        "installed": [
+                            {"name": "teamwork-engineering-assistant", "version": installed_version}
+                        ] if installed_version else []
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    if cache_root.exists():
+                        shutil.rmtree(cache_root)
+                    cache_root.mkdir(parents=True)
+                    return {"status": "removed"}
+                cache_root.mkdir(parents=True, exist_ok=True)
                 version = json.loads((target / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
                 shutil.copytree(target, cache_root / version)
                 registered_versions.append(version)
+                installed_version = version
                 if len(registered_versions) == 1:
                     raise RuntimeError("registration failed after side effect")
                 return {"version": version}
@@ -580,21 +663,36 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/teamwork-engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-old-registration"
+            old_version = "3.0.0-rc.1+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
             old_cache = codex_home / "plugins/cache/personal/teamwork-engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
             _update_personal_marketplace(root / ".agents/plugins/marketplace.json")
             registered_versions: list[str] = []
+            installed_version: str | None = old_version
 
             def register(command: list[str], _environment=None) -> dict:
+                nonlocal installed_version
                 cache_root = old_cache.parent
-                if cache_root.exists():
-                    shutil.rmtree(cache_root)
-                cache_root.mkdir(parents=True)
+                if command[2] == "list":
+                    return {
+                        "installed": [
+                            {"name": "teamwork-engineering-assistant", "version": installed_version}
+                        ] if installed_version else []
+                    }
+                if command[2] == "remove":
+                    installed_version = None
+                    if cache_root.exists():
+                        shutil.rmtree(cache_root)
+                    cache_root.mkdir(parents=True)
+                    return {"status": "removed"}
+                cache_root.mkdir(parents=True, exist_ok=True)
                 version = json.loads((target / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
                 shutil.copytree(target, cache_root / version)
                 registered_versions.append(version)
+                installed_version = version
+                if len(registered_versions) == 1:
+                    raise RuntimeError("force compensation")
                 return {"version": version}
 
             restore_calls = 0
@@ -610,7 +708,7 @@ class LocalPublishTests(unittest.TestCase):
                 "engineering_assistant.local_publish._restore_codex_cache_snapshots",
                 side_effect=restore_with_first_failure,
             ):
-                with self.assertRaisesRegex(RuntimeError, "restore failed"):
+                with self.assertRaisesRegex(ValidationFailure, "cache_restore=restore failed"):
                     _publish_one(
                         ROOT,
                         "codex",
@@ -629,7 +727,7 @@ class LocalPublishTests(unittest.TestCase):
         policy = ROOT / "config/local-publish-policy.json"
         loaded = _load_policy(policy, ["codex", "hermes"])
         self.assertTrue(loaded["enabled"])
-        self.assertEqual("2.1.0.0-rc.1", loaded["canonical_version"])
+        self.assertEqual("3.0.0.0-rc.1", loaded["canonical_version"])
         self.assertNotIn("reviewer", loaded)
         self.assertNotIn("execution_result", loaded)
 
@@ -699,7 +797,7 @@ class LocalPublishTests(unittest.TestCase):
     def test_atomic_swap_can_be_rolled_back(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            target = root / "engineering-assistant"
+            target = root / "teamwork-engineering-assistant"
             staging = root / ".stage"
             target.mkdir()
             staging.mkdir()

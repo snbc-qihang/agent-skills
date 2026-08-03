@@ -16,6 +16,8 @@ from .artifact_validation import ARTIFACT_SCHEMAS, validate_artifact_payload
 from .catalog import DEFAULT_REPOSITORY_ROOT, load_catalog
 from .artifact_io import ArtifactConflict
 from .codec import (
+    approval_record_from_dict,
+    investigation_decision_record_from_dict,
     investigation_request_from_dict,
     quality_snapshot_from_dict,
     provider_invocation_from_dict,
@@ -24,13 +26,8 @@ from .codec import (
     step_result_from_dict,
 )
 from .engine import RuntimeEngine
-from .design_source import (
-    check_design_source,
-    read_design_document,
-    resolve_design_source,
-    validate_database_design,
-    validate_review_package,
-)
+from .design_sources import validate_design_source_registry
+from .design_intake import intake_design_sources, recheck_design_sources
 from .evidence import EvidenceStore
 from .governance import (
     InvestigationStore,
@@ -38,12 +35,10 @@ from .governance import (
     QualityStore,
     investigation_evidence_contract,
 )
-from .model import DesignSourceRef, ProviderResult
+from .model import ApprovalRecord, InvestigationDecisionRecord, ProviderResult
 from .provider_runtime import ProviderExecutor
-from .router import route_intent
-from .state_store import StateStore
-from .team_context import team_context_for_intent
-from .trust import TrustVerifier
+from .router import ROUTES, route_intent
+from .state_store import ApprovalStore, StateStore
 from .validation import ValidationFailure, load_json, validate_instance
 from .version import CANONICAL_VERSION
 
@@ -68,41 +63,22 @@ class RuntimeTools:
     def __init__(
         self,
         repository_root: Path | str = DEFAULT_REPOSITORY_ROOT,
-        *,
-        trust_verifier: TrustVerifier | None = None,
-        evidence_broker_enabled: bool = False,
-        approval_broker_enabled: bool = False,
     ) -> None:
         self.catalog = load_catalog(repository_root)
-        self.trust_verifier = trust_verifier
-        self.evidence_broker_enabled = bool(
-            trust_verifier is not None and evidence_broker_enabled
-        )
-        self.approval_broker_enabled = bool(
-            trust_verifier is not None and approval_broker_enabled
-        )
         schemas = self.catalog.root / "schemas"
         self._route_intent_schema = load_json(schemas / "route-intent.schema.json")
         self._step_result_schema = load_json(schemas / "step-result.schema.json")
         self._evidence_schema = load_json(schemas / "evidence-ref.schema.json")
-        self._evidence_claim_schema = _object_schema(
-            {
-                "id": {"type": "string", "minLength": 1},
-                "kind": self._evidence_schema["properties"]["kind"],
-                "uri": {"type": "string", "minLength": 1},
-                "scope": {"type": "string", "minLength": 1},
-            },
-            ["id", "kind", "uri", "scope"],
-        )
         self._quality_snapshot_schema = load_json(schemas / "quality-snapshot.schema.json")
         self._provider_invocation_schema = load_json(
             schemas / "provider-invocation.schema.json"
         )
         self._investigation_request_schema = load_json(schemas / "investigation-request.schema.json")
+        self._approval_record_schema = load_json(schemas / "approval-record.schema.json")
+        self._investigation_decision_schema = load_json(
+            schemas / "investigation-decision-record.schema.json"
+        )
         self._definitions = self._build_definitions()
-
-    def _profile_id(self, arguments: Mapping[str, Any]) -> str:
-        return str(arguments.get("profile") or self.catalog.product.default_profile_id)
 
     def _build_definitions(self) -> list[dict]:
         project_root = {
@@ -110,16 +86,12 @@ class RuntimeTools:
             "minLength": 1,
             "description": "目标项目绝对路径或当前工作目录相对路径。",
         }
-        profile = {
-            "type": "string",
-            "minLength": 1,
-            "default": self.catalog.product.default_profile_id,
-        }
+        profile = {"type": "string", "minLength": 1, "default": self.catalog.product.default_profile_id}
         return [
             {
                 "name": "engineering_assistant_route",
                 "title": "工程任务路由",
-                "description": "把已结构化的工程意图路由到唯一的 flow、skills 和治理策略；团队 profile 同时返回按任务启用的 packs、规则及来源，不执行写入。",
+                "description": "把已结构化的工程意图路由到唯一的 flow、skills 和治理策略；不执行写入。",
                 "inputSchema": _object_schema(
                     {"intent": self._route_intent_schema, "profile": profile},
                     ["intent"],
@@ -150,99 +122,22 @@ class RuntimeTools:
                 },
             },
             {
-                "name": "engineering_assistant_design_source_resolve",
-                "title": "固定外部设计输入",
-                "description": "只读解析显式指定的外部设计注册表，返回 HLD、ADR、领域边界、上下文详细设计、治理文档和模板的固定摘要快照。",
+                "name": "engineering_assistant_feedback_summary",
+                "title": "读取反馈汇总",
+                "description": "按当前项目和可选 run 读取结构化反馈汇总；不会修改正式资产。",
                 "inputSchema": _object_schema(
                     {
-                        "source_root": {"type": "string", "minLength": 1},
-                        "registry": {"type": "string", "minLength": 1},
+                        "project_root": project_root,
+                        "run_id": {"type": ["string", "null"], "minLength": 1},
+                        "limit": {"type": "integer", "minimum": 0, "maximum": 1000},
                     },
-                    ["source_root", "registry"],
+                    ["project_root"],
                 ),
                 "annotations": {
                     "readOnlyHint": True,
                     "destructiveHint": False,
                     "idempotentHint": True,
-                    "openWorldHint": True,
-                },
-            },
-            {
-                "name": "engineering_assistant_design_source_read",
-                "title": "读取已登记设计文档",
-                "description": "只读读取外部设计注册表中唯一登记的文档或模板，不允许越过设计源根目录。",
-                "inputSchema": _object_schema(
-                    {
-                        "source_root": {"type": "string", "minLength": 1},
-                        "registry": {"type": "string", "minLength": 1},
-                        "document": {"type": "string", "minLength": 1},
-                    },
-                    ["source_root", "registry", "document"],
-                ),
-                "annotations": {
-                    "readOnlyHint": True,
-                    "destructiveHint": False,
-                    "idempotentHint": True,
-                    "openWorldHint": True,
-                },
-            },
-            {
-                "name": "engineering_assistant_design_source_check",
-                "title": "复核外部设计摘要",
-                "description": "提交设计评审前重新读取外部事实源；摘要变化时返回 stale，阻断批准并要求 rebase。",
-                "inputSchema": _object_schema(
-                    {
-                        "source_root": {"type": "string", "minLength": 1},
-                        "registry": {"type": "string", "minLength": 1},
-                        "expected_digest": {
-                            "type": "string",
-                            "pattern": "^sha256:[0-9a-f]{64}$",
-                        },
-                        "document": {"type": ["string", "null"], "minLength": 1},
-                    },
-                    ["source_root", "registry", "expected_digest"],
-                ),
-                "annotations": {
-                    "readOnlyHint": True,
-                    "destructiveHint": False,
-                    "idempotentHint": True,
-                    "openWorldHint": True,
-                },
-            },
-            {
-                "name": "engineering_assistant_database_design_validate",
-                "title": "校验关系型 OLTP 详细设计",
-                "description": "只读校验数据库设计是否严格保留团队模板的章节、顺序和表列，且已清除占位符。",
-                "inputSchema": _object_schema(
-                    {"document_path": {"type": "string", "minLength": 1}},
-                    ["document_path"],
-                ),
-                "annotations": {
-                    "readOnlyHint": True,
-                    "destructiveHint": False,
-                    "idempotentHint": True,
-                    "openWorldHint": True,
-                },
-            },
-            {
-                "name": "engineering_assistant_review_package_validate",
-                "title": "校验需求设计评审包",
-                "description": "只读校验评审包结构、reviewing 状态、基线元数据、占位符和需求到设计章节追踪。",
-                "inputSchema": _object_schema(
-                    {
-                        "package_root": {"type": "string", "minLength": 1},
-                        "requirement_id": {
-                            "type": "string",
-                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-                        },
-                    },
-                    ["package_root", "requirement_id"],
-                ),
-                "annotations": {
-                    "readOnlyHint": True,
-                    "destructiveHint": False,
-                    "idempotentHint": True,
-                    "openWorldHint": True,
+                    "openWorldHint": False,
                 },
             },
             {
@@ -261,6 +156,7 @@ class RuntimeTools:
                             "items": {"type": "string", "minLength": 1},
                             "uniqueItems": True,
                         },
+                        "design_source_ref": {"type": "string", "minLength": 1},
                     },
                     ["intent", "task_id", "project_root"],
                 ),
@@ -270,6 +166,51 @@ class RuntimeTools:
                     "idempotentHint": False,
                     "openWorldHint": False,
                 },
+            },
+            {
+                "name": "engineering_assistant_design_source_intake",
+                "title": "冻结团队领域设计输入",
+                "description": "只读采集外部资料到目标项目运行工件，并生成项目内 v2 DesignSourceRegistry。",
+                "inputSchema": _object_schema(
+                    {
+                        "project_root": project_root,
+                        "source_root": {"type": "string", "minLength": 1},
+                        "registry": {"type": "object"},
+                        "intake_id": {"type": "string", "minLength": 1},
+                    },
+                    ["project_root", "source_root", "registry", "intake_id"],
+                ),
+                "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+            },
+            {
+                "name": "engineering_assistant_design_source_recheck",
+                "title": "复核冻结领域设计输入",
+                "description": "在评审前比对外部只读来源与冻结摘要，不修改来源。",
+                "inputSchema": _object_schema(
+                    {"project_root": project_root, "design_source_ref": {"type": "string", "minLength": 1}},
+                    ["project_root", "design_source_ref"],
+                ),
+                "annotations": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            },
+            {
+                "name": "engineering_assistant_domain_design_delegate",
+                "title": "委派团队领域设计子运行",
+                "description": "从 team-delivery 的领域设计委派节点启动关联 domain-design 子运行。",
+                "inputSchema": _object_schema(
+                    {"parent_run_id": {"type": "string", "minLength": 1}, "child_run_id": {"type": "string", "minLength": 1}, "task_id": {"type": "string", "minLength": 1}, "intent": self._route_intent_schema, "project_root": project_root, "design_source_ref": {"type": "string", "minLength": 1}, "profile": profile},
+                    ["parent_run_id", "child_run_id", "task_id", "intent", "project_root", "design_source_ref"],
+                ),
+                "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+            },
+            {
+                "name": "engineering_assistant_domain_design_delegation_complete",
+                "title": "完成团队领域设计委派",
+                "description": "仅当关联 domain-design 子运行完成双审批基线后恢复 team-delivery。",
+                "inputSchema": _object_schema(
+                    {"parent_run_id": {"type": "string", "minLength": 1}, "child_run_id": {"type": "string", "minLength": 1}, "project_root": project_root, "profile": profile},
+                    ["parent_run_id", "child_run_id", "project_root"],
+                ),
+                "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
             },
             {
                 "name": "engineering_assistant_next",
@@ -291,19 +232,100 @@ class RuntimeTools:
                 },
             },
             {
+                "name": "engineering_assistant_runs_list",
+                "title": "列出持久化运行",
+                "description": "分页读取项目中的运行；默认只返回未终止运行。",
+                "inputSchema": _object_schema(
+                    {
+                        "project_root": project_root,
+                        "profile": profile,
+                        "include_terminal": {"type": "boolean", "default": False},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                        "after_run_id": {"type": ["string", "null"]},
+                    },
+                    ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_run_status",
+                "title": "读取运行状态",
+                "description": "读取一个运行的当前状态、节点和执行指导。",
+                "inputSchema": _object_schema(
+                    {
+                        "run_id": {"type": "string", "minLength": 1},
+                        "project_root": project_root,
+                        "profile": profile,
+                    },
+                    ["run_id", "project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": True,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_evidence_register",
+                "title": "登记本地运行证据",
+                "description": "登记证据；项目内文件由 Runtime 校验边界并计算摘要，远程引用固定为 agent_reported。",
+                "inputSchema": _object_schema(
+                    {
+                        "run_id": {"type": "string", "minLength": 1},
+                        "project_root": project_root,
+                        "evidence_id": {"type": "string", "minLength": 1},
+                        "kind": self._evidence_schema["properties"]["kind"],
+                        "uri": {"type": "string", "minLength": 1},
+                        "producer": {"type": "string", "minLength": 1},
+                        "scope": {"type": "string", "minLength": 1},
+                        "scope_tags": self._evidence_schema["properties"]["scope_tags"],
+                        "contract_refs": self._evidence_schema["properties"]["contract_refs"],
+                        "subject_digest": self._evidence_schema["properties"]["subject_digest"],
+                        "profile": profile,
+                    },
+                    ["run_id", "project_root", "evidence_id", "kind", "uri", "producer", "scope", "scope_tags", "contract_refs"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
+                "name": "engineering_assistant_approval_record",
+                "title": "记录用户审批决定",
+                "description": "记录对话中的明确用户决定；只提供本地追溯，不声明身份验签。",
+                "inputSchema": _object_schema(
+                    {
+                        key: value
+                        for key, value in self._approval_record_schema["properties"].items()
+                        if key != "recorded_at"
+                    } | {"project_root": project_root, "profile": profile},
+                    [key for key in self._approval_record_schema["required"] if key != "recorded_at"] + ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
                 "name": "engineering_assistant_complete",
                 "title": "提交节点结果",
-                "description": "验证节点结果及宿主登记证据，执行门禁并持久化下一状态；模型不能通过 evidence_claims 登记完成证据，失败不会被口头放行。",
+                "description": "验证节点结果及已登记证据，执行门禁并持久化下一状态。",
                 "inputSchema": _object_schema(
                     {
                         "run_id": {"type": "string", "minLength": 1},
                         "project_root": project_root,
                         "result": self._step_result_schema,
-                        "evidence_claims": {
-                            "type": "array",
-                            "items": self._evidence_claim_schema,
-                            "description": "兼容字段；非空输入会在任何写入前被拒绝，证据必须由宿主导入。",
-                        },
                         "evidence_max_age_seconds": {"type": ["integer", "null"], "minimum": 1},
                         "profile": profile,
                     },
@@ -396,6 +418,25 @@ class RuntimeTools:
                 },
             },
             {
+                "name": "engineering_assistant_investigation_decide",
+                "title": "记录调研决定",
+                "description": "记录用户对调研范围、模式和成本的明确决定；不执行身份验签。",
+                "inputSchema": _object_schema(
+                    {
+                        key: value
+                        for key, value in self._investigation_decision_schema["properties"].items()
+                        if key != "recorded_at"
+                    } | {"project_root": project_root, "profile": profile},
+                    [key for key in self._investigation_decision_schema["required"] if key != "recorded_at"] + ["project_root"],
+                ),
+                "annotations": {
+                    "readOnlyHint": False,
+                    "destructiveHint": False,
+                    "idempotentHint": True,
+                    "openWorldHint": False,
+                },
+            },
+            {
                 "name": "engineering_assistant_investigation_start",
                 "title": "启动已批准调研",
                 "description": "仅把已由人工批准的调研置为运行中；未批准提议会被门禁拒绝。",
@@ -430,7 +471,6 @@ class RuntimeTools:
                             "uniqueItems": True,
                             "items": {"type": "string", "minLength": 1},
                         },
-                        "evidence_claims": {"type": "array", "items": self._evidence_claim_schema},
                         "project_root": project_root,
                         "profile": profile,
                     },
@@ -457,6 +497,9 @@ class RuntimeTools:
         handler = getattr(self, "_" + name.removeprefix("engineering_assistant_"))
         return handler(payload)
 
+    def _profile_id(self, arguments: Mapping[str, Any]) -> str:
+        return str(arguments.get("profile") or self.catalog.product.default_profile_id)
+
     def _stores(self, project_root: str, profile_id: str):
         if profile_id not in self.catalog.profiles:
             raise ValidationFailure(f"unknown profile {profile_id}")
@@ -466,7 +509,64 @@ class RuntimeTools:
             self.catalog.root / "schemas",
             profile.store["run_root"],
         )
-        return state_store, EvidenceStore(state_store, self.trust_verifier)
+        return state_store, EvidenceStore(state_store)
+
+    def _guidance(self, state, node: dict | None, gate: dict) -> dict | None:
+        if node is None:
+            return None
+        capability_id = node["capability"]
+        skill = self.catalog.skill_for_capability(capability_id)
+        if skill is None:
+            fallback_skill_ids = next(
+                (
+                    skill_ids
+                    for flow_id, skill_ids in ROUTES.values()
+                    if flow_id == state.flow_id
+                ),
+                (),
+            )
+            skill = (
+                self.catalog.skills.get(fallback_skill_ids[0])
+                if fallback_skill_ids
+                else None
+            )
+        policy_rules = []
+        for policy_id in node.get("policy_refs", []):
+            policy = self.catalog.policies[policy_id]
+            policy_rules.extend(
+                {
+                    "policy_id": policy_id,
+                    "rule_id": rule.id,
+                    "condition": rule.condition,
+                    "effect": rule.effect,
+                    "severity": rule.severity,
+                }
+                for rule in policy.rules
+            )
+        return {
+            "capability": capability_id,
+            "skill": skill.id if skill is not None else None,
+            "skill_source": skill.source_path if skill is not None else None,
+            "node_goal": node["completion_criteria"],
+            "completion_criteria": [
+                {"id": criterion_id, "description": description}
+                for criterion_id, description in zip(
+                    node["criterion_ids"], node["completion_criteria"]
+                )
+            ],
+            "condition": node["when"],
+            "evidence_contract": {
+                "kinds": node.get("evidence_kinds", []),
+                "scope_tags": node.get("evidence_scope_tags", []),
+                "requires_registered_evidence": True,
+            },
+            "policy_rules": policy_rules,
+            "next_action": (
+                state.next_actions[0]
+                if state.next_actions
+                else gate.get("reason", "inspect run status")
+            ),
+        }
 
     @staticmethod
     def _load_state(state_store: StateStore, run_id: str, profile_id: str):
@@ -478,22 +578,14 @@ class RuntimeTools:
         return state
 
     def _route(self, arguments: dict) -> dict:
-        profile_id = self._profile_id(arguments)
-        intent = route_intent_from_dict(arguments["intent"])
         decision = route_intent(
-            intent,
+            route_intent_from_dict(arguments["intent"]),
             self.catalog,
-            profile_id=profile_id,
+            profile_id=self._profile_id(arguments),
         )
         has_flow = bool(decision.flow_id)
-        approval_ready = (
-            not decision.approval_required or self.approval_broker_enabled
-        )
         persisted_flow_ready = bool(
-            decision.decision in {"proceed", "confirm"}
-            and has_flow
-            and self.evidence_broker_enabled
-            and approval_ready
+            decision.decision == "proceed" and has_flow
         )
         if decision.decision != "proceed":
             recommended_execution = "stop"
@@ -505,33 +597,17 @@ class RuntimeTools:
         elif not has_flow:
             recommended_execution = "inline"
             reason = "no_persisted_flow"
-        elif not self.evidence_broker_enabled:
-            recommended_execution = "skills_only"
-            reason = (
-                "host_trust_unavailable"
-                if self.trust_verifier is None
-                else "evidence_broker_unavailable"
-            )
-        elif not approval_ready:
-            recommended_execution = "skills_only"
-            reason = "approval_broker_unavailable"
         else:
             recommended_execution = "persisted_flow"
-            reason = "host_trust_ready"
-        response = {
+            reason = "local_persistence_ready"
+        return {
             "decision": decision.to_dict(),
             "execution": {
-                "external_approval_available": self.approval_broker_enabled,
-                "external_evidence_available": self.evidence_broker_enabled,
                 "persisted_flow_ready": persisted_flow_ready,
                 "recommended_execution": recommended_execution,
                 "reason": reason,
             },
         }
-        team_context = team_context_for_intent(self.catalog, profile_id, intent)
-        if team_context is not None:
-            response["team_context"] = team_context
-        return response
 
     def _artifact_validate(self, arguments: dict) -> dict:
         return validate_artifact_payload(
@@ -540,34 +616,85 @@ class RuntimeTools:
             artifact=arguments["artifact"],
         )
 
-    @staticmethod
-    def _design_source_reference(arguments: dict) -> DesignSourceRef:
-        return DesignSourceRef(
-            root=arguments["source_root"], registry=arguments["registry"]
+    def _feedback_summary(self, arguments: dict) -> dict:
+        # Keep the MCP runtime usable when optional feedback collection is unavailable.
+        from .feedback import summarize_feedback_events
+
+        return summarize_feedback_events(
+            arguments["project_root"],
+            self.catalog.root / "schemas",
+            item_limit=arguments.get("limit", 100),
+            run_id=arguments.get("run_id"),
         )
 
-    def _design_source_resolve(self, arguments: dict) -> dict:
-        return resolve_design_source(self._design_source_reference(arguments))
-
-    def _design_source_read(self, arguments: dict) -> dict:
-        return read_design_document(
-            self._design_source_reference(arguments), arguments["document"]
+    def _design_source_intake(self, arguments: dict) -> dict:
+        return intake_design_sources(
+            arguments["project_root"],
+            arguments["source_root"],
+            arguments["registry"],
+            schema_root=self.catalog.root / "schemas",
+            intake_id=arguments["intake_id"],
         )
 
-    def _design_source_check(self, arguments: dict) -> dict:
-        return check_design_source(
-            self._design_source_reference(arguments),
-            arguments["expected_digest"],
-            arguments.get("document"),
+    def _design_source_recheck(self, arguments: dict) -> dict:
+        return recheck_design_sources(
+            arguments["project_root"], arguments["design_source_ref"]
         )
 
-    def _review_package_validate(self, arguments: dict) -> dict:
-        return validate_review_package(
-            arguments["package_root"], arguments["requirement_id"]
+    def _domain_design_delegate(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        parent = self._load_state(state_store, arguments["parent_run_id"], profile_id)
+        if parent.flow_id != "team-delivery" or parent.current_node != "domain-design-delegation":
+            raise ValidationFailure("parent run is not waiting at domain-design-delegation")
+        if any(ref.startswith("child-run:") for ref in parent.context_refs):
+            raise ValidationFailure("domain-design delegation is already bound to a child run")
+        child_intent = route_intent_from_dict(arguments["intent"])
+        if child_intent.task_kind != "domain-design":
+            raise ValidationFailure("delegated child intent must be domain-design")
+        child = self._start(
+            {
+                "intent": child_intent.to_dict(),
+                "task_id": arguments["task_id"],
+                "run_id": arguments["child_run_id"],
+                "project_root": arguments["project_root"],
+                "profile": profile_id,
+                "context_refs": [f"parent-run:{parent.run_id}"],
+                "design_source_ref": arguments["design_source_ref"],
+            }
         )
+        previous_revision = parent.revision
+        parent.context_refs.append(f"child-run:{arguments['child_run_id']}")
+        design_source_context = f"design-source:{arguments['design_source_ref']}"
+        if design_source_context not in parent.context_refs:
+            parent.context_refs.append(design_source_context)
+        parent.status = "waiting_for_input"
+        parent.next_actions = [f"complete domain-design child: {arguments['child_run_id']}"]
+        RuntimeEngine._record(parent, "delegate-domain-design", "waiting_for_input", arguments["child_run_id"])
+        state_store.save(parent, expected_revision=previous_revision)
+        return {"parent": parent.to_dict(), "child": child}
 
-    def _database_design_validate(self, arguments: dict) -> dict:
-        return validate_database_design(arguments["document_path"])
+    def _domain_design_delegation_complete(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        parent = self._load_state(state_store, arguments["parent_run_id"], profile_id)
+        child = self._load_state(state_store, arguments["child_run_id"], profile_id)
+        child_ref = f"child-run:{child.run_id}"
+        if parent.flow_id != "team-delivery" or parent.current_node != "domain-design-delegation" or child_ref not in parent.context_refs:
+            raise ValidationFailure("parent and child runs are not an active domain-design delegation")
+        if child.flow_id != "domain-design" or child.status != "completed":
+            raise ValidationFailure("domain-design child has not completed its approved baseline")
+        previous_revision = parent.revision
+        parent.completed_nodes.append("domain-design-delegation")
+        parent.current_node = None
+        parent.status = "running"
+        parent.context_refs.append(f"domain-design-baseline:{child.run_id}")
+        RuntimeEngine._record(parent, "complete-domain-design-delegation", "running", child.run_id)
+        engine = RuntimeEngine(self.catalog)
+        gate = engine.next(parent, approval_records=ApprovalStore(state_store).list(parent.run_id))
+        state_store.save(parent, expected_revision=previous_revision)
+        node = engine.node_payload(parent)
+        return {"gate": gate.to_dict(), "state": parent.to_dict(), "node": node, "guidance": self._guidance(parent, node, gate.to_dict())}
 
     def _start(self, arguments: dict) -> dict:
         profile_id = self._profile_id(arguments)
@@ -576,35 +703,75 @@ class RuntimeTools:
             self.catalog,
             profile_id=profile_id,
         )
-        if not self.evidence_broker_enabled:
+        if decision.decision != "proceed":
             raise ValidationFailure(
-                "persisted flow requires an administrator-bound evidence broker; "
-                "use the routed skills only and do not retry unchanged"
+                f"cannot start route decision {decision.decision}; resolve it first"
             )
-        if decision.approval_required and not self.approval_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow approvals require an administrator-bound approval "
-                "broker; stop and do not retry unchanged"
+        design_source_ref = arguments.get("design_source_ref")
+        if design_source_ref:
+            validate_design_source_registry(
+                arguments["project_root"],
+                design_source_ref,
+                self.catalog.root / "schemas",
             )
-        state = RuntimeEngine(self.catalog).start(
+        intent = route_intent_from_dict(arguments["intent"])
+        engine = RuntimeEngine(self.catalog)
+        state = engine.start(
             arguments["task_id"],
-            route_intent_from_dict(arguments["intent"]),
+            intent,
             profile_id=profile_id,
             run_id=arguments.get("run_id"),
             context_refs=arguments.get("context_refs", []),
+            design_source_ref=design_source_ref,
         )
         state_store, _ = self._stores(
             arguments["project_root"], profile_id
         )
-        path = state_store.create(state)
-        return {"state": state.to_dict(), "state_path": str(path)}
+        manifest = {
+            "schema_version": "2",
+            "product_version": CANONICAL_VERSION,
+            "build_version": os.environ.get(
+                "ENGINEERING_ASSISTANT_BUILD_VERSION", CANONICAL_VERSION
+            ),
+            "run_id": state.run_id,
+            "task_id": state.task_id,
+            "intent": intent.to_dict(),
+            "route_decision": decision.to_dict(),
+            "profile_id": profile_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        path = state_store.create(state, manifest=manifest)
+        approval_store = ApprovalStore(state_store)
+        for index, action in enumerate(intent.confirmed_actions, start=1):
+            approval_store.save(
+                ApprovalRecord(
+                    record_id=f"route-confirmation-{index}",
+                    run_id=state.run_id,
+                    run_revision=state.revision,
+                    approval_id=action,
+                    decision="approved",
+                    scope=[f"flow:{state.flow_id}", f"approval:{action}"],
+                    actor_ref="conversation-user",
+                    reason="Action was explicitly confirmed in RouteIntent.confirmed_actions.",
+                    recorded_at=datetime.now(timezone.utc).isoformat(),
+                    source="user_confirmation",
+                )
+            )
+        previous_revision = state.revision
+        gate = engine.next(state, approval_records=[])
+        if state.revision != previous_revision:
+            state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        gate_payload = gate.to_dict()
+        return {
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
+            "state": state.to_dict(),
+            "state_path": str(path),
+        }
 
     def _next(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow is unavailable without an administrator-bound "
-                "evidence broker; do not retry unchanged"
-            )
         state_store, _ = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -613,26 +780,113 @@ class RuntimeTools:
         )
         previous_revision = state.revision
         engine = RuntimeEngine(self.catalog)
-        gate = engine.next(state)
+        gate = engine.next(
+            state,
+            approval_records=ApprovalStore(state_store).list(state.run_id),
+        )
         if state.revision != previous_revision:
             state_store.save(state, expected_revision=previous_revision)
+        gate_payload = gate.to_dict()
+        node = engine.node_payload(state)
         return {
-            "gate": gate.to_dict(),
-            "node": engine.node_payload(state),
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
             "state": state.to_dict(),
         }
 
+    def _runs_list(self, arguments: dict) -> dict:
+        state_store, _ = self._stores(
+            arguments["project_root"], self._profile_id(arguments)
+        )
+        states, cursor = state_store.list_states(
+            include_terminal=arguments.get("include_terminal", False),
+            limit=arguments.get("limit", 50),
+            after_run_id=arguments.get("after_run_id"),
+        )
+        return {
+            "runs": [state.to_dict() for state in states],
+            "next_cursor": cursor,
+        }
+
+    def _run_status(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        engine = RuntimeEngine(self.catalog)
+        node = engine.node_payload(state)
+        gate = {
+            "decision": "continue" if node else "inspect",
+            "evaluated_policies": node.get("policy_refs", []) if node else [],
+            "missing_evidence": [],
+            "reason": "Recovered current persisted run state.",
+            "next_node": state.current_node,
+        }
+        return {
+            "state": state.to_dict(),
+            "node": node,
+            "guidance": self._guidance(state, node, gate),
+        }
+
+    def _evidence_register(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, evidence_store = self._stores(
+            arguments["project_root"], profile_id
+        )
+        self._load_state(state_store, arguments["run_id"], profile_id)
+        evidence = evidence_store.register(
+            arguments["run_id"],
+            evidence_id=arguments["evidence_id"],
+            kind=arguments["kind"],
+            uri=arguments["uri"],
+            producer=arguments["producer"],
+            scope=arguments["scope"],
+            scope_tags=arguments["scope_tags"],
+            contract_refs=arguments["contract_refs"],
+            subject_digest=arguments.get("subject_digest"),
+        )
+        return {"evidence": evidence.to_dict()}
+
+    def _approval_record(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, _ = self._stores(arguments["project_root"], profile_id)
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        record_payload = {
+            key: value
+            for key, value in arguments.items()
+            if key not in {"project_root", "profile"}
+        }
+        record_payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        record = approval_record_from_dict(record_payload)
+        existing = ApprovalStore(state_store).list(state.run_id)
+        previous_revision = state.revision
+        engine = RuntimeEngine(self.catalog)
+        gate = engine.apply_approval_record(
+            state,
+            record,
+            approval_records=existing,
+        )
+        ApprovalStore(state_store).save(record)
+        state_store.save(state, expected_revision=previous_revision)
+        if gate.decision == "continue" and state.current_node is None:
+            previous_revision = state.revision
+            gate = engine.next(
+                state,
+                approval_records=[*existing, record],
+            )
+            if state.revision != previous_revision:
+                state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        gate_payload = gate.to_dict()
+        return {
+            "record": record.to_dict(),
+            "gate": gate_payload,
+            "state": state.to_dict(),
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
+        }
+
     def _complete(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted flow is unavailable without an administrator-bound "
-                "evidence broker; do not retry unchanged"
-            )
-        if arguments.get("evidence_claims"):
-            raise ValidationFailure(
-                "model evidence_claims cannot register completion evidence; import "
-                "host-observed evidence and do not retry unchanged"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -643,26 +897,43 @@ class RuntimeTools:
         result = step_result_from_dict(arguments["result"])
         if result.run_id != state.run_id or result.node_id != state.current_node:
             raise ValidationFailure("step result does not match the active run and node")
+        if state.flow_id == "team-delivery" and state.current_node == "design-source-recheck":
+            design_source_ref = next(
+                (ref.removeprefix("design-source:") for ref in state.context_refs if ref.startswith("design-source:")),
+                None,
+            )
+            if design_source_ref is None:
+                raise ValidationFailure("team design-source recheck has no frozen v2 registry")
+            recheck = recheck_design_sources(arguments["project_root"], design_source_ref)
+            if recheck["status"] != "current":
+                raise ValidationFailure(
+                    "design source is stale; regenerate the review package from the latest input"
+                )
         engine = RuntimeEngine(self.catalog)
         gate = engine.complete_step(
             state,
             result,
             evidence_store=evidence_store,
             evidence_max_age_seconds=arguments.get("evidence_max_age_seconds"),
+            approval_records=ApprovalStore(state_store).list(state.run_id),
         )
-        state_store.save(state, expected_revision=previous_revision)
+        node = engine.node_payload(state)
+        state_store.save_with_step(
+            state,
+            expected_revision=previous_revision,
+            result=result.to_dict(),
+            gate=gate.to_dict(),
+            node_output=node,
+        )
+        gate_payload = gate.to_dict()
         return {
-            "gate": gate.to_dict(),
-            "node": engine.node_payload(state),
+            "gate": gate_payload,
+            "node": node,
+            "guidance": self._guidance(state, node, gate_payload),
             "state": state.to_dict(),
         }
 
     def _quality_submit(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted quality flow is unavailable without an administrator-bound "
-                "evidence broker; report inline quality findings instead"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -679,11 +950,6 @@ class RuntimeTools:
         return {"snapshot": saved.to_dict(), "gate": QualityGate.evaluate(saved).to_dict()}
 
     def _provider_invoke(self, arguments: dict) -> dict:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "provider invocation is unavailable without an administrator-bound "
-                "evidence broker; use native skills and do not retry unchanged"
-            )
         profile_id = self._profile_id(arguments)
         state_store, _ = self._stores(arguments["project_root"], profile_id)
         invocation = provider_invocation_from_dict(arguments["invocation"])
@@ -964,7 +1230,6 @@ class RuntimeTools:
         return expected is None or current == expected
 
     def _investigation_propose(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -984,7 +1249,6 @@ class RuntimeTools:
         }
 
     def _investigation_list(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -1005,8 +1269,26 @@ class RuntimeTools:
             "next_after_id": next_after_id,
         }
 
+    def _investigation_decide(self, arguments: dict) -> dict:
+        profile_id = self._profile_id(arguments)
+        state_store, evidence_store = self._stores(
+            arguments["project_root"], profile_id
+        )
+        state = self._load_state(state_store, arguments["run_id"], profile_id)
+        payload = {
+            key: value
+            for key, value in arguments.items()
+            if key not in {"project_root", "profile"}
+        }
+        payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
+        decision = investigation_decision_record_from_dict(payload)
+        record = InvestigationStore(state_store, evidence_store).apply_decision(
+            decision,
+            current_run_revision=state.revision,
+        )
+        return {"decision": decision.to_dict(), "record": record.to_dict()}
+
     def _investigation_start(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
         state_store, _ = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -1022,12 +1304,6 @@ class RuntimeTools:
         }
 
     def _investigation_finish(self, arguments: dict) -> dict:
-        self._require_investigation_broker()
-        if arguments.get("evidence_claims"):
-            raise ValidationFailure(
-                "model evidence_claims cannot register investigation evidence; "
-                "import host-observed evidence and do not retry unchanged"
-            )
         state_store, evidence_store = self._stores(
             arguments["project_root"], self._profile_id(arguments)
         )
@@ -1044,14 +1320,6 @@ class RuntimeTools:
             "record": record.to_dict(),
             "evidence_contract": investigation_evidence_contract(record),
         }
-
-    def _require_investigation_broker(self) -> None:
-        if not self.evidence_broker_enabled:
-            raise ValidationFailure(
-                "persisted investigation is unavailable without an administrator-bound "
-                "evidence broker; report inline findings and do not retry unchanged"
-            )
-
 
 class MCPServer:
     def __init__(self, tools: RuntimeTools | None = None) -> None:
@@ -1090,7 +1358,7 @@ class MCPServer:
                     "protocolVersion": negotiated,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {
-                        "name": self.tools.catalog.product.id,
+                        "name": "engineering-assistant",
                         "version": CANONICAL_VERSION,
                     },
                 },

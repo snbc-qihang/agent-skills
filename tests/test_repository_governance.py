@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -53,9 +52,9 @@ class RepositoryGovernanceTests(unittest.TestCase):
 
         canary = (ROOT / "docs/operations/canary.md").read_text(encoding="utf-8")
         self.assertIn("盲评 Blocker、盲评 Major、未闭合矩阵单元格", canary)
-        self.assertIn("进入 broker 签名 claims", canary)
-        self.assertIn("`delegation_ablation`", canary)
-        self.assertIn("主/子 Agent 证据重叠", canary)
+        self.assertIn("`assurance=local_unattested`", canary)
+        self.assertIn("三臂闭包", canary)
+        self.assertIn("不提供独立身份、抗篡改或跨主机信任证明", canary)
 
     def test_canary_efficiency_rules_prevent_duplicate_routing_and_evidence_dumping(self) -> None:
         router = (ROOT / "skills/engineering-assistant/SKILL.md").read_text(
@@ -88,32 +87,15 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("一次拼接多份整文件输出", review)
         self.assertIn("不得为了减少调用次数扩大单次输出", review)
         self.assertIn("不得再用 shell 读取自己的 `SKILL.md`", review)
-        self.assertIn("`recommended_execution=skills_only`", router)
-        self.assertIn("不调用任何需要 active run 的 Runtime 工具", router)
-        self.assertIn("`provider_invoke`、`investigation_*`", router)
-        self.assertIn("不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁", router)
+        self.assertIn("返回 `persisted_flow`", router)
+        self.assertIn("直接 primitive skill 保持内联，不创建 run", router)
+        self.assertIn("evidence-register", router)
+        self.assertIn("Runtime 返回的 capability、skill、目标、完成标准", router)
         self.assertIn("否则只内联报告六维判断", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
-        self.assertIn("否则只在报告中合并六维判断", review)
+        self.assertIn("否则只内联合并六维判断", review)
         self.assertIn("精确区间", context)
         self.assertIn("不得输出大目录清单", context)
         self.assertIn("证据充分后立即停止", review)
-
-    def test_teamwork_code_review_delivers_report_without_forcing_design_tracking(self) -> None:
-        review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
-        report = (
-            ROOT / "skills/code-review/references/code-review-report.md"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("普通代码走查不得把 `requirement_id`", review)
-        self.assertIn("未激活时标为 `not_applicable`", review)
-        self.assertIn("不得追问或阻断普通代码走查", review)
-        self.assertIn("独立执行代码异味走查", review)
-        self.assertIn("不得只写 `pass`", review)
-        self.assertIn("references/code-review-report.md", review)
-        self.assertIn("code-reviews/<REVIEW-ID>/code-review-report.md", review)
-        self.assertIn("聊天摘要不能替代报告文件", report)
-        self.assertIn("代码异味专项", report)
-        self.assertIn("设计追踪状态", report)
 
     def test_review_separates_blocker_confidence_from_human_review_state(self) -> None:
         review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
@@ -124,37 +106,6 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("`human_review_status`", review)
         self.assertIn("不得用技术 `blocked` 覆盖待人工批准", review)
         self.assertIn("技术问题关闭后仍恢复到原人工门禁", review)
-
-    def test_relational_database_design_uses_the_canonical_team_template(self) -> None:
-        design_skill = (
-            ROOT / "skills/codebase-design/SKILL.md"
-        ).read_text(encoding="utf-8")
-        database_pack = (ROOT / "packs/database.md").read_text(encoding="utf-8")
-        team_pack = (ROOT / "packs/rrq-yq-database.md").read_text(
-            encoding="utf-8"
-        )
-        template = (
-            ROOT
-            / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
-        ).read_text(encoding="utf-8")
-
-        for source in (design_skill, database_pack, team_pack):
-            self.assertIn(
-                "relational-oltp-detailed-design-template.md", source
-            )
-            self.assertIn("engineering_assistant_database_design_validate", source)
-        self.assertIn("不得删除、合并、改名或重排", database_pack)
-        self.assertIn("不适用", database_pack)
-        self.assertEqual(
-            "# 关系型（OLTP）表级详细设计文档模板",
-            template.splitlines()[0],
-        )
-        self.assertIn("### 6.2 强制前置条件（Mandatory Conditions）", template)
-        self.assertIn("### 11.2 兼容性说明（MySQL / PostgreSQL）", template)
-        self.assertEqual(
-            "297527d885672eb039bc2829945f7c8c89eee6e92d9cd9a4fa13c49f4963f70f",
-            hashlib.sha256(template.encode("utf-8")).hexdigest(),
-        )
 
     def test_security_seam_references_close_observed_high_risk_boundaries(self) -> None:
         tdd_skill = (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8")

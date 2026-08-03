@@ -114,9 +114,60 @@ class FeedbackHookTests(unittest.TestCase):
 
     def test_normal_stop_records_metadata_without_creating_feedback_noise(self) -> None:
         result = self.collector.collect_codex(self.stop_payload("实现完成，所有验证均已通过。"))
-        self.assertEqual("no_signal", result.capture.status)
+        self.assertIsNone(result.capture)
         self.assertEqual([], self.artifacts("events"))
-        self.assertEqual(1, len(self.artifacts("captures")))
+        self.assertEqual([], self.artifacts("captures"))
+
+    def test_stop_feedback_uses_the_single_active_run_context(self) -> None:
+        state = self.project / ".run-artifacts/engineering-assistant/run-real/run-state.json"
+        state.parent.mkdir(parents=True)
+        state.write_text(
+            json.dumps(
+                {
+                    "schema_version": "2",
+                    "run_id": "run-real",
+                    "task_id": "task-real",
+                    "flow_id": "implement",
+                    "status": "running",
+                    "current_node": "red-green",
+                }
+            )
+        )
+
+        event = self.collector.collect_codex(
+            self.stop_payload("当前被测试失败阻断，需要返工。")
+        ).event
+
+        self.assertEqual("run-real", event.run_id)
+        self.assertEqual("task-real", event.task_id)
+        self.assertEqual("red-green", event.node_id)
+        self.assertEqual("implement", event.flow_id)
+
+    def test_post_tool_feedback_extracts_runtime_identity_from_result(self) -> None:
+        result = self.collector.collect_tool_result(
+            {
+                "session_id": "session-sensitive-id",
+                "turn_id": "turn-runtime",
+                "cwd": str(self.project),
+                "tool_name": "mcp__engineering_assistant__engineering_assistant_complete",
+                "tool_response": {
+                    "status": "failed",
+                    "state": {
+                        "run_id": "run-result",
+                        "task_id": "task-result",
+                        "flow_id": "design",
+                        "current_node": "architecture",
+                    },
+                },
+            },
+            mode="candidates",
+            platform="codex",
+        )
+
+        self.assertEqual("run-result", result.event.run_id)
+        self.assertEqual("task-result", result.event.task_id)
+        self.assertEqual("design", result.event.flow_id)
+        self.assertEqual("architecture", result.event.node_id)
 
     def test_continued_stop_is_loop_guarded(self) -> None:
         result = self.collector.collect_codex(

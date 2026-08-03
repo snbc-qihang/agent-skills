@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["simulation", "experiment_kind", "experiment_protocol_digest", "baseline_arm_id", "candidate_arm_id", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "baseline_treatment_digest", "candidate_treatment_digest", "trust_provenance", "quality_delta_points", "worst_workload_quality_delta_points", "token_reduction_ratio", "total_input_token_reduction_ratio", "noncached_input_token_reduction_ratio", "output_token_reduction_ratio", "wall_time_reduction_ratio", "worst_workload_total_input_token_reduction_ratio", "worst_workload_noncached_input_token_reduction_ratio", "worst_workload_output_token_reduction_ratio", "worst_workload_wall_time_reduction_ratio", "workload_efficiency", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "blind_blocker_count", "blind_major_count", "open_matrix_cells", "production_contract_failures", "evidence_refs"],
+  "required": ["simulation", "experiment_kind", "experiment_protocol_digest", "baseline_arm_id", "candidate_arm_id", "product_repository", "baseline_ref", "candidate_ref", "baseline_execution_config_digest", "candidate_execution_config_digest", "baseline_treatment_digest", "candidate_treatment_digest", "assurance", "quality_delta_points", "worst_workload_quality_delta_points", "token_reduction_ratio", "total_input_token_reduction_ratio", "noncached_input_token_reduction_ratio", "output_token_reduction_ratio", "wall_time_reduction_ratio", "worst_workload_total_input_token_reduction_ratio", "worst_workload_noncached_input_token_reduction_ratio", "worst_workload_output_token_reduction_ratio", "worst_workload_wall_time_reduction_ratio", "workload_efficiency", "cost_reduction_ratio", "document_noise_reduction_ratio", "safety_violations", "blind_blocker_count", "blind_major_count", "open_matrix_cells", "production_contract_failures", "evidence_refs"],
   "properties": {
     "simulation": {"const": false},
     "experiment_kind": {"enum": ["paired_canary", "delegation_ablation"]},
@@ -27,15 +27,7 @@
     "candidate_execution_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "baseline_treatment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "candidate_treatment_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "trust_provenance": {
-      "type": "object",
-      "required": ["evidence_broker_id", "host_trust_config_digest"],
-      "properties": {
-        "evidence_broker_id": {"type": "string", "minLength": 1},
-        "host_trust_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-      },
-      "additionalProperties": false
-    },
+    "assurance": {"const": "local_unattested"},
     "quality_delta_points": {"type": "number"},
     "worst_workload_quality_delta_points": {"type": "number"},
     "token_reduction_ratio": {"type": "number"},

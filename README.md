@@ -2,7 +2,7 @@
 
 `agent-skills` 是 `teamwork-engineering-assistant`（团队研发助手）的统一作者源。产品完整继承 `engineering-assistant` 的 11 个工程原语、运行内核和平台协议，并以默认 `rrq-yq-team` profile 扩展团队交付流程与规范。
 
-- 当前版本：`2.1.0.0-rc.1`
+- 当前版本：`3.0.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes
 - 开发语言：Python 3.9+

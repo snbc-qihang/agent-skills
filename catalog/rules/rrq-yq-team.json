@@ -1,6 +1,6 @@
 {
   "id": "rrq-yq-team-rules",
-  "version": "2.1.0.0-rc.1",
+  "version": "3.0.0.0-rc.1",
   "profile_id": "rrq-yq-team",
   "sources": [
     {
@@ -233,7 +233,7 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
-        "design-source-read",
+        "design-source-intake",
         "architecture-design",
         "review-package-validation",
         "design-review"
@@ -331,7 +331,7 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
-        "design-source-read",
+        "design-source-intake",
         "architecture-design",
         "review-package-validation",
         "design-review"
@@ -412,7 +412,7 @@
         "rrq-yq-delivery"
       ],
       "capability_refs": [
-        "design-source-read",
+        "design-source-intake",
         "implementation-contract",
         "review-package-validation",
         "design-review",
@@ -1637,41 +1637,90 @@
       "id": "DG23",
       "category": "文档治理",
       "guidance": "每个需求必须显式提供 requirement_id、外部设计源绝对根目录和注册表；repo-context 只读解析注册表，并固定 HLD、ADR、受影响上下文详细设计、模板及维护规则的编号、版本、状态和摘要，本次快照不得跨需求复用。",
-      "source_refs": ["yq-overview"],
-      "target_refs": ["rrq-yq-delivery"],
-      "capability_refs": ["repo-context", "design-source-read", "shape-contract", "architecture-design"]
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "repo-context",
+        "design-source-intake",
+        "shape-contract",
+        "architecture-design"
+      ]
     },
     {
       "id": "DG24",
       "category": "文档治理",
       "guidance": "每个需求在 .run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中 HLD 和上下文详细设计是符合外部模板的完整 reviewing 评审稿，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
-      "source_refs": ["yq-overview"],
-      "target_refs": ["rrq-yq-delivery"],
-      "capability_refs": ["architecture-design", "implementation-contract", "review-package-validation", "design-review"]
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "architecture-design",
+        "implementation-contract",
+        "review-package-validation",
+        "design-review"
+      ]
     },
     {
       "id": "DG25",
       "category": "文档治理",
       "guidance": "普通上下文需求只生成受影响上下文详细设计评审稿；仅当服务边界、数据主权、依赖方向或其他系统级架构变化时生成 HLD 和适用 ADR 评审内容。",
-      "source_refs": ["yq-overview", "rrq-architecture"],
-      "target_refs": ["rrq-yq-delivery"],
-      "capability_refs": ["design-source-read", "architecture-design", "review-package-validation", "design-review"]
+      "source_refs": [
+        "yq-overview",
+        "rrq-architecture"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "design-source-intake",
+        "architecture-design",
+        "review-package-validation",
+        "design-review"
+      ]
     },
     {
       "id": "DG26",
       "category": "文档治理",
       "guidance": "追踪矩阵必须闭合需求条目到设计章节、设计章节到代码目标和测试用例；无需求依据的内容标记为架构治理项或移除，未确认业务规则保留为待决策事项而非正式不变量。",
-      "source_refs": ["yq-overview"],
-      "target_refs": ["rrq-yq-delivery"],
-      "capability_refs": ["decision-interview", "domain-modeling", "implementation-contract", "review-package-validation", "work-slicing", "implementation", "code-review"]
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "decision-interview",
+        "domain-modeling",
+        "implementation-contract",
+        "review-package-validation",
+        "work-slicing",
+        "implementation",
+        "code-review"
+      ]
     },
     {
       "id": "DG27",
       "category": "文档治理",
       "guidance": "提交评审前必须重新读取相同外部设计源；目标文档摘要与 base_digest 不一致时将评审包标记 stale，阻断批准并基于最新基线 rebase 或重新生成。Git 无冲突不能代替业务不变量、状态和契约冲突判断。",
-      "source_refs": ["yq-overview"],
-      "target_refs": ["rrq-yq-delivery"],
-      "capability_refs": ["design-source-read", "review-package-validation", "design-review", "code-review"]
+      "source_refs": [
+        "yq-overview"
+      ],
+      "target_refs": [
+        "rrq-yq-delivery"
+      ],
+      "capability_refs": [
+        "design-source-intake",
+        "review-package-validation",
+        "design-review",
+        "code-review"
+      ]
     },
     {
       "id": "RRQ-ARCH1",

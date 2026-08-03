@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Mapping, TextIO
@@ -11,8 +12,10 @@ from typing import Mapping, TextIO
 
 MAX_HOOK_INPUT_CHARS = 1_048_576
 OBSERVATION_ROOT = ".run-artifacts/engineering-assistant/usage-observations"
-PLUGIN_NAMES = ("teamwork-engineering-assistant", "engineering-assistant")
-PLUGIN_SERVER_NAMES = frozenset(name.replace("-", "_") for name in PLUGIN_NAMES)
+PLUGIN_ID = os.environ.get("ENGINEERING_ASSISTANT_PLUGIN_ID", "engineering-assistant")
+PLUGIN_SERVER_ID = os.environ.get(
+    "ENGINEERING_ASSISTANT_MCP_SERVER_ID", "engineering_assistant"
+)
 PLUGIN_SKILL_IDS = (
     "engineering-assistant",
     "research",
@@ -31,12 +34,21 @@ PLUGIN_TOOL_NAMES = frozenset(
         "engineering_assistant_route",
         "engineering_assistant_artifact_validate",
         "engineering_assistant_start",
+        "engineering_assistant_design_source_intake",
+        "engineering_assistant_design_source_recheck",
+        "engineering_assistant_domain_design_delegate",
+        "engineering_assistant_domain_design_delegation_complete",
         "engineering_assistant_next",
+        "engineering_assistant_runs_list",
+        "engineering_assistant_run_status",
+        "engineering_assistant_evidence_register",
+        "engineering_assistant_approval_record",
         "engineering_assistant_complete",
         "engineering_assistant_quality_submit",
         "engineering_assistant_provider_invoke",
         "engineering_assistant_investigation_propose",
         "engineering_assistant_investigation_list",
+        "engineering_assistant_investigation_decide",
         "engineering_assistant_investigation_start",
         "engineering_assistant_investigation_finish",
     }
@@ -44,9 +56,8 @@ PLUGIN_TOOL_NAMES = frozenset(
 OBSERVATION_EXEMPT_TOOL_NAMES = frozenset(
     {"engineering_assistant_feedback_summary"}
 )
-_PLUGIN_NAME = r"(?:" + "|".join(re.escape(name) for name in PLUGIN_NAMES) + r")"
 _SKILL_TOKEN = (
-    r"\$" + _PLUGIN_NAME + r"(?::(?:"
+    r"\$" + re.escape(PLUGIN_ID) + r"(?::(?:"
     + "|".join(re.escape(skill) for skill in PLUGIN_SKILL_IDS)
     + r"))?(?!:)\b"
 )
@@ -71,24 +82,24 @@ _NAMESPACED_PLUGIN_CALLS = (
 )
 _NATURAL_PLUGIN_CALL = re.compile(
     r"^\s*" + _ZH_COMMAND_PREFIX + r"(?:已安装的\s*)?"
-    + _PLUGIN_NAME + r"\s*插件"
+    + re.escape(PLUGIN_ID) + r"\s*插件"
     r"(?=\s|[，,。:：]|完成|执行|进行|评审|审查|分析|处理|帮|$)",
     re.IGNORECASE,
 )
 _ENGLISH_PLUGIN_CALL = re.compile(
     r"^\s*" + _EN_COMMAND_PREFIX +
-    r"(?:the\s+)?(?:installed\s+)?" + _PLUGIN_NAME + r"\s+plugin\b",
+    r"(?:the\s+)?(?:installed\s+)?" + re.escape(PLUGIN_ID) + r"\s+plugin\b",
     re.IGNORECASE,
 )
 _SEQUENCED_PLUGIN_CALLS = (
     re.compile(
         r"(?:\bthen\s+|然后\s*)" + _EN_COMMAND_PREFIX
-        + r"(?:the\s+)?(?:installed\s+)?" + _PLUGIN_NAME + r"\s+plugin\b",
+        + r"(?:the\s+)?(?:installed\s+)?" + re.escape(PLUGIN_ID) + r"\s+plugin\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"(?:\bthen\s+|然后\s*)" + _ZH_COMMAND_PREFIX
-        + r"(?:已安装的\s*)?" + _PLUGIN_NAME + r"\s*插件",
+        + r"(?:已安装的\s*)?" + re.escape(PLUGIN_ID) + r"\s*插件",
         re.IGNORECASE,
     ),
 )
@@ -109,10 +120,10 @@ _POLICY_OR_CONDITIONAL_CONTEXT = re.compile(
 )
 _NEGATING_CONTEXT = re.compile(
     r"不是(?:本|当前)?任务[^。！？!?]{0,24}(?:要求|请求)|"
-    r"(?:不要|不应|无需)[^。！？!?]{0,24}(?:使用|调用|启用|用)[^。！？!?]{0,24}" + _PLUGIN_NAME + r"|"
+    r"(?:不要|不应|无需)[^。！？!?]{0,24}(?:使用|调用|启用|用)[^。！？!?]{0,24}" + re.escape(PLUGIN_ID) + r"|"
     r"(?:\bdo\s+not\b|\bdon't\b)[^.;!?]{0,24}(?:use|invoke|enable)"
-    r"[^.;!?]{0,24}(?:" + _PLUGIN_NAME + r"|\bit\b)|"
-    + _PLUGIN_NAME + r"[^.;!?]{0,80}\bnot\s+(?:required|requested)\b",
+    r"[^.;!?]{0,24}(?:" + re.escape(PLUGIN_ID) + r"|\bit\b)|"
+    + re.escape(PLUGIN_ID) + r"[^.;!?]{0,80}\bnot\s+(?:required|requested)\b",
     re.IGNORECASE,
 )
 _EXPLANATORY_TAIL = re.compile(
@@ -234,14 +245,41 @@ def is_namespaced_plugin_request(prompt: str) -> bool:
     return False
 
 
-def is_explicit_plugin_request(prompt: str) -> bool:
-    if is_namespaced_plugin_request(prompt):
-        return True
-    for pattern in (
-        _NATURAL_PLUGIN_CALL,
-        _ENGLISH_PLUGIN_CALL,
-        *_SEQUENCED_PLUGIN_CALLS,
-    ):
+def is_explicit_plugin_request(prompt: str, *, plugin_id: str | None = None) -> bool:
+    """Return whether a prompt explicitly invokes the current packaged product.
+
+    ``plugin_id`` keeps a packaged adapter isolated when another copy of this
+    module was imported earlier by its host process.
+    """
+    if plugin_id is None or plugin_id == PLUGIN_ID:
+        if is_namespaced_plugin_request(prompt):
+            return True
+        patterns = (
+            _NATURAL_PLUGIN_CALL,
+            _ENGLISH_PLUGIN_CALL,
+            *_SEQUENCED_PLUGIN_CALLS,
+        )
+    else:
+        escaped_id = re.escape(plugin_id)
+        skill_token = r"\$" + escaped_id + r"(?::(?:" + "|".join(
+            re.escape(skill) for skill in PLUGIN_SKILL_IDS
+        ) + r"))?(?!:)\b"
+        patterns = (
+            re.compile(r"^\s*" + _ZH_COMMAND_PREFIX + skill_token, re.IGNORECASE),
+            re.compile(r"^\s*" + _EN_COMMAND_PREFIX + skill_token, re.IGNORECASE),
+            re.compile(r"^\s*" + skill_token, re.IGNORECASE),
+            re.compile(
+                r"^\s*" + _ZH_COMMAND_PREFIX + r"(?:已安装的\s*)?"
+                + escaped_id + r"\s*插件",
+                re.IGNORECASE,
+            ),
+            re.compile(
+                r"^\s*" + _EN_COMMAND_PREFIX
+                + r"(?:the\s+)?(?:installed\s+)?" + escaped_id + r"\s+plugin\b",
+                re.IGNORECASE,
+            ),
+        )
+    for pattern in patterns:
         match = pattern.search(prompt)
         if match is not None and _candidate_is_request(prompt, match):
             return True
@@ -253,7 +291,7 @@ def is_plugin_tool(tool_name: str) -> bool:
     if len(parts) != 3 or parts[0] != "mcp":
         return False
     server = parts[1].replace("-", "_")
-    return server in PLUGIN_SERVER_NAMES and parts[2] in PLUGIN_TOOL_NAMES
+    return server == PLUGIN_SERVER_ID and parts[2] in PLUGIN_TOOL_NAMES
 
 
 def is_observation_exempt_tool(tool_name: str) -> bool:
@@ -262,7 +300,7 @@ def is_observation_exempt_tool(tool_name: str) -> bool:
         return False
     server = parts[1].replace("-", "_")
     return (
-        server in PLUGIN_SERVER_NAMES
+        server == PLUGIN_SERVER_ID
         and parts[2] in OBSERVATION_EXEMPT_TOOL_NAMES
     )
 
@@ -290,7 +328,26 @@ def should_load_runtime(payload: Mapping[str, object]) -> bool:
     session_ref = hashed_ref("session-", session_id, 16)
     turn_ref = hashed_ref("turn-", turn_id, 16)
     marker = Path(cwd).resolve() / OBSERVATION_ROOT / session_ref / f"{turn_ref}.json"
-    return marker.is_file()
+    if marker.is_file():
+        return True
+    run_root = Path(cwd).resolve() / ".run-artifacts/engineering-assistant"
+    if not run_root.is_dir():
+        return False
+    try:
+        candidates = sorted(run_root.glob("*/run-state.json"))[:256]
+        for candidate in candidates:
+            if candidate.stat().st_size > 262_144:
+                continue
+            state = json.loads(candidate.read_text(encoding="utf-8"))
+            if state.get("schema_version") == "2" and state.get("status") not in {
+                "blocked", "cancelled", "completed"
+            }:
+                return True
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return False
+
+
 def read_gate_input(input_stream: TextIO) -> tuple[bool, str]:
     raw = input_stream.read(MAX_HOOK_INPUT_CHARS + 1)
     if len(raw) > MAX_HOOK_INPUT_CHARS:

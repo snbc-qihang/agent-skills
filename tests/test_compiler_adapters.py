@@ -166,21 +166,9 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertTrue((hermes / "__init__.py").is_file())
         self.assertEqual(11, len(list((codex / "skills").glob("*/SKILL.md"))))
         self.assertEqual(11, len(list((hermes / "skills").glob("*/SKILL.md"))))
-        self.assertFalse((codex / "engineering-assistant/generator").exists())
+        self.assertFalse((codex / "teamwork-engineering-assistant/generator").exists())
         self.assertFalse(any(path.name == ".DS_Store" for path in codex.rglob("*")))
         self.assertFalse(any(path.name == ".DS_Store" for path in hermes.rglob("*")))
-        for package in (codex, hermes):
-            self.assertEqual(
-                (
-                    ROOT
-                    / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
-                ).read_bytes(),
-                (
-                    package
-                    / "skills/codebase-design/references/"
-                    "relational-oltp-detailed-design-template.md"
-                ).read_bytes(),
-            )
         verify_package(codex)
         verify_package(hermes)
 
@@ -192,12 +180,10 @@ class CompilerAdapterTests(unittest.TestCase):
             mcp_config["mcpServers"]["teamwork-engineering-assistant"]["args"][-1:],
         )
         self.assertEqual(
-            "./engineering-assistant/bin/ea",
+            "./teamwork-engineering-assistant/bin/ea",
             mcp_config["mcpServers"]["teamwork-engineering-assistant"]["command"],
         )
-        self.assertEqual(
-            ".", mcp_config["mcpServers"]["teamwork-engineering-assistant"]["cwd"]
-        )
+        self.assertEqual(".", mcp_config["mcpServers"]["teamwork-engineering-assistant"]["cwd"])
 
         hermes_manifest = (hermes / "plugin.yaml").read_text(encoding="utf-8")
         self.assertIn("provides_tools:", hermes_manifest)
@@ -205,16 +191,19 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertIn("provides_hooks:", hermes_manifest)
         hooks = json.loads((codex / "hooks/hooks.json").read_text(encoding="utf-8"))
         self.assertEqual(
-            {"PreToolUse", "PostToolUse"},
+            {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
             set(hooks["hooks"]),
         )
-        for groups in hooks["hooks"].values():
+        for event_name in ("PreToolUse", "PostToolUse"):
+            groups = hooks["hooks"][event_name]
             self.assertEqual(
                 "^mcp__teamwork_engineering_assistant__engineering_assistant_.*$",
                 groups[0]["matcher"],
             )
             command = groups[0]["hooks"][0]["command"]
             self.assertIn("${PLUGIN_ROOT}/hooks/feedback_capture.py", command)
+        for event_name in ("UserPromptSubmit", "Stop"):
+            self.assertNotIn("matcher", hooks["hooks"][event_name][0])
 
         hook_source = (codex / "hooks/feedback_capture.py").read_text(encoding="utf-8")
         self.assertLess(
@@ -284,7 +273,7 @@ class CompilerAdapterTests(unittest.TestCase):
         activation_payload = {
             **hook_payload,
             "hook_event_name": "UserPromptSubmit",
-            "prompt": "使用已安装的 engineering-assistant 插件，对当前仓库执行只读评审。",
+            "prompt": "使用已安装的 teamwork-engineering-assistant 插件，对当前仓库执行只读评审。",
         }
         activation_payload.pop("last_assistant_message")
         activation_payload.pop("stop_hook_active")
@@ -504,18 +493,18 @@ class CompilerAdapterTests(unittest.TestCase):
         hook = codex / "hooks/feedback_capture.py"
         gate = (
             codex
-            / "engineering-assistant/runtime/engineering_assistant/hook_gate.py"
+            / "teamwork-engineering-assistant/runtime/engineering_assistant/hook_gate.py"
         )
         feedback = (
             codex
-            / "engineering-assistant/runtime/engineering_assistant/feedback.py"
+            / "teamwork-engineering-assistant/runtime/engineering_assistant/feedback.py"
         )
         payload = {
             "session_id": "fail-open-session",
             "turn_id": "fail-open-turn",
             "cwd": str(self.root / "project"),
             "hook_event_name": "UserPromptSubmit",
-            "prompt": "使用已安装的 engineering-assistant 插件执行评审。",
+            "prompt": "使用已安装的 teamwork-engineering-assistant 插件执行评审。",
         }
 
         def run_hook() -> subprocess.CompletedProcess[str]:
@@ -545,20 +534,25 @@ class CompilerAdapterTests(unittest.TestCase):
         codex = self.root / "codex-scoped-hook"
         build_package(ROOT, "codex", codex)
         hooks = json.loads((codex / "hooks/hooks.json").read_text(encoding="utf-8"))
-        self.assertEqual({"PreToolUse", "PostToolUse"}, set(hooks["hooks"]))
+        self.assertEqual(
+            {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"},
+            set(hooks["hooks"]),
+        )
         self.assertEqual(
             {
                 "^mcp__teamwork_engineering_assistant__engineering_assistant_.*$",
             },
             {
                 group["matcher"]
-                for groups in hooks["hooks"].values()
+                for event_name in ("PreToolUse", "PostToolUse")
+                for groups in (hooks["hooks"][event_name],)
                 for group in groups
             },
         )
         matcher = next(
             group["matcher"]
-            for groups in hooks["hooks"].values()
+            for event_name in ("PreToolUse", "PostToolUse")
+            for groups in (hooks["hooks"][event_name],)
             for group in groups
         )
         self.assertIsNotNone(
@@ -572,8 +566,7 @@ class CompilerAdapterTests(unittest.TestCase):
             "apply_patch",
             "mcp__filesystem__read_file",
             "mcp__other__mcp__engineering_assistant__engineering_assistant_route",
-            "mcp__engineering_assistant__engineering_assistant_route",
-            "mcp__engineering-assistant__engineering_assistant_route",
+            "mcp__teamwork-engineering-assistant__engineering_assistant_route",
         ):
             self.assertIsNone(re.search(matcher, unrelated_tool), unrelated_tool)
 
@@ -586,7 +579,7 @@ class CompilerAdapterTests(unittest.TestCase):
             "cwd": str(project),
             "model": "test",
             "permission_mode": "default",
-            "tool_name": "mcp__engineering_assistant__engineering_assistant_route",
+            "tool_name": "mcp__teamwork_engineering_assistant__engineering_assistant_route",
             "tool_input": {"intent": {"task_kind": "review"}},
             "tool_use_id": "scoped-tool",
         }
@@ -677,7 +670,7 @@ class CompilerAdapterTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        launcher = codex / "engineering-assistant/bin/ea"
+        launcher = codex / "teamwork-engineering-assistant/bin/ea"
         disposition = subprocess.run(
             [
                 str(launcher),
@@ -713,7 +706,7 @@ class CompilerAdapterTests(unittest.TestCase):
         build_package(ROOT, "hermes", hermes)
         feedback = (
             hermes
-            / "engineering-assistant/runtime/engineering_assistant/feedback.py"
+            / "teamwork-engineering-assistant/runtime/engineering_assistant/feedback.py"
         )
         feedback.write_text("raise RuntimeError('broken hook runtime')\n", encoding="utf-8")
         script = """
@@ -752,7 +745,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.1.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("3.0.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -764,14 +757,23 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.1.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("3.0.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"2.1.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"3.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        for name in (
+            "strategic-modeling.md",
+            "tactical-modeling.md",
+            "model-artifact.md",
+            "scenario-traceability.md",
+        ):
+            relative = f"skills/domain-modeling/references/{name}"
+            self.assertTrue((output / relative).is_file())
+            self.assertIn(relative, build_manifest["payload_files"])
 
     def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
         output = self.root / "runtime-smoke"
         build_package(ROOT, "codex", output)
-        launcher = output / "engineering-assistant/bin/ea"
+        launcher = output / "teamwork-engineering-assistant/bin/ea"
         validate = subprocess.run(
             [str(launcher), "validate", "--require-sources"],
             text=True,
@@ -789,38 +791,6 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         report = json.loads(evaluate.stdout)
         self.assertFalse(report["simulation"])
         self.assertGreaterEqual(report["routing"]["case_count"], 100)
-
-        template = (
-            ROOT
-            / "skills/codebase-design/references/relational-oltp-detailed-design-template.md"
-        ).read_text(encoding="utf-8")
-        database_design = self.root / "database-design.md"
-        database_design.write_text(
-            re.sub(r"\{[^{}\n]+\}", "实际值", template).replace(
-                "YYYY-MM-DD", "2026-07-22"
-            ),
-            encoding="utf-8",
-        )
-        database_validation = subprocess.run(
-            [
-                str(launcher),
-                "database-design-validate",
-                "--document",
-                str(database_design),
-            ],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(
-            0,
-            database_validation.returncode,
-            database_validation.stdout + database_validation.stderr,
-        )
-        self.assertEqual(
-            "sha256:297527d885672eb039bc2829945f7c8c89eee6e92d9cd9a4fa13c49f4963f70f",
-            json.loads(database_validation.stdout)["template_digest"],
-        )
 
         messages = "\n".join(
             json.dumps(message)
@@ -850,73 +820,39 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         responses = [json.loads(line) for line in mcp.stdout.splitlines()]
         self.assertEqual([1, 2], [response["id"] for response in responses])
         tool_names = {item["name"] for item in responses[1]["result"]["tools"]}
-        self.assertEqual(16, len(tool_names))
+        self.assertEqual(21, len(tool_names))
         self.assertIn("engineering_assistant_artifact_validate", tool_names)
-        self.assertNotIn("engineering_assistant_investigation_decide", tool_names)
+        self.assertIn("engineering_assistant_investigation_decide", tool_names)
 
-    def test_packaged_hermes_runtime_consumes_fixed_host_trust_binding(self) -> None:
+    def test_packaged_hermes_runtime_has_no_host_trust_binding(self) -> None:
         output = self.root / "hermes-host-trust"
         build_package(ROOT, "hermes", output)
-        config = self.root / "host-trust.json"
-        config.write_text(
-            json.dumps(
-                {
-                    "schema_version": "1.0",
-                    "profiles": {
-                        "rrq-yq-team": {
-                            "evidence_broker": {
-                                "enabled": True,
-                                "id": "enterprise-evidence",
-                                "introspection_url": "https://broker.example/evidence",
-                                "timeout_seconds": 5,
-                            },
-                            "approval_broker": {
-                                "enabled": False,
-                                "id": "enterprise-approval",
-                                "audience": "teamwork-engineering-assistant",
-                                "introspection_url": "https://broker.example/approval",
-                                "timeout_seconds": 5,
-                            },
-                        }
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-        config.chmod(0o600)
         script = r"""
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-config = Path(sys.argv[2]).resolve()
-sys.path.insert(0, str(root / 'engineering-assistant/runtime'))
-import engineering_assistant.trust as trust
-trust._host_trust_config_path = lambda: config
-trust._trusted_host_owner_uid = lambda: os.geteuid()
+sys.path.insert(0, str(root / 'teamwork-engineering-assistant/runtime'))
 spec = importlib.util.spec_from_file_location('hermes_host_trust_fixture', root / '__init__.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps({
-    'broker_id': module._TRUST.evidence_broker['id'],
-    'config_digest': module._TRUST.config_digest,
-    'verifier': type(module._TOOLS.trust_verifier).__name__,
+    'has_trust': hasattr(module, '_TRUST'),
+    'tools_has_trust_verifier': hasattr(module._TOOLS, 'trust_verifier'),
 }))
 """
         result = subprocess.run(
-            [sys.executable, "-c", script, str(output), str(config)],
+            [sys.executable, "-c", script, str(output)],
             text=True,
             capture_output=True,
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         loaded = json.loads(result.stdout)
-        self.assertEqual("enterprise-evidence", loaded["broker_id"])
-        self.assertTrue(loaded["config_digest"].startswith("sha256:"))
-        self.assertEqual("ExternalTrustVerifier", loaded["verifier"])
+        self.assertFalse(loaded["has_trust"])
+        self.assertFalse(loaded["tools_has_trust_verifier"])
 
     def test_packaged_hermes_tools_emit_nonblocking_efficiency_feedback(self) -> None:
         output = self.root / "hermes-efficiency"
@@ -952,6 +888,7 @@ print(json.dumps({
                 "scope": ["diff"],
                 "risk_signals": [],
                 "requested_external_actions": [],
+                "confirmed_actions": [],
                 "confidence": 0.99,
                 "evidence": ["用户请求"],
             }
@@ -974,7 +911,7 @@ print(json.dumps({
         self.assertEqual("review", json.loads(second)["decision"]["flow_id"])
         context.hooks["post_llm_call"](
             "hermes-efficiency-session",
-            "使用 teamwork-engineering-assistant 插件评审当前变更。",
+            "使用 engineering-assistant 插件评审当前变更。",
             "评审完成。",
             [],
             "test",
@@ -1029,7 +966,7 @@ print(json.dumps({
         ) as collect_turn:
             context.hooks["post_llm_call"](
                 "hermes-efficiency-session",
-                "使用 teamwork-engineering-assistant 插件评审当前变更。",
+                "使用 engineering-assistant 插件评审当前变更。",
                 "发现一个需要记录的人工修正。",
                 [],
                 "test",
@@ -1057,7 +994,7 @@ print(json.dumps({
         ) as collect_turn:
             context.hooks["post_llm_call"](
                 "hermes-efficiency-session",
-                "使用 teamwork-engineering-assistant 插件评审当前变更。",
+                "使用 engineering-assistant 插件评审当前变更。",
                 "发现一个需要记录的人工修正。",
                 [],
                 "test",
@@ -1110,7 +1047,7 @@ print(json.dumps({
             )
             context.hooks["post_llm_call"](
                 "hermes-mode-session",
-                "使用 teamwork-engineering-assistant 插件评审当前变更。",
+                "使用 engineering-assistant 插件评审当前变更。",
                 "评审完成。",
                 [],
                 "test",
@@ -1233,9 +1170,9 @@ print(json.dumps({
         spec.loader.exec_module(module)
         context = Context()
         module.register(context)
-        self.assertEqual(16, len(context.tools))
+        self.assertEqual(21, len(context.tools))
         self.assertIn("engineering_assistant_artifact_validate", context.tools)
-        self.assertNotIn("engineering_assistant_investigation_decide", context.tools)
+        self.assertIn("engineering_assistant_investigation_decide", context.tools)
         plugin_lines = (output / "plugin.yaml").read_text(encoding="utf-8").splitlines()
         start = plugin_lines.index("provides_tools:") + 1
         end = plugin_lines.index("provides_hooks:")
@@ -1251,6 +1188,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1307,6 +1245,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1344,6 +1283,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1382,6 +1322,7 @@ print(json.dumps({
                     "scope": ["diff"],
                     "risk_signals": [],
                     "requested_external_actions": [],
+                    "confirmed_actions": [],
                     "confidence": 0.95,
                     "evidence": ["用户请求"],
                 }
@@ -1462,7 +1403,7 @@ print(json.dumps({
         for index in range(1025):
             context.hooks["post_llm_call"](
                 f"explicit-session-{index}",
-                "使用 teamwork-engineering-assistant 插件评审当前 diff。",
+                "使用 engineering-assistant 插件评审当前 diff。",
                 "评审完成。",
                 [],
                 "test",

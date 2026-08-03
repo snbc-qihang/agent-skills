@@ -19,7 +19,6 @@ from engineering_assistant.model import (  # noqa: E402
     CriterionResult,
     EvidenceRef,
     RouteIntent,
-    RunApprovalGrant,
     StepResult,
 )
 from engineering_assistant.router import ROUTES, route_intent  # noqa: E402
@@ -31,24 +30,14 @@ from engineering_assistant.validation import (  # noqa: E402
 )
 
 
-class FakeTrustVerifier:
-    def verify_evidence(self, run_id: str, evidence: EvidenceRef) -> bool:
-        return evidence.attestation == f"test-receipt:{run_id}:{evidence.id}"
-
-    def verify_decision(self, grant) -> bool:
-        return False
-
-    def verify_run_approval(self, grant) -> bool:
-        return grant.token == f"test-run-grant:{grant.grant_id}"
-
-
-def intent(kind: str, *, risks=None, actions=None, confidence: float = 0.9) -> RouteIntent:
+def intent(kind: str, *, risks=None, actions=None, confirmed=None, confidence: float = 0.9) -> RouteIntent:
     return RouteIntent(
         task_kind=kind,
         requested_outcome=f"Complete a bounded {kind} task.",
         scope=["repository"],
         risk_signals=list(risks or []),
         requested_external_actions=list(actions or []),
+        confirmed_actions=list(confirmed or []),
         confidence=confidence,
         evidence=["explicit user request"],
     )
@@ -62,7 +51,7 @@ class RouterTests(unittest.TestCase):
     def test_every_semantic_kind_has_a_valid_route(self) -> None:
         for kind in ROUTES:
             with self.subTest(kind=kind):
-                decision = route_intent(intent(kind), self.catalog, profile_id="default")
+                decision = route_intent(intent(kind), self.catalog)
                 self.assertEqual("proceed" if kind != "release" else "confirm", decision.decision)
                 if kind == "explain":
                     self.assertEqual([], decision.skill_ids)
@@ -71,12 +60,18 @@ class RouterTests(unittest.TestCase):
                 self.assertIn("safety-core", decision.policy_refs)
 
     def test_low_confidence_asks_without_preloading_a_flow(self) -> None:
-        decision = route_intent(
-            intent("design", confidence=0.4), self.catalog, profile_id="default"
-        )
+        decision = route_intent(intent("design", confidence=0.4), self.catalog)
         self.assertEqual("ask", decision.decision)
         self.assertIsNone(decision.flow_id)
         self.assertEqual(["engineering-assistant"], decision.skill_ids)
+
+    def test_high_risk_and_external_actions_never_proceed_unconfirmed(self) -> None:
+        decision = route_intent(
+            intent("implement", risks=["production"], actions=["push"]),
+            self.catalog,
+        )
+        self.assertEqual("confirm", decision.decision)
+        self.assertEqual(["push", "production"], decision.approval_required)
 
     def test_shape_and_design_routes_include_domain_modeling(self) -> None:
         self.assertEqual(
@@ -89,17 +84,8 @@ class RouterTests(unittest.TestCase):
         )
         self.assertEqual(
             ["domain-modeling"],
-            route_intent(intent("model"), self.catalog, profile_id="default").skill_ids,
+            route_intent(intent("model"), self.catalog).skill_ids,
         )
-
-    def test_high_risk_and_external_actions_never_proceed_unconfirmed(self) -> None:
-        decision = route_intent(
-            intent("implement", risks=["production"], actions=["push"]),
-            self.catalog,
-            profile_id="default",
-        )
-        self.assertEqual("confirm", decision.decision)
-        self.assertEqual(["push", "production"], decision.approval_required)
 
 
 class RuntimeTests(unittest.TestCase):
@@ -109,142 +95,27 @@ class RuntimeTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.project = Path(self.temporary.name)
         self.state_store = StateStore(self.project, ROOT / "schemas")
-        self.evidence_store = EvidenceStore(self.state_store, FakeTrustVerifier())
+        self.evidence_store = EvidenceStore(self.state_store)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def start(self, *args, **kwargs):
-        kwargs.setdefault("profile_id", "default")
-        return self.engine.start(*args, **kwargs)
-
-    @staticmethod
-    def approval_grant(state, *, grant_id: str = "release-grant") -> RunApprovalGrant:
-        return RunApprovalGrant(
-            grant_id=grant_id,
-            broker_id="test-broker",
-            audience="engineering-assistant",
-            action="run.approve",
-            run_id=state.run_id,
-            run_revision=state.revision,
-            approval_id="release-execution",
-            scope=["flow:release", "approval:release-execution"],
-            issued_at=datetime.now(timezone.utc).isoformat(),
-            expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-            actor_ref="opaque-human",
-            nonce="0123456789abcdef",
-            token=f"test-run-grant:{grant_id}",
+    def test_release_requires_same_intent_with_confirmed_action(self) -> None:
+        with self.assertRaisesRegex(ValidationFailure, "route decision confirm"):
+            self.engine.start("task-release", intent("release"), run_id="release-1")
+        state = self.engine.start(
+            "task-release",
+            intent("release", confirmed=["release-execution"]),
+            run_id="release-1",
         )
-
-    def apply_approval(self, state) -> None:
-        self.engine.apply_approval(
-            state,
-            self.approval_grant(state),
-            verifier=FakeTrustVerifier(),
-            expected_broker_id="test-broker",
-            expected_audience="engineering-assistant",
-        )
-
-    def test_release_waits_for_and_records_explicit_approval(self) -> None:
-        state = self.start("task-release", intent("release"), run_id="release-1")
-        self.assertEqual("waiting_for_approval", state.status)
-        self.assertEqual("pause_for_approval", self.engine.next(state).decision)
-        gate = self.engine.apply_approval(
-            state,
-            self.approval_grant(state),
-            verifier=FakeTrustVerifier(),
-            expected_broker_id="test-broker",
-            expected_audience="engineering-assistant",
-        )
-        self.assertEqual("continue", gate.decision)
-        self.assertEqual("initialized", state.status)
-        self.assertEqual(1, len(state.approval_records))
-        self.assertNotIn("token", state.approval_records[0])
-        self.assertEqual("opaque-human", state.approval_records[0]["actor_ref"])
-        self.assertEqual(
-            ["flow:release", "approval:release-execution"],
-            state.approval_records[0]["scope"],
-        )
-        invalid = state.to_dict()
-        invalid["approval_records"][0]["token"] = "must-not-persist"
-        with self.assertRaises(ValidationFailure):
-            validate_instance(
-                invalid,
-                load_json(ROOT / "schemas/run-state.schema.json"),
-                "run-state",
-            )
-
-    def test_expired_approval_cannot_resume_high_risk_flow(self) -> None:
-        state = self.start("task-expiry", intent("release"), run_id="release-expiry")
-        self.apply_approval(state)
-        state.approval_expiries["release-execution"] = (
-            datetime.now(timezone.utc) - timedelta(seconds=1)
-        ).isoformat()
-        gate = self.engine.next(state)
-        self.assertEqual("pause_for_approval", gate.decision)
-        self.assertEqual(["release-execution"], gate.missing_evidence)
-
-    def test_run_approval_rejects_forged_or_insufficient_scope_grants(self) -> None:
-        state = self.start(
-            "task-forged-approval", intent("release"), run_id="release-forged"
-        )
-        with self.assertRaisesRegex(ValidationFailure, "external broker grant"):
-            self.engine.apply_approval(
-                state,
-                replace(self.approval_grant(state), token="forged-approval-token"),
-                verifier=FakeTrustVerifier(),
-                expected_broker_id="test-broker",
-                expected_audience="engineering-assistant",
-            )
-        with self.assertRaisesRegex(ValidationFailure, "insufficient scope"):
-            self.engine.apply_approval(
-                state,
-                replace(
-                    self.approval_grant(state, grant_id="scope-grant"),
-                    scope=["flow:release"],
-                ),
-                verifier=FakeTrustVerifier(),
-                expected_broker_id="test-broker",
-                expected_audience="engineering-assistant",
-            )
-        valid = self.approval_grant(state, grant_id="binding-grant")
-        for label, grant, broker, audience, message in (
-            ("broker", valid, "other-broker", "engineering-assistant", "wrong broker"),
-            ("audience", valid, "test-broker", "other-audience", "wrong audience"),
-            (
-                "revision",
-                replace(valid, run_revision=state.revision + 1),
-                "test-broker",
-                "engineering-assistant",
-                "stale run",
-            ),
-            (
-                "expired",
-                replace(
-                    valid,
-                    expires_at=(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
-                ),
-                "test-broker",
-                "engineering-assistant",
-                "not currently valid",
-            ),
-        ):
-            with self.subTest(label=label), self.assertRaisesRegex(
-                ValidationFailure, message
-            ):
-                self.engine.apply_approval(
-                    state,
-                    grant,
-                    verifier=FakeTrustVerifier(),
-                    expected_broker_id=broker,
-                    expected_audience=audience,
-                )
+        self.assertEqual("readiness", self.engine.next(state).next_node)
 
     def test_release_readiness_rejects_stale_or_unrelated_evidence(self) -> None:
-        state = self.start(
-            "task-release-evidence", intent("release"), run_id="release-evidence"
+        state = self.engine.start(
+            "task-release-evidence",
+            intent("release", confirmed=["release-execution"]),
+            run_id="release-evidence",
         )
-        self.apply_approval(state)
         self.engine.next(state)
         old_path = self.project / "old-approval.txt"
         old_path.write_text("unrelated old approval\n", encoding="utf-8")
@@ -258,7 +129,7 @@ class RuntimeTests(unittest.TestCase):
                     uri=str(old_path),
                     producer="test-broker",
                     observed_at="2000-01-01T00:00:00+00:00",
-                    trust_level="observed",
+                    provenance="runtime_observed",
                     scope="unrelated approval",
                 ),
             ),
@@ -294,7 +165,7 @@ class RuntimeTests(unittest.TestCase):
                     uri=str(fresh_path),
                     producer="test-runner",
                     observed_at=datetime.now(timezone.utc).isoformat(),
-                    trust_level="observed",
+                    provenance="runtime_observed",
                     scope="unrelated:not-flow:release",
                     scope_tags=["not-flow:release"],
                 ),
@@ -314,7 +185,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("retry", gate.decision)
         self.assertIn("readiness:1:evidence-contract", gate.missing_evidence)
     def test_evidenced_completion_skip_and_resume_are_real_state_transitions(self) -> None:
-        state = self.start("task-design", intent("design"), run_id="design-1")
+        state = self.engine.start("task-design", intent("design"), run_id="design-1")
         self.state_store.create(state)
         previous = state.revision
         gate = self.engine.next(state)
@@ -333,7 +204,7 @@ class RuntimeTests(unittest.TestCase):
                 uri=str(evidence_file),
                 producer="test",
                 observed_at=datetime.now(timezone.utc).isoformat(),
-                trust_level="observed",
+                provenance="runtime_observed",
                 scope="design repository context",
             ),
             ),
@@ -382,8 +253,7 @@ class RuntimeTests(unittest.TestCase):
             self.engine.node_payload(resumed)["capability"],
         )
         self.state_store.save(resumed, expected_revision=previous)
-
-        resumed = self.state_store.load(state.run_id)
+        resumed = self.state_store.load(resumed.run_id)
         previous = resumed.revision
         gate = self.engine.complete_step(
             resumed,
@@ -403,8 +273,43 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("architecture", gate.next_node)
         self.state_store.save(resumed, expected_revision=previous)
 
+    def test_shape_domain_model_precedes_decision_interview_and_can_be_skipped(self) -> None:
+        state = self.engine.start("task-shape-domain", intent("shape"), run_id="shape-domain-1")
+        gate = self.engine.next(state)
+        self.assertEqual("discover-facts", gate.next_node)
+        gate = self.engine.complete_step(
+            state,
+            StepResult(
+                run_id=state.run_id,
+                node_id="discover-facts",
+                status="skipped",
+                criteria_results=[],
+                outputs=["The request provides all repository facts needed for shaping."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertEqual("domain-model", gate.next_node)
+        gate = self.engine.complete_step(
+            state,
+            StepResult(
+                run_id=state.run_id,
+                node_id="domain-model",
+                status="skipped",
+                criteria_results=[],
+                outputs=["No domain ambiguity changes scope, acceptance, or risk."],
+                findings=[],
+                open_questions=[],
+                requested_transition="continue",
+            ),
+            evidence_store=self.evidence_store,
+        )
+        self.assertEqual("resolve-decisions", gate.next_node)
+
     def test_stale_evidence_can_be_excluded_by_runtime_policy(self) -> None:
-        state = self.start("task-stale", intent("design"), run_id="stale-1")
+        state = self.engine.start("task-stale", intent("design"), run_id="stale-1")
         self.state_store.create(state)
         evidence_file = self.project / "stale.txt"
         evidence_file.write_text("old observation\n", encoding="utf-8")
@@ -418,7 +323,7 @@ class RuntimeTests(unittest.TestCase):
                 uri=str(evidence_file),
                 producer="test",
                 observed_at=(datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
-                trust_level="observed",
+                provenance="runtime_observed",
                 scope="staleness eval",
             ),
             ),
@@ -430,7 +335,7 @@ class RuntimeTests(unittest.TestCase):
         )
 
     def test_state_store_rejects_stale_writer(self) -> None:
-        state = self.start("task-shape", intent("shape"), run_id="shape-1")
+        state = self.engine.start("task-shape", intent("shape"), run_id="shape-1")
         self.state_store.create(state)
         stale = self.state_store.load(state.run_id)
         fresh = self.state_store.load(state.run_id)
@@ -447,7 +352,6 @@ class RuntimeTests(unittest.TestCase):
         return replace(
             evidence,
             digest=digest,
-            attestation=f"test-receipt:{run_id}:{evidence.id}",
         )
 
 

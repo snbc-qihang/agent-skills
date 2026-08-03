@@ -8,7 +8,7 @@ import math
 import tempfile
 from collections import defaultdict
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -40,16 +40,18 @@ from .model import (
     ProviderInvocation,
     QualityDimension,
     QualitySnapshot,
-    RunApprovalGrant,
     StepResult,
 )
 from .natural_intent import normalize_request
 from .provider_runtime import ProviderExecutor
 from .router import route_intent
 from .state_store import StateStore
-from .trust import parse_time
-from .trust import TrustVerifier
 from .validation import ValidationFailure, load_json, validate_instance
+
+
+def _parse_time(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def run_evals(repository_root: Path | str) -> dict:
@@ -72,7 +74,8 @@ def run_evals(repository_root: Path | str) -> dict:
         "capabilities": capabilities,
         "canary": {
             "status": "not_run",
-            "reason": "尚无通过外部 evidence broker 验签并满足门槛的真实产品 canary 结果；本机预发布或未验签运行不等同于产品 canary 通过。",
+            "reason": "尚无经人工评审并满足门槛的真实产品 canary bundle；local_unattested 只证明本地结构和摘要一致。",
+            "assurance": "local_unattested",
             "simulation_results_accepted": False,
         },
     }
@@ -83,10 +86,6 @@ def run_evals(repository_root: Path | str) -> dict:
 def _load_canary_observations(
     artifacts: ArtifactIO,
     evidence_refs: list[str],
-    trust_verifier: TrustVerifier,
-    *,
-    expected_evidence_broker_id: str,
-    expected_host_trust_config_digest: str,
 ) -> list[dict]:
     repository_root = Path(__file__).resolve().parents[2]
     observation_schema = load_json(
@@ -116,21 +115,13 @@ def _load_canary_observations(
             observation,
             (item["measurement_kinds"] for item in observation["artifact_refs"]),
         )
-        if not trust_verifier.verify_canary_observation(observation):
-            raise ValidationFailure("canary observation attestation is not trusted")
-        expected_provenance = {
-            "evidence_broker_id": expected_evidence_broker_id,
-            "host_trust_config_digest": expected_host_trust_config_digest,
-        }
-        if observation["trust_provenance"] != expected_provenance:
-            raise ValidationFailure(
-                "canary observation was attested by a different host trust binding"
-            )
+        if observation["assurance"] != "local_unattested":
+            raise ValidationFailure("canary assurance must be local_unattested")
         if observation["experiment_kind"] != "delegation_ablation":
             raise ValidationFailure(
                 "paired_canary is legacy evidence and is not promotable by canary assemble"
             )
-        if parse_time(observation["finished_at"]) < parse_time(observation["started_at"]):
+        if _parse_time(observation["finished_at"]) < _parse_time(observation["started_at"]):
             raise ValidationFailure("canary evidence finishes before it starts")
         observation_artifacts = []
         for artifact in observation["artifact_refs"]:
@@ -884,15 +875,9 @@ def assemble_canary_result(
     evidence_root: Path | str,
     evidence_refs: list[str],
     *,
-    trust_verifier: TrustVerifier | None = None,
-    expected_evidence_broker_id: str,
-    expected_host_trust_config_digest: str,
     artifact_io: ArtifactIO | None = None,
 ) -> dict:
-    """Derive a strict result only from externally attested observations."""
-
-    if trust_verifier is None:
-        raise ValidationFailure("canary assembly requires an external evidence broker")
+    """Derive a strict local result from digest-checked observations."""
     if not 10 <= len(evidence_refs) <= 128:
         raise ValidationFailure("canary evidence requires between 10 and 128 references")
     if len(evidence_refs) != len(set(evidence_refs)):
@@ -902,9 +887,6 @@ def assemble_canary_result(
     observations = _load_canary_observations(
         artifacts,
         evidence_refs,
-        trust_verifier,
-        expected_evidence_broker_id=expected_evidence_broker_id,
-        expected_host_trust_config_digest=expected_host_trust_config_digest,
     )
     pairs, task_ids = _pair_canary_observations(observations)
     metrics = _canary_metrics(pairs, task_ids)
@@ -941,16 +923,7 @@ def assemble_canary_result(
         "candidate_treatment_digest": _single_canary_value(
             observations, "treatment_digest", variant="candidate"
         ),
-        "trust_provenance": {
-            "evidence_broker_id": _single_canary_value(
-                [item["trust_provenance"] for item in observations],
-                "evidence_broker_id",
-            ),
-            "host_trust_config_digest": _single_canary_value(
-                [item["trust_provenance"] for item in observations],
-                "host_trust_config_digest",
-            ),
-        },
+        "assurance": "local_unattested",
         **metrics,
         "evidence_refs": list(evidence_refs),
     }
@@ -976,14 +949,8 @@ def assemble_canary_result(
 
 def run_canary_result(
     path: Path | str,
-    *,
-    trust_verifier: TrustVerifier | None = None,
-    expected_evidence_broker_id: str,
-    expected_host_trust_config_digest: str,
 ) -> dict:
     path = Path(path)
-    if trust_verifier is None:
-        raise ValidationFailure("canary validation requires an external evidence broker")
     evidence_root = path.parent.resolve()
     artifacts = ArtifactIO(evidence_root, ".")
     data, _raw = artifacts.read_json_limited(
@@ -1000,9 +967,6 @@ def run_canary_result(
     computed = assemble_canary_result(
         evidence_root,
         data["evidence_refs"],
-        trust_verifier=trust_verifier,
-        expected_evidence_broker_id=expected_evidence_broker_id,
-        expected_host_trust_config_digest=expected_host_trust_config_digest,
         artifact_io=artifacts,
     )
     metric_fields = {
@@ -1058,7 +1022,7 @@ def _routing_eval(root: Path, catalog) -> dict:
     failures = []
     for case in cases:
         intent = normalize_request(case["request"])
-        decision = route_intent(intent, catalog, profile_id="default")
+        decision = route_intent(intent, catalog)
         if decision.decision == "ask":
             no_result += 1
         if intent.task_kind == case["task_kind"]:
@@ -1082,32 +1046,20 @@ def _routing_eval(root: Path, catalog) -> dict:
 
 
 def _behavior_eval(root: Path, catalog) -> dict:
-    cases = [
-        *load_json(root / "evals/behavior/cases.json")["cases"],
-        *load_json(root / "evals/behavior/teamwork-cases.json")["cases"],
-    ]
+    cases = load_json(root / "evals/behavior/cases.json")["cases"]
     passed = 0
     failures = []
     for case in cases:
         intent = normalize_request(case["request"])
-        decision = route_intent(
-            intent, catalog, profile_id=case.get("profile_id", "default")
-        )
+        decision = route_intent(intent, catalog)
         actual = {
             "task_kind": intent.task_kind,
             "decision": decision.decision,
             "flow_id": decision.flow_id,
             "skill_ids": decision.skill_ids,
-            "policy_refs": decision.policy_refs,
         }
         expected = case["expected"]
-        required_policy_refs = expected.get("required_policy_refs", [])
-        scalar_expected = {
-            key: value for key, value in expected.items() if key != "required_policy_refs"
-        }
-        if all(
-            actual.get(key) == value for key, value in scalar_expected.items()
-        ) and set(required_policy_refs).issubset(actual["policy_refs"]):
+        if all(actual.get(key) == value for key, value in expected.items()):
             passed += 1
         else:
             failures.append({"id": case["id"], "expected": expected, "actual": actual})
@@ -1389,46 +1341,13 @@ def _scenario_investigation_policy(_catalog, root: Path) -> dict:
 
 def _scenario_approval_resume(catalog, _root: Path) -> None:
     engine = RuntimeEngine(catalog)
+    unconfirmed = normalize_request("Prepare a release rollout plan")
+    if route_intent(unconfirmed, catalog).decision != "confirm":
+        raise AssertionError("release did not require confirmation")
     state = engine.start(
         "eval-release",
-        normalize_request("Prepare a release rollout plan"),
-        profile_id="default",
+        replace(unconfirmed, confirmed_actions=["release-execution"]),
         run_id="eval-release",
-    )
-    if engine.next(state).decision != "pause_for_approval":
-        raise AssertionError("release did not pause")
-    grant = RunApprovalGrant(
-        grant_id="eval-release-grant",
-        broker_id="eval-broker",
-        audience="engineering-assistant",
-        action="run.approve",
-        run_id=state.run_id,
-        run_revision=state.revision,
-        approval_id="release-execution",
-        scope=["flow:release", "approval:release-execution"],
-        issued_at=datetime.now(timezone.utc).isoformat(),
-        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
-        actor_ref="eval-human-boundary",
-        nonce="eval-nonce-000001",
-        token="eval-run-grant-token",
-    )
-
-    class EvalApprovalVerifier:
-        def verify_evidence(self, run_id, evidence):
-            return False
-
-        def verify_decision(self, decision_grant):
-            return False
-
-        def verify_run_approval(self, approval_grant):
-            return approval_grant.token == "eval-run-grant-token"
-
-    engine.apply_approval(
-        state,
-        grant,
-        verifier=EvalApprovalVerifier(),
-        expected_broker_id="eval-broker",
-        expected_audience="engineering-assistant",
     )
     if engine.next(state).next_node != "readiness":
         raise AssertionError("release did not resume")
@@ -1438,22 +1357,11 @@ def _scenario_evidence_resume(catalog, root: Path) -> None:
     with tempfile.TemporaryDirectory() as temporary:
         project = Path(temporary)
         store = StateStore(project, root / "schemas")
-        class EvalTrustVerifier:
-            def verify_evidence(self, run_id, evidence):
-                return evidence.attestation == f"eval-receipt:{run_id}:{evidence.id}"
-
-            def verify_decision(self, grant):
-                return False
-
-            def verify_run_approval(self, grant):
-                return False
-
-        evidence_store = EvidenceStore(store, EvalTrustVerifier())
+        evidence_store = EvidenceStore(store)
         engine = RuntimeEngine(catalog)
         state = engine.start(
             "eval-design",
             normalize_request("Design the module boundary and interface"),
-            profile_id="default",
             run_id="eval-design",
         )
         store.create(state)
@@ -1470,9 +1378,8 @@ def _scenario_evidence_resume(catalog, root: Path) -> None:
                 uri=str(observed),
                 producer="core-eval",
                 observed_at=datetime.now(timezone.utc).isoformat(),
-                trust_level="observed",
+                provenance="runtime_observed",
                 scope="state recovery eval",
-                attestation=f"eval-receipt:{state.run_id}:observed-source",
             ),
         )
         previous = state.revision
@@ -1501,7 +1408,6 @@ def _scenario_retry(catalog, _root: Path) -> None:
         state = engine.start(
             "eval-implement",
             normalize_request("Implement the accepted endpoint behavior"),
-            profile_id="default",
             run_id="eval-implement",
         )
         engine.next(state)
@@ -1522,7 +1428,6 @@ def _scenario_block(catalog, _root: Path) -> None:
         state = engine.start(
             "eval-shape",
             normalize_request("Clarify this requirement and its acceptance criteria"),
-            profile_id="default",
             run_id="eval-shape",
         )
         engine.next(state)

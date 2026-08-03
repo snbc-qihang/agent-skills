@@ -10,7 +10,7 @@
     "cost_usd_micros", "quality_score", "document_noise_units", "safety_violations",
     "blind_blocker_count", "blind_major_count", "applicable_matrix_cells",
     "closed_matrix_cells", "production_contract_failures",
-    "artifact_refs", "trust_provenance", "attestation"
+    "artifact_refs", "assurance"
   ],
   "properties": {
     "simulation": {"const": false},
@@ -75,16 +75,7 @@
         "additionalProperties": false
       }
     },
-    "trust_provenance": {
-      "type": "object",
-      "required": ["evidence_broker_id", "host_trust_config_digest"],
-      "properties": {
-        "evidence_broker_id": {"type": "string", "minLength": 1},
-        "host_trust_config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-      },
-      "additionalProperties": false
-    },
-    "attestation": {"type": "string", "minLength": 16, "maxLength": 8192}
+    "assurance": {"const": "local_unattested"}
   },
   "allOf": [
     {

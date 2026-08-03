@@ -78,7 +78,7 @@ def _is_regular_file_at(directory_fd: int, relative: str) -> bool:
         os.close(descriptor)
 
 
-def _protected_layout_fd(directory_fd: int) -> bool:
+def _layout_kind_fd(directory_fd: int) -> str | None:
     author = all(
         _is_directory_at(directory_fd, relative)
         for relative in ("catalog", "skills", "schemas", "src/engineering_assistant")
@@ -90,10 +90,14 @@ def _protected_layout_fd(directory_fd: int) -> bool:
     compiled_package = _is_regular_file_at(
         directory_fd, "package-manifest.json"
     ) and _is_directory_at(directory_fd, "engineering-assistant/runtime/engineering_assistant")
-    return author or compiled_engine or compiled_package
+    if author:
+        return "author"
+    if compiled_engine or compiled_package:
+        return "installed"
+    return None
 
 
-def _protected_layout_path(root: Path) -> bool:
+def _layout_kind_path(root: Path) -> str | None:
     author = all(
         path.is_dir()
         for path in (
@@ -115,7 +119,19 @@ def _protected_layout_path(root: Path) -> bool:
         (root / "package-manifest.json").is_file()
         and (root / "engineering-assistant/runtime/engineering_assistant").is_dir()
     )
-    return author or compiled_engine or compiled_package
+    if author:
+        return "author"
+    if compiled_engine or compiled_package:
+        return "installed"
+    return None
+
+
+def _protected_layout_fd(directory_fd: int) -> bool:
+    return _layout_kind_fd(directory_fd) is not None
+
+
+def _protected_layout_path(root: Path) -> bool:
+    return _layout_kind_path(root) is not None
 
 
 def assert_runtime_artifact_target(
@@ -233,7 +249,12 @@ class ArtifactIO:
         self._assert_safe(target)
         return target
 
-    def assert_runtime_target(self, schema_root: Path | str) -> None:
+    def assert_runtime_target(
+        self,
+        schema_root: Path | str,
+        *,
+        allow_author_repository: bool = False,
+    ) -> None:
         """Validate the already-opened project root instead of a mutable path."""
 
         schemas = Path(schema_root).resolve()
@@ -253,9 +274,12 @@ class ArtifactIO:
         try:
             while True:
                 metadata = os.fstat(descriptor)
+                layout_kind = _layout_kind_fd(descriptor)
+                protected_schema = (metadata.st_dev, metadata.st_ino) in protected_inodes
                 if (
-                    _protected_layout_fd(descriptor)
-                    or (metadata.st_dev, metadata.st_ino) in protected_inodes
+                    layout_kind == "installed"
+                    or (layout_kind == "author" and not allow_author_repository)
+                    or (protected_schema and not allow_author_repository)
                 ):
                     raise ValidationFailure(
                         "runtime artifacts cannot target the engineering-assistant "

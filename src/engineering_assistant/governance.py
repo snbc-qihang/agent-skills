@@ -13,14 +13,13 @@ from .artifact_io import ArtifactConflict
 from .codec import investigation_record_from_dict, quality_snapshot_from_dict
 from .evidence import EvidenceStore
 from .model import (
-    InvestigationDecisionGrant,
+    InvestigationDecisionRecord,
     InvestigationRecord,
     InvestigationRequest,
     InvestigationTransition,
     QualitySnapshot,
 )
 from .state_store import SAFE_ID, StateStore
-from .trust import TrustVerifier, parse_time
 from .validation import ValidationFailure, load_json, validate_instance
 
 
@@ -57,13 +56,18 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_time(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+
+
 def _safe_id(value: str, label: str) -> None:
     if SAFE_ID.fullmatch(value) is None:
         raise ValidationFailure(f"unsafe {label} {value!r}")
 
 
 def investigation_evidence_contract(record: InvestigationRecord) -> dict:
-    """Return the deterministic contract that host evidence must attest."""
+    """Return the deterministic contract that local evidence must satisfy."""
 
     request = record.request
     material = json.dumps(
@@ -97,7 +101,7 @@ def investigation_evidence_contract(record: InvestigationRecord) -> dict:
         ],
         "evidence_requirements": list(request.evidence_requirements),
         "required_contract_refs": contract_refs,
-        "minimum_trust_level": "observed",
+        "minimum_provenance": "runtime_observed",
     }
 
 
@@ -202,7 +206,7 @@ class QualityStore:
             )
             if snapshot.run_id != run_id or snapshot.node_id != node_id:
                 continue
-            observed_at = parse_time(snapshot.observed_at)
+            observed_at = _parse_time(snapshot.observed_at)
             if latest_time is None or observed_at > latest_time:
                 latest = snapshot
                 latest_time = observed_at
@@ -246,9 +250,9 @@ class QualityStore:
                     f"quality snapshot references unregistered evidence: {evidence_id}"
                 ) from exc
         candidate = evidence_by_id[snapshot.candidate_evidence_id]
-        if candidate.kind != "source" or candidate.trust_level not in {
-            "observed",
-            "verified",
+        if candidate.kind != "source" or candidate.provenance not in {
+            "runtime_observed",
+            "user_confirmed",
         }:
             raise ValidationFailure("candidate evidence must be an observed source artifact")
         if candidate.digest != snapshot.candidate_ref:
@@ -257,7 +261,7 @@ class QualityStore:
             )
         for evidence_id in referenced:
             item = evidence_by_id[evidence_id]
-            if item.trust_level not in {"observed", "verified"}:
+            if item.provenance not in {"runtime_observed", "user_confirmed"}:
                 raise ValidationFailure(
                     f"quality evidence {evidence_id} must be observed or verified"
                 )
@@ -265,7 +269,7 @@ class QualityStore:
                 raise ValidationFailure(
                     f"quality evidence {evidence_id} is not bound to the candidate"
                 )
-            age = (datetime.now(timezone.utc) - parse_time(item.observed_at)).total_seconds()
+            age = (datetime.now(timezone.utc) - _parse_time(item.observed_at)).total_seconds()
             if age < -self.MAX_FUTURE_SKEW_SECONDS:
                 raise ValidationFailure(
                     f"quality evidence {evidence_id} is too far in the future"
@@ -277,7 +281,7 @@ class QualityStore:
             matching = [
                 item
                 for item in evidence
-                if item.trust_level in {"observed", "verified"}
+                if item.provenance in {"runtime_observed", "user_confirmed"}
                 and item.kind in QUALITY_EVIDENCE_KINDS[dimension.id]
                 and item.subject_digest == snapshot.candidate_ref
             ]
@@ -295,11 +299,11 @@ class QualityStore:
                     )
             elif not matching:
                 raise ValidationFailure(
-                    f"quality dimension {dimension.id} lacks candidate-bound attested evidence"
+                    f"quality dimension {dimension.id} lacks candidate-bound runtime evidence"
                 )
 
     def _validate_time(self, snapshot: QualitySnapshot) -> None:
-        observed = parse_time(snapshot.observed_at)
+        observed = _parse_time(snapshot.observed_at)
         now = datetime.now(timezone.utc)
         age = (now - observed).total_seconds()
         if age < -self.MAX_FUTURE_SKEW_SECONDS:
@@ -390,68 +394,69 @@ class InvestigationStore:
             )
         return record
 
-    def apply_grant(
+    def apply_decision(
         self,
-        grant: InvestigationDecisionGrant,
+        decision: InvestigationDecisionRecord,
         *,
-        verifier: TrustVerifier | None,
         current_run_revision: int,
-        expected_broker_id: str | None = None,
-        expected_audience: str = "engineering-assistant",
     ) -> InvestigationRecord:
         validate_instance(
-            grant.to_dict(),
-            load_json(self.state_store.schema_root / "investigation-decision-grant.schema.json"),
-            "investigation-decision-grant",
+            decision.to_dict(),
+            load_json(self.state_store.schema_root / "investigation-decision-record.schema.json"),
+            "investigation-decision-record",
         )
-        if verifier is None or not verifier.verify_decision(grant):
-            raise ValidationFailure("investigation decision requires a valid external broker grant")
-        if expected_broker_id is not None and grant.broker_id != expected_broker_id:
-            raise ValidationFailure("investigation decision grant has the wrong broker")
-        if grant.audience != expected_audience:
-            raise ValidationFailure("investigation decision grant has the wrong audience")
-        now = datetime.now(timezone.utc)
-        if parse_time(grant.issued_at) > now or parse_time(grant.expires_at) <= now:
-            raise ValidationFailure("investigation decision grant is not currently valid")
-        if grant.run_revision != current_run_revision:
-            raise ValidationFailure("investigation decision grant targets a stale run revision")
-        record = self.load(grant.run_id, grant.investigation_id)
+        if decision.run_revision != current_run_revision:
+            raise ValidationFailure("investigation decision targets a stale run revision")
+        record = self.load(decision.run_id, decision.investigation_id)
         if record.request.status != "proposed":
             raise ValidationFailure("only proposed investigations can be decided")
-        if grant.decision == "decline":
+        if decision.decision == "decline":
+            self._save_decision(decision)
             return self._transition(
                 record,
                 "declined",
                 "decline",
-                grant.grant_id,
-                mode=grant.selected_mode,
+                decision.record_id,
+                mode=decision.selected_mode,
                 current_source_scope=[],
                 remaining_source_scope=list(record.remaining_source_scope),
             )
         approved_scope = list(record.request.source_scope)
-        if grant.selected_mode == "guided":
-            selected = set(grant.allowed_source_scope)
+        if decision.selected_mode == "guided":
+            selected = set(decision.allowed_source_scope)
             if len(selected) != 1 or not selected.issubset(record.remaining_source_scope):
-                raise ValidationFailure("guided investigation grants must approve exactly one requested source")
-            approved_scope = list(grant.allowed_source_scope)
-        elif not set(record.request.source_scope).issubset(grant.allowed_source_scope):
-            raise ValidationFailure("investigation exceeds the source scope approved by the broker")
+                raise ValidationFailure("guided investigation decisions must approve exactly one requested source")
+            approved_scope = list(decision.allowed_source_scope)
+        elif not set(record.request.source_scope).issubset(decision.allowed_source_scope):
+            raise ValidationFailure("investigation exceeds the locally approved source scope")
         cost_rank = {"low": 0, "medium": 1, "high": 2}
-        if cost_rank[record.request.estimated_cost] > cost_rank[grant.max_cost]:
-            raise ValidationFailure("investigation exceeds the cost approved by the broker")
-        if grant.decision == "approve" and grant.selected_mode == "disabled":
+        if cost_rank[record.request.estimated_cost] > cost_rank[decision.max_cost]:
+            raise ValidationFailure("investigation exceeds the locally approved cost")
+        if decision.decision == "approve" and decision.selected_mode == "disabled":
             raise ValidationFailure("disabled investigation mode cannot be approved")
+        self._save_decision(decision)
         return self._transition(
             record,
             "approved",
             "approve",
-            grant.grant_id,
-            mode=grant.selected_mode,
+            decision.record_id,
+            mode=decision.selected_mode,
             current_source_scope=approved_scope,
             remaining_source_scope=[
                 item for item in record.remaining_source_scope if item not in approved_scope
             ],
         )
+
+    def _save_decision(self, decision: InvestigationDecisionRecord) -> None:
+        try:
+            self.state_store.artifacts.create_immutable_json(
+                decision.to_dict(),
+                decision.run_id,
+                "investigations",
+                f"{decision.investigation_id}.{decision.record_id}.decision.json",
+            )
+        except ArtifactConflict as exc:
+            raise ValidationFailure("investigation decision record is immutable") from exc
 
     def start(self, run_id: str, investigation_id: str) -> InvestigationRecord:
         record = self.load(run_id, investigation_id)
@@ -496,7 +501,7 @@ class InvestigationStore:
         covered_contract_refs: set[str] = set()
         for evidence_id in evidence_refs:
             evidence = evidence_by_id[evidence_id]
-            if evidence.trust_level not in {"observed", "verified"}:
+            if evidence.provenance not in {"runtime_observed", "user_confirmed"}:
                 raise ValidationFailure(
                     f"investigation evidence {evidence_id} must be observed"
                 )
@@ -565,7 +570,7 @@ class InvestigationStore:
                         f"investigation references unregistered evidence: {evidence_id}"
                     ) from exc
                 if (
-                    cumulative.trust_level not in {"observed", "verified"}
+                    cumulative.provenance not in {"runtime_observed", "user_confirmed"}
                     or cumulative.subject_digest != contract["subject_digest"]
                     or cumulative.digest is None
                 ):

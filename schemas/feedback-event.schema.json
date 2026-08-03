@@ -13,6 +13,7 @@
     "run_id": {"type": "string", "minLength": 1},
     "task_id": {"type": "string", "minLength": 1},
     "node_id": {"type": ["string", "null"]},
+    "flow_id": {"type": ["string", "null"], "minLength": 1},
     "turn_id": {"type": ["string", "null"]},
     "event_type": {"enum": ["blocker", "human_correction", "rework", "quality_regression", "tool_failure", "scope_change", "positive_outcome"]},
     "severity": {"enum": ["info", "low", "medium", "high", "blocker"]},

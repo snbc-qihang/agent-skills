@@ -93,22 +93,15 @@ class PolicySpec(Serializable):
 
 
 @dataclass(frozen=True)
-class DesignSourceRef(Serializable):
-    root: str
-    registry: str
-
-
-@dataclass(frozen=True)
 class RouteIntent(Serializable):
     task_kind: str
     requested_outcome: str
     scope: List[str]
     risk_signals: List[str]
     requested_external_actions: List[str]
+    confirmed_actions: List[str]
     confidence: float
     evidence: List[str]
-    requirement_id: Optional[str] = None
-    design_source: Optional[DesignSourceRef] = None
 
 
 @dataclass(frozen=True)
@@ -130,13 +123,12 @@ class EvidenceRef(Serializable):
     uri: str
     producer: str
     observed_at: str
-    trust_level: str
+    provenance: str
     scope: str
     scope_tags: List[str] = field(default_factory=list)
     contract_refs: List[str] = field(default_factory=list)
     subject_digest: Optional[str] = None
     digest: Optional[str] = None
-    attestation: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -219,6 +211,7 @@ class FeedbackEvent(Serializable):
     reusable_candidate: bool
     sensitivity: str
     observed_at: str
+    flow_id: Optional[str] = None
     scope_tags: List[str] = field(default_factory=lambda: ["unknown"])
     change_kind: str = "unknown"
     affected_asset_refs: List[str] = field(default_factory=list)
@@ -366,11 +359,8 @@ class InvestigationRecord(Serializable):
 
 
 @dataclass(frozen=True)
-class InvestigationDecisionGrant(Serializable):
-    grant_id: str
-    broker_id: str
-    audience: str
-    action: str
+class InvestigationDecisionRecord(Serializable):
+    record_id: str
     run_id: str
     investigation_id: str
     run_revision: int
@@ -378,28 +368,24 @@ class InvestigationDecisionGrant(Serializable):
     selected_mode: str
     allowed_source_scope: List[str]
     max_cost: str
-    issued_at: str
-    expires_at: str
     actor_ref: str
-    nonce: str
-    token: str
+    reason: str
+    recorded_at: str
+    source: str
 
 
 @dataclass(frozen=True)
-class RunApprovalGrant(Serializable):
-    grant_id: str
-    broker_id: str
-    audience: str
-    action: str
+class ApprovalRecord(Serializable):
+    record_id: str
     run_id: str
     run_revision: int
     approval_id: str
+    decision: str
     scope: List[str]
-    issued_at: str
-    expires_at: str
     actor_ref: str
-    nonce: str
-    token: str
+    reason: str
+    recorded_at: str
+    source: str
 
 
 @dataclass(frozen=True)
@@ -428,6 +414,7 @@ class StepResult(Serializable):
     findings: List[Finding]
     open_questions: List[str]
     requested_transition: str
+    required_approvals: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -441,6 +428,7 @@ class GateDecision(Serializable):
 
 @dataclass
 class RunState(Serializable):
+    schema_version: str
     run_id: str
     task_id: str
     profile_id: str
@@ -453,9 +441,6 @@ class RunState(Serializable):
     evidence_refs: List[str]
     open_questions: List[str]
     required_approvals: List[str]
-    approvals: List[str]
-    approval_expiries: Dict[str, str]
-    approval_records: List[Dict[str, Any]]
     transition_history: List[Dict[str, Any]]
     next_actions: List[str]
     revision: int = 0

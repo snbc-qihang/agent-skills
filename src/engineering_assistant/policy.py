@@ -52,7 +52,7 @@ def _ordered_unique(values: Iterable[str]) -> list[str]:
 def resolve_policies(
     catalog: Catalog,
     *,
-    profile_id: str | None = None,
+    profile_id: str = "default",
     global_refs: Sequence[str] = ("safety-core",),
     flow_id: str | None = None,
     skill_ids: Sequence[str] = (),
@@ -65,7 +65,6 @@ def resolve_policies(
     therefore requires an approval; immutable policies can never be disabled.
     """
 
-    profile_id = profile_id or catalog.product.default_profile_id
     if profile_id not in catalog.profiles:
         raise ValidationFailure(f"unknown profile {profile_id}")
     if flow_id is not None and flow_id not in catalog.flows:

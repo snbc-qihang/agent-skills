@@ -224,7 +224,7 @@ class ProviderExecutor:
 
             del denied_roots  # a denylist cannot strengthen the allowlist below
             runtime_executable = ProviderExecutor._runtime_executable()
-            runtime_root = Path(sys.prefix).resolve()
+            runtime_root = ProviderExecutor._runtime_root()
             profile = (
                 '(version 1)(deny default)(import "system.sb")'
                 '(deny network*)(deny file-write*)(deny process-fork)'
@@ -241,24 +241,39 @@ class ProviderExecutor:
         )
 
     @staticmethod
-    def _runtime_executable() -> Path:
-        """Return the direct Darwin framework executable so the provider cannot fork."""
+    def _runtime_root() -> Path:
+        if platform.system() == "Darwin":
+            return Path(sys.base_prefix).resolve()
+        return Path(sys.prefix).resolve()
+
+    @classmethod
+    def _runtime_executable(cls) -> Path:
+        """Return a direct Darwin runtime inside the sandbox read allowlist."""
         executable = Path(sys.executable).resolve()
         if platform.system() != "Darwin":
             return executable
+        runtime_root = cls._runtime_root()
         framework_executable = (
-            Path(sys.prefix)
+            runtime_root
             / "Resources"
             / "Python.app"
             / "Contents"
             / "MacOS"
             / "Python"
         )
-        if not framework_executable.is_file():
+        if framework_executable.is_file():
+            return framework_executable.resolve()
+        try:
+            executable.relative_to(runtime_root)
+        except ValueError as exc:
+            raise ValidationFailure(
+                "direct Python runtime is unavailable for least-privilege execution"
+            ) from exc
+        if not executable.is_file():
             raise ValidationFailure(
                 "direct Python runtime is unavailable for least-privilege execution"
             )
-        return framework_executable.resolve()
+        return executable
 
     @staticmethod
     def _bundle_root(root: Path) -> Path:

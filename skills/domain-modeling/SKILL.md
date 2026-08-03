@@ -9,8 +9,8 @@ description: 在明确的限界上下文中建立统一语言、业务规则、�
 
 ## 操作流程
 
-1. 明确建模目的、范围、业务负责人、候选限界上下文和当前需求的 `requirement_id`；以固定外部设计快照中的登记边界和上下文 Owner 为基线。
-2. 从业务语言、成功、失败和非法场景、源码、接口、数据、现有文档及固定设计源快照中收集术语与事实；区分可调查事实和必须人工决定的业务选择。
+1. 明确建模目的、范围、业务负责人、候选限界上下文和当前需求的 `requirement_id`；以 v2 `DesignSourceRegistry` 的冻结边界和上下文 Owner 为基线。
+2. 从业务语言、成功、失败和非法场景、源码、接口、数据、现有文档及冻结设计源中收集术语与事实；区分可调查事实和必须人工决定的业务选择。
 3. 用场景检验术语、关系、命令、事件、生命周期和不变量，术语只要求在所属上下文内含义唯一；未确认业务规则只能列入待决策事项，不得伪造成正式不变量。
 4. 先完成战略边界，再在单个上下文内应用必要的战术模式；不得为了模式清单制造领域对象。
 5. 将模型与代码、API、数据和文档对照；无法确认的差异保留为未知或交给 `decision-interview`，不得静默选择。
@@ -20,6 +20,9 @@ description: 在明确的限界上下文中建立统一语言、业务规则、�
 存在多个子域、团队边界、同名异义或跨系统协作时读取 [references/strategic-modeling.md](references/strategic-modeling.md)。
 任务涉及聚合、不变量、生命周期或实现映射时读取 [references/tactical-modeling.md](references/tactical-modeling.md)。
 创建或更新正式领域模型文档时读取 [references/model-artifact.md](references/model-artifact.md)。
+请求覆盖战略设计、多个限界上下文、部署拓扑或能力级详细设计时读取 [references/design-governance.md](references/design-governance.md)。
+请求正式领域设计、上下文切片或能力级详细设计时读取 [references/scenario-traceability.md](references/scenario-traceability.md)。
+存在跨限界上下文或外部模型协作时读取 [references/integration-consistency.md](references/integration-consistency.md)。
 只有决策确实需要 ADR 时才读取 [references/adr-format.md](references/adr-format.md)。
 
 历史名称只能作为明确别名保留，不能与当前规范术语并列成为第二事实源。不得创建全局唯一业务模型，不得把组织图、微服务或数据库表直接当作领域边界，也不得把 ADR 当作会议记录或在领域模型中复制完整设计。

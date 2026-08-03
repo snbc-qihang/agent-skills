@@ -61,8 +61,7 @@ class ProjectProfile:
     version: str
     policy_refs: tuple[str, ...]
     store: Mapping[str, Any]
-    evidence_broker: Mapping[str, Any]
-    approval_broker: Mapping[str, Any]
+    local_approval: Mapping[str, tuple[str, ...]]
     investigation_policy: Mapping[str, Any]
     evidence_policy: Mapping[str, Any]
     adapter_preferences: tuple[str, ...]
@@ -431,8 +430,10 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
             version=item["version"],
             policy_refs=tuple(item["policy_refs"]),
             store=item["store"],
-            evidence_broker=item["evidence_broker"],
-            approval_broker=item["approval_broker"],
+            local_approval={
+                approval_id: tuple(actor_refs)
+                for approval_id, actor_refs in item["local_approval"].items()
+            },
             investigation_policy=item["investigation_policy"],
             evidence_policy=item["evidence_policy"],
             adapter_preferences=tuple(item["adapter_preferences"]),
@@ -442,25 +443,11 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
         for item_id, item in profile_data.items()
     }
     for profile in profiles.values():
-        for broker_name, broker in (
-            ("evidence_broker", profile.evidence_broker),
-            ("approval_broker", profile.approval_broker),
+        if not profile.local_approval or any(
+            not actors or any(not actor.strip() for actor in actors)
+            for actors in profile.local_approval.values()
         ):
-            required = ("enabled", "id", "introspection_url", "timeout_seconds")
-            if not isinstance(broker.get("enabled"), bool) or any(
-                key not in broker for key in required
-            ):
-                raise ValidationFailure(f"profile {profile.id} {broker_name} is incomplete")
-            if broker["enabled"] and not str(broker["introspection_url"]).startswith("https://"):
-                raise ValidationFailure(
-                    f"profile {profile.id} {broker_name} requires an HTTPS introspection URL"
-                )
-        if not isinstance(profile.approval_broker.get("audience"), str) or not profile.approval_broker[
-            "audience"
-        ].strip():
-            raise ValidationFailure(
-                f"profile {profile.id} approval_broker requires a non-empty audience"
-            )
+            raise ValidationFailure(f"profile {profile.id} local_approval is incomplete")
         investigation_mode = profile.investigation_policy.get("default_mode")
         if investigation_mode not in {"auto_readonly", "suggest_then_run", "guided", "disabled"}:
             raise ValidationFailure(

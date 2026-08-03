@@ -6,14 +6,14 @@ from typing import Any, Mapping
 
 from .model import (
     CapabilityProviderSpec,
+    ApprovalRecord,
     CriterionResult,
-    DesignSourceRef,
     EvidenceRef,
     FeedbackEvent,
     FeedbackCapture,
     Finding,
     InvestigationRecord,
-    InvestigationDecisionGrant,
+    InvestigationDecisionRecord,
     InvestigationRequest,
     InvestigationTransition,
     ProviderSource,
@@ -23,7 +23,6 @@ from .model import (
     QualitySnapshot,
     RouteDecision,
     RouteIntent,
-    RunApprovalGrant,
     RunState,
     StepResult,
     UsageObservationLedger,
@@ -117,22 +116,18 @@ def investigation_record_from_dict(data: Mapping[str, Any]) -> InvestigationReco
     )
 
 
-def investigation_decision_grant_from_dict(data: Mapping[str, Any]) -> InvestigationDecisionGrant:
-    return InvestigationDecisionGrant(**data)
+def investigation_decision_record_from_dict(
+    data: Mapping[str, Any],
+) -> InvestigationDecisionRecord:
+    return InvestigationDecisionRecord(**data)
 
 
-def run_approval_grant_from_dict(data: Mapping[str, Any]) -> RunApprovalGrant:
-    return RunApprovalGrant(**data)
+def approval_record_from_dict(data: Mapping[str, Any]) -> ApprovalRecord:
+    return ApprovalRecord(**data)
 
 
 def route_intent_from_dict(data: Mapping[str, Any]) -> RouteIntent:
-    design_source = data.get("design_source")
-    return RouteIntent(
-        **{key: value for key, value in data.items() if key != "design_source"},
-        design_source=(
-            DesignSourceRef(**design_source) if design_source is not None else None
-        ),
-    )
+    return RouteIntent(**data)
 
 
 def route_decision_from_dict(data: Mapping[str, Any]) -> RouteDecision:
@@ -153,11 +148,13 @@ def step_result_from_dict(data: Mapping[str, Any]) -> StepResult:
         findings=[Finding(**item) for item in data["findings"]],
         open_questions=list(data["open_questions"]),
         requested_transition=data["requested_transition"],
+        required_approvals=list(data.get("required_approvals", [])),
     )
 
 
 def run_state_from_dict(data: Mapping[str, Any]) -> RunState:
     return RunState(
+        schema_version=data["schema_version"],
         run_id=data["run_id"],
         task_id=data["task_id"],
         profile_id=data["profile_id"],
@@ -170,9 +167,6 @@ def run_state_from_dict(data: Mapping[str, Any]) -> RunState:
         evidence_refs=list(data["evidence_refs"]),
         open_questions=list(data["open_questions"]),
         required_approvals=list(data["required_approvals"]),
-        approvals=list(data["approvals"]),
-        approval_expiries=dict(data["approval_expiries"]),
-        approval_records=list(data["approval_records"]),
         transition_history=list(data["transition_history"]),
         next_actions=list(data["next_actions"]),
         revision=data["revision"],

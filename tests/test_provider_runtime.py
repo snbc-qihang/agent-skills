@@ -98,6 +98,61 @@ class ProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(subprocess.DEVNULL, calls[0][1]["stdin"])
         self.assertTrue(calls[0][1]["start_new_session"])
 
+    def test_darwin_venv_uses_the_base_framework_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            venv_root = root / "venv"
+            base_root = root / "framework"
+            executable = base_root / "Resources/Python.app/Contents/MacOS/Python"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            with patch(
+                "engineering_assistant.provider_runtime.platform.system",
+                return_value="Darwin",
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.prefix", str(venv_root)
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.base_prefix", str(base_root)
+            ):
+                self.assertEqual(base_root.resolve(), ProviderExecutor._runtime_root())
+                self.assertEqual(executable.resolve(), ProviderExecutor._runtime_executable())
+
+    def test_darwin_venv_accepts_a_direct_base_runtime_without_framework(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            venv_root = root / "venv"
+            base_root = root / "python"
+            executable = base_root / "bin/python3"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            venv_executable = venv_root / "bin/python"
+            venv_executable.parent.mkdir(parents=True)
+            venv_executable.symlink_to(executable)
+            with patch(
+                "engineering_assistant.provider_runtime.platform.system",
+                return_value="Darwin",
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.prefix", str(venv_root)
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.base_prefix", str(base_root)
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.executable", str(venv_executable)
+            ):
+                self.assertEqual(executable.resolve(), ProviderExecutor._runtime_executable())
+
+    def test_non_darwin_runtime_root_keeps_the_current_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch(
+                "engineering_assistant.provider_runtime.platform.system",
+                return_value="Linux",
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.prefix", str(root / "venv")
+            ), patch(
+                "engineering_assistant.provider_runtime.sys.base_prefix", str(root / "base")
+            ):
+                self.assertEqual((root / "venv").resolve(), ProviderExecutor._runtime_root())
+
     def test_missing_or_tampered_bundle_falls_back_to_native(self) -> None:
         missing = self.executor.invoke(self.invocation(), provider_root=None)
         self.assertEqual("fallback", missing.status)

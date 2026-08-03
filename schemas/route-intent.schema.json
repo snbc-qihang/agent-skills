@@ -1,25 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["task_kind", "requested_outcome", "scope", "risk_signals", "requested_external_actions", "confidence", "evidence"],
+  "required": ["task_kind", "requested_outcome", "scope", "risk_signals", "requested_external_actions", "confirmed_actions", "confidence", "evidence"],
   "properties": {
-    "task_kind": {"enum": ["explain", "context", "research", "decide", "model", "shape", "prototype", "design", "implement", "diagnose", "review", "release", "evolve", "wayfind"]},
+    "task_kind": {"enum": ["explain", "context", "research", "decide", "model", "domain-design", "shape", "prototype", "design", "implement", "diagnose", "review", "release", "evolve", "wayfind"]},
     "requested_outcome": {"type": "string", "minLength": 1},
     "scope": {"type": "array", "items": {"type": "string"}},
     "risk_signals": {"type": "array", "items": {"type": "string"}},
     "requested_external_actions": {"type": "array", "items": {"type": "string"}},
+    "confirmed_actions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}},
-    "requirement_id": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
-    "design_source": {
-      "type": ["object", "null"],
-      "required": ["root", "registry"],
-      "properties": {
-        "root": {"type": "string", "minLength": 1},
-        "registry": {"type": "string", "minLength": 1}
-      },
-      "additionalProperties": false
-    }
+    "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
   },
   "additionalProperties": false
 }

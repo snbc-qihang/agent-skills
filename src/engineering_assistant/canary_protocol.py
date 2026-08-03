@@ -243,14 +243,14 @@ def audit_canary_protocol(
             "status": "legacy_unverifiable",
             "experiment_id": str(protocol["experiment_id"]),
             "protocol_digest": canonical_digest(protocol),
-            "broker_status": "unavailable",
+            "assurance": "local_unattested",
             "billing_status": "not_collected",
             "promotion_eligible": False,
             "included_structural_runs": 0,
             "included_run_bindings": [],
             "audited_run_bindings": [],
             "limitations": [
-                "external_attestation_not_verified",
+                "local_audit_is_not_independently_verified",
                 "billing_not_collected",
                 "plugin_skill_root_or_content_digest_not_frozen",
             ],
@@ -748,7 +748,7 @@ def audit_canary_protocol(
     else:
         status = "local_structural"
         warnings.append(
-            "local protocol audit does not verify broker attestations or billing provenance"
+            "local protocol audit verifies structure and digests, not independent identity or billing provenance"
         )
     def attempt_binding(record: Mapping[str, Any]) -> dict[str, Any]:
         return {
@@ -793,7 +793,7 @@ def audit_canary_protocol(
         "status": status,
         "experiment_id": experiment_id,
         "protocol_digest": expected_protocol_digest,
-        "broker_status": "unavailable",
+        "assurance": "local_unattested",
         "billing_status": "not_collected",
         "promotion_eligible": False,
         "included_structural_runs": len(included_structural),
@@ -837,7 +837,7 @@ def audit_canary_protocol(
             blind_review_bindings, key=lambda item: item["run_id"]
         ),
         "limitations": [
-            "external_attestation_not_verified",
+            "local_audit_is_not_independently_verified",
             "billing_not_collected",
             "skill_reads_command_confirmed_not_dedicated_host_load_events",
             "delegation_scope_derived_from_locally_transcript_bound_prompt_artifacts",
@@ -1163,8 +1163,8 @@ def _audit_structural_record(
         if component["cached_input_tokens"] > component["input_tokens"]:
             failures.append(f"cached_input_exceeds_input:{run_id}:{label}")
 
-    if record["broker"] != {"status": "unavailable"}:
-        failures.append(f"broker_status_nonlocal:{run_id}")
+    if record["assurance"] != "local_unattested":
+        failures.append(f"assurance_nonlocal:{run_id}")
     if record["billing"].get("status") not in {"not_collected", "collected"}:
         failures.append(f"billing_status_nonlocal:{run_id}")
 

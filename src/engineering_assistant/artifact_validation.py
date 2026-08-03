@@ -13,7 +13,7 @@ from .governance import validate_quality_contract
 
 ARTIFACT_SCHEMAS = {
     "capability-provider-spec": "capability-provider-spec.schema.json",
-    "design-source-snapshot": "design-source-snapshot.schema.json",
+    "design-source-registry": "design-source-registry.schema.json",
     "feedback-capture": "feedback-capture.schema.json",
     "feedback-disposition": "feedback-disposition.schema.json",
     "feedback-evolution-export": "feedback-evolution-export.schema.json",

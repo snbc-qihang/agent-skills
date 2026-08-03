@@ -1,9 +1,0 @@
-{
-  "cases": [
-    {"id": "rrq-yq-requirements", "profile_id": "rrq-yq-team", "request": "为萤启新需求补齐范围和验收标准。", "expected": {"task_kind": "shape", "decision": "proceed", "flow_id": "team-delivery", "required_policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption"]}},
-    {"id": "rrq-yq-design", "profile_id": "rrq-yq-team", "request": "按人人取团队规范输出萤启系统概要设计。", "expected": {"task_kind": "design", "decision": "proceed", "flow_id": "team-delivery", "required_policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption"]}},
-    {"id": "rrq-yq-implementation", "profile_id": "rrq-yq-team", "request": "实现已经评审通过的萤启服务功能。", "expected": {"task_kind": "implement", "decision": "proceed", "flow_id": "team-delivery", "required_policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption"]}},
-    {"id": "rrq-yq-release", "profile_id": "rrq-yq-team", "request": "准备萤启生产发布和回滚方案。", "expected": {"task_kind": "release", "decision": "confirm", "flow_id": "team-delivery", "required_policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption"]}},
-    {"id": "rrq-yq-retrospective", "profile_id": "rrq-yq-team", "request": "复盘研发助手为何未遵守萤启团队规范并提炼候选。", "expected": {"task_kind": "evolve", "decision": "proceed", "flow_id": "team-delivery", "required_policy_refs": ["teamwork-delivery-gates", "teamwork-rule-consumption"]}}
-  ]
-}
