@@ -22,6 +22,7 @@ from engineering_assistant.feedback import (  # noqa: E402
     summarize_feedback_events,
     summarize_usage_efficiency,
 )
+from engineering_assistant.claude_hook import run_claude_hook  # noqa: E402
 from engineering_assistant.model import (  # noqa: E402
     FeedbackDisposition,
     FeedbackEvent,
@@ -862,6 +863,52 @@ class FeedbackHookTests(unittest.TestCase):
             output_stream=invalid_output,
             schema_root=ROOT / "schemas",
             environment={},
+        )
+        self.assertEqual(0, code)
+        self.assertEqual({}, json.loads(invalid_output.getvalue()))
+
+    def test_claude_hook_normalizes_prompt_id_and_fails_open(self) -> None:
+        prompt = {
+            "session_id": "claude-sensitive-session",
+            "prompt_id": "claude-prompt-1",
+            "cwd": str(self.project),
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "使用 engineering-assistant 插件评审当前变更。",
+        }
+        activation_output = io.StringIO()
+        code = run_claude_hook(
+            input_stream=io.StringIO(json.dumps(prompt)),
+            output_stream=activation_output,
+            schema_root=ROOT / "schemas",
+            environment={"ENGINEERING_ASSISTANT_FEEDBACK_MODE": "candidates"},
+        )
+        self.assertEqual(0, code)
+        self.assertIn("hookSpecificOutput", json.loads(activation_output.getvalue()))
+
+        stop = {
+            **prompt,
+            "hook_event_name": "Stop",
+            "last_assistant_message": "当前被测试失败阻断。",
+        }
+        stop.pop("prompt")
+        stop_output = io.StringIO()
+        code = run_claude_hook(
+            input_stream=io.StringIO(json.dumps(stop)),
+            output_stream=stop_output,
+            schema_root=ROOT / "schemas",
+            environment={"ENGINEERING_ASSISTANT_FEEDBACK_MODE": "candidates"},
+        )
+        self.assertEqual(0, code)
+        self.assertEqual({}, json.loads(stop_output.getvalue()))
+        capture = json.loads(self.artifacts("captures")[0].read_text(encoding="utf-8"))
+        self.assertEqual("claude-code", capture["platform"])
+        self.assertNotIn("claude-prompt-1", json.dumps(capture))
+
+        invalid_output = io.StringIO()
+        code = run_claude_hook(
+            input_stream=io.StringIO(json.dumps({"hook_event_name": "Stop"})),
+            output_stream=invalid_output,
+            schema_root=ROOT / "schemas",
         )
         self.assertEqual(0, code)
         self.assertEqual({}, json.loads(invalid_output.getvalue()))

@@ -588,7 +588,11 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_validate.set_defaults(handler=command_artifact_validate)
 
     build = subparsers.add_parser("build")
-    build.add_argument("--platform", choices=sorted(("codex", "hermes")), required=True)
+    build.add_argument(
+        "--platform",
+        choices=sorted(("claude-code", "codex", "hermes")),
+        required=True,
+    )
     build.add_argument("--output", required=True)
     build.add_argument("--replace", action="store_true")
     build.set_defaults(handler=command_build)

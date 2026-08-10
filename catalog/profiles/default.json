@@ -1,6 +1,6 @@
 {
   "id": "default",
-  "version": "2.0.0.0-rc.1",
+  "version": "2.1.0.0-rc.1",
   "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards"],
   "store": {
     "run_root": ".run-artifacts/engineering-assistant",
@@ -19,5 +19,5 @@
     "max_age_seconds": 3600,
     "max_future_skew_seconds": 300
   },
-  "adapter_preferences": ["codex", "hermes"]
+  "adapter_preferences": ["codex", "hermes", "claude-code"]
 }

@@ -255,7 +255,13 @@ def is_plugin_tool(tool_name: str) -> bool:
     if len(parts) != 3 or parts[0] != "mcp":
         return False
     server = parts[1].replace("-", "_")
-    return server == "engineering_assistant" and parts[2] in PLUGIN_TOOL_NAMES
+    return (
+        server in {
+            "engineering_assistant",
+            "plugin_engineering_assistant_engineering_assistant",
+        }
+        and parts[2] in PLUGIN_TOOL_NAMES
+    )
 
 
 def is_observation_exempt_tool(tool_name: str) -> bool:

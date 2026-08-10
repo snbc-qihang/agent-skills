@@ -1,10 +1,10 @@
 # agent-skills
 
-`agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex 和 Hermes 提供可组合、可恢复、可验证的工程协作能力。
+`agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex、Hermes 和 Claude Code 提供可组合、可恢复、可验证的工程协作能力。
 
-- 当前版本：`2.0.0.0-rc.1`
+- 当前版本：`2.1.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
-- 运行平台：Codex、Hermes
+- 运行平台：Codex、Hermes、Claude Code
 - 开发语言：Python 3.9+
 - 默认语言：简体中文，同时保留中英文任务路由能力
 
@@ -31,7 +31,7 @@
 评审当前变更是否同时符合仓库规范和原始需求。
 ```
 
-Codex 可以根据 skill 的名称和描述自动选择能力，也可以通过 `$repo-context`、`$diagnosing-bugs`、`$code-review` 等名称显式调用。Hermes 可以通过自然语言选择 skill，也可以使用限定名：
+Codex 和 Claude Code 可以根据 skill 的名称和描述自动选择能力，也可以显式调用。Hermes 可以通过自然语言选择 skill，也可以使用限定名：
 
 ```bash
 hermes --skills engineering-assistant:repo-context
@@ -51,9 +51,17 @@ python3 scripts/publish_local.py --platform hermes --yes
 
 同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
 
+Claude Code 使用临时构建包，不写入用户配置或插件目录：
+
+```bash
+ea build --platform claude-code --output /tmp/engineering-assistant-claude
+claude plugin validate /tmp/engineering-assistant-claude --strict
+claude --plugin-dir /tmp/engineering-assistant-claude -p "使用 engineering-assistant 对当前仓库执行只读路由。"
+```
+
 ### 当前平台集成边界
 
-当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。Codex 注册 `UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop`；轻量 gate 只在明确使用插件或项目存在活动 run 时加载观察逻辑，无有效信号不写反馈 artifact。
+当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 和 Claude Code 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。Codex 与 Claude Code 注册 `UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop`；轻量 gate 只在明确使用插件或项目存在活动 run 时加载观察逻辑，无有效信号不写反馈 artifact。
 
 | 能力 | 当前行为 |
 | --- | --- |
@@ -74,7 +82,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 - 可验证完成：flow 节点通过 `StepResult`、完成条件和 `EvidenceRef` 判断是否推进。
 - 确定性门禁：高风险动作、审批、证据时效和状态转换由 runtime 执行。
 - 可恢复运行：`RunState` v2 持久化当前节点、revision 和阻断原因；`complete` 先写不可变步骤记录再推进 CAS 状态，中断后可从步骤记录恢复；审批由独立不可变记录计算，可在新对话中发现并继续。
-- 平台无关核心：Codex 与 Hermes 共用相同 catalog、skills、packs、schemas 和 runtime，仅 adapter 不同。
+- 平台无关核心：Codex、Hermes 与 Claude Code 共用相同 catalog、skills、packs、schemas 和 runtime，仅 adapter 不同。
 - 无生成镜像：仓库不保存发布包或大面积派生副本，发布时从作者源临时构建。
 
 ## 仓库结构

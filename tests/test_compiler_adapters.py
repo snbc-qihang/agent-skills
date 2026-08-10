@@ -152,23 +152,29 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertEqual("unrelated", marker.read_text(encoding="utf-8"))
         verify_package(output)
 
-    def test_codex_and_hermes_packages_have_the_same_core(self) -> None:
+    def test_platform_packages_have_the_same_core(self) -> None:
+        claude = self.root / "claude-code"
         codex = self.root / "codex"
         hermes = self.root / "hermes"
+        build_package(ROOT, "claude-code", claude)
         codex_report = build_package(ROOT, "codex", codex)
         build_package(ROOT, "hermes", hermes)
         self.assertEqual(11, codex_report["skill_count"])
+        self.assertTrue((claude / ".claude-plugin/plugin.json").is_file())
         self.assertTrue((codex / ".codex-plugin/plugin.json").is_file())
         self.assertTrue((codex / ".mcp.json").is_file())
         self.assertTrue((codex / "hooks/hooks.json").is_file())
         self.assertTrue((codex / "hooks/feedback_capture.py").is_file())
         self.assertTrue((hermes / "plugin.yaml").is_file())
         self.assertTrue((hermes / "__init__.py").is_file())
+        self.assertEqual(11, len(list((claude / "skills").glob("*/SKILL.md"))))
         self.assertEqual(11, len(list((codex / "skills").glob("*/SKILL.md"))))
         self.assertEqual(11, len(list((hermes / "skills").glob("*/SKILL.md"))))
         self.assertFalse((codex / "engineering-assistant/generator").exists())
+        self.assertFalse(any(path.name == ".DS_Store" for path in claude.rglob("*")))
         self.assertFalse(any(path.name == ".DS_Store" for path in codex.rglob("*")))
         self.assertFalse(any(path.name == ".DS_Store" for path in hermes.rglob("*")))
+        verify_package(claude)
         verify_package(codex)
         verify_package(hermes)
 
@@ -184,6 +190,16 @@ class CompilerAdapterTests(unittest.TestCase):
             mcp_config["mcpServers"]["engineering-assistant"]["command"],
         )
         self.assertEqual(".", mcp_config["mcpServers"]["engineering-assistant"]["cwd"])
+
+        claude_manifest = json.loads(
+            (claude / ".claude-plugin/plugin.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("engineering-assistant", claude_manifest["name"])
+        claude_mcp = json.loads((claude / ".mcp.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea",
+            claude_mcp["mcpServers"]["engineering-assistant"]["command"],
+        )
 
         hermes_manifest = (hermes / "plugin.yaml").read_text(encoding="utf-8")
         self.assertIn("provides_tools:", hermes_manifest)
@@ -204,6 +220,18 @@ class CompilerAdapterTests(unittest.TestCase):
             self.assertIn("${PLUGIN_ROOT}/hooks/feedback_capture.py", command)
         for event_name in ("UserPromptSubmit", "Stop"):
             self.assertNotIn("matcher", hooks["hooks"][event_name][0])
+
+        claude_hooks = json.loads((claude / "hooks/hooks.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(hooks["hooks"]), set(claude_hooks["hooks"]))
+        for event_name in ("PreToolUse", "PostToolUse"):
+            self.assertEqual(
+                "^mcp__plugin_engineering-assistant_engineering-assistant__engineering_assistant_.*$",
+                claude_hooks["hooks"][event_name][0]["matcher"],
+            )
+            self.assertIn(
+                "${CLAUDE_PLUGIN_ROOT}/hooks/feedback_capture.py",
+                claude_hooks["hooks"][event_name][0]["hooks"][0]["command"],
+            )
 
         hook_source = (codex / "hooks/feedback_capture.py").read_text(encoding="utf-8")
         self.assertLess(
@@ -270,6 +298,36 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertFalse(
             (hook_project / ".run-artifacts/engineering-assistant").exists()
         )
+
+        claude_hook = claude / "hooks/feedback_capture.py"
+        claude_payload = {
+            "session_id": "claude-hook-session",
+            "prompt_id": "claude-hook-prompt",
+            "cwd": str(hook_project),
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "解释这个普通 Python 函数。",
+        }
+        claude_run = subprocess.run(
+            [sys.executable, str(claude_hook)],
+            input=json.dumps(claude_payload),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, claude_run.returncode, claude_run.stderr)
+        self.assertEqual({}, json.loads(claude_run.stdout))
+        self.assertFalse(
+            (hook_project / ".run-artifacts/engineering-assistant").exists()
+        )
+        invalid_claude = subprocess.run(
+            [sys.executable, str(claude_hook)],
+            input=json.dumps({"hook_event_name": "Stop"}),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, invalid_claude.returncode, invalid_claude.stderr)
+        self.assertEqual({}, json.loads(invalid_claude.stdout))
         activation_payload = {
             **hook_payload,
             "hook_event_name": "UserPromptSubmit",
@@ -745,7 +803,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.0.0-rc.1+build.0", manifest["version"])
+        self.assertEqual("2.1.0-rc.1+build.0", manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -757,9 +815,9 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.0.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual("2.1.0.0-rc.1", build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"2.0.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({"2.1.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
         for name in (
             "strategic-modeling.md",
             "tactical-modeling.md",

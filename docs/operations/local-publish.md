@@ -72,3 +72,7 @@ hermes --skills engineering-assistant:repo-context
 发布成功结果中的 `backup` 是直接回滚目录。脚本在注册或安装后验证失败时自动恢复；成功后的人工回滚应先停止使用该插件的新任务，再恢复备份目录并重新执行平台的 add/enable 命令。
 
 发布结果只输出到终端，不写入仓库。
+
+## Claude Code 临时加载
+
+Claude Code 当前只提供构建包与按会话验证，不纳入本机发布脚本，也不会修改用户配置。先将包构建到仓库外临时目录，再用 `claude plugin validate <package> --strict` 校验；需要真实验证时，以 `claude --plugin-dir <package> -p` 加载该包。包内 MCP 使用 `${CLAUDE_PLUGIN_ROOT}` 启动 Runtime，Hook 将 Claude 的 `prompt_id` 映射为运行时的 `turn_id`。

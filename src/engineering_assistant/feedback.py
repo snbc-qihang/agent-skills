@@ -618,13 +618,21 @@ class FeedbackCollector:
     def __init__(self, schema_root: Path | str) -> None:
         self.schema_root = Path(schema_root).resolve()
 
-    def collect_codex(self, payload: Mapping[str, object], *, mode: str = "candidates") -> CaptureResult:
+    def collect_lifecycle(
+        self,
+        payload: Mapping[str, object],
+        *,
+        platform: str,
+        mode: str = "candidates",
+    ) -> CaptureResult:
+        if platform not in {"claude-code", "codex"}:
+            raise ValidationFailure(f"unsupported lifecycle platform {platform!r}")
         self._validate_mode(mode)
         if mode == "disabled":
             return CaptureResult(None, None)
         event_name = payload.get("hook_event_name")
         if event_name == "PostToolUse":
-            return self.collect_tool_result(payload, mode=mode, platform="codex")
+            return self.collect_tool_result(payload, mode=mode, platform=platform)
         if event_name not in {"Stop", "UserPromptSubmit"}:
             raise ValidationFailure(f"unsupported feedback hook event {event_name!r}")
         session_id = self._required_string(payload, "session_id")
@@ -642,12 +650,17 @@ class FeedbackCollector:
             turn_id=turn_id,
             event_name=event_name,
             content=content,
-            platform="codex",
+            platform=platform,
             model=str(payload.get("model") or "unknown"),
             permission_mode=str(payload.get("permission_mode") or "unknown"),
             stop_hook_active=bool(payload.get("stop_hook_active", False)),
             mode=mode,
         )
+
+    def collect_codex(
+        self, payload: Mapping[str, object], *, mode: str = "candidates"
+    ) -> CaptureResult:
+        return self.collect_lifecycle(payload, platform="codex", mode=mode)
 
     def collect_usage_efficiency(
         self,
@@ -1446,8 +1459,9 @@ def _opaque_feedback_ref(kind: str, value: str) -> str:
     return f"{kind}-sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def run_codex_hook(
+def run_lifecycle_hook(
     *,
+    platform: str,
     input_stream: TextIO = sys.stdin,
     output_stream: TextIO = sys.stdout,
     schema_root: Path | str = DEFAULT_REPOSITORY_ROOT / "schemas",
@@ -1455,6 +1469,8 @@ def run_codex_hook(
 ) -> int:
     response: dict = {}
     try:
+        if platform not in {"claude-code", "codex"}:
+            raise ValidationFailure(f"unsupported lifecycle platform {platform!r}")
         raw = input_stream.read(MAX_HOOK_INPUT_BYTES + 1)
         if len(raw.encode("utf-8")) > MAX_HOOK_INPUT_BYTES:
             raise ValidationFailure("engineering-assistant hook input is too large")
@@ -1544,7 +1560,10 @@ def run_codex_hook(
             except Exception:
                 pass
         try:
-            collector.collect_codex(payload, mode=mode)
+            if platform == "codex":
+                collector.collect_codex(payload, mode=mode)
+            else:
+                collector.collect_lifecycle(payload, platform=platform, mode=mode)
             feedback_complete = True
         except Exception:
             pass
@@ -1576,6 +1595,22 @@ def run_codex_hook(
     output_stream.write("\n")
     output_stream.flush()
     return 0
+
+
+def run_codex_hook(
+    *,
+    input_stream: TextIO = sys.stdin,
+    output_stream: TextIO = sys.stdout,
+    schema_root: Path | str = DEFAULT_REPOSITORY_ROOT / "schemas",
+    environment: Mapping[str, str] = os.environ,
+) -> int:
+    return run_lifecycle_hook(
+        platform="codex",
+        input_stream=input_stream,
+        output_stream=output_stream,
+        schema_root=schema_root,
+        environment=environment,
+    )
 
 
 def main() -> int:

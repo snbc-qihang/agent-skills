@@ -9,13 +9,17 @@ import re
 import secrets
 from pathlib import Path
 
-from .adapters import CodexAdapter, HermesAdapter
+from .adapters import ClaudeCodeAdapter, CodexAdapter, HermesAdapter
 from .artifact_io import ArtifactIO
 from .catalog import load_catalog
 from .validation import ValidationFailure
 
 
-ADAPTERS = {"codex": CodexAdapter, "hermes": HermesAdapter}
+ADAPTERS = {
+    "claude-code": ClaudeCodeAdapter,
+    "codex": CodexAdapter,
+    "hermes": HermesAdapter,
+}
 BUILD_FORMAT_VERSION = "1.0"
 MAX_BUILD_MANIFEST_BYTES = 1024 * 1024
 MAX_BUILD_PAYLOAD_FILE_BYTES = 32 * 1024 * 1024
@@ -335,6 +339,12 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
             "hooks/feedback_capture.py",
         ),
         "hermes": ("plugin.yaml", "__init__.py"),
+        "claude-code": (
+            ".claude-plugin/plugin.json",
+            ".mcp.json",
+            "hooks/hooks.json",
+            "hooks/feedback_capture.py",
+        ),
     }
     required_files = required_layouts[manifest["platform"]]
     if any(
