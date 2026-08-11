@@ -2,7 +2,7 @@
 
 `agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex、Hermes 和 Claude Code 提供可组合、可恢复、可验证的工程协作能力。
 
-- 当前版本：`2.1.0.0-rc.1`
+- 当前版本：`2.2.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes、Claude Code
 - 开发语言：Python 3.9+
@@ -47,16 +47,22 @@ python3 scripts/publish_local.py --platform codex --yes
 
 python3 scripts/publish_local.py --platform hermes --dry-run
 python3 scripts/publish_local.py --platform hermes --yes
+
+python3 scripts/publish_local.py --platform claude-code --dry-run
+python3 scripts/publish_local.py --platform claude-code --yes
+python3 scripts/publish_local.py --platform claude-code --verify
 ```
 
 同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
 
-Claude Code 使用临时构建包，不写入用户配置或插件目录：
+Claude Code 通过受控本机 marketplace 安装；安装或更新后执行 `/reload-plugins`，或启动新会话：
 
 ```bash
-ea build --platform claude-code --output /tmp/engineering-assistant-claude
-claude plugin validate /tmp/engineering-assistant-claude --strict
-claude --plugin-dir /tmp/engineering-assistant-claude -p "使用 engineering-assistant 对当前仓库执行只读路由。"
+python3 scripts/publish_local.py --platform claude-code --dry-run
+python3 scripts/publish_local.py --platform claude-code --yes
+python3 scripts/publish_local.py --platform claude-code --verify
+# 卸载并注销 marketplace（保留受控市场包，便于重新安装）
+python3 scripts/publish_local.py --platform claude-code --uninstall --yes
 ```
 
 ### 当前平台集成边界
@@ -324,6 +330,7 @@ ea verify-package --package /tmp/engineering-assistant-hermes
 ```bash
 python3 scripts/publish_local.py --platform codex --dry-run
 python3 scripts/publish_local.py --platform hermes --dry-run
+python3 scripts/publish_local.py --platform claude-code --dry-run
 python3 scripts/publish_local.py --platform all --dry-run
 ```
 
@@ -332,6 +339,7 @@ python3 scripts/publish_local.py --platform all --dry-run
 ```bash
 python3 scripts/publish_local.py --platform codex --yes
 python3 scripts/publish_local.py --platform hermes --yes
+python3 scripts/publish_local.py --platform claude-code --yes
 python3 scripts/publish_local.py --platform all --yes
 ```
 
@@ -341,12 +349,14 @@ GitHub CI 不依赖开发者本机 Codex 环境：workflow 从 OpenAI 官方仓�
 
 - Codex：安装到 `~/plugins/engineering-assistant`，维护 personal marketplace 并刷新 Codex 缓存。
 - Hermes：安装到 `~/.hermes/plugins/engineering-assistant`，调用 `hermes plugins enable engineering-assistant`。
+- Claude Code：安装到 `~/.claude/plugins/marketplaces/engineering-assistant-local`，注册 marketplace 并以 user scope 安装 `engineering-assistant@engineering-assistant-local`。
 
 平台 CLI 按“显式环境变量 → `PATH` → macOS App 内置路径”的顺序发现。Codex App 安装在标准目录时，无需额外配置；自定义位置可以显式指定：
 
 ```bash
 CODEX_CLI="/自定义路径/codex" python3 scripts/publish_local.py --platform codex --yes
 HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform hermes --yes
+CLAUDE_CLI="/自定义路径/claude" python3 scripts/publish_local.py --platform claude-code --yes
 ```
 
 详细说明见 [本机发布](docs/operations/local-publish.md)。

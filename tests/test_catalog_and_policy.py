@@ -28,7 +28,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(10, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("2.1.0.0-rc.1", self.catalog.version)
+        self.assertEqual("2.2.0.0-rc.1", self.catalog.version)
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}

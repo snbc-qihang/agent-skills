@@ -1,4 +1,4 @@
-"""安全地构建并安装本机 Codex/Hermes 插件。"""
+"""安全地构建并安装本机 Codex、Hermes 和 Claude Code 插件。"""
 
 from __future__ import annotations
 
@@ -32,6 +32,8 @@ from .validation import ValidationFailure
 PLUGIN_NAME = "engineering-assistant"
 DEFAULT_POLICY = "config/local-publish-policy.json"
 CODEX_CACHE_MARKETPLACE = "personal"
+CLAUDE_MARKETPLACE_NAME = "engineering-assistant-local"
+CLAUDE_MARKETPLACE_PLUGIN_PATH = "plugins/engineering-assistant"
 MAX_CODEX_CACHE_CANDIDATES = 512
 MAX_CODEX_CACHE_ENTRIES = 4096
 MAX_CODEX_CACHE_TOTAL_BYTES = 256 * 1024 * 1024
@@ -252,10 +254,14 @@ def _run_registration(command: list[str], environment: dict[str, str] | None = N
         return {"status": "passed", "output": output}
 
 
-def _target_for(platform: str, codex_home: Path, hermes_home: Path) -> Path:
+def _target_for(platform: str, codex_home: Path, hermes_home: Path, claude_home: Path) -> Path:
     if platform == "codex":
         return codex_home.parent / "plugins" / PLUGIN_NAME
-    return hermes_home / "plugins" / PLUGIN_NAME
+    if platform == "hermes":
+        return hermes_home / "plugins" / PLUGIN_NAME
+    if platform == "claude-code":
+        return claude_home / "plugins" / "marketplaces" / CLAUDE_MARKETPLACE_NAME
+    raise ValidationFailure(f"不支持的平台：{platform}")
 
 
 def _codex_cache_root(codex_home: Path) -> Path:
@@ -618,6 +624,249 @@ def _hooks_changed(previous: Path, candidate: Path) -> bool:
     return not old.is_file() or old.read_bytes() != new.read_bytes()
 
 
+def _claude_plugin_id() -> str:
+    return f"{PLUGIN_NAME}@{CLAUDE_MARKETPLACE_NAME}"
+
+
+def _write_claude_marketplace(marketplace_root: Path) -> Path:
+    manifest = marketplace_root / ".claude-plugin" / "marketplace.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        json.dumps(
+            {
+                "name": CLAUDE_MARKETPLACE_NAME,
+                "owner": {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
+                "description": "本机 engineering-assistant Claude Code 插件市场。",
+                "plugins": [
+                    {
+                        "name": PLUGIN_NAME,
+                        "source": f"./{CLAUDE_MARKETPLACE_PLUGIN_PATH}",
+                        "description": "基于证据的工程原语、受治理流程、状态恢复和人工审批门禁。",
+                        "version": _installed_platform_version(
+                            marketplace_root / CLAUDE_MARKETPLACE_PLUGIN_PATH,
+                            "claude-code",
+                        ),
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def _verify_claude_marketplace(marketplace_root: Path) -> dict:
+    if marketplace_root.is_symlink() or not marketplace_root.is_dir():
+        raise ValidationFailure(f"Claude marketplace 不是安全目录：{marketplace_root}")
+    manifest_path = marketplace_root / ".claude-plugin" / "marketplace.json"
+    try:
+        marketplace = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationFailure(f"Claude marketplace manifest 不可读取：{manifest_path}") from exc
+    if marketplace.get("name") != CLAUDE_MARKETPLACE_NAME:
+        raise ValidationFailure("Claude marketplace 名称不匹配")
+    plugins = marketplace.get("plugins")
+    if not isinstance(plugins, list) or len(plugins) != 1:
+        raise ValidationFailure("Claude marketplace 必须只包含当前插件")
+    plugin = plugins[0]
+    if not isinstance(plugin, dict) or plugin.get("name") != PLUGIN_NAME:
+        raise ValidationFailure("Claude marketplace 插件名称不匹配")
+    if plugin.get("source") != f"./{CLAUDE_MARKETPLACE_PLUGIN_PATH}":
+        raise ValidationFailure("Claude marketplace 插件来源必须是受控相对路径")
+    package_root = marketplace_root / CLAUDE_MARKETPLACE_PLUGIN_PATH
+    package = verify_package(package_root)
+    version = _installed_platform_version(package_root, "claude-code")
+    if plugin.get("version") != version:
+        raise ValidationFailure("Claude marketplace 与插件版本不一致")
+    return {"marketplace": CLAUDE_MARKETPLACE_NAME, "plugin_version": version, **package}
+
+
+def _claude_plugin_entry(payload: object) -> dict | None:
+    pending = [payload]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, list):
+            pending.extend(current)
+        elif isinstance(current, dict):
+            name = current.get("name") or current.get("plugin_name")
+            identifier = current.get("id") or current.get("plugin_id")
+            marketplace = current.get("marketplace") or current.get("marketplace_name")
+            if identifier == _claude_plugin_id() or (
+                name == PLUGIN_NAME and marketplace == CLAUDE_MARKETPLACE_NAME
+            ):
+                return current
+            pending.extend(current.values())
+    return None
+
+
+def _claude_list(register: Callable[..., dict]) -> object:
+    return register(["claude", "plugin", "list", "--json"])
+
+
+def _verify_selected_claude_version(entry: dict, expected_version: str) -> None:
+    selected = entry.get("version") or entry.get("plugin_version")
+    if selected is not None and selected != expected_version:
+        raise ValidationFailure(
+            f"Claude Code 选择版本不一致：expected={expected_version}, actual={selected}"
+        )
+
+
+def _validate_claude_marketplace(register: Callable[..., dict], marketplace_root: Path) -> dict:
+    return register(["claude", "plugin", "validate", str(marketplace_root), "--strict"])
+
+
+def _publish_claude_code(
+    repository_root: Path,
+    *,
+    codex_home: Path,
+    hermes_home: Path,
+    claude_home: Path,
+    dry_run: bool,
+    register: Callable[..., dict],
+) -> dict:
+    target = _target_for("claude-code", codex_home, hermes_home, claude_home)
+    _ensure_outside_repository(repository_root, target)
+    stamp = _stamp()
+    if dry_run:
+        staging = Path(tempfile.mkdtemp(prefix=f"{PLUGIN_NAME}-claude-code-dry-run-"))
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-claude-code-stage-", dir=target.parent))
+    staging.rmdir()
+    try:
+        package_root = staging / CLAUDE_MARKETPLACE_PLUGIN_PATH
+        package_root.parent.mkdir(parents=True)
+        build = build_package(repository_root, "claude-code", package_root)
+        _write_claude_marketplace(staging)
+        verified = _verify_claude_marketplace(staging)
+        validation = _validate_claude_marketplace(register, staging)
+        if dry_run:
+            return {
+                "status": "dry_run_passed",
+                "platform": "claude-code",
+                "canonical_version": build["canonical_version"],
+                "plugin_version": verified["plugin_version"],
+                "payload_digest": verified["payload_digest"],
+                "skill_count": verified["skill_count"],
+                "marketplace_validation": validation,
+                "restart_required": True,
+                "hooks_review_required": True,
+            }
+
+        listed_before = _claude_list(register)
+        was_installed = _claude_plugin_entry(listed_before) is not None
+        backup = _swap_in(staging, target, stamp)
+        registration_attempted = False
+        try:
+            registration_attempted = True
+            registration = register(
+                ["claude", "plugin", "marketplace", "add", str(target), "--scope", "user"]
+            )
+            command = ["claude", "plugin", "update" if was_installed else "install", _claude_plugin_id()]
+            if not was_installed:
+                command.extend(["--scope", "user"])
+            installation = register(command)
+            selected = _claude_plugin_entry(_claude_list(register))
+            if selected is None:
+                raise ValidationFailure("Claude Code 安装后 plugin list 未返回本次插件")
+            installed = _verify_claude_marketplace(target)
+            _verify_selected_claude_version(selected, installed["plugin_version"])
+        except Exception as original_error:
+            _roll_back(target, backup, stamp)
+            compensation_errors = []
+            if registration_attempted:
+                try:
+                    if backup is None:
+                        register(["claude", "plugin", "marketplace", "remove", CLAUDE_MARKETPLACE_NAME])
+                    else:
+                        register(
+                            ["claude", "plugin", "marketplace", "add", str(target), "--scope", "user"]
+                        )
+                    if was_installed:
+                        register(["claude", "plugin", "update", _claude_plugin_id()])
+                    else:
+                        register(["claude", "plugin", "uninstall", _claude_plugin_id()])
+                except Exception as exc:
+                    compensation_errors.append(str(exc))
+            if compensation_errors:
+                raise ValidationFailure(
+                    f"Claude Code 发布失败且补偿未完成：publish={original_error}; compensation={'; '.join(compensation_errors)}"
+                ) from original_error
+            raise
+        return {
+            "status": "published",
+            "platform": "claude-code",
+            "canonical_version": installed["canonical_version"],
+            "plugin_version": installed["plugin_version"],
+            "target": str(target),
+            "backup": str(backup) if backup is not None else None,
+            "payload_digest": installed["payload_digest"],
+            "skill_count": installed["skill_count"],
+            "marketplace_validation": validation,
+            "registration": registration,
+            "installation": installation,
+            "selected_version_verified": True,
+            "restart_required": True,
+            "hooks_review_required": True,
+        }
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
+def verify_claude_installation(
+    repository_root: Path,
+    *,
+    codex_home: Path,
+    hermes_home: Path,
+    claude_home: Path,
+    register: Callable[..., dict] = _run_registration,
+) -> dict:
+    target = _target_for("claude-code", codex_home, hermes_home, claude_home)
+    _ensure_outside_repository(repository_root, target)
+    marketplace = _verify_claude_marketplace(target)
+    validation = _validate_claude_marketplace(register, target)
+    selected = _claude_plugin_entry(_claude_list(register))
+    if selected is None:
+        raise ValidationFailure("Claude Code 未安装 engineering-assistant 本机插件")
+    _verify_selected_claude_version(selected, marketplace["plugin_version"])
+    return {
+        "status": "verified",
+        "platform": "claude-code",
+        "target": str(target),
+        "plugin_version": marketplace["plugin_version"],
+        "payload_digest": marketplace["payload_digest"],
+        "marketplace_validation": validation,
+        "selected_version_verified": True,
+    }
+
+
+def uninstall_claude_installation(
+    repository_root: Path,
+    *,
+    codex_home: Path,
+    hermes_home: Path,
+    claude_home: Path,
+    register: Callable[..., dict] = _run_registration,
+) -> dict:
+    target = _target_for("claude-code", codex_home, hermes_home, claude_home)
+    _ensure_outside_repository(repository_root, target)
+    removal = register(["claude", "plugin", "uninstall", _claude_plugin_id()])
+    marketplace_removal = register(["claude", "plugin", "marketplace", "remove", CLAUDE_MARKETPLACE_NAME])
+    if _claude_plugin_entry(_claude_list(register)) is not None:
+        raise ValidationFailure("Claude Code 卸载后 plugin list 仍返回本次插件")
+    return {
+        "status": "uninstalled",
+        "platform": "claude-code",
+        "marketplace_root_retained": str(target),
+        "uninstall": removal,
+        "marketplace_remove": marketplace_removal,
+    }
+
+
 def _publish_one(
     repository_root: Path,
     platform: str,
@@ -625,10 +874,21 @@ def _publish_one(
     codex_home: Path,
     hermes_home: Path,
     dry_run: bool,
+    claude_home: Path | None = None,
     register: Callable[..., dict] = _run_registration,
     official_validate: Callable[..., dict] = validate_with_official_tools,
 ) -> dict:
-    target = _target_for(platform, codex_home, hermes_home)
+    claude_home = Path.home() / ".claude" if claude_home is None else claude_home
+    if platform == "claude-code":
+        return _publish_claude_code(
+            repository_root,
+            codex_home=codex_home,
+            hermes_home=hermes_home,
+            claude_home=claude_home,
+            dry_run=dry_run,
+            register=register,
+        )
+    target = _target_for(platform, codex_home, hermes_home, claude_home)
     _ensure_outside_repository(repository_root, target)
     stamp = _stamp()
     cachebuster = _cachebuster() if platform == "codex" else None
@@ -804,6 +1064,9 @@ def _installed_platform_version(target: Path, platform: str) -> str:
     if platform == "codex":
         manifest = json.loads((target / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         return str(manifest["version"])
+    if platform == "claude-code":
+        manifest = json.loads((target / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+        return str(manifest["version"])
     for line in (target / "plugin.yaml").read_text(encoding="utf-8").splitlines():
         if line.startswith("version:"):
             return line.partition(":")[2].strip().strip('"')
@@ -818,6 +1081,7 @@ def publish_local(
     codex_home: Path,
     hermes_home: Path,
     dry_run: bool,
+    claude_home: Path | None = None,
 ) -> dict:
     if not dry_run:
         if policy_path is None:
@@ -838,6 +1102,7 @@ def publish_local(
             platform,
             codex_home=codex_home,
             hermes_home=hermes_home,
+            claude_home=claude_home,
             dry_run=dry_run,
         )
         for platform in platforms
@@ -846,19 +1111,22 @@ def publish_local(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="将 engineering-assistant 安全发布到本机 Codex 或 Hermes。")
-    parser.add_argument("--platform", choices=["codex", "hermes", "all"], default="codex")
+    parser = argparse.ArgumentParser(description="将 engineering-assistant 安全发布到本机 Codex、Hermes 或 Claude Code。")
+    parser.add_argument("--platform", choices=["codex", "hermes", "claude-code", "all"], default="codex")
     parser.add_argument("--repository-root", default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument("--policy", default=DEFAULT_POLICY)
     parser.add_argument("--codex-home", default=str(Path.home() / ".codex"))
     parser.add_argument("--hermes-home", default=str(Path.home() / ".hermes"))
+    parser.add_argument("--claude-home", default=str(Path.home() / ".claude"))
     parser.add_argument(
         "--repair-cache-version",
         help="从当前发布包或发布备份恢复仍被活跃 Codex 任务引用的插件 cache 版本。",
     )
-    mode = parser.add_mutually_exclusive_group(required=True)
+    mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="只验证和构建，不写入本机插件目录。")
-    mode.add_argument("--yes", action="store_true", help="确认执行本机发布、备份和平台注册。")
+    mode.add_argument("--verify", action="store_true", help="只读校验 Claude Code marketplace、安装状态和版本。")
+    mode.add_argument("--uninstall", action="store_true", help="卸载 Claude Code 插件并注销本机 marketplace；仍须同时提供 --yes。")
+    parser.add_argument("--yes", action="store_true", help="确认执行本机发布、备份、注册或卸载。")
     return parser
 
 
@@ -870,12 +1138,22 @@ def main(argv: list[str] | None = None) -> int:
     if not policy.is_absolute():
         policy = repository_root / policy
     try:
+        if not any((args.dry_run, args.verify, args.uninstall, args.yes)):
+            raise ValidationFailure("必须提供 --dry-run、--verify、--yes 或 --uninstall --yes")
+        if args.yes and (args.dry_run or args.verify):
+            raise ValidationFailure("--yes 不能与 --dry-run 或 --verify 同用")
+        if args.verify and platforms != ["claude-code"]:
+            raise ValidationFailure("--verify 目前仅支持 --platform claude-code")
+        if args.uninstall and (not args.yes or platforms != ["claude-code"]):
+            raise ValidationFailure("卸载必须使用 --platform claude-code --uninstall --yes")
+        if args.uninstall and args.dry_run:
+            raise ValidationFailure("--uninstall 不能与 --dry-run 同用")
         if args.repair_cache_version:
             if not args.yes or platforms != ["codex"]:
                 raise ValidationFailure("修复 Codex cache 必须使用 --platform codex --yes")
             codex_home = Path(args.codex_home).expanduser().resolve()
             _load_policy(policy, ["codex"])
-            target = _target_for("codex", codex_home, Path(args.hermes_home).expanduser().resolve())
+            target = _target_for("codex", codex_home, Path(args.hermes_home).expanduser().resolve(), Path(args.claude_home).expanduser().resolve())
             repaired = _repair_codex_cache_version(codex_home, target, args.repair_cache_version)
             print(
                 json.dumps(
@@ -890,12 +1168,25 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
+        homes = {
+            "codex_home": Path(args.codex_home).expanduser().resolve(),
+            "hermes_home": Path(args.hermes_home).expanduser().resolve(),
+            "claude_home": Path(args.claude_home).expanduser().resolve(),
+        }
+        if args.verify:
+            result = verify_claude_installation(repository_root, **homes)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.uninstall:
+            _load_policy(policy, ["claude-code"])
+            result = uninstall_claude_installation(repository_root, **homes)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         result = publish_local(
             repository_root,
             platforms,
             policy_path=policy,
-            codex_home=Path(args.codex_home).expanduser().resolve(),
-            hermes_home=Path(args.hermes_home).expanduser().resolve(),
+            **homes,
             dry_run=args.dry_run,
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))

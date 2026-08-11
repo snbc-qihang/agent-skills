@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0.0-rc.1",
+  "version": "2.2.0.0-rc.1",
   "review_scope": [
     "anthropic-skills",
     "obra-superpowers",
@@ -11,7 +11,7 @@
   "sources": [
     {
       "id": "anthropic-skills",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/anthropics/skills",
       "revision": "9d2f1ae187231d8199c64b5b762e1bdf2244733d",
       "license": "mixed: referenced skill assets Apache-2.0; source-available document assets excluded",
@@ -32,7 +32,7 @@
     },
     {
       "id": "obra-superpowers",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/obra/superpowers",
       "revision": "d884ae04edebef577e82ff7c4e143debd0bbec99",
       "license": "MIT",
@@ -53,7 +53,7 @@
     },
     {
       "id": "addyosmani-agent-skills",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/addyosmani/agent-skills",
       "revision": "98967c45a42b88d6b8fb3a88b7ff6273920763d6",
       "license": "MIT",
@@ -74,7 +74,7 @@
     },
     {
       "id": "taste-skill",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/Leonxlnx/taste-skill",
       "revision": "b17742737e796305d829b3ad39eda3add0d79060",
       "license": "MIT",
@@ -94,7 +94,7 @@
     },
     {
       "id": "ui-ux-pro-max-skill",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
       "revision": "3da52ff1cab1be91848072ec1be5f493d730fd5f",
       "license": "MIT",
@@ -113,7 +113,7 @@
     },
     {
       "id": "ux-ui-agent-skills",
-      "version": "2.1.0.0-rc.1",
+      "version": "2.2.0.0-rc.1",
       "repository_url": "https://github.com/plugin87/ux-ui-agent-skills",
       "revision": "93a7fbbdb3f19016fc2ea01eeec48a3895045be1",
       "license": "MIT declared in package.json and README; standalone LICENSE file absent at reviewed revision",

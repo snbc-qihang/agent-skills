@@ -26,6 +26,8 @@ from engineering_assistant.local_publish import (  # noqa: E402
     _snapshot_codex_caches,
     _swap_in,
     _update_personal_marketplace,
+    uninstall_claude_installation,
+    verify_claude_installation,
 )
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
@@ -43,7 +45,7 @@ class LocalPublishTests(unittest.TestCase):
 
     def test_repository_preflight_requires_source_and_official_validation(self) -> None:
         evaluation = {
-            "version": "2.1.0.0-rc.1",
+            "version": "2.2.0.0-rc.1",
             "simulation": False,
             "canary": {
                 "status": "not_run",
@@ -117,7 +119,7 @@ class LocalPublishTests(unittest.TestCase):
             build_package(ROOT, "codex", output, codex_cachebuster="local-test-1")
             verify_package(output)
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-            self.assertEqual("2.1.0-rc.1+codex.local-test-1", manifest["version"])
+            self.assertEqual("2.2.0-rc.1+codex.local-test-1", manifest["version"])
 
     def test_codex_registration_uses_the_selected_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -369,7 +371,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-corrupted-active"
+            old_version = "2.2.0-rc.1+codex.local-corrupted-active"
             build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
             old_cache = (
                 codex_home
@@ -423,7 +425,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-active-thread"
+            version = "2.2.0-rc.1+codex.local-active-thread"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
@@ -443,7 +445,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-previous-contract"
+            version = "2.2.0-rc.1+codex.local-previous-contract"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(
@@ -472,7 +474,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-unsafe-snapshot"
+            version = "2.2.0-rc.1+codex.local-unsafe-snapshot"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
@@ -490,7 +492,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.1.0-rc.1+codex.local-unsafe-manifest"
+            version = "2.2.0-rc.1+codex.local-unsafe-manifest"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
@@ -512,7 +514,7 @@ class LocalPublishTests(unittest.TestCase):
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
             backup = target.parent / ".engineering-assistant.backup-test"
-            version = "2.1.0-rc.1+codex.local-repair"
+            version = "2.2.0-rc.1+codex.local-repair"
             build_package(ROOT, "codex", backup, codex_cachebuster="local-repair")
             runtime_cache = backup / "engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
@@ -533,7 +535,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-old-thread"
+            old_version = "2.2.0-rc.1+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -584,7 +586,7 @@ class LocalPublishTests(unittest.TestCase):
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
-                version = f"2.1.0-rc.1+codex.{cachebuster}"
+                version = f"2.2.0-rc.1+codex.{cachebuster}"
                 cache = cache_root / version
                 build_package(ROOT, "codex", cache, codex_cachebuster=cachebuster)
                 os.utime(cache, ns=(index + 1, index + 1))
@@ -609,7 +611,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-partial-registration"
+            old_version = "2.2.0-rc.1+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -663,7 +665,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.1.0-rc.1+codex.local-old-registration"
+            old_version = "2.2.0-rc.1+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -723,11 +725,11 @@ class LocalPublishTests(unittest.TestCase):
             self.assertEqual(old_version, json.loads((target / ".codex-plugin/plugin.json").read_text())["version"])
             self.assertTrue((old_cache / "hooks/feedback_capture.py").is_file())
 
-    def test_local_publish_policy_allows_both_platforms_without_history(self) -> None:
+    def test_local_publish_policy_allows_supported_platforms_without_history(self) -> None:
         policy = ROOT / "config/local-publish-policy.json"
-        loaded = _load_policy(policy, ["codex", "hermes"])
+        loaded = _load_policy(policy, ["codex", "hermes", "claude-code"])
         self.assertTrue(loaded["enabled"])
-        self.assertEqual("2.1.0.0-rc.1", loaded["canonical_version"])
+        self.assertEqual("2.2.0.0-rc.1", loaded["canonical_version"])
         self.assertNotIn("reviewer", loaded)
         self.assertNotIn("execution_result", loaded)
 
@@ -768,6 +770,94 @@ class LocalPublishTests(unittest.TestCase):
                     self.assertIsNone(report["official_validation"])
             self.assertFalse((home / "plugins").exists())
             self.assertFalse((home / ".hermes").exists())
+
+    def test_claude_code_marketplace_install_verify_and_uninstall(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            homes = {
+                "codex_home": root / ".codex",
+                "hermes_home": root / ".hermes",
+                "claude_home": root / ".claude",
+            }
+            installed = False
+            commands: list[list[str]] = []
+
+            def register(command: list[str], _environment=None) -> dict:
+                nonlocal installed
+                commands.append(command)
+                if command[1:3] == ["plugin", "list"]:
+                    return ([{"id": "engineering-assistant@engineering-assistant-local"}] if installed else [])
+                if command[1:3] == ["plugin", "install"] or command[1:3] == ["plugin", "update"]:
+                    installed = True
+                if command[1:3] == ["plugin", "uninstall"]:
+                    installed = False
+                return {"status": "passed"}
+
+            report = _publish_one(
+                ROOT,
+                "claude-code",
+                dry_run=False,
+                register=register,
+                official_validate=self.official_validation,
+                **homes,
+            )
+            target = homes["claude_home"] / "plugins/marketplaces/engineering-assistant-local"
+            marketplace = json.loads((target / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+            self.assertEqual("published", report["status"])
+            self.assertEqual("./plugins/engineering-assistant", marketplace["plugins"][0]["source"])
+            self.assertTrue((target / "plugins/engineering-assistant/.mcp.json").is_file())
+            self.assertIn(
+                ["claude", "plugin", "marketplace", "add", str(target), "--scope", "user"],
+                commands,
+            )
+            self.assertIn(
+                ["claude", "plugin", "install", "engineering-assistant@engineering-assistant-local", "--scope", "user"],
+                commands,
+            )
+
+            commands.clear()
+            updated = _publish_one(
+                ROOT,
+                "claude-code",
+                dry_run=False,
+                register=register,
+                official_validate=self.official_validation,
+                **homes,
+            )
+            self.assertEqual("published", updated["status"])
+            self.assertIn(
+                ["claude", "plugin", "update", "engineering-assistant@engineering-assistant-local"],
+                commands,
+            )
+
+            verified = verify_claude_installation(ROOT, register=register, **homes)
+            self.assertEqual("verified", verified["status"])
+            removed = uninstall_claude_installation(ROOT, register=register, **homes)
+            self.assertEqual("uninstalled", removed["status"])
+            self.assertTrue(target.is_dir())
+
+    def test_claude_code_dry_run_uses_strict_marketplace_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            commands: list[list[str]] = []
+
+            def register(command: list[str], _environment=None) -> dict:
+                commands.append(command)
+                return {"status": "passed"}
+
+            report = _publish_one(
+                ROOT,
+                "claude-code",
+                codex_home=home / ".codex",
+                hermes_home=home / ".hermes",
+                claude_home=home / ".claude",
+                dry_run=True,
+                register=register,
+            )
+            self.assertEqual("dry_run_passed", report["status"])
+            self.assertEqual(["claude", "plugin", "validate"], commands[0][:3])
+            self.assertEqual("--strict", commands[0][-1])
+            self.assertFalse((home / ".claude").exists())
 
     def test_official_validator_cannot_mutate_final_staging_after_verification(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

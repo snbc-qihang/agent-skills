@@ -175,7 +175,7 @@ class RepositoryGovernanceTests(unittest.TestCase):
     def test_local_publish_policy_is_current_configuration_not_history(self) -> None:
         policy = json.loads((ROOT / "config/local-publish-policy.json").read_text(encoding="utf-8"))
         self.assertTrue(policy["enabled"])
-        self.assertEqual(["codex", "hermes"], policy["platforms"])
+        self.assertEqual(["codex", "hermes", "claude-code"], policy["platforms"])
         self.assertTrue(policy["requires_explicit_yes"])
         self.assertFalse(policy["stable_release_allowed"])
         self.assertFalse(policy["product_repository_changes_allowed"])

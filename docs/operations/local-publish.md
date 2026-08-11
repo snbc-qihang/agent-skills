@@ -3,7 +3,7 @@
 统一入口：
 
 ```bash
-python3 scripts/publish_local.py --platform <codex|hermes|all> <--dry-run|--yes>
+python3 scripts/publish_local.py --platform <codex|hermes|claude-code|all> <--dry-run|--yes>
 ```
 
 ## 无副作用预演
@@ -21,6 +21,7 @@ GitHub CI 在临时 Runner 中从 OpenAI 官方仓库的固定提交准备 valid
 ```bash
 python3 scripts/publish_local.py --platform codex --yes
 python3 scripts/publish_local.py --platform hermes --yes
+python3 scripts/publish_local.py --platform claude-code --yes
 python3 scripts/publish_local.py --platform all --yes
 ```
 
@@ -30,7 +31,7 @@ python3 scripts/publish_local.py --platform all --yes
 
 发布脚本按以下顺序查找平台注册命令：
 
-1. `CODEX_CLI` 或 `HERMES_CLI` 指定的可执行文件。
+1. `CODEX_CLI`、`HERMES_CLI` 或 `CLAUDE_CLI` 指定的可执行文件。
 2. 当前终端的 `PATH`。
 3. macOS 标准应用目录中的 Codex App 内置 CLI，包括 `ChatGPT.app` 和 `Codex.app`。
 
@@ -39,6 +40,7 @@ python3 scripts/publish_local.py --platform all --yes
 ```bash
 CODEX_CLI="/自定义路径/codex" python3 scripts/publish_local.py --platform codex --yes
 HERMES_CLI="/自定义路径/hermes" python3 scripts/publish_local.py --platform hermes --yes
+CLAUDE_CLI="/自定义路径/claude" python3 scripts/publish_local.py --platform claude-code --yes
 ```
 
 ### Codex
@@ -73,6 +75,22 @@ hermes --skills engineering-assistant:repo-context
 
 发布结果只输出到终端，不写入仓库。
 
-## Claude Code 临时加载
+## Claude Code marketplace
 
-Claude Code 当前只提供构建包与按会话验证，不纳入本机发布脚本，也不会修改用户配置。先将包构建到仓库外临时目录，再用 `claude plugin validate <package> --strict` 校验；需要真实验证时，以 `claude --plugin-dir <package> -p` 加载该包。包内 MCP 使用 `${CLAUDE_PLUGIN_ROOT}` 启动 Runtime，Hook 将 Claude 的 `prompt_id` 映射为运行时的 `turn_id`。
+Claude Code 发布会在 `~/.claude/plugins/marketplaces/engineering-assistant-local` 生成受控本地 marketplace，随后执行 `claude plugin marketplace add` 和 `claude plugin install`（已安装时改为 `update`）。市场包通过 `claude plugin validate <marketplace> --strict`，并以 `claude plugin list --json` 确认已选中插件。包内 MCP 使用 `${CLAUDE_PLUGIN_ROOT}` 启动 Runtime，Hook 将 Claude 的 `prompt_id` 映射为运行时的 `turn_id`。
+
+```bash
+# 仅构建并严格校验，不修改 ~/.claude 或 Claude 配置
+python3 scripts/publish_local.py --platform claude-code --dry-run
+
+# 注册 marketplace 并安装到当前用户 scope
+python3 scripts/publish_local.py --platform claude-code --yes
+
+# 只读确认 marketplace、严格校验和已安装状态
+python3 scripts/publish_local.py --platform claude-code --verify
+
+# 显式卸载插件并注销 marketplace；本地 marketplace 包保留，便于重新安装
+python3 scripts/publish_local.py --platform claude-code --uninstall --yes
+```
+
+安装或更新后在 Claude Code 中执行 `/reload-plugins`，或启动一个新会话。`--claude-home` 仅用于指定受控 marketplace 包目录；Claude CLI 的用户 scope 仍由当前 Claude CLI 配置决定。
