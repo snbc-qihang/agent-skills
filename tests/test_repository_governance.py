@@ -37,6 +37,8 @@ class RepositoryGovernanceTests(unittest.TestCase):
         )
         context = (ROOT / "skills/repo-context/SKILL.md").read_text(encoding="utf-8")
         review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("references/evidence-and-stage-audit.md", review)
+        review += (ROOT / "skills/code-review/references/evidence-and-stage-audit.md").read_text(encoding="utf-8")
         self.assertIn("engineering_assistant_route", router)
         self.assertIn("阶段状态审计", router)
         self.assertIn("插件自动采集", context)
@@ -62,6 +64,8 @@ class RepositoryGovernanceTests(unittest.TestCase):
         )
         context = (ROOT / "skills/repo-context/SKILL.md").read_text(encoding="utf-8")
         review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("references/evidence-and-stage-audit.md", review)
+        review += (ROOT / "skills/code-review/references/evidence-and-stage-audit.md").read_text(encoding="utf-8")
 
         self.assertIn("该选择即为本轮平台能力选择结果", router)
         self.assertIn("不得为了确认 skill 再次调用 `engineering_assistant_route`", router)
@@ -92,13 +96,15 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("evidence-register", router)
         self.assertIn("Runtime 返回的 capability、skill、目标、完成标准", router)
         self.assertIn("否则只内联报告六维判断", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
-        self.assertIn("否则只内联合并六维判断", review)
+        self.assertIn("内联评审记录判断及不适用理由", review)
         self.assertIn("精确区间", context)
         self.assertIn("不得输出大目录清单", context)
         self.assertIn("证据充分后立即停止", review)
 
     def test_review_separates_blocker_confidence_from_human_review_state(self) -> None:
         review = (ROOT / "skills/code-review/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("references/evidence-and-stage-audit.md", review)
+        review += (ROOT / "skills/code-review/references/evidence-and-stage-audit.md").read_text(encoding="utf-8")
 
         self.assertIn("决定性证据仍包含“可能”", review)
         self.assertIn("不得定级为已证实 blocker", review)

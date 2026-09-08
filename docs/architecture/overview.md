@@ -20,6 +20,9 @@ flowchart LR
     C --> B["compiler"]
     B --> X["Codex adapter"]
     B --> H["Hermes adapter"]
+    B --> L["Claude Code adapter"]
+    L --> Q
+    L --> F
     X --> Q
     H --> T
     X --> F
@@ -36,7 +39,7 @@ flowchart LR
 - `feedback.py` 提供跨平台的脱敏、信号分类、精确去重和反馈持久化。
 - `governance.py` 提供证据绑定的六维质量门禁和带人工选择审计的调研队列。
 - `provider_runtime.py` 把固定第三方 bundle 复制为拒绝 pyc、symlink 和特殊文件的私有快照，对快照验摘要后在最小权限沙箱执行 UI/UX 建议；输出只作为不可信建议，任何失败都返回明确的原生 Provider 执行指令。
-- `compiler.py` 从同一作者源构建 Codex/Hermes 包。
+- `compiler.py` 从同一作者源构建 Codex/Hermes/Claude Code 包。
 - `local_publish.py` 负责本机预发布、回滚和平台注册。
 
 ## 依赖方向
@@ -61,7 +64,9 @@ flowchart LR
 
 Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`、skills 和 `engineering-assistant/` 运行目录，`.mcp.json` 启动包内 `ea mcp-serve`；Hook manifest 注册 `UserPromptSubmit`、本插件 MCP 的 `PreToolUse`/`PostToolUse` 和 `Stop`。轻量 gate 仅在明确插件请求或活动 run 时加载 Runtime，失败始终 fail-open。Hermes 包通过 `post_llm_call` 和插件工具包装复用同一反馈采集语义，并明确平台覆盖差异。
 
-两个平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
+各平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
+
+Claude Code 包由独立 adapter 生成 plugin manifest、MCP 与 hook 配置，核心语义复用同一 Runtime。Hermes 按安装根目录隔离 Python 模块，个人工具名保持 engineering_assistant_*。
 
 模型工具暴露路由、运行发现/恢复、证据登记、审批记录、节点完成、质量快照与调研生命周期。`start` 服务端重新路由并直接返回首节点与 guidance；`complete` 保存不可变节点结果后返回下一节点；`next` 只用于恢复。项目内文件证据限制在 `project_root` 并由 Runtime 计算摘要，外部 URI 固定为 `agent_reported`。审批和调研决定是本地对话记录，不进行身份验签。Canary 只输出 `assurance=local_unattested`；真实收益晋级要求人工 reviewer record。
 
