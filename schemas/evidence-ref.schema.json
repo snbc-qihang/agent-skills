@@ -11,7 +11,7 @@
     "provenance": {"enum": ["runtime_observed", "agent_reported", "user_confirmed"]},
     "scope": {"type": "string", "minLength": 1},
     "scope_tags": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "contract_refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^(requirement|stop-condition):sha256:[0-9a-f]{64}$"}},
+    "contract_refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^((requirement|stop-condition):sha256:[0-9a-f]{64}|rule:[A-Za-z0-9][A-Za-z0-9_.-]*)$"}},
     "subject_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
     "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
   },

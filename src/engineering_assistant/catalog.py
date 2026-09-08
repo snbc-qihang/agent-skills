@@ -156,6 +156,14 @@ class Catalog:
         ]
         return max(candidates, key=lambda item: item.priority) if candidates else None
 
+    def rules_for_capability(self, profile_id: str, capability_id: str) -> tuple[TeamRule, ...]:
+        profile = self.profiles[profile_id]
+        if not profile.rule_catalog_ref:
+            return ()
+        rules = self.rule_catalogs[profile.rule_catalog_ref].rules.values()
+        return tuple(rule for rule in rules if capability_id in rule.capability_refs
+                     and set(rule.target_refs).intersection(profile.pack_refs))
+
 
 def _unique_by_id(items: Iterable[Mapping[str, Any]], label: str) -> Dict[str, Mapping[str, Any]]:
     result: Dict[str, Mapping[str, Any]] = {}

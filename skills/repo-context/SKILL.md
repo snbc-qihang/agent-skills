@@ -9,9 +9,9 @@ description: 基于源码证据梳理仓库模块、接口、数据、依赖、�
 
 ## 操作流程
 
-1. 确认仓库、分支或固定比较点、任务边界和用户明确给出的范围限制；设计或研发任务还必须确认 `requirement_id` 以及显式 `design_source.root` 和 `design_source.registry`，插件自动采集的文件数、查询数或工具数参考值不是硬约束，不得用来中止任务。
+1. 确认仓库、分支或固定比较点、任务边界和用户明确给出的范围限制；正式团队需求设计或当前节点要求设计基线时还必须确认 `requirement_id` 以及显式 `design_source.root` 和 `design_source.registry`，插件自动采集的文件数、查询数或工具数参考值不是硬约束，不得用来中止任务。
 2. 仓库提供代码图或等价索引时，先用一次聚焦查询定位入口、状态、依赖和外部系统；不要再用全仓库 grep 重复发现同一区域。
-3. 设计源已提供时，调用只读 `design_source_resolve` 固定本需求的文档编号、版本、状态和摘要；只读取注册表内文档、外部模板、架构影响规则及维护规范，不把评审稿写回外部源。详细合同见 [references/deterministic-design-input.md](references/deterministic-design-input.md)。
+3. 设计源已提供时，调用 `engineering_assistant_design_source_intake` 将已声明输入复制到目标项目的运行目录并固定摘要（外部源保持只读）；只读取注册表内文档、外部模板、架构影响规则及维护规范，不把评审稿写回外部源。详细合同见 [references/deterministic-design-input.md](references/deterministic-design-input.md)。
 4. 记录可复用能力、团队规则和禁止改动边界。
 5. 区分外部设计事实、代码事实、需求事实和仍需确认的跨仓库契约。
 6. 输出包含路径、符号、命令、受影响上下文、系统级架构影响和未知项的影响地图。

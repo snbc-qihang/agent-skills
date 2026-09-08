@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+import hashlib
 from typing import Any, Mapping
 from uuid import uuid4
 
@@ -23,6 +25,13 @@ from .validation import ValidationFailure, load_json, validate_instance
 
 
 TERMINAL_STATUSES = {"blocked", "cancelled", "completed"}
+TEAM_STAGE_ENDS = {
+    "shape": "requirements-contract",
+    "design": "design-approval",
+    "implement": "code-confirmation",
+    "release": "release-verification",
+    "evolve": "tl-disposition",
+}
 
 
 def criterion_ids(node: FlowNode) -> list[str]:
@@ -71,6 +80,10 @@ class RuntimeEngine:
             else "initialized"
         )
         resolved_context_refs = list(dict.fromkeys(context_refs or []))
+        if any(ref.startswith("delivery-stage:") for ref in resolved_context_refs):
+            raise ValidationFailure("delivery stage is derived from the routed intent")
+        if decision.flow_id == "team-delivery":
+            resolved_context_refs.append(f"delivery-stage:{intent.task_kind}")
         if design_source_ref:
             resolved_context_refs.append(f"design-source:{design_source_ref}")
         state = RunState(
@@ -186,7 +199,7 @@ class RuntimeEngine:
         if not ready:
             flow = self.catalog.flows[state.flow_id]
             resolved = set(state.completed_nodes) | set(state.skipped_nodes)
-            if len(resolved) == len(flow.nodes):
+            if {node.id for node in self._scoped_nodes(state)}.issubset(resolved):
                 state.status = "completed"
                 state.next_actions = []
                 self._record(state, "complete-run", "completed", "All flow nodes are resolved.")
@@ -373,7 +386,7 @@ class RuntimeEngine:
                 )
                 self._validate_gate(gate)
                 return gate
-        if state.flow_id == "implement" and node.id == "quality":
+        if (state.flow_id, node.id) in {("implement", "quality"), ("team-delivery", "quality-gate")}:
             quality_snapshot = QualityStore(
                 evidence_store.state_store, evidence_store
             ).latest_valid(
@@ -396,6 +409,41 @@ class RuntimeEngine:
             item.criterion_id for item in result.criteria_results if item.passed and not item.evidence_ids
         )
         missing = missing_criteria + failed_criteria + no_evidence
+        scoped_evidence = [evidence[item] for item in criterion_evidence_ids
+                           if set(node.evidence_scope_tags).issubset(evidence[item].scope_tags)
+                           and (not node.evidence_kinds or evidence[item].kind in node.evidence_kinds)]
+        supplied_kinds = {item.kind for item in scoped_evidence}
+        missing.extend(f"evidence-kind:{kind}" for kind in sorted(
+            set(node.required_evidence_kinds) - {"approval"} - supplied_kinds
+        ))
+        supplied_refs = {ref for item in scoped_evidence for ref in item.contract_refs}
+        missing.extend(f"rule:{rule.id}" for rule in self.catalog.rules_for_capability(
+            state.profile_id, node.capability
+        ) if f"rule:{rule.id}" not in supplied_refs)
+        design_kind = {"database-design": "database-design",
+                       "review-package-validation": "review-package"}.get(node.capability)
+        if design_kind:
+            from .artifact_validation import MAX_MODEL_ARTIFACT_BYTES, validate_artifact_payload
+            candidates = [item for item in scoped_evidence
+                          if f"artifact:{design_kind}" in item.scope_tags]
+            valid = False
+            for item in candidates:
+                path = evidence_store._local_path(item.uri)
+                if path is None:
+                    continue
+                try:
+                    with path.open("rb") as stream:
+                        raw = stream.read(MAX_MODEL_ARTIFACT_BYTES + 1)
+                    if len(raw) > MAX_MODEL_ARTIFACT_BYTES or item.digest != "sha256:" + hashlib.sha256(raw).hexdigest():
+                        continue
+                    payload = json.loads(raw)
+                    validate_artifact_payload(schema_root=self.catalog.root / "schemas",
+                                              kind=design_kind, artifact=payload)
+                    valid = True
+                except (OSError, ValueError, ValidationFailure):
+                    continue
+            if not valid:
+                missing.append(f"artifact:{design_kind}")
         if node.evidence_kinds or node.evidence_scope_tags:
             allowed_kinds = set(node.evidence_kinds)
             for criterion in result.criteria_results:
@@ -523,9 +571,22 @@ class RuntimeEngine:
         resolved = set(state.completed_nodes) | set(state.skipped_nodes)
         return [
             node
-            for node in self.catalog.flows[state.flow_id].nodes
+            for node in self._scoped_nodes(state)
             if node.id not in resolved and set(node.depends_on).issubset(resolved)
         ]
+
+    def _scoped_nodes(self, state: RunState) -> list[FlowNode]:
+        nodes = self.catalog.flows[state.flow_id].nodes
+        if state.flow_id != "team-delivery":
+            return list(nodes)
+        stages = [ref.split(":", 1)[1] for ref in state.context_refs
+                  if ref.startswith("delivery-stage:")]
+        if not stages:
+            return list(nodes)  # Existing full-delivery runs keep their original scope.
+        if len(stages) != 1 or stages[0] not in TEAM_STAGE_ENDS:
+            raise ValidationFailure("invalid persisted delivery stage")
+        end = next(i for i, node in enumerate(nodes) if node.id == TEAM_STAGE_ENDS[stages[0]])
+        return list(nodes[:end + 1])
 
     def _register_required_approvals(
         self,

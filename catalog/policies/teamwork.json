@@ -19,7 +19,7 @@
         {
           "id": "TEAM-GATE-002",
           "condition": "设计评审缺少受信人工审批",
-          "effect": "进入 waiting_for_human_review，不得由 Agent 文本替代",
+          "effect": "进入 waiting_for_approval，不得由 Agent 文本替代",
           "severity": "blocker"
         },
         {
@@ -31,7 +31,7 @@
         {
           "id": "TEAM-GATE-004",
           "condition": "代码确认或发布审批缺少受信人工审批",
-          "effect": "进入 waiting_for_human_review，不得执行外部发布",
+          "effect": "进入 waiting_for_approval，不得执行外部发布",
           "severity": "blocker"
         },
         {

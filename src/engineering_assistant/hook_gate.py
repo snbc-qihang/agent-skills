@@ -6,13 +6,16 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Mapping, TextIO
 
 
 MAX_HOOK_INPUT_CHARS = 1_048_576
 OBSERVATION_ROOT = ".run-artifacts/engineering-assistant/usage-observations"
-PLUGIN_ID = os.environ.get("ENGINEERING_ASSISTANT_PLUGIN_ID", "engineering-assistant")
+PLUGIN_ID = getattr(sys.modules.get(__package__), "__plugin_id__", None) or os.environ.get(
+    "ENGINEERING_ASSISTANT_PLUGIN_ID", "engineering-assistant"
+)
 PLUGIN_SERVER_ID = os.environ.get(
     "ENGINEERING_ASSISTANT_MCP_SERVER_ID", "engineering_assistant"
 )

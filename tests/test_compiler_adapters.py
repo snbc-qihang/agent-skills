@@ -15,6 +15,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from engineering_assistant.catalog import load_catalog
 from engineering_assistant.compiler import build_package, verify_package  # noqa: E402
 import engineering_assistant.compiler as compiler_module  # noqa: E402
 from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
@@ -477,7 +478,9 @@ class CompilerAdapterTests(unittest.TestCase):
         for source in sorted((ROOT / "skills").glob("*/SKILL.md")):
             relative = source.relative_to(ROOT / "skills")
             self.assertEqual(source.read_bytes(), (codex / "skills" / relative).read_bytes())
-            self.assertEqual(source.read_bytes(), (hermes / "skills" / relative).read_bytes())
+            from engineering_assistant.adapters.hermes import HermesAdapter
+            expected = HermesAdapter().render_tool_references(source.read_text(), load_catalog(ROOT))
+            self.assertEqual(expected, (hermes / "skills" / relative).read_text())
 
     def test_repeated_build_is_byte_deterministic(self) -> None:
         first = build_package(ROOT, "codex", self.root / "first")
@@ -893,7 +896,7 @@ print(json.dumps({
                 "evidence": ["用户请求"],
             }
         }
-        handler = context.tools["engineering_assistant_route"]["handler"]
+        handler = context.tools["teamwork_engineering_assistant_route"]["handler"]
 
         first = handler(
             arguments,
@@ -1171,8 +1174,20 @@ print(json.dumps({
         context = Context()
         module.register(context)
         self.assertEqual(21, len(context.tools))
-        self.assertIn("engineering_assistant_artifact_validate", context.tools)
-        self.assertIn("engineering_assistant_investigation_decide", context.tools)
+        # Host names are rendered only in prose; evidence identifiers stay byte stable.
+        core = "engineering_assistant_artifact_validate"
+        payload = module._host_payload({"description": core, "uri": core + ".json",
+                                        "id": core, "nested": {"next_actions": [core]}})
+        self.assertEqual("teamwork_" + core, payload["description"])
+        self.assertEqual(core + ".json", payload["uri"])
+        self.assertEqual(core, payload["id"])
+        self.assertEqual(["teamwork_" + core], payload["nested"]["next_actions"])
+        import re
+        for skill_file in list((output / "skills").rglob("*.md")) + list((output / "teamwork-engineering-assistant/packs").glob("*.md")):
+            for name in re.findall(r"(?<![A-Za-z0-9_])(?:teamwork_)?engineering_assistant_[a-z_]+", skill_file.read_text()):
+                self.assertIn(name, context.tools, str(skill_file))
+        self.assertIn("teamwork_engineering_assistant_artifact_validate", context.tools)
+        self.assertIn("teamwork_engineering_assistant_investigation_decide", context.tools)
         plugin_lines = (output / "plugin.yaml").read_text(encoding="utf-8").splitlines()
         start = plugin_lines.index("provides_tools:") + 1
         end = plugin_lines.index("provides_hooks:")
@@ -1180,7 +1195,7 @@ print(json.dumps({
         self.assertEqual(set(context.tools), declared_tools)
         self.assertEqual(11, len(context.skills))
         self.assertEqual({"post_llm_call"}, set(context.hooks))
-        payload = context.tools["engineering_assistant_route"]["handler"](
+        payload = context.tools["teamwork_engineering_assistant_route"]["handler"](
             {
                 "intent": {
                     "task_kind": "review",
@@ -1237,7 +1252,7 @@ print(json.dumps({
                 raise RuntimeError("host metadata cannot be stringified")
 
         hostile_session = ExplodingString()
-        fail_open_payload = context.tools["engineering_assistant_route"]["handler"](
+        fail_open_payload = context.tools["teamwork_engineering_assistant_route"]["handler"](
             {
                 "intent": {
                     "task_kind": "review",
@@ -1275,7 +1290,7 @@ print(json.dumps({
 
         tool_project = self.root / "hermes-tool-project"
         tool_project.mkdir()
-        context.tools["engineering_assistant_route"]["handler"](
+        context.tools["teamwork_engineering_assistant_route"]["handler"](
             {
                 "intent": {
                     "task_kind": "review",
@@ -1314,7 +1329,7 @@ print(json.dumps({
         )
         production_kwargs_project = self.root / "hermes-production-kwargs"
         production_kwargs_project.mkdir()
-        context.tools["engineering_assistant_route"]["handler"](
+        context.tools["teamwork_engineering_assistant_route"]["handler"](
             {
                 "intent": {
                     "task_kind": "review",

@@ -191,7 +191,7 @@
           "when": "影响范围命中数据库，否则 Runtime 必须显式跳过",
           "completion_criteria": [
             "关系型 OLTP 设计按单表或强耦合表组严格保留团队模板的章节、顺序和表头",
-            "每份数据库设计均通过 engineering_assistant_database_design_validate，且无未解析占位符",
+            "每份数据库设计均通过 engineering_assistant_artifact_validate 的 database-design 校验，且无未解析占位符",
             "schema、索引、CRUD 契约、事务、迁移和回滚已明确"
           ],
           "policy_refs": [

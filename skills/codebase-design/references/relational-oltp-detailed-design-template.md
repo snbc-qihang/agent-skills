@@ -460,9 +460,9 @@ stateDiagram-v2
 
 | 步骤 | 动作 | 失败补偿 |
 |------|------|----------|
-| 1 | 本地事务提交主事实 | — |
-| 2 | 发送消息/写 outbox 表 | 重试 + 幂等消费 |
-| 3 | 下游更新读模型 | 对账任务修正 |
+| 1 | 在同一个本地事务内写主事实和 outbox，再原子提交 | 任一步失败整体回滚，不留下只有主事实的提交 |
+| 2 | 事务提交后 dispatcher 读取 outbox 并发送消息，记录投递状态 | 可重试投递；消费者按事件 ID 幂等 |
+| 3 | 下游更新读模型并记录已处理事件 | 对账检查遗漏及状态偏差，按业务规则补偿 |
 
 ---
 
@@ -606,14 +606,16 @@ WHERE `tenant_id` = ?
 **列表查询（Seek 分页示例）：**
 
 ```sql
-SELECT `{biz_key}`, `{status}`, `create_time`
+SELECT `id`, `{biz_key}`, `{status}`, `create_time`
 FROM `{schema}`.`{table}`
 WHERE `tenant_id` = ?
-  AND `create_time` < ?
+  AND (`create_time` < ? OR (`create_time` = ? AND `id` < ?))
   AND `is_deleted` = 0
-ORDER BY `create_time` DESC
+ORDER BY `create_time` DESC, `id` DESC
 LIMIT ?;
 ```
+
+游标携带最后一行的 `create_time` 和唯一 `id`；首屏不加游标条件。索引按租户、过滤条件及 `(create_time, id)` 排序评估，同时间戳记录也不能遗漏。
 
 **逻辑删除（若启用 `is_deleted`）：**
 

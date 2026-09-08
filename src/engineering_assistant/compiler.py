@@ -179,11 +179,14 @@ def _compile_package(
     codex_cachebuster: str | None,
 ) -> dict:
     output = _BuildPath(output_io)
-    _copy_tree(repository_root / "skills", output / "skills")
+    adapter = ADAPTERS[platform](cachebuster=codex_cachebuster) if platform == "codex" else ADAPTERS[platform]()
+    _copy_tree(repository_root / "skills", output / "skills",
+               render_text=(lambda text: adapter.render_tool_references(text, catalog)) if platform == "hermes" else None)
     runtime_root = output / catalog.product.id
     _copy_tree(repository_root / "catalog", runtime_root / "catalog")
     _copy_tree(repository_root / "schemas", runtime_root / "schemas")
-    _copy_tree(repository_root / "packs", runtime_root / "packs")
+    _copy_tree(repository_root / "packs", runtime_root / "packs",
+               render_text=(lambda text: adapter.render_tool_references(text, catalog)) if platform == "hermes" else None)
     _copy_tree(repository_root / "evals", runtime_root / "evals")
     _copy_tree(repository_root / "src/engineering_assistant", runtime_root / "runtime/engineering_assistant")
     repository_io = ArtifactIO(repository_root, ".")
@@ -209,7 +212,6 @@ def _compile_package(
     )
     launcher.chmod(0o755)
 
-    adapter = ADAPTERS[platform](cachebuster=codex_cachebuster) if platform == "codex" else ADAPTERS[platform]()
     adapter.write_platform_files(output, catalog)
     payload_files = output_io.sha256_file_digests(
         max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,
@@ -345,13 +347,26 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
         raise ValidationFailure("package is missing its required platform layout")
 
 
-def _copy_tree(source: Path, target: _BuildPath) -> None:
+def _copy_tree(source: Path, target: _BuildPath, *, render_text=None) -> None:
     if not source.is_dir():
         raise ValidationFailure(f"missing compiler input {source}")
     target.mkdir(parents=True)
     destination = target.directory_io()
     source_io = ArtifactIO(source, ".")
     try:
+        if render_text is not None:
+            files = source_io.sha256_file_digests(max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES)
+            for relative, digest in files.items():
+                parts = Path(relative).parts
+                if any(part in {"__pycache__", ".DS_Store"} for part in parts) or relative.endswith(".pyc"):
+                    continue
+                payload = source_io.read_bytes_limited(MAX_BUILD_PAYLOAD_FILE_BYTES, *parts)
+                if "sha256:" + hashlib.sha256(payload).hexdigest() != digest:
+                    raise ValidationFailure("skill source changed during adapter rendering")
+                if relative.endswith(".md"):
+                    payload = render_text(payload.decode("utf-8")).encode("utf-8")
+                destination.write_bytes_exclusive(payload, *parts)
+            return
         source_io.copy_contents_to(
             destination,
             max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,

@@ -18,6 +18,8 @@
 
 ## 验证要求
 
+按变更影响选择检查；Runtime、schema、adapter 或发布路径变更执行下列完整验证，纯文案调整检查相关 skill/引用与构建即可。测试使用隔离临时夹具；已授权整改可连续修复本次引入的失败并重跑受影响检查，无需逐步确认。通过后没有新增变化或未解决风险时不重复扩大验证。
+
 ```bash
 python3 -m unittest discover -s tests -v
 ea validate --require-sources

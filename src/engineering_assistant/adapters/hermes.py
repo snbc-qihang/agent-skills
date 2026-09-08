@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from ..catalog import Catalog
 from ..mcp_server import RuntimeTools
@@ -12,11 +13,19 @@ from ..version import platform_version
 class HermesAdapter:
     id = "hermes"
 
+    def render_tool_references(self, text: str, catalog: Catalog) -> str:
+        prefix = catalog.product.id.replace("-", "_")
+        names = {tool["name"] for tool in RuntimeTools(catalog.root).definitions()}
+        pattern = r"(?<![A-Za-z0-9_])(" + "|".join(re.escape(name) for name in sorted(names)) + r")(?![A-Za-z0-9_])"
+        return re.sub(pattern, lambda match: match[0].replace("engineering_assistant_", prefix + "_", 1), text)
+
     def write_platform_files(self, package_root: Path, catalog: Catalog) -> list[Path]:
         plugin_yaml = package_root / "plugin.yaml"
         version = platform_version(catalog.version, supports_four_part=False)
+        plugin_id = catalog.product.id
+        tool_prefix = plugin_id.replace("-", "_")
         provides_tools = "".join(
-            f"  - {tool['name']}\n" for tool in RuntimeTools(catalog.root).definitions()
+            f"  - {tool['name'].replace('engineering_assistant_', tool_prefix + '_', 1)}\n" for tool in RuntimeTools(catalog.root).definitions()
         )
         plugin_yaml.write_text(
             f"name: {catalog.product.id}\n"
@@ -40,6 +49,10 @@ class HermesAdapter:
         entrypoint.write_text(
             '"""Generated Hermes adapter for engineering-assistant."""\n\n'
             "import json\n"
+            "import re\n"
+            "import hashlib\n"
+            "import importlib\n"
+            "import importlib.util\n"
             "import os\n"
             "import secrets\n"
             "import sys\n"
@@ -47,20 +60,32 @@ class HermesAdapter:
             "import time\n"
             "from pathlib import Path\n\n"
             "_ROOT = Path(__file__).resolve().parent\n"
-            f"os.environ.setdefault('ENGINEERING_ASSISTANT_PLUGIN_ID', '{catalog.product.id}')\n"
-            f"sys.path.insert(0, str(_ROOT / '{catalog.product.id}/runtime'))\n"
-            "from engineering_assistant.catalog import load_catalog\n"
-            "from engineering_assistant.mcp_server import RuntimeTools\n"
+            "_RUNTIME_ROOT = _ROOT / 'teamwork-engineering-assistant' / 'runtime/engineering_assistant'\n"
+            "_NAMESPACE = '_ea_runtime_' + hashlib.sha256(str(_ROOT).encode()).hexdigest()[:24]\n"
+            "if _NAMESPACE not in sys.modules:\n"
+            "    _spec = importlib.util.spec_from_file_location(_NAMESPACE, _RUNTIME_ROOT / '__init__.py', submodule_search_locations=[str(_RUNTIME_ROOT)])\n"
+            "    _runtime = importlib.util.module_from_spec(_spec)\n"
+            "    _runtime.__plugin_id__ = 'teamwork-engineering-assistant'\n"
+            "    sys.modules[_NAMESPACE] = _runtime\n"
+            "    try:\n"
+            "        _spec.loader.exec_module(_runtime)\n"
+            "    except Exception:\n"
+            "        for _key in list(sys.modules):\n"
+            "            if _key == _NAMESPACE or _key.startswith(_NAMESPACE + '.'):\n"
+            "                sys.modules.pop(_key, None)\n"
+            "        raise\n"
+            "load_catalog = importlib.import_module(_NAMESPACE + '.catalog').load_catalog\n"
+            "RuntimeTools = importlib.import_module(_NAMESPACE + '.mcp_server').RuntimeTools\n"
             "try:\n"
-            "    from engineering_assistant.feedback import FeedbackCollector\n"
-            "    from engineering_assistant.hook_gate import is_explicit_plugin_request\n"
+            "    FeedbackCollector = importlib.import_module(_NAMESPACE + '.feedback').FeedbackCollector\n"
+            "    is_explicit_plugin_request = importlib.import_module(_NAMESPACE + '.hook_gate').is_explicit_plugin_request\n"
             f"    _FEEDBACK = FeedbackCollector(_ROOT / '{catalog.product.id}/schemas')\n"
             "except Exception:\n"
             "    _FEEDBACK = None\n"
             "    def is_explicit_plugin_request(_prompt):\n"
             "        return False\n\n"
             "try:\n"
-            "    from engineering_assistant.usage_observation import UsageObservationController\n"
+            "    UsageObservationController = importlib.import_module(_NAMESPACE + '.usage_observation').UsageObservationController\n"
             "    _OBSERVER = UsageObservationController(\n"
             f"        _ROOT / '{catalog.product.id}/schemas',\n"
             "        coverage=('hermes_plugin_tool',),\n"
@@ -122,6 +147,17 @@ class HermesAdapter:
             "        {**payload, 'hook_event_name': 'PostToolUse', 'tool_response': response},\n"
             "        os.environ,\n"
             "    )\n\n\n"
+            f"_TOOL_PREFIX = {tool_prefix!r}\n"
+            "_TOOL_NAMES = {tool['name'] for tool in _TOOLS.definitions()}\n"
+            "_TOOL_REFERENCE = re.compile(r'(?<![A-Za-z0-9_])(' + '|'.join(re.escape(name) for name in sorted(_TOOL_NAMES)) + r')(?![A-Za-z0-9_])')\n\n"
+            "def _host_payload(value, prose=False):\n"
+            "    if isinstance(value, dict):\n"
+            "        return {key: _host_payload(item, key in {'description', 'reason', 'node_goal', 'completion_criteria', 'condition', 'effect', 'next_action', 'next_actions'}) for key, item in value.items()}\n"
+            "    if isinstance(value, list):\n"
+            "        return [_host_payload(item, prose) for item in value]\n"
+            "    if prose and isinstance(value, str):\n"
+            "        return _TOOL_REFERENCE.sub(lambda match: match[0].replace('engineering_assistant_', _TOOL_PREFIX + '_', 1), value)\n"
+            "    return value\n\n"
             "def _handler(name):\n"
             "    def invoke(args, **kwargs):\n"
             "        observation = None\n"
@@ -131,7 +167,7 @@ class HermesAdapter:
             "        except Exception:\n"
             "            pass\n"
             "        try:\n"
-            "            response = json.dumps(_TOOLS.call(name, args), ensure_ascii=False)\n"
+            "            response = json.dumps(_host_payload(_TOOLS.call(name, args)), ensure_ascii=False)\n"
             "        except Exception:\n"
             "            response = json.dumps({'error': 'ToolExecutionError', 'status': 'failed'}, ensure_ascii=False)\n"
             "            try:\n"
@@ -204,14 +240,16 @@ class HermesAdapter:
             "        return None\n"
             "    return None\n\n\n"
             "def register(ctx) -> None:\n"
+            f"    tool_prefix = {tool_prefix!r}\n"
             "    for tool in _TOOLS.definitions():\n"
+            "        host_name = tool['name'].replace('engineering_assistant_', tool_prefix + '_', 1)\n"
             "        schema = {\n"
-            "            'name': tool['name'],\n"
+            "            'name': host_name,\n"
             "            'description': tool['description'],\n"
             "            'parameters': tool['inputSchema'],\n"
             "        }\n"
             "        ctx.register_tool(\n"
-            f"            name=tool['name'], toolset='{catalog.product.id}',\n"
+            f"            name=host_name, toolset='{catalog.product.id}',\n"
             "            schema=schema, handler=_handler(tool['name']),\n"
             "        )\n"
             "    if _FEEDBACK is not None:\n"

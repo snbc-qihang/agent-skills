@@ -558,14 +558,37 @@ class RuntimeTools:
             "evidence_contract": {
                 "kinds": node.get("evidence_kinds", []),
                 "scope_tags": node.get("evidence_scope_tags", []),
+                "required_kinds": node.get("required_evidence_kinds", []),
                 "requires_registered_evidence": True,
+                **({"artifact_kind": {"database-design": "database-design", "review-package-validation": "review-package"}[capability_id],
+                    "artifact_scope_tag": "artifact:" + {"database-design": "database-design", "review-package-validation": "review-package"}[capability_id]}
+                   if capability_id in {"database-design", "review-package-validation"} else {}),
             },
             "policy_rules": policy_rules,
+            "team_context": self._team_context(state.profile_id, [capability_id]),
             "next_action": (
                 state.next_actions[0]
                 if state.next_actions
                 else gate.get("reason", "inspect run status")
             ),
+        }
+
+    def _team_context(self, profile_id: str, capabilities: list[str]) -> dict:
+        profile = self.catalog.profiles[profile_id]
+        rules = {rule.id: rule for capability in capabilities
+                 for rule in self.catalog.rules_for_capability(profile_id, capability)}
+        rule_catalog = self.catalog.rule_catalogs.get(profile.rule_catalog_ref)
+        source_ids = sorted({ref for rule in rules.values() for ref in rule.source_refs})
+        pack_ids = sorted({ref for rule in rules.values() for ref in rule.target_refs
+                           if ref in profile.pack_refs})
+        return {
+            "rules": [{"id": rule.id, "guidance": rule.guidance,
+                       "contract_ref": f"rule:{rule.id}", "source_refs": list(rule.source_refs),
+                       "pack_refs": list(rule.target_refs)} for rule in rules.values()],
+            "sources": [{"id": ref, "url": rule_catalog.sources[ref].url,
+                         "digest": rule_catalog.sources[ref].digest} for ref in source_ids],
+            "packs": [{"id": ref, "source": self.catalog.packs[ref].source_path} for ref in pack_ids],
+            "application": "逐条判断触发条件；不适用时在同一证据中说明理由。契约引用证明记录了判断，不证明规则执行正确。",
         }
 
     @staticmethod
@@ -602,6 +625,12 @@ class RuntimeTools:
             reason = "local_persistence_ready"
         return {
             "decision": decision.to_dict(),
+            "team_context": self._team_context(
+                self._profile_id(arguments),
+                [self.catalog.flows[decision.flow_id].nodes[0].capability]
+                if decision.flow_id else [capability for skill_id in decision.skill_ids
+                                         for capability in self.catalog.skills[skill_id].capabilities],
+            ),
             "execution": {
                 "persisted_flow_ready": persisted_flow_ready,
                 "recommended_execution": recommended_execution,

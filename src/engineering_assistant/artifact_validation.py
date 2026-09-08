@@ -12,6 +12,8 @@ from .governance import validate_quality_contract
 
 
 ARTIFACT_SCHEMAS = {
+    "database-design": "database-design.schema.json",
+    "review-package": "review-package.schema.json",
     "capability-provider-spec": "capability-provider-spec.schema.json",
     "design-source-registry": "design-source-registry.schema.json",
     "feedback-capture": "feedback-capture.schema.json",
@@ -58,6 +60,9 @@ def validate_artifact_payload(
         raise ValidationFailure(
             f"artifact does not conform to the {kind} schema"
         ) from exc
+    if kind in {"database-design", "review-package"}:
+        from .design_documents import validate_design_document
+        return validate_design_document(kind, artifact, Path(schema_root))
     if kind == "quality-snapshot":
         validate_quality_contract(quality_snapshot_from_dict(artifact))
     return {"status": "passed", "kind": kind}

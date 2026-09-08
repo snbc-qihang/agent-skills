@@ -59,7 +59,7 @@ flowchart LR
 
 ## 平台输出
 
-Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`、skills 和 `engineering-assistant/` 运行目录，`.mcp.json` 启动包内 `ea mcp-serve`；Hook manifest 注册 `UserPromptSubmit`、本插件 MCP 的 `PreToolUse`/`PostToolUse` 和 `Stop`。轻量 gate 仅在明确插件请求或活动 run 时加载 Runtime，失败始终 fail-open。Hermes 包通过 `post_llm_call` 和插件工具包装复用同一反馈采集语义，并明确平台覆盖差异。
+Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`、skills 和产品命名的运行目录，`.mcp.json` 启动包内 `ea mcp-serve`；Hook manifest 注册 `UserPromptSubmit`、本插件 MCP 的 `PreToolUse`/`PostToolUse` 和 `Stop`。轻量 gate 仅在明确插件请求或活动 run 时加载 Runtime，失败始终 fail-open。Hermes 包通过 `post_llm_call` 和插件工具包装复用同一反馈采集语义，并明确平台覆盖差异。
 
 两个平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
 
@@ -72,3 +72,5 @@ Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`�
 ## 安全模型
 
 不可豁免安全规则优先级最高。外部动作、生产操作、降低安全级别和稳定版发布必须显式授权。Simulation 只用于测试报告器，不能作为产品效果证据。
+
+团队版按 capability 渐进返回规则、pack 与来源，完成节点时核对 required_evidence_kinds 及 rule 契约引用。team-delivery 的阶段边界在开始时固定并随状态恢复；设计、代码确认和发布门禁按各阶段保留。Hermes 团队工具注册名为 teamwork_engineering_assistant_*，调用内部稳定工具名前完成映射；运行模块按安装根目录隔离，不污染其他插件。
