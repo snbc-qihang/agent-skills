@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 """Revision-safe persisted run state."""
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ class StateStore:
         self,
         project_root: Path | str,
         schema_root: Path | str,
-        run_root: str = ".run-artifacts/engineering-assistant",
+        run_root: str = ".run-artifacts/teamwork-engineering-assistant",
         *,
         allow_author_repository: bool = False,
     ) -> None:

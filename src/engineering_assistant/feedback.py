@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 """Privacy-aware feedback capture shared by platform lifecycle hooks."""
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from .usage_observation import UsageObservationController
 from .validation import ValidationFailure, load_json, validate_instance
 
 
-FEEDBACK_ROOT = ".run-artifacts/engineering-assistant/feedback"
+FEEDBACK_ROOT = ".run-artifacts/teamwork-engineering-assistant/feedback"
 FEEDBACK_MODES = {"candidates", "metadata", "disabled"}
 MAX_HOOK_INPUT_BYTES = 1_048_576
 HOOK_LOCK_TIMEOUT_SECONDS = 0.1
@@ -1083,7 +1084,7 @@ class FeedbackCollector:
     def _active_run_context(
         project_root: Path | str,
     ) -> tuple[str, str, str, str | None] | None:
-        run_root = Path(project_root).resolve() / ".run-artifacts/engineering-assistant"
+        run_root = Path(project_root).resolve() / ".run-artifacts/teamwork-engineering-assistant"
         if not run_root.is_dir():
             return None
         active = []

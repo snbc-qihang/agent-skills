@@ -1,10 +1,14 @@
+## GPT-6 适配变更说明
+
+团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
+
 # 真实产品 Canary
 
 本流程验证 `engineering-assistant` 在真实产品仓库中的质量、成本、上下文占用、文档噪声和安全表现。所有结果固定声明 `assurance=local_unattested`：Runtime 校验结构、输入绑定和内容摘要，但不提供独立身份、抗篡改或跨主机信任证明。
 
 ## 准备与审计
 
-真实 workload、三臂运行、配对环境、成本、盲评质量、安全评分和原始 artifact 必须位于目标项目 `.run-artifacts/engineering-assistant/` 或仓库外受控目录，不写入作者源。
+真实 workload、三臂运行、配对环境、成本、盲评质量、安全评分和原始 artifact 必须位于目标项目 `.run-artifacts/teamwork-engineering-assistant/` 或仓库外受控目录，不写入作者源。
 
 ```bash
 ea canary-audit \

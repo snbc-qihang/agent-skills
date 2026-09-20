@@ -1,3 +1,7 @@
+## GPT-6 适配变更说明
+
+团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
+
 # engineering-assistant 当前架构
 
 ## 架构边界
@@ -53,7 +57,7 @@ flowchart LR
 
 ## 运行状态
 
-任务运行状态存放于目标项目 `.run-artifacts/engineering-assistant/`。每个 run 包含不可变 manifest、CAS 更新的 `RunState` v2、不可变 steps/evidence/approval 记录，以及按需创建的 quality、investigation 和 provider artifact。步骤记录包含推进后的完整状态并先于状态 CAS 写入；进程若在两次写入之间中断，读取 run 时会完成恢复。`revision` 阻止并发旧写入；完成条件必须引用 Runtime 登记的本地 provenance 证据并满足节点 policy 的证据种类。
+任务运行状态存放于目标项目 `.run-artifacts/teamwork-engineering-assistant/`。每个 run 包含不可变 manifest、CAS 更新的 `RunState` v2、不可变 steps/evidence/approval 记录，以及按需创建的 quality、investigation 和 provider artifact。步骤记录包含推进后的完整状态并先于状态 CAS 写入；进程若在两次写入之间中断，读取 run 时会完成恢复。`revision` 阻止并发旧写入；完成条件必须引用 Runtime 登记的本地 provenance 证据并满足节点 policy 的证据种类。
 
 状态覆盖：运行、等待输入、等待审批、重试、阻断、取消、完成和恢复。
 

@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 from __future__ import annotations
 
 import json
@@ -33,7 +34,7 @@ class ArtifactIOTests(unittest.TestCase):
     def test_observation_lock_timeout_fails_fast_instead_of_waiting(self) -> None:
         artifacts = ArtifactIO(
             self.project,
-            ".run-artifacts/engineering-assistant",
+            ".run-artifacts/teamwork-engineering-assistant",
             lock_timeout_seconds=0.01,
         )
 
@@ -45,7 +46,7 @@ class ArtifactIOTests(unittest.TestCase):
                 artifacts.create_immutable_json({"value": 1}, "run", "locked.json")
 
     def test_limited_json_read_returns_payload_and_exact_raw_bytes(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         path = artifacts.path("run", "payload.json")
         path.parent.mkdir(parents=True)
         raw = b'{"value":1}\n'
@@ -222,7 +223,7 @@ class ArtifactIOTests(unittest.TestCase):
         self.assertFalse((plugin_root / ".run-artifacts").exists())
 
     def test_immutable_concurrent_writers_never_overwrite_each_other(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         barrier = Barrier(2)
 
         def write(value: int) -> str:
@@ -240,7 +241,7 @@ class ArtifactIOTests(unittest.TestCase):
         self.assertIn(payload["value"], {1, 2})
 
     def test_cas_allows_only_one_writer_from_the_same_revision(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         artifacts.create_immutable_json({"revision": 0, "winner": None}, "run", "state.json")
         barrier = Barrier(2)
 
@@ -265,7 +266,7 @@ class ArtifactIOTests(unittest.TestCase):
         outside = self.project / "outside"
         outside.mkdir()
         (self.project / ".run-artifacts").mkdir()
-        (self.project / ".run-artifacts/engineering-assistant").symlink_to(
+        (self.project / ".run-artifacts/teamwork-engineering-assistant").symlink_to(
             outside, target_is_directory=True
         )
         store = StateStore(self.project, ROOT / "schemas")
@@ -273,7 +274,7 @@ class ArtifactIOTests(unittest.TestCase):
             store.run_dir("run-1")
 
     def test_static_lock_symlink_is_rejected_without_opening_its_target(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         directory = artifacts.path("run")
         directory.mkdir(parents=True)
         target = self.project / "outside-lock-target"
@@ -311,7 +312,7 @@ class ArtifactIOTests(unittest.TestCase):
         self.assertEqual([False, True], sorted(outcomes))
 
     def test_fd_relative_delete_cannot_follow_a_replaced_parent_symlink(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         staging = artifacts.path("feedback", "staging")
         staging.mkdir(parents=True)
         candidate = staging / "candidate.json"
@@ -345,7 +346,7 @@ class ArtifactIOTests(unittest.TestCase):
         self.assertFalse((moved / candidate.name).exists())
 
     def test_conditional_stale_delete_preserves_a_refreshed_file(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         path = artifacts.create_immutable_json(
             {"revision": 0}, "usage", "ledger.json"
         )
@@ -370,7 +371,7 @@ class ArtifactIOTests(unittest.TestCase):
         self.assertEqual(1, artifacts.read_json("usage", "ledger.json")["revision"])
 
     def test_bounded_immutable_collision_never_parses_an_oversized_file(self) -> None:
-        artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
+        artifacts = ArtifactIO(self.project, ".run-artifacts/teamwork-engineering-assistant")
         path = artifacts.path("canary", "result.json")
         path.parent.mkdir(parents=True)
         path.write_text('{"value":"' + "x" * 1024 + '"}\n', encoding="utf-8")

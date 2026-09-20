@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 from __future__ import annotations
 
 import io
@@ -73,7 +74,7 @@ class FeedbackHookTests(unittest.TestCase):
         return sorted(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback"
                 / kind
             ).glob("*.json")
         )
@@ -119,7 +120,7 @@ class FeedbackHookTests(unittest.TestCase):
         self.assertEqual([], self.artifacts("captures"))
 
     def test_stop_feedback_uses_the_single_active_run_context(self) -> None:
-        state = self.project / ".run-artifacts/engineering-assistant/run-real/run-state.json"
+        state = self.project / ".run-artifacts/teamwork-engineering-assistant/run-real/run-state.json"
         state.parent.mkdir(parents=True)
         state.write_text(
             json.dumps(
@@ -257,7 +258,7 @@ class FeedbackHookTests(unittest.TestCase):
     ) -> None:
         directory = (
             self.project
-            / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+            / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
         )
         directory.mkdir(parents=True)
         secret = "private-invalid-candidate-value"
@@ -617,7 +618,7 @@ class FeedbackHookTests(unittest.TestCase):
             "sensitivity": "internal",
             "observed_at": "2026-07-14T07:00:00+00:00",
         }
-        events = self.project / ".run-artifacts/engineering-assistant/feedback/events"
+        events = self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
         events.mkdir(parents=True)
         (events / "feedback-legacy.json").write_text(json.dumps(legacy), encoding="utf-8")
         disposition = FeedbackDisposition(
@@ -898,7 +899,7 @@ class FeedbackHookTests(unittest.TestCase):
     def test_feedback_store_rejects_nested_event_symlink_escape(self) -> None:
         outside = self.project.parent / f"{self.project.name}-nested-outside"
         outside.mkdir()
-        feedback_root = self.project / ".run-artifacts/engineering-assistant/feedback"
+        feedback_root = self.project / ".run-artifacts/teamwork-engineering-assistant/feedback"
         feedback_root.mkdir(parents=True)
         (feedback_root / "events").symlink_to(outside, target_is_directory=True)
         try:

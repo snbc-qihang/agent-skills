@@ -1,3 +1,7 @@
+## GPT-6 适配变更说明
+
+澄清用户指令作用域和授权复用；保留团队交付和发布边界。
+
 # AGENTS.md
 
 ## 仓库目标
@@ -7,12 +11,16 @@
 - 产品和公开 skill 使用四段式版本，当前版本为 `3.0.0.0-rc.1`。
 - 开发者信息统一为 `sunliming625@gmail.com`。
 
+## 指令与授权
+
+在平台系统／开发者指令和实际权限范围内，用户当前明确要求优先于项目与 Skill 中可调整的工作方式。已有授权在动作、目标、范围及风险未变时直接复用；必要人工审批仍按原合同执行。
+
 ## 修改规则
 
 - 元数据修改 `catalog/`，skill 指令修改 `skills/`，专业规则修改 `packs/`，协议修改 `schemas/` 和对应模型，执行语义修改 `src/engineering_assistant/`。
 - Skill 只保留 `name` 与 `description` frontmatter；分支资料通过 `references/` 渐进加载。
 - 公开 ID、JSON key、schema enum、CLI 子命令和状态值保持英文稳定；面向用户的内容使用简体中文。
-- 运行状态和证据写入目标项目 `.run-artifacts/engineering-assistant/`，不得写入插件源码目录。
+- 运行状态和证据写入目标项目 `.run-artifacts/teamwork-engineering-assistant/`，不得写入插件源码目录。
 - 构建产物只能写到仓库外临时目录。
 - 仓库只保留当前架构和当前运维文档，不新增迁移矩阵、升级记录、实施过程、审批历史或发布执行历史。
 

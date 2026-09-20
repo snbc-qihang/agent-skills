@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 from __future__ import annotations
 
 import json
@@ -269,7 +270,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertEqual(0, ordinary_stop.returncode, ordinary_stop.stderr)
         self.assertEqual({}, json.loads(ordinary_stop.stdout))
         self.assertFalse(
-            (hook_project / ".run-artifacts/engineering-assistant").exists()
+            (hook_project / ".run-artifacts/teamwork-engineering-assistant").exists()
         )
         activation_payload = {
             **hook_payload,
@@ -294,7 +295,7 @@ class CompilerAdapterTests(unittest.TestCase):
         ledgers = list(
             (
                 hook_project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
@@ -405,7 +406,7 @@ class CompilerAdapterTests(unittest.TestCase):
                 list(
                     (
                         hook_project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -469,7 +470,7 @@ class CompilerAdapterTests(unittest.TestCase):
                 list(
                     (
                         continuation_project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
+                        / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                     ).rglob("turn-*.json")
                 )
             ),
@@ -613,7 +614,7 @@ class CompilerAdapterTests(unittest.TestCase):
             list(
                 (
                     project
-                    / ".run-artifacts/engineering-assistant/usage-observations"
+                    / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                 ).rglob("turn-*.json")
             ),
         )
@@ -623,7 +624,7 @@ class CompilerAdapterTests(unittest.TestCase):
                 list(
                     (
                         project
-                        / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
                     ).glob("*.json")
                 )
             ),
@@ -632,7 +633,7 @@ class CompilerAdapterTests(unittest.TestCase):
             next(
                 (
                     project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -643,7 +644,7 @@ class CompilerAdapterTests(unittest.TestCase):
                 list(
                     (
                         project
-                        / ".run-artifacts/engineering-assistant/feedback/captures"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/captures"
                     ).glob("*.json")
                 )
             ),
@@ -651,7 +652,7 @@ class CompilerAdapterTests(unittest.TestCase):
         events = list(
             (
                 project
-                / ".run-artifacts/engineering-assistant/feedback/events"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).glob("*.json")
         )
         self.assertEqual(1, len(events))
@@ -927,7 +928,7 @@ print(json.dumps({
         candidates = list(
             (
                 project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         )
         self.assertEqual(1, len(candidates))
@@ -1025,7 +1026,7 @@ print(json.dumps({
         feedback_artifacts = list(
             (
                 project
-                / ".run-artifacts/engineering-assistant/feedback/events"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).glob("*.json")
         )
         tool_failures = [
@@ -1065,7 +1066,7 @@ print(json.dumps({
                 list(
                     (
                         mode_project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
+                        / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                     ).rglob("*.json")
                 ),
             )
@@ -1075,7 +1076,7 @@ print(json.dumps({
                     list(
                         (
                             mode_project
-                            / ".run-artifacts/engineering-assistant/feedback/captures"
+                            / ".run-artifacts/teamwork-engineering-assistant/feedback/captures"
                         ).glob("*.json")
                     )
                 ),
@@ -1094,7 +1095,7 @@ print(json.dumps({
         self.assertFalse(
             (
                 disabled_failure_project
-                / ".run-artifacts/engineering-assistant/feedback/captures"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/captures"
             ).exists()
         )
 
@@ -1131,7 +1132,7 @@ print(json.dumps({
                 list(
                     (
                         retry_project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
+                        / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                     ).rglob("*.json")
                 )
             ),
@@ -1142,7 +1143,7 @@ print(json.dumps({
             list(
                 (
                     retry_project
-                    / ".run-artifacts/engineering-assistant/usage-observations"
+                    / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                 ).rglob("*.json")
             ),
         )
@@ -1223,7 +1224,7 @@ print(json.dumps({
             cwd=str(project),
         )
         self.assertFalse(
-            (project / ".run-artifacts/engineering-assistant").exists()
+            (project / ".run-artifacts/teamwork-engineering-assistant").exists()
         )
 
         context.hooks["post_llm_call"](
@@ -1242,7 +1243,7 @@ print(json.dumps({
                 list(
                     (
                         project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -1322,7 +1323,7 @@ print(json.dumps({
                 list(
                     (
                         tool_project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -1363,7 +1364,7 @@ print(json.dumps({
                 list(
                     (
                         production_kwargs_project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -1385,7 +1386,7 @@ print(json.dumps({
                 list(
                     (
                         production_kwargs_project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -1410,7 +1411,7 @@ print(json.dumps({
             turn_id="expired-turn",
         )
         self.assertFalse(
-            (expired_tool_project / ".run-artifacts/engineering-assistant").exists()
+            (expired_tool_project / ".run-artifacts/teamwork-engineering-assistant").exists()
         )
 
         with module._ACTIVE_TURNS_LOCK:
@@ -1457,7 +1458,7 @@ print(json.dumps({
                 list(
                     (
                         production_kwargs_project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),

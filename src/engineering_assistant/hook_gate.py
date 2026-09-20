@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 """Stdlib-only fast gate for Codex hooks scoped to this plugin's MCP tools."""
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Mapping, TextIO
 
 
 MAX_HOOK_INPUT_CHARS = 1_048_576
-OBSERVATION_ROOT = ".run-artifacts/engineering-assistant/usage-observations"
+OBSERVATION_ROOT = ".run-artifacts/teamwork-engineering-assistant/usage-observations"
 PLUGIN_ID = getattr(sys.modules.get(__package__), "__plugin_id__", None) or os.environ.get(
     "ENGINEERING_ASSISTANT_PLUGIN_ID", "engineering-assistant"
 )
@@ -333,7 +334,7 @@ def should_load_runtime(payload: Mapping[str, object]) -> bool:
     marker = Path(cwd).resolve() / OBSERVATION_ROOT / session_ref / f"{turn_ref}.json"
     if marker.is_file():
         return True
-    run_root = Path(cwd).resolve() / ".run-artifacts/engineering-assistant"
+    run_root = Path(cwd).resolve() / ".run-artifacts/teamwork-engineering-assistant"
     if not run_root.is_dir():
         return False
     try:

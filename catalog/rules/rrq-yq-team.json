@@ -952,7 +952,7 @@
     {
       "id": "DG5",
       "category": "文档治理",
-      "guidance": "任务过程摘要、缺失输入清单、临时评审意见和 flow 运行状态只允许写入 .run-artifacts/engineering-assistant/ 或登记为 EvidenceRef，不得伪装为正式文档。",
+      "guidance": "任务过程摘要、缺失输入清单、临时评审意见和 flow 运行状态只允许写入 .run-artifacts/teamwork-engineering-assistant/ 或登记为 EvidenceRef，不得伪装为正式文档。",
       "source_refs": [
         "yq-overview"
       ],
@@ -1653,7 +1653,7 @@
     {
       "id": "DG24",
       "category": "文档治理",
-      "guidance": "每个需求在 .run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中 HLD 和上下文详细设计是符合外部模板的完整 reviewing 评审稿，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
+      "guidance": "每个需求在 .run-artifacts/teamwork-engineering-assistant/review-packages/<REQUIREMENT-ID>/ 生成独立评审包；其中 HLD 和上下文详细设计是符合外部模板的完整 reviewing 评审稿，Agent 不得覆盖外部设计源或自行提升为 approved/final。",
       "source_refs": [
         "yq-overview"
       ],

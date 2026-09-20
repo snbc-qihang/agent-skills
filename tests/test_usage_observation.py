@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 from __future__ import annotations
 
 import io
@@ -101,7 +102,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
@@ -224,7 +225,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -253,7 +254,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -265,7 +266,7 @@ class UsageObservationHookTests(unittest.TestCase):
             list(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/usage-observations"
+                    / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                 ).rglob("turn-*.json")
             ),
         )
@@ -297,7 +298,7 @@ class UsageObservationHookTests(unittest.TestCase):
         small_response = {"content": [{"type": "text", "text": "ok"}]}
         candidates = (
             self.project
-            / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+            / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
         )
 
         self.assertEqual({}, self.pre(tool_name, first_input, "tool-1"))
@@ -394,7 +395,7 @@ class UsageObservationHookTests(unittest.TestCase):
             json.loads(path.read_text("utf-8"))
             for path in (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         ]
         self.assertEqual(2, len(candidates))
@@ -454,7 +455,7 @@ class UsageObservationHookTests(unittest.TestCase):
             json.loads(path.read_text("utf-8"))
             for path in (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         ]
         self.assertEqual(2, len(candidates))
@@ -477,7 +478,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledger_path = next(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         legacy = json.loads(ledger_path.read_text("utf-8"))
@@ -496,7 +497,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
 
         self.assertEqual({}, response)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_second_index_query_is_recorded_but_never_denied(self) -> None:
         self.activate()
@@ -620,7 +621,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertEqual({}, prompt)
         self.assertEqual({}, pre)
         self.assertEqual({}, stop)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_feedback_summary_is_observation_exempt_in_an_active_turn(self) -> None:
         self.activate()
@@ -665,7 +666,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertFalse(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).exists()
         )
 
@@ -687,7 +688,7 @@ class UsageObservationHookTests(unittest.TestCase):
                 {"candidate_count": 0},
             ),
         )
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_describing_the_plugin_without_invoking_it_does_not_activate(self) -> None:
         response = self.run_hook(
@@ -698,7 +699,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
 
         self.assertEqual({}, response)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_hypothetical_plugin_mention_does_not_activate(self) -> None:
         prompts = [
@@ -779,7 +780,7 @@ class UsageObservationHookTests(unittest.TestCase):
                         {"hook_event_name": "UserPromptSubmit", "prompt": prompt}
                     ),
                 )
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_explicit_plugin_skill_syntax_activates_observation(self) -> None:
         response = self.run_hook(
@@ -946,7 +947,7 @@ class UsageObservationHookTests(unittest.TestCase):
                     ),
                 )
                 self.assertFalse(
-                    (other_project / ".run-artifacts/engineering-assistant").exists()
+                    (other_project / ".run-artifacts/teamwork-engineering-assistant").exists()
                 )
             finally:
                 self.common["cwd"] = previous
@@ -1039,7 +1040,7 @@ class UsageObservationHookTests(unittest.TestCase):
                         {"hook_event_name": "UserPromptSubmit", "prompt": prompt}
                     ),
                 )
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_unqualified_skill_name_does_not_claim_plugin_provenance(self) -> None:
         response = self.run_hook(
@@ -1050,7 +1051,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
 
         self.assertEqual({}, response)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_unknown_namespaced_skill_does_not_activate_observation(self) -> None:
         response = self.run_hook(
@@ -1061,7 +1062,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
 
         self.assertEqual({}, response)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_negated_plugin_request_does_not_activate_observation(self) -> None:
         response = self.run_hook(
@@ -1072,7 +1073,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
 
         self.assertEqual({}, response)
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_activation_is_scoped_to_one_turn(self) -> None:
         self.activate()
@@ -1091,7 +1092,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
@@ -1101,7 +1102,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledger = next(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         stale = 1_700_000_000 - STALE_LEDGER_TTL_SECONDS - 1
@@ -1113,7 +1114,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
@@ -1123,7 +1124,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.activate()
         root = (
             self.project
-            / ".run-artifacts/engineering-assistant/usage-observations"
+            / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
         )
         session_directory = next(path for path in root.iterdir() if path.is_dir())
 
@@ -1152,13 +1153,13 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
         events = list(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).glob("*.json")
         )
         self.assertEqual(0, len(events))
@@ -1186,13 +1187,13 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         self.assertEqual(1, len(ledgers))
         self.assertFalse(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).exists()
         )
 
@@ -1214,7 +1215,7 @@ class UsageObservationHookTests(unittest.TestCase):
                 list(
                     (
                         self.project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
+                        / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                     ).rglob("turn-*.json")
                 )
             ),
@@ -1237,7 +1238,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertEqual({}, response)
         events = list(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).glob("*.json")
         )
         self.assertEqual(1, len(events))
@@ -1251,7 +1252,7 @@ class UsageObservationHookTests(unittest.TestCase):
         artifact_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (
-                self.project / ".run-artifacts/engineering-assistant/feedback"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback"
             ).rglob("*.json")
         )
         self.assertNotIn("sensitive failure details", artifact_text)
@@ -1283,7 +1284,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/events"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -1294,7 +1295,7 @@ class UsageObservationHookTests(unittest.TestCase):
         artifacts = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (
-                self.project / ".run-artifacts/engineering-assistant/feedback"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback"
             ).rglob("*.json")
         )
         self.assertNotIn("private failure output", artifacts)
@@ -1323,7 +1324,7 @@ class UsageObservationHookTests(unittest.TestCase):
                     next(
                         (
                             Path(temporary)
-                            / ".run-artifacts/engineering-assistant/feedback/events"
+                            / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                         ).glob("*.json")
                     ).read_text(encoding="utf-8")
                 )
@@ -1359,7 +1360,7 @@ class UsageObservationHookTests(unittest.TestCase):
 
         self.assertFalse(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).exists()
         )
 
@@ -1382,7 +1383,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/events"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -1407,7 +1408,7 @@ class UsageObservationHookTests(unittest.TestCase):
         )
         self.assertFalse(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).exists()
         )
 
@@ -1416,7 +1417,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         ledgers[0].write_text("{}", encoding="utf-8")
@@ -1430,7 +1431,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledgers = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         ledgers[0].write_text(
@@ -1452,7 +1453,7 @@ class UsageObservationHookTests(unittest.TestCase):
 
         self.assertEqual(0, code)
         self.assertEqual({}, json.loads(output.getvalue()))
-        self.assertFalse((self.project / ".run-artifacts/engineering-assistant").exists())
+        self.assertFalse((self.project / ".run-artifacts/teamwork-engineering-assistant").exists())
 
     def test_explicit_plugin_hook_fails_open_in_the_author_source_tree(self) -> None:
         author_root = self.project / "author"
@@ -1510,7 +1511,7 @@ class UsageObservationHookTests(unittest.TestCase):
 
         self.assertEqual({}, response)
         captures = list(
-            (self.project / ".run-artifacts/engineering-assistant/feedback/captures").glob(
+            (self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/captures").glob(
                 "*.json"
             )
         )
@@ -1549,7 +1550,7 @@ class UsageObservationHookTests(unittest.TestCase):
         candidates = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         )
         self.assertEqual(1, len(candidates))
@@ -1566,7 +1567,7 @@ class UsageObservationHookTests(unittest.TestCase):
             list(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/usage-observations"
+                    / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
                 ).rglob("turn-*.json")
             ),
         )
@@ -1586,7 +1587,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidate-index"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidate-index"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -1598,7 +1599,7 @@ class UsageObservationHookTests(unittest.TestCase):
             list(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidate-staging"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidate-staging"
                 ).glob("*.json")
             ),
         )
@@ -1629,7 +1630,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -1661,7 +1662,7 @@ class UsageObservationHookTests(unittest.TestCase):
         candidates = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         )
         self.assertEqual(1, len(candidates))
@@ -1669,7 +1670,7 @@ class UsageObservationHookTests(unittest.TestCase):
             next(
                 (
                     self.project
-                    / ".run-artifacts/engineering-assistant/feedback/efficiency-candidate-index"
+                    / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidate-index"
                 ).glob("*.json")
             ).read_text(encoding="utf-8")
         )
@@ -1698,7 +1699,7 @@ class UsageObservationHookTests(unittest.TestCase):
         candidates = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         )
         self.assertEqual(1, len(candidates))
@@ -1727,7 +1728,7 @@ class UsageObservationHookTests(unittest.TestCase):
         first_candidate = next(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).glob("*.json")
         )
         first_payload = first_candidate.read_text(encoding="utf-8")
@@ -1761,11 +1762,11 @@ class UsageObservationHookTests(unittest.TestCase):
             self.assertEqual({}, self.run_hook(stop))
         candidates_dir = (
             self.project
-            / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+            / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
         )
         staging_dir = (
             self.project
-            / ".run-artifacts/engineering-assistant/feedback/efficiency-candidate-staging"
+            / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidate-staging"
         )
         self.assertEqual(1, len(list(candidates_dir.glob("*.json"))))
         self.assertEqual(1, len(list(staging_dir.glob("*.json"))))
@@ -1780,7 +1781,7 @@ class UsageObservationHookTests(unittest.TestCase):
         ledger = next(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/usage-observations"
+                / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
             ).rglob("turn-*.json")
         )
         ledger.write_text("{}", encoding="utf-8")
@@ -1797,14 +1798,14 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertFalse(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).exists()
         )
 
     def test_text_feedback_failure_keeps_ledger_for_stop_retry(self) -> None:
         observation_root = (
             self.project
-            / ".run-artifacts/engineering-assistant/usage-observations"
+            / ".run-artifacts/teamwork-engineering-assistant/usage-observations"
         )
         self.activate()
         command = {"command": "git diff --stat"}
@@ -1836,7 +1837,7 @@ class UsageObservationHookTests(unittest.TestCase):
                 list(
                     (
                         self.project
-                        / ".run-artifacts/engineering-assistant/feedback/events"
+                        / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
                     ).glob("*.json")
                 )
             ),
@@ -1860,7 +1861,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertFalse(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/feedback/efficiency-candidates"
+                / ".run-artifacts/teamwork-engineering-assistant/feedback/efficiency-candidates"
             ).exists()
         )
 
@@ -1880,7 +1881,7 @@ class UsageObservationHookTests(unittest.TestCase):
         artifact_text = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (
-                self.project / ".run-artifacts/engineering-assistant/feedback"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback"
             ).rglob("*.json")
         )
         self.assertNotIn(access_key, artifact_text)
@@ -1888,7 +1889,7 @@ class UsageObservationHookTests(unittest.TestCase):
         self.assertIn("raw hook content was omitted", artifact_text)
         events = list(
             (
-                self.project / ".run-artifacts/engineering-assistant/feedback/events"
+                self.project / ".run-artifacts/teamwork-engineering-assistant/feedback/events"
             ).glob("*.json")
         )
         self.assertEqual(1, len(events))

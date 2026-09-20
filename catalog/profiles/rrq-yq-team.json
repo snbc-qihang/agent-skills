@@ -36,7 +36,7 @@
   ],
   "rule_catalog_ref": "rrq-yq-team-rules",
   "store": {
-    "run_root": ".run-artifacts/engineering-assistant",
+    "run_root": ".run-artifacts/teamwork-engineering-assistant",
     "formal_document_roots": [
       "docs/requirements",
       "docs/architecture",

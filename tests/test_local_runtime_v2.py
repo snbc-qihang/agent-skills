@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
 from __future__ import annotations
 
 import copy
@@ -69,7 +70,7 @@ class LocalRuntimeV2Tests(unittest.TestCase):
         self.assertEqual("select-slice", started["node"]["id"])
         self.assertEqual("work-slicing", started["guidance"]["capability"])
         self.assertEqual("tdd", started["guidance"]["skill"])
-        run_dir = self.project / ".run-artifacts/engineering-assistant/run-local-v2"
+        run_dir = self.project / ".run-artifacts/teamwork-engineering-assistant/run-local-v2"
         self.assertTrue((run_dir / "run-manifest.json").is_file())
         self.assertTrue((run_dir / "run-state.json").is_file())
         manifest = json.loads((run_dir / "run-manifest.json").read_text())
@@ -209,7 +210,7 @@ class LocalRuntimeV2Tests(unittest.TestCase):
         steps = list(
             (
                 self.project
-                / ".run-artifacts/engineering-assistant/run-complete/steps"
+                / ".run-artifacts/teamwork-engineering-assistant/run-complete/steps"
             ).glob("*.json")
         )
         self.assertEqual(1, len(steps))
@@ -265,7 +266,7 @@ class LocalRuntimeV2Tests(unittest.TestCase):
         self.assertEqual(after, persisted)
 
     def test_old_run_state_is_rejected_with_stable_message(self) -> None:
-        run_dir = self.project / ".run-artifacts/engineering-assistant/old-run"
+        run_dir = self.project / ".run-artifacts/teamwork-engineering-assistant/old-run"
         run_dir.mkdir(parents=True)
         (run_dir / "run-state.json").write_text(json.dumps({"run_id": "old-run"}))
 

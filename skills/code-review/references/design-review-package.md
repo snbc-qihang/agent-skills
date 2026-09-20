@@ -1,6 +1,10 @@
+## GPT-6 适配变更说明
+
+团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
+
 # 需求设计评审包
 
-评审包固定在 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`，至少包含影响评估、专项差异、实现测试计划、设计变更摘要、需求设计追踪矩阵和评审清单，并包含一份或多份完整上下文详细设计评审稿。只有命中系统级架构影响时才包含完整 HLD 评审稿。
+评审包固定在 `.run-artifacts/teamwork-engineering-assistant/review-packages/<REQUIREMENT-ID>/`，至少包含影响评估、专项差异、实现测试计划、设计变更摘要、需求设计追踪矩阵和评审清单，并包含一份或多份完整上下文详细设计评审稿。只有命中系统级架构影响时才包含完整 HLD 评审稿。
 
 设计评审稿必须：
 

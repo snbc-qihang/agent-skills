@@ -1,3 +1,7 @@
+## GPT-6 适配变更说明
+
+团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
+
 # teamwork-engineering-assistant
 
 `agent-skills` 是 `teamwork-engineering-assistant`（团队研发助手）的统一作者源。产品完整继承 `engineering-assistant` 的 11 个工程原语、运行内核和平台协议，并以默认 `rrq-yq-team` profile 扩展团队交付流程与规范。
@@ -16,7 +20,7 @@
 1. 公开 skill：面向用户和模型的稳定工程原语。
 2. 内部 flow：组织多步骤任务的有向无环图。
 3. capability/policy pack：只在相关领域进入范围时加载的专业能力和规则。
-4. runtime kernel：负责路由、状态、证据、门禁、恢复和平台构建；CLI、核心工具 ID 和 artifact 路径保持 `ea`、`engineering_assistant_*` 和 `.run-artifacts/engineering-assistant/` 兼容；Hermes 注册名带团队前缀。
+4. runtime kernel：负责路由、状态、证据、门禁、恢复和平台构建；CLI、核心工具 ID 和 artifact 路径保持 `ea`、`engineering_assistant_*` 和 `.run-artifacts/teamwork-engineering-assistant/` 兼容；Hermes 注册名带团队前缀。
 
 目标是让执行过程可预测，而不是把输出固定成模板。Agent 负责语义判断和工程工作，运行时负责确定性状态与安全边界。
 
@@ -65,7 +69,7 @@ python3 scripts/publish_local.py --platform hermes --yes
 | `ea artifact-validate --kind database-design` | 只读校验关系型 OLTP 设计是否严格保留团队模板的章节顺序、层级和表头，且无未解析占位符 |
 | `ea artifact-validate --kind review-package` | 只读校验需求独立评审包、`reviewing` 状态、基线元数据和追踪矩阵 |
 | 人工审批与调研选择 | 本地记录用户明确决定并按 profile 的角色及范围检查；不提供身份验签 |
-| `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/engineering-assistant/` |
+| `RunState` 持久化、DAG 推进和 Runtime 门禁 | 平台调用 Runtime 工具后生效，状态只写入目标项目 `.run-artifacts/teamwork-engineering-assistant/` |
 | Hook 反馈采集 | Codex 仅从本插件 MCP Pre/Post 提升可观测的工具失败和 usage 信号；Hermes 可在插件轮次内补充纠正、阻断、返工和范围变化；两者都记录无原文 capture 元数据并支持独立审计处置 |
 | `ea validate/artifact-validate/eval/build/verify-package/canary-audit/canary-prepare/canary-attestation-import/canary-assemble/canary-validate` | 由开发者、CI 或发布维护者执行 |
 
@@ -177,7 +181,7 @@ Flow 不是提示词清单。`RuntimeEngine` 会消费 DAG、计算下一节点�
 
 正式团队需求设计和相应受治理节点显式提交 `requirement_id`、外部设计源绝对根目录及注册表。Runtime 只读解析当前 HLD、ADR、领域边界、上下文详细设计、模板、架构影响规则和维护规范，按本需求固定摘要，不跨任务复用，也不覆盖外部设计源。
 
-普通上下文需求只生成完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才生成完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/engineering-assistant/review-packages/<REQUIREMENT-ID>/`。提交评审前通过 `design-source-recheck` 核对 intake 的全部冻结源摘要；发生变化时返回 `stale`，重新核对并建立新 intake。评审包中的 `base_digest` 仅做格式与必填检查，不提供逐目标并行合并或语义一致性证明。外部团队负责评审、合并和维护唯一设计基线。
+普通上下文需求只生成完整上下文详细设计评审稿；服务边界、数据主权、依赖方向等系统级变化才生成完整 HLD/ADR 评审内容。评审稿固定为 `reviewing`，写入 `.run-artifacts/teamwork-engineering-assistant/review-packages/<REQUIREMENT-ID>/`。提交评审前通过 `design-source-recheck` 核对 intake 的全部冻结源摘要；发生变化时返回 `stale`，重新核对并建立新 intake。评审包中的 `base_digest` 仅做格式与必填检查，不提供逐目标并行合并或语义一致性证明。外部团队负责评审、合并和维护唯一设计基线。
 
 关系型 OLTP 影响命中时，按单表或强耦合表组在评审包 `09-database-designs/` 下生成数据库设计。除一级标题可使用实际文档名外，文档必须保留 `skills/codebase-design/references/relational-oltp-detailed-design-template.md` 的全部二、三级标题、顺序和表头；不适用章节保留并说明原因。`ea artifact-validate --kind database-design` 失败或仍有占位符时，数据库设计节点和评审包校验均不通过。未命中数据库时该能力为 `not_applicable`，不会要求普通设计任务生成数据库文档。
 
@@ -216,7 +220,7 @@ flowchart TB
 默认运行状态写入目标项目：
 
 ```text
-.run-artifacts/engineering-assistant/
+.run-artifacts/teamwork-engineering-assistant/
 ```
 
 反馈 capture、候选事件、审计处置和去标识化效率候选分别写入该目录下的 `feedback/captures/`、`feedback/events/`、`feedback/dispositions/` 与 `feedback/efficiency-candidates/`。Hook 不保存原始 transcript、原始命令、原始工具输入输出或内容摘录；capture 会保存内容摘要、长度、脱敏计数、采集时间，以及由 session/turn 单向哈希得到的可关联伪名引用。运行期 usage ledger 还会短暂保存 task 摘要、伪名 session/turn 引用和最近 256 条工具签名哈希，用于幂等汇总。Codex 在本插件 MCP 工具的 PostToolUse 完成后尝试汇总：若仍有已跟踪调用未完成则等待后续 PostToolUse，避免把正常并发误报为缺失完成事件；全部已跟踪调用完成且出现受控效率信号并成功生成候选时，按已汇总 revision 条件清理 ledger；若其间出现并发新调用，则将新增计数与散列事件原子换入新的 observation，而不删除或重复计入已汇总快照。尚无信号时保留有界散列签名，以便同轮后续插件调用识别重复输入；任一环节失败时也保留以便重试。真正缺失的 PostToolUse 只在平台提供的可靠轮次结束边界汇总。Hermes 在插件自身轮次结束时汇总。新插件调用会机会式清理超过 24 小时的孤儿 ledger，单次最多扫描 256 个文件。效率候选使用随机 ID，只保留聚合计数和受控信号；事件与处置用于长期优化输入，处置不覆盖原事件。处置文件中的 reason、actor_ref 和 evidence_refs 是人工或 CI 明确提交的原文元数据，Runtime 不会自动脱敏，因此不得放入凭证、个人信息或业务秘密；summary 和演进导出都不回显 reason 或 actor_ref，演进导出不复制处置 evidence_refs，并把事件 ID、复发键、事件 evidence_refs 和资产引用统一转成单向 SHA-256 opaque 引用。`ea feedback-summary --project-root <目标项目>` 以有界内存流式汇总效率、问题类型、人工参与、有效处置和有限条最近事件；复发键最多保留 256 个精确计数，超出部分只计入 `recurrence_overflow_event_count`，不会导致长期事件库占用无限增长。`ea feedback-disposition --project-root <目标项目> --input <文件>` 只导入人工或 CI 明确提供的不可变处置。`ea feedback-evolution-export --project-root <目标项目>` 只把当前有效且明确接受的反馈转换为确定性、可分页、去敏的回归提案，并固定标记 `requires_review=true`、`formal_assets_modified=false`。导出只在扫描前后短暂读取 disposition snapshot revision，不会在全库扫描期间占用处置写锁；后续页必须同时提交 opaque cursor 和该 revision，若处置集合变化则丢弃本页并明确要求从第一页重启，避免静默遗漏或输出过期 accepted 项。三者都不会自动修改 skill、flow、policy、eval 或门禁；当前 adapter 尚未获得可信 workspace 绑定，因此模型工具不暴露跨项目汇总、处置或演进入口。损坏 artifact 只计数、不回显内容。企业环境应由目标项目所有者为 captures/events/dispositions/candidates 制定合规保留与归档周期；Runtime 当前不擅自删除这些长期优化资料。环境变量 `ENGINEERING_ASSISTANT_FEEDBACK_MODE` 支持：

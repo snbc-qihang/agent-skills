@@ -22,7 +22,7 @@
   ],
   "rule_catalog_ref": null,
   "store": {
-    "run_root": ".run-artifacts/engineering-assistant",
+    "run_root": ".run-artifacts/teamwork-engineering-assistant",
     "formal_document_roots": [
       "docs/architecture",
       "docs/design",

@@ -1,8 +1,12 @@
+## GPT-6 适配变更说明
+
+团队版运行、反馈和观测使用独立目录；旧共享目录不自动迁移或合并。
+
 # 代码走查报告契约
 
 每次 teamwork 代码走查必须交付独立 Markdown 报告。用户指定路径时使用该路径；否则写入目标项目：
 
-`.run-artifacts/engineering-assistant/code-reviews/<REVIEW-ID>/code-review-report.md`
+`.run-artifacts/teamwork-engineering-assistant/code-reviews/<REVIEW-ID>/code-review-report.md`
 
 优先使用用户或 Runtime 提供的 `REVIEW-ID`。没有时使用规范化的 `<repository>-<candidate-short-sha>`；非 Git 阶段审计使用稳定任务或阶段 ID。只能覆盖绑定同一 base、head 和范围的既有报告；比较点变化时使用新的 ID。
 
