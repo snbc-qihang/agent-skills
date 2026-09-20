@@ -9,6 +9,7 @@
     "risk_signals": {"type": "array", "items": {"type": "string"}},
     "requested_external_actions": {"type": "array", "items": {"type": "string"}},
     "confirmed_actions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "read_only": {"type": "boolean", "default": false, "description": "用户明确要求仅分析、不持久化、不执行外部动作时为 true；不得用它掩盖实现或外部写入请求。"},
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
   },

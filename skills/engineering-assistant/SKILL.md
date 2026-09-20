@@ -3,15 +3,21 @@ name: engineering-assistant
 description: 将工程任务路由到最小充分的 skill 或受治理 flow。适用于请求跨越上下文、设计、实现、评审、发布或长期任务协调的场景。
 ---
 
+## GPT-6 适配变更说明
+
+明确只读路由和授权复用，普通新任务不强制查询历史运行；正式交付继续遵守原门禁。
+
 # 工程助手
 
 将请求转换为结构化 `RouteIntent`，再交给运行时路由器。只加载选中的公开 skill、flow 节点和被引用的 policy。
+
+同项目同时安装个人版与团队版时，优先遵守用户显式指定的插件和项目已配置的产品规则；同一受治理目标只选择一个产品拥有和推进运行。不要向两个 Runtime 重复 start/complete 或交叉提交证据。目标产品确实不明且会改变正式门禁时才澄清；普通单原语任务按已选择的插件内联完成。
 
 ## 操作流程
 
 1. 在询问用户前，先调查可能改变路由的事实。
 2. 单个原语能够完成任务时只选一个原语；只有存在依赖关系的多步骤任务才选择 flow。
-3. 明确记录范围、风险信号、外部动作、`confirmed_actions` 和置信度；不得通过删除原始风险信号绕过确认。
+3. 明确记录范围、风险信号、外部动作、`confirmed_actions` 和置信度。用户明确只读分析、不写文件且不执行外部动作时设置 `read_only=true`，保留审查对象的风险信号；其他任务省略该字段或为 false，不得借只读标记绕过写入授权。
 4. 遇到 `ask`、未确认的 `confirm` 或 `block` 时暂停该路由所依赖的动作；可独立完成的已授权调查继续。复用范围及风险未变化的既有授权，不能自行填写未获确认的 `confirmed_actions`。
 5. `proceed + flow` 默认启动或恢复持久化运行；直接 primitive skill 保持内联，不创建 run。
 6. 阶段或切片完成后按风险触发子 Agent 自动评审：先枚举固定 diff 的全部适用反例矩阵单元格和尚未闭合的可证伪风险假设。只有同时满足“固定 diff 涉及安全、事务、跨模块生产合同、发布或不可逆动作”和“未闭合假设集合非空”时，才把集合内彼此不重复的假设全部交给独立子 Agent 覆盖；可合并为一个限制证据范围和验收问题的有界任务，但不得只选择其中一个，也不得重复主 Agent 已完成的全量评审。不满足上述联合条件时使用已选 `code-review` 内联收口；平台不支持委派时逐项内联检查并把无法获得决定性证据的单元格标为 `not_evaluated`，不得据此降低标准门禁或原有人工门禁。用户或仓库明确要求多类独立评审时遵守该要求。
@@ -22,7 +28,7 @@ description: 将工程任务路由到最小充分的 skill 或受治理 flow。�
 
 `engineering_assistant_route` 返回 `recommended_execution=stop` 时遵守 `ask`、未确认的 `confirm` 或 `block`。返回 `inline` 时只执行所选 primitive skill。返回 `persisted_flow` 时固定执行 `route → start/resume → evidence-register → complete → 下一节点`：`start` 已返回首节点和 guidance，`complete` 已原子记录阶段结果并返回下一节点，只有恢复既有 run 才调用 `next`。每个节点直接遵守 Runtime 返回的 capability、skill、目标、完成标准、条件、证据合同和 policy 规则，不扫描 catalog 猜测执行方法。确定性校验失败且输入与外部状态未变化时不得原样重试。
 
-`.run-artifacts/engineering-assistant/<run-id>/run-state.json` 是进度的唯一状态源；manifest、steps、evidence、approvals、quality、investigations 和 providers 是不可变或按合同更新的追溯记录，只在实际使用时创建。新对话先用 `runs_list` 和 `run_status` 查找未终止 run。项目内文件通过 `evidence_register` 由 Runtime 校验路径并计算摘要；命令和远程状态只能记录为 `agent_reported`。本地 approval record 只证明对话中存在明确决定，不提供身份验签或抗篡改保证；生产、发布和破坏性动作仍服从平台权限确认。
+`.run-artifacts/engineering-assistant/<run-id>/run-state.json` 是进度的唯一状态源；manifest、steps、evidence、approvals、quality、investigations 和 providers 是不可变或按合同更新的追溯记录，只在实际使用时创建。只有明确续接受治理运行时才用 `runs_list` 和 `run_status` 查找未终止 run；普通新任务不扫描历史运行。项目内文件通过 `evidence_register` 由 Runtime 校验路径并计算摘要；命令和远程状态只能记录为 `agent_reported`。本地 approval record 只证明对话中存在明确决定，不提供身份验签或抗篡改保证；生产、发布和破坏性动作仍服从平台权限确认。
 
 用户未明确限制时，一次 Runtime 路由、一次代码索引查询、八个证据文件和六个 shell 命令仅作为采集参考值，不是执行上限。路由结果已经给出的 flow、skill、policy 直接使用，不得再读取 catalog 验证。优先检查用户点名的阶段结果、自测、代码评审和运行证据；索引查询还应覆盖当前 diff 中的鉴权、秘密、持久化和外部动作高风险路径。超过参考值时继续以完成任务所需的最小充分证据推进，并把超出原因留作持续优化输入，不得自动阻断或要求人工批准。
 

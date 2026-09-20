@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：离线路由显式保留只读意图；矛盾写入仍由核心路由拒绝。
 """Reference natural-language normalizer used by offline routing evals.
 
 Production adapters may use a model to produce RouteIntent.  This small,
@@ -69,6 +70,7 @@ def normalize_request(request: str) -> RouteIntent:
     risks = [risk for risk, patterns in RISK_PATTERNS.items() if any(re.search(pattern, text) for pattern in patterns)]
     actions = [action for action, patterns in ACTION_PATTERNS.items() if any(re.search(pattern, text) for pattern in patterns)]
     return RouteIntent(
+        read_only=bool(re.search(r"只读|\bread[- ]only\b", text)),
         task_kind=kind,
         requested_outcome=request.strip(),
         scope=[],

@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：只读意图显式内联执行，保留原始风险证据；矛盾的写入请求仍阻断，旧调用默认行为保持兼容。
 """Core data models for the engineering-assistant protocol."""
 
 from __future__ import annotations
@@ -101,6 +102,7 @@ class RouteIntent(Serializable):
     confirmed_actions: List[str]
     confidence: float
     evidence: List[str]
+    read_only: bool = False
 
 
 @dataclass(frozen=True)

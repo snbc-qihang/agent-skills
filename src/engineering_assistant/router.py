@@ -1,3 +1,4 @@
+# GPT-6 适配变更说明：只读意图显式内联执行，保留原始风险证据；矛盾的写入请求仍阻断，旧调用默认行为保持兼容。
 """Semantic intent router for the public skill surface."""
 
 from __future__ import annotations
@@ -55,7 +56,23 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
     if intent.task_kind not in ROUTES:
         raise ValidationFailure(f"unsupported task kind {intent.task_kind}")
 
+    if intent.read_only and (
+        intent.task_kind not in {"explain", "context", "research", "decide", "model", "domain-design", "shape", "design", "diagnose", "review", "wayfind"}
+        or intent.requested_external_actions
+        or {"forbidden", "authorization-denied"} & set(intent.risk_signals)
+    ):
+        decision = RouteDecision(
+            decision="block", flow_id=None, skill_ids=[],
+            policy_refs=list(catalog.profiles[profile_id].policy_refs),
+            evidence_level="inline", persistence_mode="blocked", approval_required=[],
+            reason="只读意图与请求的执行动作或明确拒绝授权相矛盾；先澄清冲突，不执行写入。",
+        )
+        _validate_decision(decision, catalog)
+        return decision
+
     flow_id, skill_ids = ROUTES[intent.task_kind]
+    if intent.read_only:
+        flow_id = None
     if intent.confidence < 0.55:
         decision = RouteDecision(
             decision="ask",
@@ -76,7 +93,8 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
 
     risk_signals = set(intent.risk_signals)
     approval_required = list(intent.requested_external_actions)
-    approval_required.extend(sorted(risk_signals & HIGH_RISK_SIGNALS))
+    if not intent.read_only:
+        approval_required.extend(sorted(risk_signals & HIGH_RISK_SIGNALS))
     if intent.task_kind == "release":
         approval_required.append("release-execution")
     approval_required = _ordered_unique(approval_required)
@@ -94,7 +112,7 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str = "de
         reason = "路由已经明确，但高风险或外部动作需要范围独立的审批。"
     else:
         decision_name = "proceed"
-        persistence = "target_repo" if flow_id or intent.task_kind == "wayfind" else "inline"
+        persistence = "target_repo" if flow_id or (intent.task_kind == "wayfind" and not intent.read_only) else "inline"
         reason = (
             "请求只需要解释；直接回答，不调用 skill。"
             if intent.task_kind == "explain"
