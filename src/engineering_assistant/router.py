@@ -24,7 +24,7 @@ ROUTES = {
     "shape": ("shape", ("repo-context", "domain-modeling", "decision-interview")),
     "prototype": (None, ("prototype",)),
     "design": ("design", ("repo-context", "domain-modeling", "codebase-design")),
-    "implement": ("implement", ("tdd", "code-review")),
+    "implement": ("implement", ("code-review",)),
     "diagnose": (None, ("diagnosing-bugs",)),
     "review": ("review", ("code-review",)),
     "release": ("release", ("engineering-assistant",)),
@@ -58,6 +58,9 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str | Non
     if intent.task_kind not in ROUTES:
         raise ValidationFailure(f"unsupported task kind {intent.task_kind}")
 
+    if intent.implementation_mode == "inline" and intent.task_kind != "implement":
+        raise ValidationFailure("implementation_mode inline is only valid for implement")
+
     if intent.read_only and (
         intent.task_kind not in {"explain", "context", "research", "decide", "model", "domain-design", "shape", "design", "diagnose", "review", "wayfind"}
         or intent.requested_external_actions
@@ -78,6 +81,14 @@ def route_intent(intent: RouteIntent, catalog: Catalog, *, profile_id: str | Non
         and intent.task_kind in TEAM_DELIVERY_TASKS
     ):
         flow_id = "team-delivery"
+    if (
+        intent.task_kind == "implement"
+        and intent.implementation_mode == "inline"
+        and not intent.risk_signals
+        and not intent.requested_external_actions
+        and flow_id == "implement"
+    ):
+        flow_id, skill_ids = None, ()
     if intent.read_only:
         flow_id = None
     if intent.confidence < 0.55:

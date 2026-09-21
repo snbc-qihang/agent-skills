@@ -522,7 +522,7 @@
       "id": "tdd",
       "version": "3.0.0.0-rc.1",
       "invocation_mode": "model",
-      "description": "在确认的公共 seam 上使用红绿循环纵向切片实现一个行为。适用于测试优先的功能、修复和回归覆盖。",
+      "description": "通过真实红绿反馈实现可测试的行为。适用于明确要求 TDD，或新增规则、缺陷修复适合失败测试驱动的场景；普通修改不自动触发。",
       "leading_words": [
         "seam",
         "红绿循环",

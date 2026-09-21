@@ -95,7 +95,7 @@ class RepositoryGovernanceTests(unittest.TestCase):
         self.assertIn("直接 primitive skill 保持内联，不创建 run", router)
         self.assertIn("evidence-register", router)
         self.assertIn("Runtime 返回的 capability、skill、目标、完成标准", router)
-        self.assertIn("否则只内联报告六维判断", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
+        self.assertIn("不固定输出六维报告", (ROOT / "skills/tdd/SKILL.md").read_text(encoding="utf-8"))
         self.assertIn("内联评审记录判断及不适用理由", review)
         self.assertIn("精确区间", context)
         self.assertIn("不得输出大目录清单", context)

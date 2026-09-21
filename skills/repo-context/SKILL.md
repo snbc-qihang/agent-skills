@@ -3,6 +3,8 @@ name: repo-context
 description: 基于源码证据梳理仓库模块、接口、数据、依赖、可复用能力和影响范围。适用于设计或大范围变更分析之前。
 ---
 
+本 skill 属于 `teamwork-engineering-assistant`；同名能力只使用当前插件版本。直接选中本 skill 时不为确认选择重新路由；需要 Runtime 时只使用本产品的 MCP 服务，同一目标不同时推进两个插件的运行。
+
 ## GPT-6 适配变更说明
 
 同步引用中的零写入边界，提供设计源不自动授权生成冻结副本。

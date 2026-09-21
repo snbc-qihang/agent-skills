@@ -3,6 +3,8 @@ name: engineering-assistant
 description: 将工程任务路由到最小充分的 skill 或受治理 flow。适用于请求跨越上下文、设计、实现、评审、发布或长期任务协调的场景。
 ---
 
+本 skill 属于 `teamwork-engineering-assistant`；同名能力只使用当前插件版本。直接选中本 skill 时不为确认选择重新路由；需要 Runtime 时只使用本产品的 MCP 服务，同一目标不同时推进两个插件的运行。
+
 ## GPT-6 适配变更说明
 
 只读分析内联执行，正式团队交付继续遵守设计源与人工审批门禁。
@@ -28,10 +30,12 @@ description: 将工程任务路由到最小充分的 skill 或受治理 flow。�
 
 当前平台尚未选择具体插件 skill 且暴露 `engineering_assistant_route` 时，先调用一次该工具获得 flow、skill 和 policy，再加载选中 skill。平台已经直接选择具体的插件限定 skill 时，该选择即为本轮平台能力选择结果，内联原语不得为了确认 skill 再次调用 `engineering_assistant_route`；它不等同于 Runtime `RouteDecision`，任务确实需要持久化 flow、Runtime 门禁或超出所选原语范围时才进入 Runtime 路由。不得扫描插件目录猜测路由、工作流或 validator。阶段状态审计、自动评审通过条件、blocker 和门禁判断属于 `code-review`，不是通用 `repo-context`。只有用户明确指向历史上下文，或当前仓库事实无法解释状态时，才加载 memory/rollout。
 
-`engineering_assistant_route` 返回的 `execution` 是宿主可信能力边界。`recommended_execution=stop` 时停止该路由建议的 skills，遵守 `ask`、未确认的 `confirm` 或 `block`；仍可继续独立的已授权工作。`recommended_execution=inline` 时只执行路由给出的公开 skill：直接 primitive skill 保持内联，不创建 run。`recommended_execution=persisted_flow` 时才可启动、推进、完成运行并以 `evidence-register` 登记证据或提交审批记录。Runtime 返回的 capability、skill、目标、完成标准直接作为当前节点的执行合同。`complete` 已经返回下一节点时不再额外调用 `next`，确定性校验失败且输入与外部状态未变化时不得原样重试。审批记录必须由 profile 名单内人员提交；本地记录不等同于外部验签。不得省略已选 skill 要求的 TDD、测试、风险评审或安全门禁。
+`engineering_assistant_route` 返回的 `execution` 是宿主可信能力边界。`recommended_execution=stop` 时停止该路由建议的 skills，遵守 `ask`、未确认的 `confirm` 或 `block`；仍可继续独立的已授权工作。`recommended_execution=inline` 时执行所选原语，直接 primitive skill 保持内联，不创建 run；`implement` 且 skills 为空时直接完成范围内实现和适用验证，不重新路由以补齐 skill，不创建 run。`recommended_execution=persisted_flow` 时才可启动、推进、完成运行并以 `evidence-register` 登记证据或提交审批记录。Runtime 返回的 capability、skill、目标、完成标准直接作为当前节点的执行合同。`complete` 已经返回下一节点时不再额外调用 `next`，确定性校验失败且输入与外部状态未变化时不得原样重试。审批记录必须由 profile 名单内人员提交；本地记录不等同于外部验签。按当前节点条件选择 TDD 或其他适用验证；明确要求的测试、风险评审、安全和人工门禁继续有效。
 
 用户未明确限制时，一次 Runtime 路由、一次代码索引查询、八个证据文件和六个 shell 命令仅作为采集参考值，不是执行上限。路由结果已经给出的 flow、skill、policy 直接使用，不得再读取 catalog 验证。优先检查用户点名的阶段结果、自测、代码评审和运行证据；索引查询还应覆盖当前 diff 中的鉴权、秘密、持久化和外部动作高风险路径。超过参考值时继续以完成任务所需的最小充分证据推进，并把超出原因留作持续优化输入，不得自动阻断或要求人工批准。
 
 只有工作超过一次会话时才读取 [references/wayfinding.md](references/wayfinding.md)。只有路由包含写入、发布、生产或外部动作时才读取 [references/authorization.md](references/authorization.md)。
 
 完成标准是交付用户选定的结果、适用的验证以及明确的证据缺口。已获授权的实现包含运行检查与必要修复，不在首版产出后停止；用户要求停留在审核或既有人工门禁处时遵守该边界。
+
+实现任务先选择最小充分验证。仅边界明确、无风险信号、无外部动作且不要求正式流程的局部改动，才设置 `implementation_mode=inline`；其他实现保留默认 `flow`。已有人工门禁必须保留，不能通过 inline 规避。团队正式交付 profile 不因该字段降级。TDD 只在适合失败反馈或明确要求时选择，测试方法不由改动行数决定。Runtime 的 `skill=null` 表示直接执行节点合同，不是工具缺失；不得猜测替代 skill 或重复路由。

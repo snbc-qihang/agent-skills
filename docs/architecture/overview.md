@@ -78,3 +78,11 @@ Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`�
 不可豁免安全规则优先级最高。外部动作、生产操作、降低安全级别和稳定版发布必须显式授权。Simulation 只用于测试报告器，不能作为产品效果证据。
 
 团队版按 capability 渐进返回规则、pack 与来源，完成节点时核对 required_evidence_kinds 及 rule 契约引用。team-delivery 的阶段边界在开始时固定并随状态恢复；设计、代码确认和发布门禁按各阶段保留。Hermes 团队工具注册名为 teamwork_engineering_assistant_*，调用内部稳定工具名前完成映射；运行模块按安装根目录隔离，不污染其他插件。
+
+## 实现方法与插件归属
+
+`RouteIntent.implementation_mode` 是可选的 `flow` / `inline` 字段，缺省保留实现流程。只有 `implement`、无风险信号和外部动作且未命中团队交付流程时允许 inline；调用方还须确认范围明确且无项目正式门禁。此时 skills 为空，宿主直接实现并运行适用验证，不创建 run。它不代表免测，也不能替代风险授权。
+
+实现流程不预选 TDD；切片记录验证方法，红绿节点仅在选择或明确要求 TDD 时执行，否则记录理由跳过。内部 capability 无公开 skill 时返回 `skill=null`，直接执行节点合同，不回退到其他 skill。既有正式质量及人工门禁保持有效。
+
+Codex 同时发现两套插件时，使用完整的插件限定 skill 名；同一目标只由一个产品拥有运行。直接选中 primitive 不重复路由，start/complete 已返回下一节点时不重复 next；输入与环境未变化的确定性失败不原样重试。

@@ -197,7 +197,7 @@
           "depends_on": [],
           "when": "always",
           "completion_criteria": [
-            "已明确一个有边界的纵向切片和允许修改的文件"
+            "已明确有边界的切片、允许修改的文件及适用验证方法；说明是否采用 TDD 和依据"
           ],
           "policy_refs": [
             "scope-control"
@@ -209,7 +209,7 @@
           "depends_on": [
             "select-slice"
           ],
-          "when": "存在稳定 seam",
+          "when": "本切片已选择 TDD，或用户／适用项目规范明确要求 TDD",
           "completion_criteria": [
             "同一行为同时具备红灯和绿灯证据"
           ],

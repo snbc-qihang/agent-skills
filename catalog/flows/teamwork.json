@@ -394,7 +394,7 @@
           "depends_on": [
             "work-slicing"
           ],
-          "when": "存在稳定公共 seam",
+          "when": "本切片已选择 TDD，或用户／适用项目规范明确要求 TDD",
           "completion_criteria": [
             "同一行为具备可复现红灯和绿灯证据"
           ],

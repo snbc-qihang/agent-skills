@@ -3,6 +3,8 @@ name: codebase-design
 description: 设计小接口、高杠杆、变更局部化的深模块和清晰 seam。适用于架构边界、可测试性或重构结构设计。
 ---
 
+本 skill 属于 `teamwork-engineering-assistant`；同名能力只使用当前插件版本。直接选中本 skill 时不为确认选择重新路由；需要 Runtime 时只使用本产品的 MCP 服务，同一目标不同时推进两个插件的运行。
+
 ## GPT-6 适配变更说明
 
 让追踪矩阵要求与正式团队设计触发条件一致，普通内联设计不扩充交付。
