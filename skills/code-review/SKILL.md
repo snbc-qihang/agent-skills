@@ -3,6 +3,8 @@ name: code-review
 description: 评审固定 diff、Pull Request 或阶段门禁，按仓库规范与需求识别有证据的问题。
 ---
 
+本 skill 属于 `engineering-assistant`；同名能力只使用当前插件版本。直接选中本 skill 时不为确认选择重新路由；需要 Runtime 时只使用本产品的 MCP 服务，同一目标不同时推进两个插件的运行。
+
 # 代码评审
 
 先固定比较点，再分别依据仓库规范和原始需求检查变化的行为。按变更风险选择足够的证据。

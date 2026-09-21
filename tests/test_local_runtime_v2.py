@@ -67,7 +67,7 @@ class LocalRuntimeV2Tests(unittest.TestCase):
         self.assertEqual("continue", started["gate"]["decision"])
         self.assertEqual("select-slice", started["node"]["id"])
         self.assertEqual("work-slicing", started["guidance"]["capability"])
-        self.assertEqual("tdd", started["guidance"]["skill"])
+        self.assertIsNone(started["guidance"]["skill"])
         run_dir = self.project / ".run-artifacts/engineering-assistant/run-local-v2"
         self.assertTrue((run_dir / "run-manifest.json").is_file())
         self.assertTrue((run_dir / "run-state.json").is_file())

@@ -103,6 +103,7 @@ class RouteIntent(Serializable):
     confidence: float
     evidence: List[str]
     read_only: bool = False
+    implementation_mode: str = "flow"
 
 
 @dataclass(frozen=True)

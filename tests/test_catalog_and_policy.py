@@ -77,7 +77,7 @@ class CatalogTests(unittest.TestCase):
                 any(pointer.path == "references/security-seams.md" for pointer in pointers),
                 skill_id,
             )
-        self.assertEqual(("implement", ("tdd", "code-review")), ROUTES["implement"])
+        self.assertEqual(("implement", ("code-review",)), ROUTES["implement"])
 
     def test_all_skill_and_pack_sources_exist_and_match_catalog(self) -> None:
         sourced = load_catalog(ROOT, require_sources=True)

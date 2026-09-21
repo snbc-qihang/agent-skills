@@ -162,11 +162,7 @@ class CodexAdapter:
             if len(short) < 25:
                 short = f"按明确范围、可验证证据和完成条件执行“{display}”工程工作流。"
             short = short[:64].rstrip()
-            invocation = (
-                "$engineering-assistant"
-                if skill.id == "engineering-assistant"
-                else f"$engineering-assistant:{skill.id}"
-            )
+            invocation = f"$engineering-assistant:{skill.id}"
             default_prompt = f"使用 {invocation} 基于证据完成这项工程任务。"
             content = (
                 "interface:\n"

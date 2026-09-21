@@ -36,7 +36,7 @@ from .governance import (
 )
 from .model import ApprovalRecord, InvestigationDecisionRecord, ProviderResult
 from .provider_runtime import ProviderExecutor
-from .router import ROUTES, route_intent
+from .router import route_intent
 from .state_store import ApprovalStore, StateStore
 from .validation import ValidationFailure, load_json, validate_instance
 from .version import CANONICAL_VERSION
@@ -467,20 +467,6 @@ class RuntimeTools:
             return None
         capability_id = node["capability"]
         skill = self.catalog.skill_for_capability(capability_id)
-        if skill is None:
-            fallback_skill_ids = next(
-                (
-                    skill_ids
-                    for flow_id, skill_ids in ROUTES.values()
-                    if flow_id == state.flow_id
-                ),
-                (),
-            )
-            skill = (
-                self.catalog.skills.get(fallback_skill_ids[0])
-                if fallback_skill_ids
-                else None
-            )
         policy_rules = []
         for policy_id in node.get("policy_refs", []):
             policy = self.catalog.policies[policy_id]

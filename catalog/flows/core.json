@@ -34,8 +34,8 @@
       "version": "2.2.0.0-rc.1",
       "entry_conditions": ["已有批准设计，或存在边界明确的实现任务"],
       "nodes": [
-        {"id": "select-slice", "capability": "work-slicing", "depends_on": [], "when": "always", "completion_criteria": ["已明确一个有边界的纵向切片和允许修改的文件"], "policy_refs": ["scope-control"]},
-        {"id": "red-green", "capability": "tdd", "depends_on": ["select-slice"], "when": "存在稳定 seam", "completion_criteria": ["同一行为同时具备红灯和绿灯证据"], "policy_refs": ["evidence-quality", "team-standards"]},
+        {"id": "select-slice", "capability": "work-slicing", "depends_on": [], "when": "always", "completion_criteria": ["已明确有边界的切片、允许修改的文件及适用验证方法；说明是否采用 TDD 和依据"], "policy_refs": ["scope-control"]},
+        {"id": "red-green", "capability": "tdd", "depends_on": ["select-slice"], "when": "本切片已选择 TDD，或用户／适用项目规范明确要求 TDD", "completion_criteria": ["同一行为同时具备红灯和绿灯证据"], "policy_refs": ["evidence-quality", "team-standards"]},
         {"id": "implementation", "capability": "implementation", "depends_on": ["select-slice"], "when": "always", "completion_criteria": ["实现保持在批准范围内并能够映射到验收标准"], "policy_refs": ["scope-control", "risk-approval"]},
         {"id": "quality", "capability": "quality-evidence", "depends_on": ["red-green", "implementation"], "when": "always", "completion_criteria": ["所有必需质量命令都有实际观察结果"], "policy_refs": ["evidence-quality"]},
         {"id": "review", "capability": "code-review", "depends_on": ["quality"], "when": "always", "completion_criteria": ["规范轴和需求轴均不存在未解决阻断项"], "policy_refs": ["team-standards", "risk-approval"]}

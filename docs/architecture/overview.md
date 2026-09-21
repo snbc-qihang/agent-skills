@@ -77,3 +77,11 @@ Claude Code 包由独立 adapter 生成 plugin manifest、MCP 与 hook 配置，
 ## 安全模型
 
 不可豁免安全规则优先级最高。外部动作、生产操作、降低安全级别和稳定版发布必须显式授权。Simulation 只用于测试报告器，不能作为产品效果证据。
+
+## 实现方法与插件归属
+
+`RouteIntent.implementation_mode` 是可选的 `flow` / `inline` 字段，缺省保留实现流程。只有 `implement`、无风险信号和外部动作且未命中团队交付流程时允许 inline；调用方还须确认范围明确且无项目正式门禁。此时 skills 为空，宿主直接实现并运行适用验证，不创建 run。它不代表免测，也不能替代风险授权。
+
+实现流程不预选 TDD；切片记录验证方法，红绿节点仅在选择或明确要求 TDD 时执行，否则记录理由跳过。内部 capability 无公开 skill 时返回 `skill=null`，直接执行节点合同，不回退到其他 skill。既有正式质量及人工门禁保持有效。
+
+Codex 同时发现两套插件时，使用完整的插件限定 skill 名；同一目标只由一个产品拥有运行。直接选中 primitive 不重复路由，start/complete 已返回下一节点时不重复 next；输入与环境未变化的确定性失败不原样重试。
