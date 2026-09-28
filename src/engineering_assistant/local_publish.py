@@ -204,12 +204,16 @@ def _roll_back(target: Path, backup: Path | None, stamp: str) -> Path | None:
 def _bundled_cli_candidates(command: str) -> list[Path]:
     if command != "codex" or sys.platform != "darwin":
         return []
+    app_bundles = (
+        Path("/Applications/ChatGPT.app"),
+        Path("/Applications/Codex.app"),
+        Path.home() / "Applications/ChatGPT.app",
+        Path.home() / "Applications/Codex.app",
+    )
     return [
-        Path("/Applications/ChatGPT.app/Contents/Resources/codex"),
-        Path("/Applications/Codex.app/Contents/Resources/codex"),
-        Path.home() / "Applications/ChatGPT.app/Contents/Resources/codex",
-        Path.home() / "Applications/Codex.app/Contents/Resources/codex",
-    ]
+        bundle / "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+        for bundle in app_bundles
+    ] + [bundle / "Contents/Resources/codex" for bundle in app_bundles]
 
 
 def _resolve_platform_cli(command: str, environment: dict[str, str] | None = None) -> str:
