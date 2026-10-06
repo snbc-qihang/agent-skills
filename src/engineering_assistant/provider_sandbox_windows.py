@@ -385,12 +385,13 @@ def run(
 def _run_lpac(
     command: list[str], bundle: Path, work: Path, environment: dict[str, str],
     timeout: int, output_limit: int, *, diagnostics: dict | None = None,
-    _console_diagnostic: bool = False, _loader_diagnostic: bool = False,
+    _console_diagnostic: bool | None = None, _loader_diagnostic: bool = False,
 ) -> tuple[int, bytes, bytes]:
-    # Production run() has no console override. The alternative flag is only
-    # available to the independent diagnostic's exact, fixed trusted command.
-    if type(_console_diagnostic) is not bool or type(_loader_diagnostic) is not bool or (
-            (_console_diagnostic or _loader_diagnostic) and (
+    # Production detaches from the controller console. NO_WINDOW fails during
+    # LPAC process initialization even for the fixed Kernel32-only control.
+    # Explicit console overrides remain restricted to the trusted diagnostic.
+    if (_console_diagnostic is not None and type(_console_diagnostic) is not bool) or type(_loader_diagnostic) is not bool or (
+            (_console_diagnostic is not None or _loader_diagnostic) and (
             command != _STARTUP_COMMAND or diagnostics is None)):
         raise OSError("console override is restricted to the fixed startup diagnostic")
     available = capability()
@@ -476,9 +477,9 @@ def _run_lpac(
         startup.attributes = attributes
         environment_block = _environment_block(environment, work)
         command_line = ctypes.create_unicode_buffer(subprocess.list2cmdline(actual_command))
-        # Swap only this fixed-code experiment's console mode. Production keeps
-        # CREATE_NO_WINDOW; DETACHED_PROCESS does not allocate/inherit a console.
-        console_flag = 0x8 if _console_diagnostic else 0x08000000
+        # Production DETACHED_PROCESS does not allocate/inherit a console.
+        # Explicit False preserves NO_WINDOW solely as a diagnostic control.
+        console_flag = 0x08000000 if _console_diagnostic is False else 0x8
         flags = 0x80000 | 0x400 | 0x4 | console_flag
         if _loader_diagnostic:
             flags |= 0x2  # DEBUG_ONLY_THIS_PROCESS: fixed trusted diagnostic only.

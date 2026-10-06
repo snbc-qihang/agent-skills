@@ -454,7 +454,8 @@ class ProviderSandboxContractTests(unittest.TestCase):
             root = Path(temporary)
             profile = root / "fresh-profile"
             profile.mkdir()
-            for experiment, loader, console_flag in ((False, False, 0x08000000), (True, False, 0x8),
+            for experiment, loader, console_flag in ((None, False, 0x8), (None, True, 0x8),
+                                                     (False, False, 0x08000000), (True, False, 0x8),
                                                      (False, True, 0x08000000), (True, True, 0x8)):
                 with self.subTest(experiment=experiment, loader=loader):
                     api = Mock()
@@ -508,7 +509,8 @@ class ProviderSandboxContractTests(unittest.TestCase):
                          patch.object(windows, "_secure_tree") as secure, \
                          patch.object(windows, "_private_runtime", return_value=root / "runtime" / "python.exe"):
                         with self.assertRaisesRegex(RuntimeError, "stop before native console startup"):
-                            windows._run_lpac(list(windows._STARTUP_COMMAND), root / "bundle", root / "work", {}, 1, 4096,
+                            command = list(windows._STARTUP_COMMAND) if loader or experiment is not None else ["python.exe", "provider.py"]
+                            windows._run_lpac(command, root / "bundle", root / "work", {}, 1, 4096,
                                               diagnostics={}, _console_diagnostic=experiment, _loader_diagnostic=loader)
                     self.assertEqual((api, profile, "owner", None, False), secure.call_args_list[0].args)
                     api.kernel.DeleteProcThreadAttributeList.assert_called_once()
@@ -516,7 +518,9 @@ class ProviderSandboxContractTests(unittest.TestCase):
 
     def test_windows_console_diagnostic_refuses_untrusted_commands_and_has_two_fresh_cases(self) -> None:
         for command, observer, alternative in ((["provider.exe"], {}, True),
+                                                (["provider.exe"], {}, False),
                                                 (windows._STARTUP_COMMAND, None, True),
+                                                (windows._STARTUP_COMMAND, None, False),
                                                 (windows._STARTUP_COMMAND + ["external-input"], {}, True),
                                                 (windows._STARTUP_COMMAND, {}, "registry_only")):
             with patch.object(windows, "_Api") as api:
