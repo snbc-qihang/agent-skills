@@ -102,8 +102,7 @@ class NativeLauncherTests(unittest.TestCase):
 
         flags = os.O_RDONLY | (artifact_fs.O_DIRECTORY if path.is_dir() else 0)
         descriptor = artifact_fs.open(str(path.absolute()), flags)
-        handle = artifact_fs._kernel.ReOpenFile(artifact_fs._handle(descriptor),
-                                               0x40080, 7, 0x02200000)
+        handle = artifact_fs._reopen_handle(descriptor, 0x60080)
         if handle in (None, ctypes.c_void_p(-1).value):
             artifact_fs.close(descriptor)
             raise ctypes.WinError(ctypes.get_last_error())

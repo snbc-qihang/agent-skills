@@ -111,6 +111,52 @@ class ProviderRuntimeTests(unittest.TestCase):
         self.assertEqual(subprocess.DEVNULL, calls[0][1]["stdin"])
         self.assertTrue(calls[0][1]["start_new_session"])
 
+    def test_windows_trusted_bootstrap_restores_private_directory_options(self) -> None:
+        # This portable seam executes the bootstrap, not Windows confinement.
+        # Windows native qualification below must still pass real LPAC launch.
+        (self.bundle / "scripts/search.py").write_text(
+            "import os\n"
+            "keys = ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')\n"
+            "assert all(os.environ[key] == os.getcwd() for key in keys)\n"
+            "print('## Design System: private directory options')\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+
+        def launch(command, _bundle, work, environment, timeout, _limit):
+            redirected = dict(environment)
+            redirected.update({key: 'unapproved-profile' for key in (
+                'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR',
+            )})
+            result = subprocess.run(command, cwd=work, env=redirected, capture_output=True, timeout=timeout)
+            return result.returncode, result.stdout, result.stderr
+
+        with patch('engineering_assistant.provider_runtime.platform.system', return_value='Windows'), patch.object(
+            ProviderExecutor, '_sandbox_command', side_effect=lambda command, *_args: command,
+        ), patch('engineering_assistant.provider_sandbox_windows.run', side_effect=launch):
+            result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual('completed', result.status, result.warning)
+        self.assertEqual('## Design System: private directory options', result.output)
+
+    @unittest.skipUnless(sys.platform == "win32", "native Windows LPAC environment redirection")
+    def test_windows_lpac_keeps_temporary_and_profile_options_in_private_work(self) -> None:
+        self._require_production_sandbox()
+        (self.bundle / "scripts/search.py").write_text(
+            "import os, tempfile\n"
+            "from pathlib import Path\n"
+            "keys = ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')\n"
+            "assert all(os.environ[key] == os.getcwd() for key in keys)\n"
+            "assert 'HOME' not in os.environ and 'HTTP_PROXY' not in os.environ\n"
+            "with tempfile.TemporaryFile() as stream:\n"
+            "    stream.write(b'private temporary data')\n"
+            "assert Path(tempfile.gettempdir()).samefile(Path.cwd())\n"
+            "print('## Design System: private temporary directory')\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+        result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("completed", result.status, result.warning)
+
     def test_darwin_venv_uses_the_base_framework_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

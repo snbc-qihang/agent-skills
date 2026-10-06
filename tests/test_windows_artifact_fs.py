@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import ast
 import ctypes
+import inspect
 import os
 import struct
 import sys
 import tempfile
+import textwrap
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -27,10 +30,102 @@ from engineering_assistant.windows_artifact_fs import (
 
 
 class WindowsProtocolTests(unittest.TestCase):
+    def test_launcher_acl_fixture_uses_bound_reopen_with_security_access(self) -> None:
+        tree = ast.parse((ROOT / "tests/test_native_launcher.py").read_text(encoding="utf-8"))
+        method = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef) and node.name == "_windows_dacl")
+        calls = [node for node in ast.walk(method)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
+        self.assertFalse(any(node.func.attr == "ReOpenFile" for node in calls))
+        reopened = [node for node in calls if node.func.attr == "_reopen_handle"]
+        self.assertEqual(1, len(reopened))
+        self.assertEqual("descriptor", reopened[0].args[0].id)
+        self.assertEqual(0x60080, reopened[0].args[1].value)
+
+    def test_native_acl_fixture_reopens_through_the_bound_identity_api(self) -> None:
+        source = inspect.getsource(
+            WindowsArtifactIntegrationTests.test_created_file_and_chmod_preserve_private_owner_dacl
+        )
+        calls = [node for node in ast.walk(ast.parse(textwrap.dedent(source)))
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
+        self.assertFalse(any(node.func.attr == "ReOpenFile" for node in calls))
+        reopened = [node for node in calls if node.func.attr == "_reopen_handle"]
+        self.assertEqual(1, len(reopened), "DACL integration must use the bound NTFS identity reopening API")
+        self.assertEqual("descriptor", reopened[0].args[0].id)
+        self.assertEqual(0x20080, reopened[0].args[1].value)
+
+    def test_scalar_file_information_passes_its_address_to_native_api(self) -> None:
+        filesystem = object.__new__(WindowsFilesystem)
+        filesystem._handle = Mock(return_value=123)
+        observed = []
+        signature = ctypes.CFUNCTYPE(ctypes.c_int32, ctypes.c_void_p, ctypes.c_void_p,
+                                     ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32)
+
+        def set_information(_handle, _status, buffer, size, information_class):
+            observed.append((ctypes.string_at(buffer, size), information_class))
+            return 0
+
+        filesystem._nt = SimpleNamespace(NtSetInformationFile=signature(set_information))
+        filesystem._set_information(8, ctypes.c_uint32(3), 64)
+        self.assertEqual([(struct.pack("<I", 3), 64)], observed)
+
+    def test_directory_reopen_uses_retained_ntfs_id_instead_of_path(self) -> None:
+        filesystem = object.__new__(WindowsFilesystem)
+        filesystem._attributes = Mock(return_value=0x10)
+        observed = {}
+
+        def query(handle, _status, output, _size, information_class):
+            self.assertEqual(6, information_class)  # FileInternalInformation
+            self.assertIn(handle, (42, 99))
+            output._obj.value = 789
+            return 0
+
+        def reopen(volume, identity, access, sharing, security, flags):
+            information = identity._obj
+            observed.update(volume=volume, identity=information.Id.FileId, kind=information.Type,
+                            size=information.dwSize, access=access, sharing=sharing,
+                            security=security, flags=flags)
+            return 99
+
+        filesystem._nt = SimpleNamespace(NtQueryInformationFile=query)
+        filesystem._kernel = SimpleNamespace(OpenFileById=reopen, GetFileType=Mock(return_value=1),
+            ReOpenFile=Mock(side_effect=PermissionError("native directory ReOpenFile: WinError 5")),
+            CloseHandle=Mock())
+        filesystem._crt = SimpleNamespace(get_osfhandle=Mock(return_value=42),
+                                          open_osfhandle=Mock(return_value=7))
+        windows_os = SimpleNamespace(**{name: getattr(os, name) for name in dir(os)})
+        windows_os.O_BINARY = windows_os.O_NOINHERIT = 0
+        with patch("engineering_assistant.windows_artifact_fs.os", windows_os):
+            self.assertEqual(7, filesystem._reopen_directory(8))
+        self.assertEqual(42, observed["volume"])
+        self.assertEqual(789, observed["identity"])
+        self.assertEqual(0, observed["kind"])
+        self.assertEqual(24, observed["size"])
+        self.assertEqual(7, observed["sharing"])
+        self.assertIsNone(observed["security"])
+        self.assertTrue(observed["flags"] & 0x200000)  # Never follow a reparse point.
+        filesystem._kernel.ReOpenFile.assert_not_called()
+
+    def test_ntfs_reopen_rejects_changed_or_reparse_identity_before_crt_fd(self) -> None:
+        for attributes, reason in ((0x400, "unsafe"), (0x10, "changed its NTFS identity")):
+            with self.subTest(attributes=attributes):
+                filesystem = object.__new__(WindowsFilesystem)
+                filesystem._handle = Mock(return_value=42)
+                filesystem._attributes = Mock(side_effect=(0x10, attributes))
+                filesystem._file_id = Mock(side_effect=(789, 790))
+                filesystem._kernel = SimpleNamespace(OpenFileById=Mock(return_value=99),
+                    GetFileType=Mock(return_value=1), CloseHandle=Mock())
+                filesystem._crt = SimpleNamespace(open_osfhandle=Mock(return_value=7))
+                with self.assertRaisesRegex(ValidationFailure, reason):
+                    filesystem._reopen_directory(8)
+                filesystem._kernel.CloseHandle.assert_called_once_with(99)
+                filesystem._crt.open_osfhandle.assert_not_called()
+
     def test_truncated_ace_sid_is_rejected_before_native_sid_conversion(self) -> None:
         filesystem = object.__new__(WindowsFilesystem)
         filesystem._user_sid = "current-user"
         filesystem._handle = Mock(return_value=12)
+        filesystem._reopen_handle = Mock(return_value=123)
         filesystem._attributes = Mock(return_value=0x10)
         filesystem._sid_text = Mock(return_value="current-user")
         # ACE reserves eight SID bytes but claims one further subauthority.
@@ -234,8 +329,7 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
     def test_new_staging_owner_assignment_preserves_rejected_broad_dacl(self) -> None:
         directory = self.artifacts.ensure_directory("new-staging")
         with self.artifacts.open_directory("new-staging") as descriptor:
-            handle = artifact_fs._kernel.ReOpenFile(artifact_fs._handle(descriptor),
-                                                   0x60080, 7, 0x02200000)
+            handle = artifact_fs._reopen_handle(descriptor, 0x60080)
             self.assertNotIn(handle, (None, ctypes.c_void_p(-1).value))
             private = f"D:P(A;;FA;;;{artifact_fs._user_sid})(A;;FA;;;SY)"
             try:
@@ -251,8 +345,7 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
         directory = self.artifacts.ensure_directory("private")
         private = f"D:P(A;;FA;;;{artifact_fs._user_sid})(A;;FA;;;SY)"
         with self.artifacts.open_directory("private") as descriptor:
-            handle = artifact_fs._kernel.ReOpenFile(artifact_fs._handle(descriptor),
-                                                   0x60080, 7, 0x02200000)
+            handle = artifact_fs._reopen_handle(descriptor, 0x60080)
             self.assertNotIn(handle, (None, ctypes.c_void_p(-1).value))
             try:
                 for principal in ("WD", "AU", "BA"):
@@ -322,8 +415,7 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
                 artifact_fs.close(descriptor)
             descriptor = artifact_fs.open("private.json", os.O_RDONLY, dir_fd=directory)
             try:
-                handle = artifact_fs._kernel.ReOpenFile(artifact_fs._handle(descriptor),
-                                                       0x20000, 7, 0x02200000)
+                handle = artifact_fs._reopen_handle(descriptor, 0x20080)
                 self.assertNotIn(handle, (None, ctypes.c_void_p(-1).value))
                 advapi = ctypes.WinDLL("advapi32", use_last_error=True)
                 advapi.GetSecurityInfo.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32,
@@ -365,13 +457,27 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
         project.mkdir(parents=True)
         self.artifacts = ArtifactIO(project, ".")
         self.artifacts.create_immutable_json({"trusted": True}, "old.json")
-        parent.rename(self.root / "held")
-        project.mkdir(parents=True)
-        (project / "old.json").write_text('{"trusted": false}', encoding="utf-8")
-        self.assertEqual({"trusted": True}, self.artifacts.read_json("old.json"))
-        self.artifacts.create_immutable_json({"trusted": True}, "new.json")
-        self.assertTrue((self.root / "held/project/new.json").exists())
-        self.assertFalse((project / "new.json").exists())
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "old.json").write_text('{"trusted": false}', encoding="utf-8")
+        held = self.root / "held"
+        with self.artifacts.open_directory() as opened:
+            before = artifact_fs.fstat(opened)
+            # NTFS refuses ancestor rename while its child directory is open,
+            # even when handles share DELETE (MS-FSA section 2.1.4.2).
+            with self.assertRaises(PermissionError) as rejected:
+                parent.rename(held)
+            self.assertEqual(5, rejected.exception.winerror)
+            after, named = artifact_fs.fstat(opened), project.stat()
+            identity = (before.st_dev, before.st_ino)
+            self.assertEqual(identity, (after.st_dev, after.st_ino))
+            self.assertEqual(identity, (named.st_dev, named.st_ino))
+            self.assertFalse(held.exists())
+            self.assertEqual({"trusted": True}, self.artifacts.read_json("old.json"))
+            self.artifacts.create_immutable_json({"trusted": True}, "new.json")
+            self.assertTrue((project / "new.json").exists())
+            self.assertFalse((outside / "new.json").exists())
+            self.assertEqual('{"trusted": false}', (outside / "old.json").read_text(encoding="utf-8"))
 
     def test_directory_fd_copy_hash_rename_and_delete_contract(self) -> None:
         path, descriptor, metadata = self.artifacts.create_directory_exclusive_open("staging")

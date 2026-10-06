@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.compiler import build_package, verify_package  # noqa: E402
 import engineering_assistant.compiler as compiler_module  # noqa: E402
-from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
+from engineering_assistant.artifact_io import ArtifactIO, artifact_fs  # noqa: E402
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
 from engineering_assistant.catalog import load_catalog  # noqa: E402
 from engineering_assistant.version import platform_version  # noqa: E402
@@ -165,19 +165,32 @@ class CompilerAdapterTests(unittest.TestCase):
         output = self.root / "bound-output"
         marker = self.root / "replacement-build-marker.txt"
         original_compile = compiler_module._compile_package
-        replaced = False
+        attack_attempted = False
 
         def replace_temporary_root_before_compile(*args, **kwargs):
-            nonlocal replaced
+            nonlocal attack_attempted
             temporary_roots = list(
                 self.root.glob(".engineering-assistant-build-*")
             )
             self.assertEqual(1, len(temporary_roots))
             temporary_root = temporary_roots[0]
-            temporary_root.rename(self.root / "held-build-before-compile")
-            temporary_root.mkdir()
+            held = self.root / "held-build-before-compile"
+            if os.name == "nt":
+                # NTFS keeps the parent in place while the package child is open.
+                identity = (temporary_root / "package").stat()
+                with self.assertRaises(PermissionError) as denied:
+                    temporary_root.rename(held)
+                self.assertEqual(5, denied.exception.winerror)
+                retained = artifact_fs.fstat(args[2]._root_fd)
+                current = (temporary_root / "package").stat()
+                self.assertEqual((identity.st_dev, identity.st_ino), (current.st_dev, current.st_ino))
+                self.assertEqual((retained.st_dev, retained.st_ino), (current.st_dev, current.st_ino))
+                self.assertFalse(held.exists())
+            else:
+                temporary_root.rename(held)
+                temporary_root.mkdir()
             marker.write_text("unrelated", encoding="utf-8")
-            replaced = True
+            attack_attempted = True
             return original_compile(*args, **kwargs)
 
         with mock.patch.object(
@@ -187,7 +200,7 @@ class CompilerAdapterTests(unittest.TestCase):
         ):
             build_package(ROOT, "codex", output)
 
-        self.assertTrue(replaced)
+        self.assertTrue(attack_attempted)
         self.assertEqual("unrelated", marker.read_text(encoding="utf-8"))
         verify_package(output)
 

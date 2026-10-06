@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shlex
 import shutil
 import sys
 import tempfile
@@ -35,6 +36,10 @@ def fixed_digest(seed: str) -> str:
 
 def bytes_digest(payload: bytes) -> str:
     return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def quote_transcript_path(path: Path) -> str:
+    return shlex.quote(path.as_posix())
 
 
 class CanaryProtocolAuditTests(unittest.TestCase):
@@ -147,7 +152,7 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             path = self.plugin_root / "skills" / skill_id / "SKILL.md"
             path.parent.mkdir(parents=True, exist_ok=True)
             payload = f"---\nname: {skill_id}\ndescription: test\n---\n# {skill_id}\n"
-            path.write_text(payload, encoding="utf-8")
+            path.write_bytes(payload.encode("utf-8"))
             self.plugin_skill_digests[skill_id] = bytes_digest(payload.encode())
         package_layout = {
             ".codex-plugin/plugin.json": b"{}\n",
@@ -381,7 +386,7 @@ class CanaryProtocolAuditTests(unittest.TestCase):
                             "item": {
                                 "type": "command_execution",
                                 "command": "; ".join(
-                                    f"sed -n '1,260p' {self.plugin_root}/skills/{skill}/SKILL.md"
+                                    f"sed -n '1,260p' {quote_transcript_path(self.plugin_root / 'skills' / skill / 'SKILL.md')}"
                                     for skill in skills
                                 ),
                                 "aggregated_output": "".join(
@@ -1921,10 +1926,10 @@ class CanaryProtocolAuditTests(unittest.TestCase):
             and event.get("item", {}).get("type") == "command_execution"
         )
         command_item["command"] = (
-            f"wc -l {self.plugin_root}/skills/tdd/SKILL.md "
-            f"{self.plugin_root}/skills/code-review/SKILL.md && "
-            f"sed -n '1,260p' {self.plugin_root}/skills/tdd/SKILL.md && "
-            f"sed -n '1,260p' {self.plugin_root}/skills/code-review/SKILL.md"
+            f"wc -l {quote_transcript_path(self.plugin_root / 'skills/tdd/SKILL.md')} "
+            f"{quote_transcript_path(self.plugin_root / 'skills/code-review/SKILL.md')} && "
+            f"sed -n '1,260p' {quote_transcript_path(self.plugin_root / 'skills/tdd/SKILL.md')} && "
+            f"sed -n '1,260p' {quote_transcript_path(self.plugin_root / 'skills/code-review/SKILL.md')}"
         )
         transcript_path.write_text(
             "\n".join(json.dumps(event) for event in events) + "\n",
@@ -1940,6 +1945,45 @@ class CanaryProtocolAuditTests(unittest.TestCase):
 
         report = self.audit(records)
         self.assertEqual([], report["failures"])
+
+    def test_skill_read_in_space_directory_keeps_root_digest_and_full_content_binding(self) -> None:
+        moved = self.evidence_root / "plugin with spaces"
+        self.plugin_root.rename(moved)
+        self.plugin_root = moved
+        self.protocol["execution_config"]["plugin_root"] = str(moved)
+        self.protocol["execution_config_digest"] = digest(self.protocol["execution_config"])
+        self.protocol_digest = digest(self.protocol)
+        records = self.complete_records()
+        report = self.audit(records)
+        self.assertEqual([], report["failures"])
+
+        minimum = next(record for record in records if record["arm_id"] == "minimum_skills")
+        transcript_path = self.evidence_root / minimum["platform_transcript"]["ref"]
+        events = [json.loads(line) for line in transcript_path.read_text().splitlines()]
+        item = next(event["item"] for event in events
+                    if event.get("item", {}).get("type") == "command_execution")
+        arguments = {"plugin_root": moved, "plugin_skill_digests": self.plugin_skill_digests,
+                     "plugin_content_root": None}
+        self.assertEqual({"tdd", "code-review"}, canary_protocol._verified_skill_reads(item, **arguments))
+        for attack in ("content", "digest", "root"):
+            changed = dict(item)
+            checks = dict(arguments)
+            if attack == "content":
+                changed["aggregated_output"] = "name: tdd\nname: code-review\n"
+            elif attack == "digest":
+                checks["plugin_skill_digests"] = {"tdd": fixed_digest("wrong"),
+                                                 "code-review": self.plugin_skill_digests["code-review"]}
+            else:
+                checks["plugin_root"] = self.evidence_root / "other plugin"
+            with self.subTest(attack=attack):
+                self.assertEqual(set(), canary_protocol._verified_skill_reads(changed, **checks))
+
+    def test_skill_fixture_digests_are_bound_to_exact_file_bytes(self) -> None:
+        for skill_id, expected in self.plugin_skill_digests.items():
+            payload = (self.plugin_root / "skills" / skill_id / "SKILL.md").read_bytes()
+            with self.subTest(skill_id=skill_id):
+                self.assertEqual(expected, bytes_digest(payload))
+                self.assertNotIn(b"\r", payload)
 
     def test_descendant_usage_requires_native_provenance(self) -> None:
         records = self.complete_records()
@@ -2468,13 +2512,13 @@ class CanaryProtocolAuditTests(unittest.TestCase):
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(f"---\nname: {skill_id}\n---\n", encoding="utf-8")
                 command_item["command"] = "; ".join(
-                    f"cat {fake_root}/skills/{skill_id}/SKILL.md"
+                    f"cat {quote_transcript_path(fake_root / 'skills' / skill_id / 'SKILL.md')}"
                     for skill_id in ("tdd", "code-review")
                 )
                 command_item["aggregated_output"] = "---\nname: tdd\n---\n---\nname: code-review\n---\n"
             else:
                 command_item["command"] = "; ".join(
-                    f"sed -n '/^name:/p' {self.plugin_root}/skills/{skill_id}/SKILL.md"
+                    f"sed -n '/^name:/p' {quote_transcript_path(self.plugin_root / 'skills' / skill_id / 'SKILL.md')}"
                     for skill_id in ("tdd", "code-review")
                 )
                 command_item["aggregated_output"] = "name: tdd\nname: code-review\n"

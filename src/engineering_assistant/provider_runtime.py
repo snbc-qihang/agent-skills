@@ -144,6 +144,15 @@ class ProviderExecutor:
                 f"boundary=runpy.run_path({str(sandbox_module)!r});"
                 f"boundary['restrict']({str(self._runtime_root())!r},{str(bundle)!r},{str(work)!r});"
             )
+        elif platform.system() == "Windows":
+            # CreateProcessW may redirect AppContainer directory options into
+            # its profile. Restore only the private cwd after LPAC/Job setup
+            # and before loading any Provider code; the profile stays closed.
+            bootstrap += (
+                "import os;"
+                "os.environ.update(dict.fromkeys("
+                "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'),os.getcwd()));"
+            )
         bootstrap += (
             "entry=sys.argv[2];"
             "sys.path.insert(0,sys.argv[1]);"

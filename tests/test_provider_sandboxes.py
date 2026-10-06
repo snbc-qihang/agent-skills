@@ -91,6 +91,29 @@ class ProviderSandboxContractTests(unittest.TestCase):
         with self.assertRaisesRegex(OSError, "could not confirm exit"):
             windows._terminate_process(SimpleNamespace(kernel=kernel), 123, 456, False)
 
+    def test_windows_lpac_creation_environment_has_private_local_app_data(self) -> None:
+        work = Path("private-work")
+        block = windows._environment_block({
+            "SystemRoot": "C:\\Windows", "TMP": "old-profile",
+            "LOCALAPPDATA": "host-app-data", "HOME": "host-home", "HTTP_PROXY": "host-proxy",
+        }, work)
+        entries = {name: value for name, value in (
+            item.split("=", 1) for item in block[:].rstrip("\0").split("\0")
+        )}
+        self.assertEqual(str(work), entries.get("LOCALAPPDATA"))
+        self.assertEqual(str(work), entries["TMP"])
+        self.assertNotIn("host-", block[:])
+        self.assertNotIn("HOME", entries)
+        self.assertNotIn("HTTP_PROXY", entries)
+        self.assertTrue(block[:].endswith("\0\0"))
+
+    def test_windows_environment_is_case_insensitive_and_rejects_embedded_nuls(self) -> None:
+        block = windows._environment_block({"SystemRoot": "C:\\Windows", "TMP": "work", "LANG": "C.UTF-8"}, Path("work"))
+        names = [item.split("=", 1)[0] for item in block[:].rstrip("\0").split("\0")]
+        self.assertEqual(sorted(names, key=str.upper), names)
+        with self.assertRaisesRegex(OSError, "invalid.*environment"):
+            windows._environment_block({"SystemRoot": "C:\\Windows\0HOME=host"}, Path("work"))
+
 
 if __name__ == "__main__":
     unittest.main()

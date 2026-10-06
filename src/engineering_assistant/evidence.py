@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import replace
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.parse import unquote, urlparse
 
 from .artifact_io import ArtifactConflict
@@ -156,13 +156,30 @@ class EvidenceStore:
         return replace(evidence, digest=digest)
 
     def _local_path(self, uri: str) -> Path | None:
-        parsed = urlparse(uri)
-        if parsed.scheme == "file":
-            candidate = Path(unquote(parsed.path)).resolve()
-            return self._bounded_local_path(candidate)
-        if parsed.scheme:
-            return None
+        # urlparse treats a native drive prefix (C:) as a URL scheme. Detect
+        # Windows paths first so the runtime still observes and hashes files.
+        if not PureWindowsPath(uri).drive and not uri.startswith(("\\\\", "//")):
+            parsed = urlparse(uri)
+            if parsed.scheme == "file":
+                if parsed.netloc.lower() not in {"", "localhost"}:
+                    raise ValidationFailure("local evidence file URI must not refer to a remote host")
+                uri = unquote(parsed.path)
+                # file:///C:/project/file is a drive path, not a root-relative
+                # \\C:\\project\\file. Leave ordinary POSIX URI paths unchanged.
+                if uri.startswith("/") and PureWindowsPath(uri[1:]).drive:
+                    uri = uri[1:]
+            elif parsed.scheme:
+                return None
+        windows = PureWindowsPath(uri)
+        if uri.startswith(("\\\\", "//")) or (
+            windows.drive and (
+                len(windows.drive) != 2 or windows.drive[1] != ":" or not windows.is_absolute()
+            )
+        ):
+            raise ValidationFailure("local evidence must not use UNC, device or drive-relative paths")
         candidate = Path(uri)
+        if windows.drive and not candidate.is_absolute():
+            raise ValidationFailure("Windows drive evidence requires a native Windows filesystem")
         resolved = (
             candidate
             if candidate.is_absolute()

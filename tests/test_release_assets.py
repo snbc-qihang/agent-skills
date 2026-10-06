@@ -197,6 +197,17 @@ class ReleaseAssetTests(unittest.TestCase):
                     self.assemble()
                 path.write_bytes(previous)
 
+    def test_windows_private_provider_environment_requires_native_execution(self):
+        test_id = (
+            "test_provider_runtime.ProviderRuntimeTests."
+            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work"
+        )
+        self.mutate("windows-x64", "native-tests.json", lambda report: report.update(
+            native_tests=[name for name in report["native_tests"] if name != test_id]
+        ))
+        with self.assertRaisesRegex(ValidationFailure, "原生必需"):
+            self.assemble()
+
     def test_runtime_checks_and_provider_eleven_boundaries_cannot_be_soft_passed(self):
         path = self.artifacts["linux-x64"] / "runtime-qualification.json"
         original = path.read_bytes()

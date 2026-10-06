@@ -79,7 +79,10 @@ def required_native_tests(target: str) -> frozenset[str]:
     if target.startswith("macos-"):
         required |= {"test_provider_runtime.ProviderRuntimeTests.test_production_sandbox_denies_shared_temp_and_child_processes"}
     if target == "windows-x64":
-        required |= _WINDOWS_TESTS
+        required |= _WINDOWS_TESTS | {
+            "test_provider_runtime.ProviderRuntimeTests."
+            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work"
+        }
     return frozenset(required)
 
 

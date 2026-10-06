@@ -50,6 +50,14 @@ class _ACLSizeInformation(ctypes.Structure):
     _fields_ = [("AceCount", _DWORD), ("AclBytesInUse", _DWORD), ("AclBytesFree", _DWORD)]
 
 
+class _FileIdentifier(ctypes.Union):
+    _fields_ = [("FileId", ctypes.c_uint64), ("Reserved", ctypes.c_ubyte * 16)]
+
+
+class _FileIdDescriptor(ctypes.Structure):
+    _fields_ = [("dwSize", _DWORD), ("Type", ctypes.c_int32), ("Id", _FileIdentifier)]
+
+
 def _validate_child_name(name: str) -> None:
     """Reject Windows device aliases, ADS, and ambiguous Win32 spelling."""
 
@@ -133,7 +141,8 @@ class WindowsFilesystem:
                    [_HANDLE, ctypes.c_int, ctypes.c_void_p, _DWORD])
         self._bind(self._kernel, "GetFileType", _DWORD, [_HANDLE])
         self._bind(self._kernel, "CloseHandle", ctypes.c_int, [_HANDLE])
-        self._bind(self._kernel, "ReOpenFile", _HANDLE, [_HANDLE, _DWORD, _DWORD, _DWORD])
+        self._bind(self._kernel, "OpenFileById", _HANDLE,
+                   [_HANDLE, ctypes.POINTER(_FileIdDescriptor), _DWORD, _DWORD, ctypes.c_void_p, _DWORD])
         self._bind(self._kernel, "GetFinalPathNameByHandleW", _DWORD,
                    [_HANDLE, ctypes.c_wchar_p, _DWORD, _DWORD])
         self._bind(self._kernel, "GetCurrentProcess", _HANDLE, [])
@@ -243,10 +252,11 @@ class WindowsFilesystem:
         if self._attributes(self._handle(descriptor)) & 0x400:
             raise ValidationFailure("private owner cannot target a reparse point")
         security = self._security_descriptor(f"O:{self._user_sid}")
-        handle = self._kernel.ReOpenFile(self._handle(descriptor), 0x80080, 7, 0x82200000)
-        if handle in (None, ctypes.c_void_p(-1).value):
+        try:
+            handle = self._reopen_handle(descriptor, 0xA0080, flags=0x82200000)
+        except BaseException:
             self._kernel.LocalFree(security)
-            raise ValidationFailure("new staging ownership cannot be opened")
+            raise
         try:
             owner, defaulted = ctypes.c_void_p(), ctypes.c_int()
             if not self._advapi.GetSecurityDescriptorOwner(security, ctypes.byref(owner), ctypes.byref(defaulted)):
@@ -266,10 +276,7 @@ class WindowsFilesystem:
         This validates the retained directory identity and never changes its ACL.
         """
         if isinstance(path_or_descriptor, int):
-            handle = self._kernel.ReOpenFile(self._handle(path_or_descriptor),
-                                             0x120080, 0x7, 0x02200000)
-            if handle in (None, ctypes.c_void_p(-1).value):
-                raise ValidationFailure("Runtime directory security cannot be opened")
+            handle = self._reopen_handle(path_or_descriptor, 0x120080)
             descriptor = None
         else:
             descriptor = self._native_open(str(Path(path_or_descriptor).absolute()),
@@ -438,13 +445,41 @@ class WindowsFilesystem:
             raise ValidationFailure("Windows artifacts require a local filesystem")
         return Path(text[4:])
 
-    def _reopen_directory(self, descriptor: int) -> int:
-        handle = self._kernel.ReOpenFile(self._handle(descriptor), 0x1000A1, 0x7, 0x02200000)
+    def _file_id(self, handle: int) -> int:
+        identity, status_block = ctypes.c_uint64(), _IOStatusBlock()
+        status = self._nt.NtQueryInformationFile(handle, ctypes.byref(status_block),
+            ctypes.byref(identity), ctypes.sizeof(identity), 6)  # FileInternalInformation on NTFS.
+        if status < 0:
+            self._raise_status(status)
+        return identity.value
+
+    def _reopen_handle(self, descriptor: int, access: int, *, flags=0x02200000) -> int:
+        # ReOpenFile requires a CreateFile handle, whereas this backend opens
+        # through NtCreateFile. Reopen by NTFS identity on the retained volume;
+        # parent renames cannot redirect this operation to a replacement path.
+        original = self._handle(descriptor)
+        if self._attributes(original) & 0x400:
+            raise ValidationFailure("artifact handle contains a reparse point")
+        identity = self._file_id(original)
+        information = _FileIdDescriptor(ctypes.sizeof(_FileIdDescriptor), 0, _FileIdentifier(FileId=identity))
+        handle = self._kernel.OpenFileById(original, ctypes.byref(information), access, 7, None, flags)
         if handle in (None, ctypes.c_void_p(-1).value):
             raise ctypes.WinError(ctypes.get_last_error())
         try:
-            if self._attributes(handle) & 0x400:
-                raise ValidationFailure("artifact directory contains a reparse point")
+            if self._kernel.GetFileType(handle) != 1 or self._attributes(handle) & 0x400:
+                raise ValidationFailure("reopened artifact handle is unsafe")
+            if self._file_id(handle) != identity:
+                raise ValidationFailure("reopened artifact changed its NTFS identity")
+            return handle
+        except BaseException:
+            self._kernel.CloseHandle(handle)
+            raise
+
+    def _reopen_directory(self, descriptor: int) -> int:
+        handle = self._reopen_handle(descriptor, 0x1000A1)
+        try:
+            if not self._attributes(handle) & 0x10:
+                raise ValidationFailure("artifact descriptor is not a directory")
             return self._crt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY | os.O_NOINHERIT)
         except BaseException:
             self._kernel.CloseHandle(handle)
@@ -499,7 +534,7 @@ class WindowsFilesystem:
     def _set_information(self, descriptor: int, buffer, information_class: int) -> None:
         status_block = _IOStatusBlock()
         status = self._nt.NtSetInformationFile(self._handle(descriptor), ctypes.byref(status_block),
-                                              buffer, ctypes.sizeof(buffer), information_class)
+                                              ctypes.byref(buffer), ctypes.sizeof(buffer), information_class)
         if status < 0:
             self._raise_status(status)
 
@@ -578,10 +613,11 @@ class WindowsFilesystem:
         security = self._security_descriptor(
             f"D:P(A;;{permissions};;;{self._user_sid})(A;;FA;;;SY)"
         )
-        handle = self._kernel.ReOpenFile(self._handle(descriptor), 0x40080, 0x7, 0x82200000)
-        if handle in (None, ctypes.c_void_p(-1).value):
+        try:
+            handle = self._reopen_handle(descriptor, 0x60080, flags=0x82200000)
+        except BaseException:
             self._kernel.LocalFree(security)
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise
         try:
             present, defaulted, dacl = ctypes.c_int(), ctypes.c_int(), ctypes.c_void_p()
             if not self._advapi.GetSecurityDescriptorDacl(

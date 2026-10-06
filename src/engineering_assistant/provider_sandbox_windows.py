@@ -258,6 +258,28 @@ def _secure_tree(api: _Api, root: Path, owner: str, sandbox: str | None, writabl
             api.acl(Path(directory) / name, owner, sandbox, writable)
 
 
+def _environment_block(environment: dict[str, str], work: Path):
+    """Supply LPAC's required option without granting a host AppData path."""
+    allowed = {"SYSTEMROOT", "WINDIR", "PYTHONIOENCODING", "PYTHONDONTWRITEBYTECODE", "LANG"}
+    values = {}
+    for key, value in environment.items():
+        if not key or "=" in key or "\0" in key or "\0" in value:
+            raise OSError("invalid Windows sandbox environment entry")
+        if key.upper() in allowed:
+            values[key.upper()] = value
+    # CreateProcessW constructs AppContainer's environment using LOCALAPPDATA.
+    # Omitting it fails before Python starts with ERROR_ENVVAR_NOT_FOUND (203).
+    # Windows can redirect these options to its profile during creation; the
+    # trusted bootstrap restores the approved work paths before Provider code.
+    values.update({key: str(work) for key in (
+        "LOCALAPPDATA", "APPDATA", "USERPROFILE", "TEMP", "TMP", "TMPDIR",
+    )})
+    if "\0" in str(work):
+        raise OSError("invalid Windows sandbox environment work path")
+    entries = (f"{key}={value}" for key, value in sorted(values.items()))
+    return ctypes.create_unicode_buffer("\0".join(entries) + "\0\0")
+
+
 def run(
     command: list[str], bundle: Path, work: Path, environment: dict[str, str],
     timeout: int, output_limit: int,
@@ -338,7 +360,7 @@ def run(
         startup.startup.flags = 0x100
         startup.startup.stdin, startup.startup.stdout, startup.startup.stderr = stdin, *writers
         startup.attributes = attributes
-        environment_block = ctypes.create_unicode_buffer("\0".join(f"{key}={value}" for key, value in sorted(environment.items())) + "\0\0")
+        environment_block = _environment_block(environment, work)
         command_line = ctypes.create_unicode_buffer(subprocess.list2cmdline(actual_command))
         flags = 0x80000 | 0x400 | 0x4 | 0x08000000
         api.check(api.kernel.CreateProcessW(str(executable), command_line, None, None, True, flags, environment_block, str(work), ctypes.byref(startup), ctypes.byref(process)), "LPAC process creation")

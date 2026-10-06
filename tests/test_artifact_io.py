@@ -145,7 +145,6 @@ class ArtifactIOTests(unittest.TestCase):
         artifacts = ArtifactIO(trusted_root, ".")
 
         held = self.project / "switch-held"
-        switch.rename(held)
         other = self.project / "other"
         outside_root = other / "evidence"
         outside_root.mkdir(parents=True)
@@ -155,7 +154,22 @@ class ArtifactIOTests(unittest.TestCase):
         (outside_root / "state.json").write_text(
             '{"revision":0,"value":"outside"}\n', encoding="utf-8"
         )
-        switch.symlink_to(other, target_is_directory=True)
+        if os.name == "nt":
+            # NTFS rejects a parent rename while its descendant is open.
+            identity = trusted_root.stat()
+            with self.assertRaises(PermissionError) as denied:
+                switch.rename(held)
+            self.assertEqual(5, denied.exception.winerror)
+            retained = artifact_fs.fstat(artifacts._root_fd)
+            current = trusted_root.stat()
+            self.assertEqual((identity.st_dev, identity.st_ino), (current.st_dev, current.st_ino))
+            self.assertEqual((retained.st_dev, retained.st_ino), (current.st_dev, current.st_ino))
+            self.assertFalse(held.exists())
+            retained_root = trusted_root
+        else:
+            switch.rename(held)
+            switch.symlink_to(other, target_is_directory=True)
+            retained_root = held / "evidence"
 
         payload, _raw = artifacts.read_json_limited(1024, "payload.json")
         artifacts.create_immutable_json({"created": True}, "created.json")
@@ -166,11 +180,11 @@ class ArtifactIOTests(unittest.TestCase):
         )
 
         self.assertEqual({"value": "trusted"}, payload)
-        self.assertTrue((held / "evidence/created.json").is_file())
+        self.assertTrue((retained_root / "created.json").is_file())
         self.assertFalse((outside_root / "created.json").exists())
         self.assertEqual(
             "updated",
-            json.loads((held / "evidence/state.json").read_text(encoding="utf-8"))[
+            json.loads((retained_root / "state.json").read_text(encoding="utf-8"))[
                 "value"
             ],
         )
@@ -180,6 +194,7 @@ class ArtifactIOTests(unittest.TestCase):
                 "value"
             ],
         )
+        artifacts.close()
 
     def test_runtime_stores_reject_the_author_source_tree_as_a_target(self) -> None:
         author_root = self.project / "author"
@@ -323,14 +338,26 @@ class ArtifactIOTests(unittest.TestCase):
         outside_candidate.write_text("outside", encoding="utf-8")
         moved = staging.with_name("staging-moved")
         real_stat = artifact_fs.stat
-        swapped = False
+        attack_attempted = False
 
         def replace_parent_before_stat(path, *args, **kwargs):
-            nonlocal swapped
-            if not swapped and path == candidate.name and kwargs.get("dir_fd") is not None:
-                staging.rename(moved)
-                staging.symlink_to(outside, target_is_directory=True)
-                swapped = True
+            nonlocal attack_attempted
+            if not attack_attempted and path == candidate.name and kwargs.get("dir_fd") is not None:
+                if os.name == "nt":
+                    # The active child lock prevents this NTFS parent rename.
+                    identity = staging.stat()
+                    with self.assertRaises(PermissionError) as denied:
+                        staging.rename(moved)
+                    self.assertEqual(5, denied.exception.winerror)
+                    retained = artifact_fs.fstat(kwargs["dir_fd"])
+                    current = staging.stat()
+                    self.assertEqual((identity.st_dev, identity.st_ino), (current.st_dev, current.st_ino))
+                    self.assertEqual((retained.st_dev, retained.st_ino), (current.st_dev, current.st_ino))
+                    self.assertFalse(moved.exists())
+                else:
+                    staging.rename(moved)
+                    staging.symlink_to(outside, target_is_directory=True)
+                attack_attempted = True
             return real_stat(path, *args, **kwargs)
 
         with patch(
@@ -341,9 +368,10 @@ class ArtifactIOTests(unittest.TestCase):
                 artifacts.delete_regular_file("feedback", "staging", candidate.name)
             )
 
-        self.assertTrue(swapped)
+        self.assertTrue(attack_attempted)
         self.assertEqual("outside", outside_candidate.read_text(encoding="utf-8"))
-        self.assertFalse((moved / candidate.name).exists())
+        self.assertFalse((staging if os.name == "nt" else moved).joinpath(candidate.name).exists())
+        artifacts.close()
 
     def test_conditional_stale_delete_preserves_a_refreshed_file(self) -> None:
         artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")
