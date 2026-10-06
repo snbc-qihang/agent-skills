@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import sys
 import tempfile
@@ -9,6 +10,7 @@ import textwrap
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +24,42 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 
 
 class RepositorySurfaceTests(unittest.TestCase):
+    def test_ci_job_environment_uses_only_available_github_contexts(self) -> None:
+        # GitHub's Context availability contract excludes runner at job env:
+        # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
+        allowed = {"github", "needs", "strategy", "matrix", "vars", "secrets", "inputs"}
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        environments = re.findall(r"^    env:\n((?:      [^\n]*\n)+)", workflow, flags=re.MULTILINE)
+        self.assertTrue(environments)
+        for environment in environments:
+            used = set(re.findall(r"\$\{\{\s*([a-zA-Z_][\w]*)\.", environment))
+            self.assertLessEqual(used, allowed, "job env is evaluated before a Runner is available")
+
+    def test_ci_initializes_isolated_directories_on_runner_before_tools(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        step = re.search(r"      - name: 初始化隔离运行目录\n        run: \|\n(.*?)\n      - name:",
+                         workflow, flags=re.DOTALL)
+        self.assertIsNotNone(step, "Runner-dependent directories need an execution step")
+        source = re.search(r"python - <<'PY'\n(.*?)\n          PY", step.group(1), flags=re.DOTALL)
+        self.assertIsNotNone(source)
+        self.assertLess(step.start(), workflow.index("      - name: 准备固定开发工具"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            command_file = root / "github-env"
+            for target in ("macos-arm64", "macos-x64", "linux-x64", "windows-x64"):
+                with mock.patch.dict(os.environ, {"RUNNER_TEMP": str(root), "GITHUB_ENV": str(command_file),
+                                                   "EA_CI_TARGET": target}, clear=True):
+                    exec(compile(textwrap.dedent(source.group(1)), "<CI directory initialization>", "exec"), {})
+                values = dict(line.split("=", 1) for line in command_file.read_text(encoding="utf-8").splitlines())
+                self.assertEqual(values, {
+                    "ENGINEERING_ASSISTANT_VALIDATOR_CACHE_DIR": str(root / "ea-official-validators"),
+                    "UV_CACHE_DIR": str(root / "ea-uv-cache"),
+                    "CLAUDE_CONFIG_DIR": str(root / "ea-claude-config"),
+                    "EA_CI_ROOT": str(root / "ea-ci" / target),
+                })
+                self.assertTrue(all(Path(value).is_dir() for value in values.values()))
+                command_file.unlink()
+
     def test_ci_bootstraps_pinned_official_validators_for_clean_runner(self) -> None:
         from engineering_assistant.official_validation import OFFICIAL_VALIDATORS
 

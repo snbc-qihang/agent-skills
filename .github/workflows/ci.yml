@@ -33,11 +33,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
       PYTHONUTF8: "1"
       ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX: "1"
-      ENGINEERING_ASSISTANT_VALIDATOR_CACHE_DIR: ${{ runner.temp }}/ea-official-validators
-      UV_CACHE_DIR: ${{ runner.temp }}/ea-uv-cache
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/ea-claude-config
       EA_CI_TARGET: ${{ matrix.target }}
-      EA_CI_ROOT: ${{ runner.temp }}/ea-ci/${{ matrix.target }}
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
@@ -46,6 +42,23 @@ jobs:
         with:
           python-version: "3.13.13"
           cache: pip
+      - name: 初始化隔离运行目录
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]).resolve()
+          directories = {
+              "ENGINEERING_ASSISTANT_VALIDATOR_CACHE_DIR": root / "ea-official-validators",
+              "UV_CACHE_DIR": root / "ea-uv-cache",
+              "CLAUDE_CONFIG_DIR": root / "ea-claude-config",
+              "EA_CI_ROOT": root / "ea-ci" / os.environ["EA_CI_TARGET"],
+          }
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as stream:
+              for name, directory in directories.items():
+                  directory.mkdir(parents=True, exist_ok=True)
+                  stream.write(name + "=" + str(directory) + "\n")
+          PY
       - name: 配置 Claude 校验所需固定 Node（仅 CI）
         uses: actions/setup-node@v4
         with:
