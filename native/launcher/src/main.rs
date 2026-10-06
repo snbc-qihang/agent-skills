@@ -94,6 +94,13 @@ fn field<'a>(value: &'a Value, name: &str) -> Result<&'a str> {
         .ok_or("runtime configuration has a missing or invalid field")
 }
 
+fn digest_key(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
 fn absolute_path(value: &Value, name: &str) -> Result<PathBuf> {
     let path = PathBuf::from(field(value, name)?);
     if !path.is_absolute() || path.components().any(|part| part == Component::ParentDir) {
@@ -153,7 +160,11 @@ fn runtime_command(arguments: &[OsString]) -> Result<Command> {
             .ok_or("native launcher layout is invalid")?,
     )?;
     let lock = configuration(&root.join("runtime-lock.json"))?;
-    if field(&lock, "schema_version")? != "1" || field(&lock, "target")? != compiled_target() {
+    let schema = field(&lock, "schema_version")?;
+    if !["1", "2"].contains(&schema) {
+        return Err("plugin runtime schema is unsupported");
+    }
+    if field(&lock, "target")? != compiled_target() {
         return Err("plugin target does not match the native launcher");
     }
     let agent = field(&lock, "agent")?;
@@ -162,11 +173,7 @@ fn runtime_command(arguments: &[OsString]) -> Result<Command> {
     }
     field(&lock, "canonical_version")?;
     let key = field(&lock, "environment_key")?;
-    if key.len() != 64
-        || !key
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
+    if !digest_key(key) {
         return Err("plugin environment key is invalid");
     }
     let data = data_home()?;
@@ -199,6 +206,32 @@ fn runtime_command(arguments: &[OsString]) -> Result<Command> {
     for name in ["schema_version", "agent", "target", "environment_key"] {
         if field(&binding, name)? != field(&lock, name)? {
             return Err("runtime binding does not match this plugin release");
+        }
+    }
+    if schema == "2" {
+        let digest = field(&lock, "python_artifact_digest")?;
+        let artifact = lock
+            .get("python_artifact")
+            .ok_or("plugin Python artifact is missing")?;
+        if !digest_key(digest)
+            || field(&binding, "python_artifact_digest")? != digest
+            || field(&binding, "python_build")? != field(artifact, "build")?
+        {
+            return Err("runtime binding does not match the Python artifact");
+        }
+        let base = absolute_path(&binding, "python_base")?;
+        let parent = base
+            .parent()
+            .ok_or("prepared Python artifact base has no parent")?;
+        directory(parent)?;
+        private_path(parent, 0o022)?;
+        directory(&base)?;
+        private_path(&base, 0o022)?;
+        let name = field(artifact, "key")?.replace("-darwin-", "-macos-");
+        if parent.file_name().and_then(|part| part.to_str()) != Some(digest)
+            || base.file_name().and_then(|part| part.to_str()) != Some(name.as_str())
+        {
+            return Err("prepared Python base differs from its artifact");
         }
     }
     let environment = absolute_path(&binding, "environment")?;

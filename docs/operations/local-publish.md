@@ -2,7 +2,7 @@
 
 ## 用户安装目标
 
-安装完整的 skills、Runtime MCP、Hook 和 Provider 能力。原生 Agent 管理插件发现、启用、缓存和更新；`ea-setup` 只准备固定 Runtime 并验证实际协议。首次只需公共工具 `uv`，无需 Node、作者源 Git checkout、手动 Python 环境或日常激活命令。
+安装完整的 skills、Runtime MCP、Hook 和 Provider 能力。原生 Agent 管理插件发现、启用、缓存和更新；`ea-setup` 只准备固定 Runtime 并验证实际协议。首次只需公共工具 `uv` 0.8.14 或更新版本，无需 Node、作者源 Git checkout、手动 Python 环境或日常激活命令。
 
 发行维护者从四个原生 CI Runner 的验证产物组装预编译插件、独立市场树和通用 setup wheel，所有生成物都在仓库外。当前候选没有已发布的公网地址；下列 wheel/source/marketplace 参数须用经过验证的真实发行资产替换，不是可复制的公网安装地址。
 
@@ -49,11 +49,13 @@ Provider 隔离资格使用受控诊断 bundle，不表示可选的 UI/UX Pro Ma
 
 ## Runtime 准备与恢复
 
-每个包包含 `runtime-lock.json`、哈希依赖锁和目标原生 `ea`/`ea.exe`。launcher 读取按 Agent/版本持久化的绑定，使用绝对的固定解释器路径；Runtime 启动不依赖 GUI/终端 PATH 中的 Python 或 uv，Codex Windows Hook 的系统 PowerShell 先决条件见上文。Hermes 宿主只加载标准库，通过有界 RPC 启动同一个 Runtime。
+每个包包含 `runtime-lock.json`、单目标 `runtime-python-downloads.json`、哈希依赖锁和目标原生 `ea`/`ea.exe`。`config/runtime-python-downloads.json` 是四目标分布的作者源，固定 uv 0.11.7 元数据中的 CPython `3.13.13`、PBS `20260414`、官方归档 URL 与 SHA-256。准备使用包内元数据和构建日期，忽略继承的 uv 选择配置；由 uv 下载、解包并校验归档，不要求用户更换全局 uv 版本。
+
+launcher 读取按 Agent/版本持久化的 v2 绑定，使用绝对的固定解释器路径并校验分布身份；Runtime 启动和 `doctor` 还核对实际 `sys.base_prefix`、`BUILD` 与不可变安装记录。Python 基底按分布身份隔离，环境键包含该身份，更新不会重新标记旧基底的构建号。Runtime 启动不依赖 GUI/终端 PATH 中的 Python 或 uv，Codex Windows Hook 的系统 PowerShell 先决条件见上文。Hermes 宿主只加载标准库，通过有界 RPC 启动同一个 Runtime。
 
 Runtime 位于插件缓存和作者源之外：macOS `~/Library/Application Support/engineering-assistant`，Linux `${XDG_DATA_HOME:-~/.local/share}/engineering-assistant`，Windows `%LOCALAPPDATA%/engineering-assistant`。`--data-home` 或 `ENGINEERING_ASSISTANT_DATA_HOME` 可覆盖；GUI 的默认 locator 只保存指向已验证外部环境的绑定。Agent home 按显式参数、对应 `CODEX_HOME`/`HERMES_HOME`/`CLAUDE_CONFIG_DIR`、可选 `--config` JSON、原生默认目录的顺序解析；支持空格与中文路径。
 
-准备在私有 staging 创建环境，固定解释器及依赖检查、实际协议与隔离资格通过后才发布版本绑定。更新保留旧环境和旧版本绑定；修复的最终路径校验失败则恢复原环境，失败候选留在 Runtime 数据目录供诊断。不会自动删除可能被活动会话使用的环境、插件备份或旧 Codex cache。网络失败、依赖摘要不匹配或缺少安全能力都不能用安装成功标签代替。
+准备先在私有 staging 下载 Python；构建与归档安装记录随基底一次原子发布，再从该基底创建虚拟环境。依赖检查、实际协议与隔离资格通过后才发布版本绑定。中断的未发布下载留在 staging，重试使用新下载目录；未知或记录损坏的既有基底会明确失败，不覆盖可能仍被使用的文件。更新保留旧基底、旧环境和旧版本绑定；修复的最终路径校验失败则恢复原环境，失败候选留在 Runtime 数据目录供诊断。不会自动删除可能被活动会话使用的环境、插件备份或旧 Codex cache。网络失败、依赖摘要不匹配或缺少安全能力都不能用安装成功标签代替。
 
 消费者更新的恢复能力受原生 Agent 限制：Codex 和 Claude Code 当前 CLI 没有选择任意旧缓存版本的接口，不能承诺自动恢复旧插件选择。更新失败或选中未经验证的包时报告恢复要求，保留旧 Runtime；Hermes 禁用未验证插件也不意味着旧插件代码已恢复。需要自动恢复插件文件和注册状态时，作者本机发布路径使用下述备份与补偿事务。
 

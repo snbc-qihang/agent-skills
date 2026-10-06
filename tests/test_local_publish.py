@@ -34,6 +34,27 @@ import engineering_assistant.local_publish as publish_module  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
+    def test_native_v1_cache_is_verified_snapshotted_and_restored_with_its_full_contract(self):
+        from test_compiler_adapters import native_v1_fixture
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home = root / "codex-home"
+            version = "2.3.0-rc.1+codex.local-native-v1"
+            cache = home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
+            expected = native_v1_fixture(cache, cachebuster="local-native-v1")
+            self.assertEqual("2.0", expected["build_format_version"])
+            original_lock = (cache / "engineering-assistant/runtime-lock.json").read_bytes()
+            self.assertEqual("1", json.loads(original_lock)["schema_version"])
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+            self.assertEqual([version], _snapshot_codex_caches(home, snapshot))
+            self.assertEqual(expected, verify_package(snapshot / version))
+            shutil.rmtree(cache)
+            self.assertEqual([version], _restore_codex_cache_snapshots(home, snapshot))
+            self.assertEqual(expected, verify_package(cache))
+            self.assertEqual(original_lock, (cache / "engineering-assistant/runtime-lock.json").read_bytes())
+
     def setUp(self):
         # Network-free transaction tests; real native protocols have separate qualification.
         preparation = mock.patch("engineering_assistant.local_publish.prepare_runtime", create=True,

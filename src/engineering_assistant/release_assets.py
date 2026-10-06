@@ -16,7 +16,7 @@ from typing import Mapping
 
 from .artifact_io import ArtifactIO, artifact_fs
 from .compiler import verify_package
-from .installation import AGENTS, PYTHON_VERSION, TARGETS
+from .installation import AGENTS, PYTHON_VERSION, TARGETS, _package_lock
 from .validation import ValidationFailure
 from .version import CanonicalVersion, platform_version
 
@@ -152,6 +152,11 @@ def _validate_records(storage: ArtifactIO, target: str) -> tuple[dict, dict]:
         if (result.get("target") != target or result.get("python_version") != PYTHON_VERSION
                 or result.get("persistent_run") != "passed" or result.get("feedback_hook") != "passed"):
             raise ValidationFailure("Runtime 资格 target、Python、持久化或真实反馈 Hook 检查未通过")
+        if (not isinstance(result.get("python_build"), str)
+                or re.fullmatch(r"[0-9]{8}", result["python_build"]) is None
+                or not isinstance(result.get("python_artifact_digest"), str)
+                or re.fullmatch(r"[0-9a-f]{64}", result["python_artifact_digest"]) is None):
+            raise ValidationFailure("Runtime 资格缺少固定 Python 构建记录")
         checks = result.get("checks", {})
         if (not isinstance(checks, dict) or set(checks) != {"mcp", "tools_call", "hook", "windows_hook_bridge", "hermes_bridge", "provider"}
                 or any(checks.get(name) != "passed" for name in ("mcp", "tools_call", "hook"))):
@@ -376,6 +381,10 @@ def assemble_release(artifacts: Mapping[str, Path | str], wheel: Path | str, out
                         or manifest.get("canonical_version") != qualification.get("canonical_version")
                         or manifest.get("payload_digest") != qualification.get("payload_digest")):
                     raise ValidationFailure("原生包与 Runtime 资格 target、Agent、版本或摘要不一致")
+                lock = _package_lock(package)
+                if (qualification["python_build"] != lock["python_artifact"]["build"]
+                        or qualification["python_artifact_digest"] != lock["python_artifact_digest"]):
+                    raise ValidationFailure("Runtime 资格与包内固定 Python 构建不一致")
                 manifests[target, agent] = manifest
                 snapshot_ios[target, agent] = package_io
                 versions.add(manifest["canonical_version"])

@@ -23,12 +23,16 @@ from engineering_assistant import provider_sandbox_windows as windows  # noqa: E
 from engineering_assistant.windows_process import run_bounded_windows  # noqa: E402
 
 
+CRT_MODULES = tuple("api-ms-win-crt-" + name + "-l1-1-0.dll" for name in (
+    "stdio", "environment", "string", "heap", "runtime", "locale", "convert", "math", "time",
+    "process", "conio", "filesystem"))
+FILE_CHECKS = ("file_read", "file_read_execute", "sec_image", "sec_image_no_execute")
 MODULES = ("ucrtbase.dll", "advapi32.dll", "shell32.dll", "ole32.dll", "oleaut32.dll",
            "version.dll", "ws2_32.dll", "bcrypt.dll", "api-ms-win-core-path-l1-1-0.dll",
-           "vcruntime140.dll", "python313.dll")
+           "vcruntime140.dll", *CRT_MODULES, "python313.dll")
 IMPORTS = {"GetStdHandle", "WriteFile", "LoadLibraryExW", "GetLastError", "FreeLibrary",
-           "ExitProcess", "GetModuleFileNameW"}
-SOURCE_SHA256 = "2f05d195fa3f7386698f56307b9105be9f7489152a4bb8a58a6a7f7623561325"
+           "ExitProcess", "GetModuleFileNameW", "CreateFileW", "CreateFileMappingW", "CloseHandle"}
+SOURCE_SHA256 = "fad7cb98ff64b6270d78ae61b65b52853624427953df81f5b5b4660dd463001f"
 MAX_IMAGE = 1_048_576
 
 
@@ -54,7 +58,7 @@ def _error_record(exc, stage="diagnostic") -> dict:
 
 
 def parse_output(data: bytes) -> dict:
-    result = {"entry": False, "complete": False, "loads": []}
+    result = {"entry": False, "complete": False, "checks": [], "loads": []}
     if not data:
         return result
     error = ValueError("unrecognized native probe output")
@@ -64,10 +68,33 @@ def parse_output(data: bytes) -> dict:
         lines = data.decode("ascii", errors="strict").split("\n")[:-1]
     except UnicodeError:
         raise error from None
-    if not lines or lines[0] != "EA_NATIVE_DLL_PROBE_V1":
+    if not lines or lines[0] != "EA_NATIVE_DLL_PROBE_V2":
         raise error
     result["entry"] = True
     index = 1
+    opened = {}
+    for operation in FILE_CHECKS:
+        if index == len(lines):
+            return result
+        if lines[index] != "CHECK " + operation + " python313.dll":
+            raise error
+        index += 1
+        if index == len(lines):
+            result["pending_check"] = operation
+            return result
+        status = re.fullmatch(r"CHECK_RESULT " + operation + r" python313\.dll (0x[0-9A-F]{8}|SKIPPED)", lines[index])
+        required = {"sec_image": "file_read_execute", "sec_image_no_execute": "file_read"}.get(operation)
+        if not status or ((status[1] == "SKIPPED") != (required is not None and not opened[required])):
+            raise error
+        item = {"operation": operation, "module": "python313.dll"}
+        if status[1] == "SKIPPED":
+            item["not_attempted"] = True
+        else:
+            item["win32_error"] = status[1]
+        result["checks"].append(item)
+        if required is None:
+            opened[operation] = status[1] == "0x00000000"
+        index += 1
     for module in MODULES:
         if index == len(lines):
             return result
@@ -272,7 +299,9 @@ def diagnose() -> dict:
     available = windows.capability()
     report = {**available, "diagnostic_only": True, "qualified": False,
               "assurance": "native_loader_diagnostic_only", **windows._host_information(),
-              "load_order": list(MODULES), "same_process_sequence": True,
+              "load_order": list(MODULES), "check_order": list(FILE_CHECKS), "same_process_sequence": True,
+              "mapping_handle_access": {"sec_image": "GENERIC_READ|GENERIC_EXECUTE", "sec_image_no_execute": "GENERIC_READ"},
+              "image_views_mapped": False, "image_checks_invoke_dll_entry": False,
               "execution_timeout_seconds_per_case": 10, "compile_timeout_seconds": 60}
     if not available["supported"]:
         return report
@@ -335,6 +364,8 @@ def main() -> int:
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     baseline = report.get("baseline", {})
     valid = (baseline.get("exit_code") == "0x00000000" and baseline.get("complete") is True
+             and len(baseline.get("checks", [])) == len(FILE_CHECKS)
+             and all(item.get("win32_error") == "0x00000000" for item in baseline.get("checks", []))
              and all(item["win32_error"] == "0x00000000" for item in baseline.get("loads", [])))
     # This exit means a usable diagnostic control, never Provider qualification.
     return 0 if valid and all("error" not in report.get(name, {"error": None})

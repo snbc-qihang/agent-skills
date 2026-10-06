@@ -17,7 +17,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.installation import AGENTS, PYTHON_VERSION, TARGETS
+from engineering_assistant.installation import AGENTS, PYTHON_VERSION, TARGETS, python_download_metadata, runtime_lock
 from engineering_assistant.release_assets import REQUIRED_PROVIDER_CHECKS, assemble_release, required_native_tests
 from engineering_assistant.validation import ValidationFailure
 
@@ -60,12 +60,17 @@ class ReleaseAssetTests(unittest.TestCase):
                 launcher = package / "engineering-assistant/bin" / ("ea.exe" if target == "windows-x64" else "ea")
                 launcher.parent.mkdir(parents=True)
                 launcher.write_bytes(f"synthetic target {target} agent {agent}".encode())
-                files = {launcher.relative_to(package).as_posix(): sha(launcher.read_bytes())}
+                lock, _ = runtime_lock(ROOT, agent, target, VERSION)
+                write(package / "engineering-assistant/runtime-lock.json", lock)
+                (package / "engineering-assistant/runtime-python-downloads.json").write_bytes(python_download_metadata(lock))
+                files = {path.relative_to(package).as_posix(): sha(path.read_bytes())
+                         for path in package.rglob("*") if path.is_file()}
                 digest = sha("\n".join(f"{name}:{value}" for name, value in sorted(files.items())).encode())
                 write(package / "package-manifest.json", {"canonical_version": VERSION, "target": target,
                     "platform": agent, "payload_digest": digest, "payload_files": files})
                 results.append({"agent": agent, "canonical_version": VERSION, "target": target,
                     "payload_digest": digest, "python_version": PYTHON_VERSION, "persistent_run": "passed", "feedback_hook": "passed",
+                    "python_build": lock["python_artifact"]["build"], "python_artifact_digest": lock["python_artifact_digest"],
                     "native_marketplace_session": "not_executed", "hook_trust": "requires_native_host_review",
                     "checks": {"mcp": "passed", "tools_call": "passed", "hook": "passed",
                         "windows_hook_bridge": "passed" if target == "windows-x64" and agent == "codex" else "not_applicable",
@@ -232,6 +237,26 @@ class ReleaseAssetTests(unittest.TestCase):
             with self.assertRaises(ValidationFailure):
                 self.assemble()
             path.write_bytes(original)
+
+    def test_runtime_qualification_requires_fixed_python_artifact_fields(self):
+        path = self.artifacts["linux-x64"] / "runtime-qualification.json"
+        original = path.read_bytes()
+        for field in ("python_build", "python_artifact_digest"):
+            with self.subTest(field=field):
+                self.mutate("linux-x64", "runtime-qualification.json", lambda report: report["results"][0].pop(field))
+                with self.assertRaisesRegex(ValidationFailure, "Python.*构建"):
+                    self.assemble()
+                path.write_bytes(original)
+
+    def test_runtime_qualification_cannot_substitute_same_version_different_build(self):
+        path = self.artifacts["linux-x64"] / "runtime-qualification.json"
+        original = path.read_bytes()
+        for field, value in (("python_build", "20260602"), ("python_artifact_digest", "0" * 64)):
+            with self.subTest(field=field):
+                self.mutate("linux-x64", "runtime-qualification.json", lambda report: report["results"][0].update({field: value}))
+                with self.assertRaisesRegex(ValidationFailure, "Python.*构建"):
+                    self.assemble()
+                path.write_bytes(original)
 
     def test_tampered_package_is_recomputed_not_trusted(self):
         package = self.artifacts["macos-arm64"] / "codex"

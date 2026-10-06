@@ -1,6 +1,7 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "python_version": "3.13.13",
+  "python_downloads": "runtime-python-downloads.json",
   "requirements": "runtime-requirements.txt",
   "targets": ["macos-arm64", "macos-x64", "linux-x64", "windows-x64"]
 }

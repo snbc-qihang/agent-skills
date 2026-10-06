@@ -72,12 +72,13 @@ class InstallationTests(unittest.TestCase):
             }), mock.patch("engineering_assistant.installation.host_target", return_value="macos-arm64"), mock.patch(
                 "engineering_assistant.installation._create_environment", side_effect=RuntimeError("fixture sync failed")
             ), mock.patch("engineering_assistant.installation._uv", return_value=Path(sys.executable)):
-                from engineering_assistant.installation import runtime_lock
+                from engineering_assistant.installation import runtime_lock, python_download_metadata
                 lock, requirements = runtime_lock(ROOT, "codex", "macos-arm64", "2.3.0.0-rc.1")
                 runtime = root / "package/engineering-assistant"
                 runtime.mkdir(parents=True)
                 (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
                 (runtime / "runtime-requirements.txt").write_bytes(requirements)
+                (runtime / "runtime-python-downloads.json").write_bytes(python_download_metadata(lock))
                 with self.assertRaisesRegex(RuntimeError, "sync failed"):
                     prepare_runtime(root / "package", data_home=data, uv_executable=sys.executable)
             self.assertEqual(previous, binding.read_bytes())
@@ -131,7 +132,7 @@ class InstallationTests(unittest.TestCase):
                 _protocol_run([sys.executable, "-c", "print('{}')"], cwd=cwd, expected_exit_code=2)
 
     def test_failed_final_repair_check_restores_the_original_environment(self):
-        from engineering_assistant.installation import prepare_runtime, runtime_lock
+        from engineering_assistant.installation import prepare_runtime, runtime_lock, python_download_metadata
         from engineering_assistant.validation import ValidationFailure
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -141,6 +142,7 @@ class InstallationTests(unittest.TestCase):
             lock, requirements = runtime_lock(ROOT, "codex", "macos-arm64", "2.3.0.0-rc.1")
             (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
             (runtime / "runtime-requirements.txt").write_bytes(requirements)
+            (runtime / "runtime-python-downloads.json").write_bytes(python_download_metadata(lock))
             data = root / "data"
             from engineering_assistant.installation import _storage
             _storage(data).close()
@@ -174,6 +176,7 @@ class InstallationTests(unittest.TestCase):
             lock, requirements = inst.runtime_lock(ROOT, "codex", "macos-arm64", "2.3.0.0-rc.1")
             (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
             (runtime / "runtime-requirements.txt").write_bytes(requirements)
+            (runtime / "runtime-python-downloads.json").write_bytes(inst.python_download_metadata(lock))
             data = root / "data"
             inst._storage(data).close()
             environment = data / "environments" / lock["environment_key"]
@@ -187,7 +190,7 @@ class InstallationTests(unittest.TestCase):
                 generations.append(generation)
                 (staging / "generation.txt").write_text(generation, encoding="utf-8")
 
-            def verify(python, *_args):
+            def verify(python, *_args, **_kwargs):
                 if (python.parent.parent / "generation.txt").read_text(encoding="utf-8") == "original broken":
                     raise ValidationFailure("original broken")
 
@@ -768,10 +771,17 @@ class NativeInstallationTests(unittest.TestCase):
         (data / "bindings/codex.json").write_text("{}")
         self.package(self.home / "plugins/cache/selected/engineering-assistant/2.3.0-rc.1+build.0")
         entries = {"installed": [self.codex_entry(), self.codex_entry("other")]}
+        from engineering_assistant.installation import runtime_lock, _read_control
+        lock = runtime_lock(ROOT, "codex", "macos-arm64", "2.3.0.0-rc.1")[0]
+        binding = {**lock, "python_build": "20260414", "python_base": str(data / "base"), "python": str(data / "python")}
         with mock.patch("engineering_assistant.installation._native_query", return_value=entries), mock.patch(
             "engineering_assistant.installation.host_target", return_value="macos-arm64"
         ), mock.patch("engineering_assistant.setup_cli.prepare_runtime"), mock.patch(
             "engineering_assistant.installation._protocol_checks", return_value={"provider": {"qualified": True}}
+        ), mock.patch("engineering_assistant.installation._package_lock", return_value=lock), mock.patch(
+            "engineering_assistant.installation._read_control",
+            side_effect=lambda path: binding if "bindings" in path.parts else _read_control(path)
+        ), mock.patch("engineering_assistant.installation._verify_interpreter"
         ), redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, main(["prepare", "--agent", "codex", "--agent-home", str(self.home),
                 "--data-home", str(data), "--marketplace", "selected", "--hooks-trusted"]))
@@ -795,7 +805,7 @@ class NativeInstallationTests(unittest.TestCase):
                 uninstall("codex", self.home, "selected")
 
     def test_doctor_distinguishes_runtime_checks_trust_and_native_activation(self):
-        from engineering_assistant.installation import doctor
+        from engineering_assistant.installation import doctor, runtime_lock
         data = self.root / "data"
         from engineering_assistant.installation import _storage
         _storage(data).close()
@@ -805,9 +815,16 @@ class NativeInstallationTests(unittest.TestCase):
         codex = self.package(self.root / "codex")
         hermes = self.package(self.root / "hermes", agent="hermes")
         checks = {"provider": {"qualified": True}, "mcp": "passed", "tools_call": "passed", "hook": "passed"}
+        def unit_lock(package):
+            return runtime_lock(ROOT, "hermes" if package == hermes else "codex", "macos-arm64", "2.3.0.0-rc.1")[0]
+        def unit_binding(path):
+            lock = runtime_lock(ROOT, path.parent.name, "macos-arm64", "2.3.0.0-rc.1")[0]
+            return {**lock, "python_build": "20260414", "python_base": str(data / "base"), "python": str(data / "python")}
         with mock.patch("engineering_assistant.installation.host_target", return_value="macos-arm64"), mock.patch(
             "engineering_assistant.installation._protocol_checks", return_value=checks
-        ), mock.patch("engineering_assistant.installation._native_query") as native:
+        ), mock.patch("engineering_assistant.installation._package_lock", side_effect=unit_lock), mock.patch(
+            "engineering_assistant.installation._read_control", side_effect=unit_binding
+        ), mock.patch("engineering_assistant.installation._verify_interpreter"), mock.patch("engineering_assistant.installation._native_query") as native:
             untrusted = doctor("codex", package=codex, data_home=data)
             trusted = doctor("codex", package=codex, data_home=data, hooks_trusted=True)
             active = doctor("codex", package=codex, data_home=data, hooks_trusted=True, native_activation_verified=True)

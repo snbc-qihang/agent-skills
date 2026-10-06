@@ -86,6 +86,30 @@ class NativeLauncherTests(unittest.TestCase):
                     artifact_fs.close(descriptor)
         return path
 
+    def prepare_v2(self) -> tuple[Path, Path]:
+        """Fake base and boot stub exercise native checks, never artifact qualification."""
+        from engineering_assistant.artifact_io import ArtifactIO, artifact_fs
+
+        path = self.prepare()
+        digest = "b" * 64
+        artifact = {"key": "cpython-3.13.13-darwin-aarch64-none", "build": "20260414"}
+        self.lock.update(schema_version="2", python_artifact_digest=digest, python_artifact=artifact)
+        (self.runtime / "runtime-lock.json").write_text(json.dumps(self.lock), encoding="utf-8")
+        storage = ArtifactIO(self.data_home, ".")
+        try:
+            base = storage.ensure_directory("python", digest, artifact["key"].replace("-darwin-", "-macos-"))
+            if os.name == "nt":
+                for parts in (("python", digest), ("python", digest, base.name)):
+                    with storage.open_directory(*parts) as descriptor:
+                        artifact_fs.set_private_owner(descriptor)
+        finally:
+            storage.close()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        binding.update(schema_version="2", python_artifact_digest=digest,
+                       python_build=artifact["build"], python_base=str(base))
+        path.write_text(json.dumps(binding), encoding="utf-8")
+        return path, base
+
     @staticmethod
     @contextmanager
     def _windows_dacl(path: Path, broad: bool) -> Iterator[None]:
@@ -217,6 +241,134 @@ class NativeLauncherTests(unittest.TestCase):
         result = self.invoke("mcp-serve", "中文 value with spaces")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["mcp-serve", "中文 value with spaces"], json.loads(result.stdout))
+
+    def test_v2_binding_runs_native_contract_with_private_artifact_base(self) -> None:
+        self.prepare_v2()
+        result = self.invoke("mcp-serve", "中文 value with spaces")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["mcp-serve", "中文 value with spaces"], json.loads(result.stdout))
+
+    def test_v2_binding_rejects_artifact_digest_and_build_mismatch_before_python(self) -> None:
+        path, _base = self.prepare_v2()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        for field, value in (("python_artifact_digest", "c" * 64), ("python_build", "20260602")):
+            with self.subTest(field=field):
+                path.write_text(json.dumps({**binding, field: value}), encoding="utf-8")
+                result = self.invoke("mcp-serve")
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(b"", result.stdout)
+                self.assertIn("artifact", json.loads(result.stderr)["reason"])
+
+    def test_v2_binding_rejects_wrong_artifact_parent_or_base_name_before_python(self) -> None:
+        from engineering_assistant.artifact_io import ArtifactIO, artifact_fs
+
+        path, base = self.prepare_v2()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        storage = ArtifactIO(self.data_home, ".")
+        try:
+            alternatives = (
+                storage.ensure_directory("python", "c" * 64, base.name),
+                storage.ensure_directory("python", base.parent.name, "wrong-base"),
+            )
+            if os.name == "nt":
+                for alternative in alternatives:
+                    for directory in (alternative.parent, alternative):
+                        with storage.open_directory(*directory.relative_to(self.data_home).parts) as descriptor:
+                            artifact_fs.set_private_owner(descriptor)
+        finally:
+            storage.close()
+        for alternative in alternatives:
+            with self.subTest(base=alternative):
+                path.write_text(json.dumps({**binding, "python_base": str(alternative)}), encoding="utf-8")
+                result = self.invoke("mcp-serve")
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(b"", result.stdout)
+                self.assertIn("artifact", json.loads(result.stderr)["reason"])
+
+    def test_v2_base_requires_absolute_path_without_parent_traversal(self) -> None:
+        path, base = self.prepare_v2()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        for alternative in ("relative/base", str(base / ".." / base.name)):
+            with self.subTest(base=alternative):
+                path.write_text(json.dumps({**binding, "python_base": alternative}), encoding="utf-8")
+                result = self.invoke("mcp-serve")
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(b"", result.stdout)
+                self.assertIn("absolute", json.loads(result.stderr)["reason"])
+
+    def test_v2_artifact_base_and_parent_cannot_be_links(self) -> None:
+        _path, base = self.prepare_v2()
+        for original in (base, base.parent):
+            with self.subTest(path=original):
+                held = original.with_name(original.name + "-held")
+                original.rename(held)
+                try:
+                    if os.name == "nt":
+                        created = subprocess.run(["cmd.exe", "/d", "/c", "mklink", "/J", str(original), str(held)],
+                                                 capture_output=True, check=False)
+                        self.assertEqual(0, created.returncode, created.stderr)
+                    else:
+                        original.symlink_to(held, target_is_directory=True)
+                    result = self.invoke("mcp-serve")
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertEqual(b"", result.stdout)
+                    self.assertIn("unsafe", json.loads(result.stderr)["reason"])
+                finally:
+                    if original.exists():
+                        original.rmdir() if os.name == "nt" else original.unlink()
+                    held.rename(original)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX ownership and mode contract")
+    def test_v2_other_user_writable_artifact_base_and_parent_are_rejected(self) -> None:
+        _path, base = self.prepare_v2()
+        for directory in (base, base.parent):
+            with self.subTest(path=directory):
+                original_mode = directory.stat().st_mode & 0o777
+                directory.chmod(original_mode | 0o022)
+                try:
+                    result = self.invoke("mcp-serve")
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertEqual(b"", result.stdout)
+                    self.assertIn("private", json.loads(result.stderr)["reason"])
+                finally:
+                    directory.chmod(original_mode)
+
+    @unittest.skipUnless(os.name == "nt", "requires real Windows security descriptors and native launcher")
+    def test_v2_windows_broad_artifact_base_and_parent_acl_are_rejected(self) -> None:
+        _path, base = self.prepare_v2()
+        for directory in (base, base.parent):
+            with self.subTest(path=directory):
+                with self._windows_dacl(directory, broad=True):
+                    result = self.invoke("mcp-serve")
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertEqual(b"", result.stdout)
+                    self.assertIn("private", json.loads(result.stderr)["reason"])
+
+    def test_unknown_schema_and_mixed_v1_v2_binding_are_rejected(self) -> None:
+        path = self.prepare()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        self.lock["schema_version"] = "3"
+        (self.runtime / "runtime-lock.json").write_text(json.dumps(self.lock), encoding="utf-8")
+        result = self.invoke("mcp-serve")
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(b"", result.stdout)
+        self.assertIn("schema", json.loads(result.stderr)["reason"])
+        self.lock["schema_version"] = "1"
+        (self.runtime / "runtime-lock.json").write_text(json.dumps(self.lock), encoding="utf-8")
+        path.write_text(json.dumps({**binding, "schema_version": "2"}), encoding="utf-8")
+        result = self.invoke("mcp-serve")
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(b"", result.stdout)
+        self.assertIn("does not match", json.loads(result.stderr)["reason"])
+
+    def test_v2_lock_does_not_accept_a_v1_binding(self) -> None:
+        path, _base = self.prepare_v2()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**binding, "schema_version": "1"}), encoding="utf-8")
+        result = self.invoke("mcp-serve")
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(b"", result.stdout)
+        self.assertIn("does not match", json.loads(result.stderr)["reason"])
 
     def test_unprepared_hook_returns_nonblocking_empty_object(self) -> None:
         result = self.invoke("hook", "--event", "Stop")

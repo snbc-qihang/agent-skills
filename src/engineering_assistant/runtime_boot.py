@@ -12,10 +12,23 @@ def main() -> int:
     sys.path.insert(0, str(root / "runtime"))
     arguments = sys.argv[1:]
     mode = arguments[0] if arguments else "--help"
+    try:
+        from engineering_assistant.installation import _read_control, _validate_runtime_lock, verify_running_python
+        lock = _read_control(root / "runtime-lock.json")
+        if lock.get("schema_version") == "2":
+            _validate_runtime_lock(lock)
+            verify_running_python(lock)
+        elif lock.get("schema_version") != "1":
+            raise ValueError("unsupported Runtime contract")
+    except Exception:
+        if mode == "hook":
+            print("{}")
+            return 0
+        print('{"status":"needs_preparation","reason":"python_artifact_verification_failed"}', file=sys.stderr)
+        return 2
     if mode == "hook":
         try:
-            from engineering_assistant.installation import _read_control
-            agent = _read_control(root / "runtime-lock.json")["agent"]
+            agent = lock["agent"]
             if agent == "claude-code":
                 from engineering_assistant.claude_hook import run_claude_hook
                 return run_claude_hook(schema_root=root / "schemas")

@@ -163,6 +163,7 @@ jobs:
                   str(Path(sys.executable).resolve()),
                   str(Path("scripts/qualify_installation.py").resolve()),
                   "--output", str(report_path),
+                  "--diagnose-windows-native-on-failure",
               ], cwd=Path.cwd(), environment=dict(os.environ),
                   timeout_seconds=720, output_limit_bytes=1048576)
               (root / "attempt.log").write_bytes(output)

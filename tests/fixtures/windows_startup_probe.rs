@@ -13,6 +13,11 @@ extern "system" {
     fn GetLastError() -> u32;
     fn FreeLibrary(module: *mut c_void) -> i32;
     fn GetModuleFileNameW(module: *mut c_void, name: *mut u16, capacity: u32) -> u32;
+    fn CreateFileW(name: *const u16, access: u32, sharing: u32, attributes: *mut c_void,
+                   creation: u32, flags: u32, template: *mut c_void) -> *mut c_void;
+    fn CreateFileMappingW(file: *mut c_void, attributes: *mut c_void, protection: u32,
+                          high: u32, low: u32, name: *const u16) -> *mut c_void;
+    fn CloseHandle(handle: *mut c_void) -> i32;
     fn ExitProcess(code: u32) -> !;
 }
 
@@ -50,6 +55,16 @@ unsafe fn load(handle: *mut c_void, label: &[u8], name: *const u16, flags: u32) 
     write(handle, b"\n");
     let module = LoadLibraryExW(name, ptr::null_mut(), flags);
     let error = if module.is_null() { GetLastError() } else { 0 };
+    write(handle, b"RESULT ");
+    write(handle, label);
+    write(handle, b" ");
+    status(handle, error);
+    if !module.is_null() && FreeLibrary(module) == 0 {
+        ExitProcess(73);
+    }
+}
+
+unsafe fn status(handle: *mut c_void, error: u32) {
     let digits = b"0123456789ABCDEF";
     let mut status = *b"0x00000000\n";
     let mut index = 0;
@@ -57,20 +72,11 @@ unsafe fn load(handle: *mut c_void, label: &[u8], name: *const u16, flags: u32) 
         status[index + 2] = digits[((error >> (28 - index * 4)) & 15) as usize];
         index += 1;
     }
-    write(handle, b"RESULT ");
-    write(handle, label);
-    write(handle, b" ");
     write(handle, &status);
-    if !module.is_null() && FreeLibrary(module) == 0 {
-        ExitProcess(73);
-    }
 }
 
-unsafe fn private_load(handle: *mut c_void, label: &[u8], suffix: &[u8]) {
+unsafe fn private_name(name: *mut u16, suffix: &[u8]) {
     // GetModuleFileNameW identifies this owned executable, never argv/CWD/PATH.
-    // No initialization of the large stack buffer or implicit CRT memset.
-    let mut storage = MaybeUninit::<[u16; 1024]>::uninit();
-    let name = storage.as_mut_ptr().cast::<u16>();
     let length = GetModuleFileNameW(ptr::null_mut(), name, 1024) as usize;
     if length < 3 || length >= 1024 || ptr::read(name.add(1)) != b':' as u16
         || ptr::read(name.add(2)) != b'\\' as u16 {
@@ -88,9 +94,76 @@ unsafe fn private_load(handle: *mut c_void, label: &[u8], suffix: &[u8]) {
         ptr::write(name.add(start + index), suffix[index] as u16);
         index += 1;
     }
+}
+
+unsafe fn private_load(handle: *mut c_void, label: &[u8], suffix: &[u8]) {
+    // No initialization of the large stack buffer or implicit CRT memset.
+    let mut storage = MaybeUninit::<[u16; 1024]>::uninit();
+    let name = storage.as_mut_ptr().cast::<u16>();
+    private_name(name, suffix);
     // DLL_LOAD_DIR|SYSTEM32 requires an absolute path and runs real DllMain.
     // https://learn.microsoft.com/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibraryexw
     load(handle, label, name, 0x900);
+}
+
+unsafe fn check_begin(handle: *mut c_void, operation: &[u8]) {
+    write(handle, b"CHECK ");
+    write(handle, operation);
+    write(handle, b" python313.dll\n");
+}
+
+unsafe fn check_result(handle: *mut c_void, operation: &[u8], error: Option<u32>) {
+    write(handle, b"CHECK_RESULT ");
+    write(handle, operation);
+    write(handle, b" python313.dll ");
+    match error {
+        Some(value) => status(handle, value),
+        None => write(handle, b"SKIPPED\n"),
+    }
+}
+
+unsafe fn image_check(handle: *mut c_void, file: *mut c_void, operation: &[u8], protection: u32) {
+    check_begin(handle, operation);
+    if file as isize == -1 {
+        check_result(handle, operation, None);
+        return;
+    }
+    // Read-only, unnamed, whole-file object. No MapViewOfFile or DLL entry.
+    // SEC_IMAGE must include a page protection; SEC_IMAGE_NO_EXECUTE requires PAGE_READONLY.
+    // https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
+    let image = CreateFileMappingW(file, ptr::null_mut(), protection, 0, 0, ptr::null());
+    let error = if image.is_null() { GetLastError() } else { 0 };
+    check_result(handle, operation, Some(error));
+    if !image.is_null() && CloseHandle(image) == 0 {
+        ExitProcess(74);
+    }
+}
+
+unsafe fn private_checks(handle: *mut c_void) {
+    let mut storage = MaybeUninit::<[u16; 1024]>::uninit();
+    let name = storage.as_mut_ptr().cast::<u16>();
+    private_name(name, b"python313.dll\0");
+    check_begin(handle, b"file_read");
+    // GENERIC_READ, sharing read/write/delete, OPEN_EXISTING, normal attributes;
+    // no writes, creation, inherited handles, registry, argv, CWD or PATH input.
+    // https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-createfilew
+    let file = CreateFileW(name, 0x80000000, 7, ptr::null_mut(), 3, 0x80, ptr::null_mut());
+    let error = if file as isize == -1 { GetLastError() } else { 0 };
+    check_result(handle, b"file_read", Some(error));
+    // Separate read/execute request makes an executable image access denial
+    // observable before CreateFileMapping; it still never maps or executes code.
+    check_begin(handle, b"file_read_execute");
+    let executable = CreateFileW(name, 0xA0000000, 7, ptr::null_mut(), 3, 0x80, ptr::null_mut());
+    let error = if executable as isize == -1 { GetLastError() } else { 0 };
+    check_result(handle, b"file_read_execute", Some(error));
+    image_check(handle, executable, b"sec_image", 0x01000002);
+    image_check(handle, file, b"sec_image_no_execute", 0x11000002);
+    if executable as isize != -1 && CloseHandle(executable) == 0 {
+        ExitProcess(74);
+    }
+    if file as isize != -1 && CloseHandle(file) == 0 {
+        ExitProcess(74);
+    }
 }
 
 #[no_mangle]
@@ -99,7 +172,8 @@ pub unsafe extern "system" fn probe_entry() -> ! {
     if handle.is_null() || handle as isize == -1 {
         ExitProcess(70);
     }
-    write(handle, b"EA_NATIVE_DLL_PROBE_V1\n");
+    write(handle, b"EA_NATIVE_DLL_PROBE_V2\n");
+    private_checks(handle);
     // Fixed sequential observations; loaded-module state is not independent.
     load(handle, b"ucrtbase.dll", wide(b"ucrtbase.dll\0").as_ptr(), 0x800);
     load(handle, b"advapi32.dll", wide(b"advapi32.dll\0").as_ptr(), 0x800);
@@ -113,6 +187,18 @@ pub unsafe extern "system" fn probe_entry() -> ! {
     load(handle, b"bcrypt.dll", wide(b"bcrypt.dll\0").as_ptr(), 0x800);
     load(handle, b"api-ms-win-core-path-l1-1-0.dll", wide(b"api-ms-win-core-path-l1-1-0.dll\0").as_ptr(), 0x800);
     private_load(handle, b"vcruntime140.dll", b"vcruntime140.dll\0");
+    load(handle, b"api-ms-win-crt-stdio-l1-1-0.dll", wide(b"api-ms-win-crt-stdio-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-environment-l1-1-0.dll", wide(b"api-ms-win-crt-environment-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-string-l1-1-0.dll", wide(b"api-ms-win-crt-string-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-heap-l1-1-0.dll", wide(b"api-ms-win-crt-heap-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-runtime-l1-1-0.dll", wide(b"api-ms-win-crt-runtime-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-locale-l1-1-0.dll", wide(b"api-ms-win-crt-locale-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-convert-l1-1-0.dll", wide(b"api-ms-win-crt-convert-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-math-l1-1-0.dll", wide(b"api-ms-win-crt-math-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-time-l1-1-0.dll", wide(b"api-ms-win-crt-time-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-process-l1-1-0.dll", wide(b"api-ms-win-crt-process-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-conio-l1-1-0.dll", wide(b"api-ms-win-crt-conio-l1-1-0.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-crt-filesystem-l1-1-0.dll", wide(b"api-ms-win-crt-filesystem-l1-1-0.dll\0").as_ptr(), 0x800);
     private_load(handle, b"python313.dll", b"python313.dll\0");
     write(handle, b"DONE\n");
     ExitProcess(0);

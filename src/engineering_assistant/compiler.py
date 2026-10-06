@@ -187,7 +187,7 @@ def _compile_package(
     codex_cachebuster: str | None,
     target: str,
 ) -> dict:
-    from .installation import runtime_lock
+    from .installation import runtime_lock, python_download_metadata
     from .native_launcher import build_launcher
     output = _BuildPath(output_io)
     _copy_tree(repository_root / "skills", output / "skills")
@@ -210,6 +210,7 @@ def _compile_package(
     lock, requirements = runtime_lock(repository_root, platform, target, catalog.version)
     (runtime_root / "runtime-lock.json").write_text(json.dumps(lock, sort_keys=True) + "\n", encoding="utf-8")
     (runtime_root / "runtime-requirements.txt").write_bytes(requirements)
+    (runtime_root / "runtime-python-downloads.json").write_bytes(python_download_metadata(lock))
     _copy_tree(repository_root / "config", runtime_root / "config")
     (runtime_root / "runtime_boot.py").write_bytes((repository_root / "src/engineering_assistant/runtime_boot.py").read_bytes())
     launcher = runtime_root / ("bin/ea.exe" if target == "windows-x64" else "bin/ea")
@@ -273,9 +274,27 @@ def verify_package(package_root: Path | str) -> dict:
     if f"sha256:{digest}" != manifest.get("payload_digest"):
         raise ValidationFailure("package payload digest differs from its build manifest")
     if manifest.get("build_format_version") == "2.0":
-        from .installation import _package_lock
+        from .installation import AGENTS, PYTHON_VERSION, TARGETS, _package_lock, _read_control, environment_key
         from .native_launcher import _binary_target
-        lock = _package_lock(package_root)
+        lock = _read_control(package_root / "engineering-assistant/runtime-lock.json")
+        if isinstance(lock, dict) and lock.get("schema_version") == "1":
+            # Existing native caches remain verifiable for backup and restore.
+            # Preparation separately requires the artifact-bound v2 contract.
+            fields = {"schema_version", "agent", "target", "canonical_version", "python_version",
+                      "requirements_digest", "environment_key"}
+            if (set(lock) != fields or any(not isinstance(value, str) for value in lock.values())
+                or lock["agent"] not in AGENTS or lock["target"] not in TARGETS
+                or lock["python_version"] != PYTHON_VERSION
+                or re.fullmatch(r"[0-9a-f]{64}", lock["requirements_digest"]) is None
+                or lock["environment_key"] != environment_key(lock["canonical_version"], lock["python_version"],
+                                                           lock["requirements_digest"], lock["target"])):
+                raise ValidationFailure("invalid legacy native Runtime contract")
+        elif isinstance(lock, dict) and lock.get("schema_version") == "2":
+            if "engineering-assistant/runtime-python-downloads.json" not in actual:
+                raise ValidationFailure("package is missing its fixed Python artifact metadata")
+            lock = _package_lock(package_root)
+        else:
+            raise ValidationFailure("unsupported native Runtime contract")
         if (lock["agent"] != manifest["platform"] or lock["target"] != manifest["target"]
             or lock["canonical_version"] != manifest["canonical_version"]
             or lock["environment_key"] != manifest["runtime_environment_key"]):

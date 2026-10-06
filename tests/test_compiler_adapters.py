@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import importlib.util
 import os
 import re
@@ -24,7 +25,85 @@ from engineering_assistant.catalog import load_catalog  # noqa: E402
 from engineering_assistant.version import platform_version  # noqa: E402
 
 
+def reseal_package_fixture(package: Path) -> dict:
+    """Rebind deliberate fixture mutations so semantic guards are exercised."""
+    path = package / "package-manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    files = compiler_module._file_digests(package, exclude={"package-manifest.json"})
+    manifest["payload_files"] = files
+    manifest["payload_digest"] = "sha256:" + hashlib.sha256(
+        "\n".join(f"{name}:{digest}" for name, digest in files.items()).encode()).hexdigest()
+    path.write_text(json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8")
+    return manifest
+
+
+def native_v1_fixture(package: Path, *, cachebuster: str | None = None) -> dict:
+    """Full native 2.0/v1 contract with a real host binary, never qualification."""
+    from engineering_assistant.installation import environment_key
+    build_package(ROOT, "codex", package, codex_cachebuster=cachebuster)
+    path = package / "package-manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    requirements = (package / "engineering-assistant/runtime-requirements.txt").read_bytes()
+    digest = hashlib.sha256(requirements).hexdigest()
+    lock = {"schema_version": "1", "agent": "codex", "target": manifest["target"],
+            "canonical_version": manifest["canonical_version"], "python_version": "3.13.13",
+            "requirements_digest": digest,
+            "environment_key": environment_key(manifest["canonical_version"], "3.13.13", digest, manifest["target"])}
+    (package / "engineering-assistant/runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
+    (package / "engineering-assistant/runtime-python-downloads.json").unlink()
+    manifest["runtime_environment_key"] = lock["environment_key"]
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    return reseal_package_fixture(package)
+
+
 class CompilerAdapterTests(unittest.TestCase):
+    def test_native_v1_package_keeps_strict_verification_but_is_not_preparable_as_v2(self):
+        from engineering_assistant.installation import _package_lock
+        package = self.root / "legacy-native-v1"
+        expected = native_v1_fixture(package)
+        self.assertEqual("2.0", expected["build_format_version"])
+        self.assertEqual(expected, verify_package(package))
+        with self.assertRaisesRegex(ValidationFailure, "artifact"):
+            _package_lock(package)
+
+    def test_native_v1_resealed_wrong_key_or_mixed_fields_are_rejected(self):
+        package = self.root / "legacy-native-v1"
+        native_v1_fixture(package)
+        path = package / "engineering-assistant/runtime-lock.json"
+        original = json.loads(path.read_text(encoding="utf-8"))
+        for replacement in ({"environment_key": "b" * 64}, {"python_artifact_digest": "a" * 64}, {"schema_version": "3"}):
+            with self.subTest(replacement=tuple(replacement)):
+                path.write_text(json.dumps({**original, **replacement}), encoding="utf-8")
+                reseal_package_fixture(package)
+                with self.assertRaises(ValidationFailure):
+                    verify_package(package)
+
+    def test_native_v1_resealed_changed_requirements_are_rejected(self):
+        package = self.root / "legacy-native-v1"
+        native_v1_fixture(package)
+        path = package / "engineering-assistant/runtime-requirements.txt"
+        path.write_bytes(path.read_bytes() + b"\n# changed dependency contract\n")
+        reseal_package_fixture(package)
+        with self.assertRaisesRegex(ValidationFailure, "dependency"):
+            verify_package(package)
+
+    def test_native_v1_resealed_invalid_native_binary_is_rejected(self):
+        package = self.root / "legacy-native-v1"
+        manifest = native_v1_fixture(package)
+        executable = "ea.exe" if manifest["target"] == "windows-x64" else "ea"
+        (package / "engineering-assistant/bin" / executable).write_bytes(b"not a native executable")
+        reseal_package_fixture(package)
+        with self.assertRaisesRegex(ValidationFailure, "machine header"):
+            verify_package(package)
+
+    def test_native_v2_resealed_package_still_requires_python_metadata(self):
+        package = self.root / "native-v2"
+        build_package(ROOT, "codex", package)
+        (package / "engineering-assistant/runtime-python-downloads.json").unlink()
+        reseal_package_fixture(package)
+        with self.assertRaises(ValidationFailure):
+            verify_package(package)
+
     def test_native_runtime_fixture_keeps_venv_under_private_data(self) -> None:
         package = self.root / "private-runtime-fixture"
         build_package(ROOT, "codex", package)
@@ -58,6 +137,10 @@ class CompilerAdapterTests(unittest.TestCase):
         """Current test Python checks launcher protocols, not the pinned install contract."""
         core = package / "engineering-assistant"
         lock = json.loads((core / "runtime-lock.json").read_text(encoding="utf-8"))
+        # This deliberately exercises the legacy protocol contract with the
+        # current test Python. The v2 pinned artifact is qualified by prepare.
+        lock["schema_version"] = "1"
+        (core / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
         data = self.root / "launcher-unit-data"
         from engineering_assistant.installation import _normalize_new_windows_environment, _storage
         storage = _storage(data)

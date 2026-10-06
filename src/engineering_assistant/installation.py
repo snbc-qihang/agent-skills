@@ -32,6 +32,12 @@ from .validation import ValidationFailure
 
 AGENTS = ("codex", "hermes", "claude-code")
 TARGETS = ("macos-arm64", "macos-x64", "linux-x64", "windows-x64")
+PYTHON_PLATFORMS = {
+    "macos-arm64": ("darwin", "aarch64", "none", "aarch64-apple-darwin"),
+    "macos-x64": ("darwin", "x86_64", "none", "x86_64-apple-darwin"),
+    "linux-x64": ("linux", "x86_64", "gnu", "x86_64-unknown-linux-gnu"),
+    "windows-x64": ("windows", "x86_64", "none", "x86_64-pc-windows-msvc"),
+}
 PYTHON_VERSION = "3.13.13"
 MAX_CONTROL_BYTES = 65536
 
@@ -77,23 +83,42 @@ def data_home(explicit: Path | str | None = None, environment: Mapping[str, str]
     return Path(env.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "engineering-assistant"
 
 
-def environment_key(version: str, python_version: str, requirements_digest: str, target: str) -> str:
-    return hashlib.sha256(json.dumps([version, python_version, requirements_digest, target],
+def environment_key(version: str, python_version: str, requirements_digest: str, target: str,
+                    python_artifact_digest: str | None = None) -> str:
+    components = [version, python_version, requirements_digest, target]
+    if python_artifact_digest is not None:
+        components.append(python_artifact_digest)
+    return hashlib.sha256(json.dumps(components,
                                     separators=(",", ":")).encode()).hexdigest()
+
+
+def python_download_metadata(lock: dict) -> bytes:
+    artifact = lock["python_artifact"]
+    return (json.dumps({artifact["key"]: {key: value for key, value in artifact.items() if key != "key"}},
+                       ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
 def runtime_lock(repository_root: Path, agent: str, target: str, version: str) -> tuple[dict, bytes]:
     specification = json.loads((repository_root / "config/runtime.json").read_text(encoding="utf-8"))
-    if target not in specification["targets"]:
+    if (specification.get("schema_version") != "2" or target not in specification["targets"]
+        or specification.get("python_downloads") != "runtime-python-downloads.json"):
         raise ValidationFailure(f"unsupported Runtime target: {target}")
     requirements = (repository_root / "config" / specification["requirements"]).read_bytes()
     digest = hashlib.sha256(requirements).hexdigest()
-    return {
-        "schema_version": "1", "agent": agent, "target": target,
+    downloads = json.loads((repository_root / "config" / specification["python_downloads"]).read_text(encoding="utf-8"))
+    os_name, arch, libc, _triple = PYTHON_PLATFORMS[target]
+    download_key = f"cpython-{specification['python_version']}-{os_name}-{arch}-{libc}"
+    lock = {
+        "schema_version": "2", "agent": agent, "target": target,
         "canonical_version": version, "python_version": specification["python_version"],
         "requirements_digest": digest,
-        "environment_key": environment_key(version, specification["python_version"], digest, target),
-    }, requirements
+        "python_artifact": {"key": download_key, **downloads[download_key]},
+    }
+    lock["python_artifact_digest"] = hashlib.sha256(python_download_metadata(lock)).hexdigest()
+    lock["environment_key"] = environment_key(version, specification["python_version"], digest, target,
+                                              lock["python_artifact_digest"])
+    _validate_runtime_lock(lock)
+    return lock, requirements
 
 
 def _read_control(path: Path) -> dict:
@@ -104,13 +129,45 @@ def _read_control(path: Path) -> dict:
         storage.close()
 
 
+def _validate_runtime_lock(lock: dict) -> None:
+    if not isinstance(lock, dict):
+        raise ValidationFailure("invalid fixed Python artifact contract")
+    artifact = lock.get("python_artifact")
+    if (lock.get("schema_version") != "2" or lock.get("agent") not in AGENTS
+        or lock.get("target") not in TARGETS or lock.get("python_version") != PYTHON_VERSION
+        or not isinstance(artifact, dict)):
+        raise ValidationFailure("invalid fixed Python artifact contract")
+    os_name, arch, libc, triple = PYTHON_PLATFORMS[lock["target"]]
+    expected_fields = {"key", "name", "arch", "os", "libc", "major", "minor", "patch", "prerelease",
+                       "url", "sha256", "variant", "build"}
+    if (set(artifact) != expected_fields or artifact.get("name") != "cpython"
+        or artifact.get("key") != f"cpython-{PYTHON_VERSION}-{os_name}-{arch}-{libc}"
+        or artifact.get("arch") != {"family": arch, "variant": None}
+        or artifact.get("os") != os_name or artifact.get("libc") != libc
+        or [artifact.get(name) for name in ("major", "minor", "patch")] != [3, 13, 13]
+        or artifact.get("variant") is not None or artifact.get("prerelease") != ""
+        or not isinstance(artifact.get("build"), str) or re.fullmatch(r"[0-9]{8}", artifact["build"]) is None
+        or not isinstance(artifact.get("sha256"), str) or re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]) is None
+        or artifact.get("url") != ("https://github.com/astral-sh/python-build-standalone/releases/download/"
+            + artifact["build"] + "/cpython-" + PYTHON_VERSION + "%2B" + artifact["build"] + "-"
+            + triple + "-install_only_stripped.tar.gz")
+        or lock.get("python_artifact_digest") != hashlib.sha256(python_download_metadata(lock)).hexdigest()
+        or lock.get("environment_key") != environment_key(lock.get("canonical_version"),
+             lock.get("python_version"), lock.get("requirements_digest"), lock.get("target"),
+             lock.get("python_artifact_digest"))):
+        raise ValidationFailure("invalid fixed Python artifact contract")
+
+
 def _package_lock(package: Path) -> dict:
     lock = _read_control(package / "engineering-assistant/runtime-lock.json")
-    if (lock.get("schema_version") != "1" or lock.get("agent") not in AGENTS
-        or lock.get("target") not in TARGETS or lock.get("python_version") != PYTHON_VERSION
-        or lock.get("environment_key") != environment_key(lock.get("canonical_version"),
-             lock.get("python_version"), lock.get("requirements_digest"), lock.get("target"))):
-        raise ValidationFailure("invalid fixed Runtime contract")
+    _validate_runtime_lock(lock)
+    storage = ArtifactIO(package / "engineering-assistant", ".")
+    try:
+        metadata = storage.read_bytes_limited(MAX_CONTROL_BYTES, "runtime-python-downloads.json")
+    finally:
+        storage.close()
+    if metadata != python_download_metadata(lock):
+        raise ValidationFailure("Python artifact metadata differs from its package lock")
     return lock
 
 
@@ -126,28 +183,129 @@ def _command(command: list[str], *, cwd: Path, environment: dict | None = None) 
 
 
 def _create_environment(staging: Path, lock: dict, requirements: Path, uv: Path, data: Path) -> None:
-    environment = {**os.environ, "UV_PYTHON_INSTALL_DIR": str(data / "python"),
-                   "UV_CACHE_DIR": str(data / "download-cache"), "UV_NO_PROGRESS": "1"}
+    environment = {name: value for name, value in os.environ.items() if not name.upper().startswith("UV_")}
     version = _command([str(uv), "--version"], cwd=data, environment=environment)
-    if not version.startswith("uv "):
-        raise ValidationFailure("Runtime preparation requires the uv executable")
-    _command([str(uv), "venv", "--no-project", "--managed-python", "--python",
-              lock["python_version"], str(staging)], cwd=data, environment=environment)
+    parsed = re.match(r"^uv (\d+)\.(\d+)\.(\d+)(?:\s|$|[+.-])", version)
+    if not parsed or tuple(map(int, parsed.groups())) < (0, 8, 14):
+        raise ValidationFailure("Runtime preparation requires uv 0.8.14 or newer for the fixed Python build")
+    storage = _storage(data)
+    try:
+        artifact_root = storage.ensure_directory("python", lock["python_artifact_digest"])
+        with storage.transaction("python-artifact", lock["python_artifact_digest"]):
+            controlled = ArtifactIO(artifact_root, ".")
+            try:
+                metadata = controlled.create_immutable_json(json.loads(python_download_metadata(lock)),
+                                                            "runtime-python-downloads.json")
+            finally:
+                controlled.close()
+            environment.update(UV_PYTHON_INSTALL_DIR=str(artifact_root),
+                UV_PYTHON_DOWNLOADS_JSON_URL=str(metadata), UV_PYTHON_CPYTHON_BUILD=lock["python_artifact"]["build"],
+                UV_CACHE_DIR=str(data / "download-cache"), UV_NO_PROGRESS="1", UV_PYTHON_INSTALL_BIN="0",
+                UV_PYTHON_INSTALL_REGISTRY="0", UV_PYTHON_NO_REGISTRY="1")
+            base = artifact_root / lock["python_artifact"]["key"].replace("-darwin-", "-macos-")
+            if base.exists():
+                _check_python_base(base, lock)
+            else:
+                download = storage.ensure_directory("staging", "python-" + secrets.token_hex(8), lock["python_artifact_digest"])
+                environment["UV_PYTHON_INSTALL_DIR"] = str(download)
+                _command([str(uv), "--no-config", "python", "install", lock["python_artifact"]["key"]],
+                         cwd=data, environment=environment)
+                downloaded_base = download / base.name
+                _record_python_artifact(downloaded_base, lock)
+                source = ArtifactIO(download, ".")
+                destination = ArtifactIO(artifact_root, ".")
+                try:
+                    with source.open_directory() as source_fd, destination.open_directory() as destination_fd:
+                        artifact_fs.rename(base.name, base.name, src_dir_fd=source_fd, dst_dir_fd=destination_fd)
+                finally:
+                    source.close()
+                    destination.close()
+                environment["UV_PYTHON_INSTALL_DIR"] = str(artifact_root)
+            _command([str(uv), "--no-config", "venv", "--no-project", "--managed-python", "--no-python-downloads", "--python",
+                      lock["python_artifact"]["key"], str(staging)], cwd=data, environment=environment)
+    finally:
+        storage.close()
     python = staging / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    _command([str(uv), "pip", "sync", "--python", str(python), "--require-hashes",
+    _command([str(uv), "--no-config", "pip", "sync", "--python", str(python), "--require-hashes",
               "--only-binary=:all:", str(requirements)], cwd=data, environment=environment)
     if os.name == "nt":
         _normalize_new_windows_environment(staging)
-    _verify_interpreter(python, lock)
+    _verify_interpreter(python, lock, expected_base=base)
 
 
-def _verify_interpreter(python: Path, lock: dict) -> None:
+def _verify_interpreter(python: Path, lock: dict, *, expected_base: Path | None = None) -> None:
     output = _command([str(python), "-I", "-B", "-c",
-        "import json,sys,importlib.metadata;print(json.dumps({'python':'.'.join(map(str,sys.version_info[:3])),"
-        "'jsonschema':importlib.metadata.version('jsonschema')}))"], cwd=python.parent)
+        "import json,sys,sysconfig,importlib.metadata;print(json.dumps({'python':'.'.join(map(str,sys.version_info[:3])),"
+        "'jsonschema':importlib.metadata.version('jsonschema'),'base_prefix':sys.base_prefix,"
+        "'implementation':sys.implementation.name,'gil':not bool(sysconfig.get_config_var('Py_GIL_DISABLED'))}))"], cwd=python.parent)
     actual = json.loads(output)
-    if actual != {"python": lock["python_version"], "jsonschema": "4.26.0"}:
+    _verify_python_facts(actual, lock, expected_base=expected_base)
+
+
+def _python_receipt(lock: dict) -> dict:
+    return {"schema_version": "1", "python_artifact_digest": lock["python_artifact_digest"],
+            "python_artifact": lock["python_artifact"]}
+
+
+def _check_python_base(base: Path, lock: dict, *, require_receipt: bool = True) -> None:
+    if (not base.is_absolute() or base.parent.name != lock["python_artifact_digest"]
+        or base.name != lock["python_artifact"]["key"].replace("-darwin-", "-macos-")):
+        raise ValidationFailure("prepared Python base differs from its artifact contract")
+    anchored = ArtifactIO(base, ".")
+    try:
+        build = anchored.read_bytes_limited(128, "BUILD").decode("ascii").strip()
+    finally:
+        anchored.close()
+    if build != lock["python_artifact"]["build"]:
+        raise ValidationFailure("prepared Python build differs from its artifact contract")
+    if require_receipt:
+        try:
+            receipt = _read_control(base / "runtime-python.json")
+        except FileNotFoundError:
+            raise ValidationFailure("prepared Python artifact receipt is missing") from None
+        if receipt != _python_receipt(lock):
+            raise ValidationFailure("prepared Python artifact receipt differs from its contract")
+
+
+def _record_python_artifact(base: Path, lock: dict) -> None:
+    if os.name == "nt" and not (base / "runtime-python.json").exists():
+        # Only the new, unbound managed base is normalized. Published bases
+        # already have a receipt and are checked before uv is invoked.
+        anchored = ArtifactIO(base, ".")
+        try:
+            with anchored.open_directory() as descriptor:
+                artifact_fs.set_private_owner(descriptor)
+                artifact_fs.assert_private_directory(descriptor)
+        finally:
+            anchored.close()
+    _check_python_base(base, lock, require_receipt=False)
+    storage = ArtifactIO(base, ".")
+    try:
+        storage.create_immutable_json(_python_receipt(lock), "runtime-python.json")
+    finally:
+        storage.close()
+
+
+def _verify_python_facts(actual: dict, lock: dict, *, expected_base: Path | None = None) -> None:
+    if (actual.get("python") != lock["python_version"] or actual.get("jsonschema") != "4.26.0"
+        or actual.get("implementation") != "cpython" or actual.get("gil") is not True):
         raise ValidationFailure("prepared interpreter differs from the fixed Runtime")
+    base = Path(actual.get("base_prefix", ""))
+    if expected_base is not None and base != expected_base:
+        raise ValidationFailure("prepared Python base differs from its binding")
+    _check_python_base(base, lock)
+
+
+def verify_running_python(lock: dict) -> None:
+    import importlib.metadata
+    import sysconfig
+    marker = _read_control(Path(sys.prefix) / "runtime-environment.json")
+    if {k: v for k, v in marker.items() if k not in {"agent", "python_base"}} != {k: v for k, v in lock.items() if k != "agent"}:
+        raise ValidationFailure("running Python environment differs from its package")
+    _verify_python_facts({"python": ".".join(map(str, sys.version_info[:3])),
+        "jsonschema": importlib.metadata.version("jsonschema"), "base_prefix": sys.base_prefix,
+        "implementation": sys.implementation.name, "gil": not bool(sysconfig.get_config_var("Py_GIL_DISABLED"))}, lock,
+        expected_base=Path(marker.get("python_base", "")))
 
 
 def _storage(data: Path) -> ArtifactIO:
@@ -264,6 +422,8 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
     uv = _uv(uv_executable)
     key = lock["environment_key"]
     environment = data / "environments" / key
+    base = data / "python" / lock["python_artifact_digest"] / lock["python_artifact"]["key"].replace("-darwin-", "-macos-")
+    environment_record = {**lock, "python_base": str(base)}
     recovery = {}
     try:
         with _preparation_transaction(storage, key, recovery):
@@ -271,7 +431,8 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
             rebuild = not environment.exists()
             if not rebuild and repair:
                 try:
-                    _verify_interpreter(environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"), lock)
+                    _verify_interpreter(environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"), lock,
+                                        expected_base=base)
                     _protocol_checks(package, python=environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
                 except (OSError, ValueError, ValidationFailure):
                     rebuild = True
@@ -283,14 +444,14 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                 staging = storage.ensure_directory("staging", staging_name)
                 try:
                     _create_environment(staging, lock, requirements, uv, data)
+                    staged_io = ArtifactIO(staging, ".")
+                    try:
+                        staged_io.create_immutable_json(environment_record, "runtime-environment.json")
+                    finally:
+                        staged_io.close()
                     checks = _protocol_checks(package, python=staging / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
                     if not checks["provider"].get("qualified"):
                         raise ValidationFailure("Provider sandbox qualification failed: " + str(checks["provider"].get("reason")))
-                    staged_io = ArtifactIO(staging, ".")
-                    try:
-                        staged_io.create_immutable_json(lock, "runtime-environment.json")
-                    finally:
-                        staged_io.close()
                     with storage.open_directory("staging") as source, storage.open_directory("environments") as destination:
                         if environment.exists():
                             quarantined = key + "-retained-" + secrets.token_hex(8)
@@ -312,17 +473,19 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                     raise
             else:
                 marker = _read_control(environment / "runtime-environment.json")
-                if marker != lock:
+                if marker != environment_record:
                     # Agent differs while the shared version/requirements environment is identical.
-                    if {k: v for k, v in marker.items() if k != "agent"} != {k: v for k, v in lock.items() if k != "agent"}:
+                    if {k: v for k, v in marker.items() if k != "agent"} != {k: v for k, v in environment_record.items() if k != "agent"}:
                         raise ValidationFailure("existing Runtime environment differs from its version contract")
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-            _verify_interpreter(python, lock)
+            _verify_interpreter(python, lock, expected_base=base)
             checks = _protocol_checks(package, python=python)
             if not checks["provider"].get("qualified"):
                 raise ValidationFailure("Provider sandbox qualification failed: " + str(checks["provider"].get("reason")))
-            binding = {"schema_version": "1", "agent": lock["agent"], "target": target,
+            binding = {"schema_version": "2", "agent": lock["agent"], "target": target,
                        "canonical_version": lock["canonical_version"], "environment_key": key,
+                       "python_artifact_digest": lock["python_artifact_digest"],
+                       "python_build": lock["python_artifact"]["build"], "python_base": str(base),
                        "python": str(python), "uv": str(uv), "environment": str(environment)}
             try:
                 existing = storage.read_json_limited(MAX_CONTROL_BYTES, "bindings", lock["agent"], key + ".json")[0]
@@ -696,8 +859,14 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
     if manifest.get("target") != actual:
         return {"status": "unsupported", "ready": False, "reason": "package target differs from host"}
     try:
+        lock = _package_lock(package)
+        binding = _read_control(data / "bindings" / agent / (lock["environment_key"] + ".json"))
+        if (any(binding.get(name) != lock[name] for name in ("schema_version", "agent", "target", "environment_key", "python_artifact_digest"))
+            or binding.get("python_build") != lock["python_artifact"]["build"]):
+            raise ValidationFailure("Runtime binding differs from its Python artifact contract")
+        _verify_interpreter(Path(binding["python"]), lock, expected_base=Path(binding["python_base"]))
         checks = _protocol_checks(package, data=data)
-    except (OSError, ValueError, subprocess.SubprocessError, ValidationFailure) as exc:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, ValidationFailure) as exc:
         return {"status": "failed", "ready": False, "reason": str(exc)}
     qualified = checks["provider"].get("qualified") is True
     status, reason = ("ready", None) if qualified else ("partial", checks["provider"].get("reason"))
@@ -711,6 +880,7 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
             "agent": agent, "target": actual, "version": manifest["canonical_version"],
             "package": str(package), "checks": checks,
             "hook_trust": trust, "native_activation": activation,
+            "python_build": lock["python_artifact"]["build"], "python_artifact_digest": lock["python_artifact_digest"],
             "native_marketplace_session": "not_executed", "reason": reason}
 
 

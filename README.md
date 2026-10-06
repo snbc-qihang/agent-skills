@@ -5,7 +5,7 @@
 - 当前版本：`2.3.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes、Claude Code
-- 内核语言：Python；安装 Runtime 固定 Python `3.13.13`，启动器使用 Rust
+- 内核语言：Python；安装 Runtime 固定 CPython `3.13.13`、PBS `20260414` 分布构建及归档摘要，启动器使用 Rust
 - 默认语言：简体中文，同时保留中英文任务路由能力
 
 ## 项目定位
