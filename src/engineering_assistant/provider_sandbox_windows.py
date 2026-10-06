@@ -17,6 +17,7 @@ import json
 import ntpath
 import os
 import platform
+import re
 import shutil
 import stat
 import subprocess
@@ -154,6 +155,22 @@ class _DebugEvent(ctypes.Structure):
 
 
 _STARTUP_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
+_LOADER_MODULES = frozenset({
+    "ntdll.dll", "kernel32.dll", "kernelbase.dll", "ucrtbase.dll", "vcruntime140.dll", "vcruntime140_1.dll",
+    "python3.dll", "python313.dll", "advapi32.dll", "shell32.dll", "ole32.dll", "oleaut32.dll",
+})
+_LOADER_FAILURE = re.compile(
+    r'\b(?:unable|failed)\s+to\s+load\s+dll\s*:\s*"(?P<path>[^";\r\n]{1,384})"\s*,?\s*'
+    r'(?:parent\s+module\s*:\s*"[^";\r\n]{1,384}"\s*,?\s*)?'
+    r'(?:nt)?status\s*[:=]\s*(?P<status>0x[0-9a-f]{8})(?![0-9a-z_])', re.IGNORECASE,
+)
+_LOADER_MESSAGE = re.compile(
+    r"\b(?:(?P<activation_context>activation\s+context)|(?P<dll_initialization>dll\s+initialization)|"
+    r"(?P<console_initialization>console\s+initialization)|(?:dll|module)\s*[:=]?\s*[\"']?"
+    r"(?P<module>[a-z0-9_.-]{1,64})[\"']?)"
+    r"\s*(?:(?:creation|generation)\s+)?(?:(?:failed|failure|error|returned)\b\s*)?(?:,\s*)?"
+    r"(?:with\s+)?(?:nt)?status\s*[:=]?\s*(?P<status>0x[0-9a-f]{8})(?![0-9a-z_])", re.IGNORECASE,
+)
 
 
 def capability() -> dict:
@@ -582,7 +599,7 @@ def _debug_module(api: _Api, file) -> str:
 
 
 class _LoaderTrace:
-    """Fixed-code debugger on the creating thread; no target memory reads."""
+    """Fixed-code debugger; only bounded SDK debug-message reads, no scans."""
 
     def __init__(self, api: _Api, pid: int, report: list, process=None, handles=None) -> None:
         self.api, self.pid, self.report = api, pid, report
@@ -593,12 +610,14 @@ class _LoaderTrace:
         self.pending_status = 0x10002
         self.initial_breakpoint = False
         self.exited, self.count = False, 0
+        self.debug_bytes = 0
         for name, result, arguments in (
             ("WaitForDebugEventEx", BOOL, [ctypes.POINTER(_DebugEvent), DWORD]),
             ("ContinueDebugEvent", BOOL, [DWORD, DWORD, DWORD]),
             ("GetFinalPathNameByHandleW", DWORD, [HANDLE, LPWSTR, DWORD, DWORD]),
             ("DuplicateHandle", BOOL, [HANDLE, HANDLE, HANDLE, ctypes.POINTER(HANDLE), DWORD, BOOL, DWORD]),
             ("DebugActiveProcessStop", BOOL, [DWORD]),
+            ("ReadProcessMemory", BOOL, [HANDLE, HANDLE, HANDLE, SIZE_T, ctypes.POINTER(SIZE_T)]),
         ):
             function = getattr(api.kernel, name)
             function.restype, function.argtypes = result, arguments
@@ -625,6 +644,68 @@ class _LoaderTrace:
                        "diagnostic debug event continuation")
         self.exited = self.exited or event.code == 5
         self.pending = None
+
+    def debug_message(self, information: _DebugStringInfo) -> dict:
+        result = {"event": "debug_string", "result": "unavailable"}
+        # Microsoft OUTPUT_DEBUG_STRING_INFO documents a WORD *byte* count,
+        # potentially truncated to its lower 16 bits. Never multiply Unicode
+        # length or read past the SDK's range; require its complete terminator.
+        # learn.microsoft.com/windows/win32/api/minwinbase/ns-minwinbase-output_debug_string_info
+        length, unicode = information.length, information.unicode
+        if (not self.owned_process or not information.data or unicode not in {0, 1}
+                or not 0 < length <= 4096 or (unicode and length % 2)
+                or information.data > (1 << (ctypes.sizeof(HANDLE) * 8)) - 1 - length):
+            return {**result, "reason": "invalid_metadata"}
+        if self.debug_bytes + length > 16384:
+            return {**result, "reason": "budget_exhausted"}
+        # Failed/partial reads also consume the attempt budget. The only memory
+        # address used is this pending SDK event's range in the retained child.
+        self.debug_bytes += length
+        buffer, consumed = ctypes.create_string_buffer(length), SIZE_T()
+        try:
+            if not self.api.kernel.ReadProcessMemory(self.owned_process, information.data, buffer, length,
+                                                      ctypes.byref(consumed)):
+                return {**result, "reason": "read_failed"}
+            if consumed.value != length:
+                return {**result, "reason": "short_read"}
+            terminator = b"\0\0" if unicode else b"\0"
+            if not buffer.raw.endswith(terminator):
+                return {**result, "reason": "unterminated"}
+            try:
+                text = buffer.raw[:-len(terminator)].decode("utf-16-le" if unicode else "ascii", errors="strict")
+            except UnicodeError:
+                return {**result, "reason": "invalid_encoding"}
+            if "\0" in text:
+                return {**result, "reason": "embedded_terminator"}
+            # A loader error can name an absolute quoted path. Only its fixed
+            # known basename is reported; Parent Module text is discarded.
+            failure = _LOADER_FAILURE.search(text)
+            if failure:
+                module = ntpath.basename(failure["path"]).lower()
+                if module in _LOADER_MODULES:
+                    return {"event": "debug_string", "result": "recognized", "module": module,
+                            "status": "0x" + failure["status"][2:].upper()}
+                return {"event": "debug_string", "result": "unrecognized"}
+            # Do not combine a known module/phase in one sentence with a status
+            # in another. No raw text, paths, addresses or unknown names escape.
+            for clause in re.split(r"[;\r\n]|\.(?:\s|$)|[!?](?:\s|$)", text):
+                if len(clause) > 512:
+                    continue
+                match = _LOADER_MESSAGE.search(clause)
+                if match:
+                    fields = {"status": "0x" + match["status"][2:].upper()}
+                    if match["module"]:
+                        module = match["module"].lower()
+                        if module not in _LOADER_MODULES:
+                            continue
+                        fields["module"] = module
+                    else:
+                        fields["kind"] = next(name for name in (
+                            "activation_context", "dll_initialization", "console_initialization") if match[name])
+                    return {"event": "debug_string", "result": "recognized", **fields}
+            return {"event": "debug_string", "result": "unrecognized"}
+        finally:
+            ctypes.memset(buffer, 0, length)
 
     def poll(self, milliseconds: int, *, record: bool = True) -> None:
         if self.pending is not None:
@@ -657,6 +738,8 @@ class _LoaderTrace:
                             self.handles.remove(borrowed)
             elif event.code == 6:
                 observation = {"event": "dll_loaded", "module": _debug_module(self.api, file)}
+            elif event.code == 8 and record:
+                observation = self.debug_message(event.data.debug_string)
             elif event.code == 1:
                 code = event.data.exception.record.code
                 first = bool(event.data.exception.first_chance)

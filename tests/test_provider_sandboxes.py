@@ -585,7 +585,7 @@ class ProviderSandboxContractTests(unittest.TestCase):
             event.data.exception.record.address = 0xDEADBEEF
             event.data.exception.first_chance = first
             events.append(event)
-        events.append(windows._DebugEvent(8, 51, 61))  # Never read debug strings.
+        events.append(windows._DebugEvent(8, 51, 61))  # Invalid SDK metadata must not cause a read.
         exit_event = windows._DebugEvent(5, 51, 61)
         exit_event.data.exit_process = 0xC0000022
         events.append(exit_event)
@@ -796,6 +796,192 @@ class ProviderSandboxContractTests(unittest.TestCase):
         self.assertIs(report["qualified"], False)
         self.assertIs(report["debug_observer"], True)
         self.assertIs(report["strict_lpac"]["marker"], True)
+
+    def test_windows_loader_debug_message_reads_sdk_byte_length_and_reports_only_fixed_fields(self) -> None:
+        for unicode, encoding in ((0, "ascii"), (1, "utf-16-le")):
+            with self.subTest(unicode=unicode):
+                api = Mock()
+                payload = "Module: python313.dll, Status: 0xC0000022\0".encode(encoding)
+
+                def read(process, address, buffer, size, consumed):
+                    self.assertEqual((901, 0x1000, len(payload)), (process, address, size))
+                    ctypes.memmove(buffer, payload, len(payload))
+                    consumed._obj.value = len(payload)
+                    return 1
+
+                api.kernel.ReadProcessMemory.side_effect = read
+                trace = windows._LoaderTrace(api, 51, [])
+                trace.owned_process = 901
+                result = trace.debug_message(windows._DebugStringInfo(0x1000, unicode, len(payload)))
+                self.assertEqual({"event": "debug_string", "result": "recognized",
+                                  "module": "python313.dll", "status": "0xC0000022"}, result)
+                self.assertEqual(len(payload), trace.debug_bytes)
+
+    def test_windows_loader_debug_message_rejects_sensitive_unknown_and_unrelated_text(self) -> None:
+        samples = (
+            "Token=secret-value user@example.org C:\\Users\\secret-account\\unknown.dll Status: 0xC0000022",
+            "Module: python313.dll loaded. Status: 0xC0000022 from unrelated-operation",
+            "Module: unknown-secret.dll Status: 0xC0000022",
+            "Activation context succeeded. Status: 0xC0000022",
+            "Process exited with 0xC0000022",
+        )
+        for sample in samples:
+            with self.subTest(sample_index=samples.index(sample)):
+                api = Mock()
+                payload = (sample + "\0").encode("ascii")
+                def read(process, address, buffer, size, consumed):
+                    ctypes.memmove(buffer, payload, len(payload))
+                    consumed._obj.value = len(payload)
+                    return 1
+                api.kernel.ReadProcessMemory.side_effect = read
+                trace = windows._LoaderTrace(api, 51, [])
+                trace.owned_process = 901
+                self.assertEqual({"event": "debug_string", "result": "unrecognized"},
+                                 trace.debug_message(windows._DebugStringInfo(0x1000, 0, len(payload))))
+
+    def test_windows_loader_debug_message_classifies_only_explicit_same_grammar_phase_and_status(self) -> None:
+        for phrase, kind in (("Activation context creation failed, Status: 0xC0000022", "activation_context"),
+                             ("DLL initialization failed with NTStatus = 0xC0000142", "dll_initialization"),
+                             ("Console initialization failed, Status 0xC0000022", "console_initialization")):
+            api = Mock()
+            payload = (phrase + "\0").encode("ascii")
+            def read(process, address, buffer, size, consumed):
+                ctypes.memmove(buffer, payload, len(payload))
+                consumed._obj.value = len(payload)
+                return 1
+            api.kernel.ReadProcessMemory.side_effect = read
+            trace = windows._LoaderTrace(api, 51, [])
+            trace.owned_process = 901
+            result = trace.debug_message(windows._DebugStringInfo(0x1000, 0, len(payload)))
+            self.assertEqual(kind, result["kind"])
+            self.assertEqual(phrase[-10:].upper().replace("0X", "0x"), result["status"])
+            self.assertEqual({"event", "result", "kind", "status"}, set(result))
+
+    def test_windows_loader_debug_message_rejects_invalid_metadata_without_reading(self) -> None:
+        metadata = ((0, 0, 1), (0x1000, 0, 0), (0x1000, 0, 4097),
+                    (0x1000, 2, 100), (0x1000, 1, 3), ((1 << 64) - 2, 0, 4))
+        for pointer, unicode, length in metadata:
+            api = Mock()
+            trace = windows._LoaderTrace(api, 51, [])
+            trace.owned_process = 901
+            result = trace.debug_message(windows._DebugStringInfo(pointer, unicode, length))
+            self.assertEqual("unavailable", result["result"])
+            api.kernel.ReadProcessMemory.assert_not_called()
+            self.assertEqual(0, trace.debug_bytes)
+
+    def test_windows_loader_debug_message_reserves_attempted_budget_and_rejects_partial_or_invalid_payload(self) -> None:
+        api = Mock()
+        api.kernel.ReadProcessMemory.return_value = 0
+        trace = windows._LoaderTrace(api, 51, [])
+        trace.owned_process = 901
+        for _ in range(4):
+            self.assertEqual("unavailable", trace.debug_message(windows._DebugStringInfo(0x1000, 0, 4096))["result"])
+        self.assertEqual(16384, trace.debug_bytes)
+        self.assertEqual("budget_exhausted", trace.debug_message(windows._DebugStringInfo(0x1000, 0, 1))["reason"])
+        self.assertEqual(4, api.kernel.ReadProcessMemory.call_count)
+        for payload, count, unicode in ((b"Status: 0xC0000022\0", 4, 0),
+                                        (b"Module: python313.dll Status: 0xC0000022", None, 0),
+                                        (b"\xff\0", None, 0), (b"\x00\xd8\x00\x00", None, 1)):
+            api = Mock()
+            def read(process, address, buffer, size, consumed):
+                ctypes.memmove(buffer, payload, len(payload))
+                consumed._obj.value = len(payload) if count is None else count
+                return 1
+            api.kernel.ReadProcessMemory.side_effect = read
+            trace = windows._LoaderTrace(api, 51, [])
+            trace.owned_process = 901
+            self.assertEqual("unavailable", trace.debug_message(windows._DebugStringInfo(0x1000, unicode, len(payload)))["result"])
+
+    def test_windows_loader_debug_message_read_continues_on_failure_and_never_repeats_during_cleanup(self) -> None:
+        api = Mock()
+        payload = b"Module: python313.dll, Status: 0xC0000022\0"
+        buffers = []
+
+        def read(process, address, buffer, size, consumed):
+            buffers.append(buffer)
+            ctypes.memmove(buffer, payload, len(payload))
+            consumed._obj.value = len(payload)
+            return 1
+
+        def checked(value, operation):
+            if not value:
+                raise OSError(5, operation)
+            return value
+
+        api.check = checked
+        api.kernel.ReadProcessMemory.side_effect = read
+        api.kernel.ContinueDebugEvent.side_effect = [0, 1, 1, 1]
+        api.kernel.WaitForSingleObject.return_value = 0
+        debug = windows._DebugEvent(8, 51, 61)
+        debug.data.debug_string = windows._DebugStringInfo(0x1000, 0, len(payload))
+        exited = windows._DebugEvent(5, 51, 61)
+        exited.data.exit_process = 1
+        events = [debug, debug, exited]
+        api.kernel.WaitForDebugEventEx.side_effect = lambda output, timeout: ctypes.memmove(
+            output, ctypes.byref(events.pop(0)), ctypes.sizeof(windows._DebugEvent)) or 1
+        report = []
+        trace = windows._LoaderTrace(api, 51, report)
+        trace.owned_process = 901
+        with self.assertRaises(OSError):
+            trace.poll(0)
+        self.assertIsNotNone(trace.pending)
+        trace.terminate(901, None, False)
+        self.assertTrue(trace.exited)
+        self.assertIsNone(trace.pending)
+        self.assertEqual(1, api.kernel.ReadProcessMemory.call_count)
+        self.assertEqual(1, len(report))
+        self.assertEqual(b"\0" * len(payload), buffers[0].raw)
+
+    def test_windows_loader_error_grammar_reveals_only_known_dll_basename_and_same_message_status(self) -> None:
+        for module in ("advapi32.dll", "shell32.dll", "ole32.dll", "oleaut32.dll"):
+            api = Mock()
+            payload = (f'LDR: ERROR: Unable to load DLL: "C:\\Users\\secret-account\\{module}", '
+                       'Parent Module: "C:\\private\\python313.dll", Status: 0xc0000022\0').encode("ascii")
+            def read(process, address, buffer, size, consumed):
+                ctypes.memmove(buffer, payload, len(payload))
+                consumed._obj.value = len(payload)
+                return 1
+            api.kernel.ReadProcessMemory.side_effect = read
+            trace = windows._LoaderTrace(api, 51, [])
+            trace.owned_process = 901
+            result = trace.debug_message(windows._DebugStringInfo(0x1000, 0, len(payload)))
+            self.assertEqual({"event": "debug_string", "result": "recognized", "module": module,
+                              "status": "0xC0000022"}, result)
+            self.assertNotIn("secret-account", json.dumps(result))
+            self.assertNotIn("python313.dll", json.dumps(result))
+        for message in ('Failed to load DLL: "unknown-secret.dll", Parent Module: "python313.dll", Status: 0xc0000022',
+                        'Failed to load DLL: "ole32.dll". Unrelated Status: 0xc0000022'):
+            api = Mock()
+            payload = (message + "\0").encode("ascii")
+            api.kernel.ReadProcessMemory.side_effect = read
+            trace = windows._LoaderTrace(api, 51, [])
+            trace.owned_process = 901
+            self.assertEqual({"event": "debug_string", "result": "unrecognized"},
+                             trace.debug_message(windows._DebugStringInfo(0x1000, 0, len(payload))))
+
+    def test_windows_loader_read_exception_erases_buffer_and_still_continues_the_pending_event(self) -> None:
+        api = Mock()
+        api.check = lambda value, operation: self.assertTrue(value)
+        payload = b"user@example.org secret-token secret-path\0"
+        buffers = []
+        def read(process, address, buffer, size, consumed):
+            buffers.append(buffer)
+            ctypes.memmove(buffer, payload, len(payload))
+            raise OSError(5, "simulated SDK failure")
+        api.kernel.ReadProcessMemory.side_effect = read
+        event = windows._DebugEvent(8, 51, 61)
+        event.data.debug_string = windows._DebugStringInfo(0x1000, 0, len(payload))
+        api.kernel.WaitForDebugEventEx.side_effect = lambda output, timeout: ctypes.memmove(
+            output, ctypes.byref(event), ctypes.sizeof(event)) or 1
+        report = []
+        trace = windows._LoaderTrace(api, 51, report)
+        trace.owned_process = 901
+        with self.assertRaises(OSError):
+            trace.poll(0)
+        self.assertEqual(b"\0" * len(payload), buffers[0].raw)
+        api.kernel.ContinueDebugEvent.assert_called_once_with(51, 61, 0x10002)
+        self.assertIsNone(trace.pending)
+        self.assertEqual([], report)
 
 
 if __name__ == "__main__":
