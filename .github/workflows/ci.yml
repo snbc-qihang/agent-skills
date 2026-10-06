@@ -138,6 +138,54 @@ jobs:
           result = unittest.TextTestRunner(verbosity=2).run(suite)
           raise SystemExit(0 if result.wasSuccessful() else 1)
           PYTHON
+      - name: Windows 启动失败后验证实际 uv Runtime（保留原失败门禁）
+        if: matrix.target == 'windows-x64' && failure() && steps.windows_provider_startup.outcome == 'failure'
+        timeout-minutes: 13
+        run: |
+          python - <<'PYTHON'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+          from engineering_assistant.windows_process import run_bounded_windows
+          root = Path(os.environ["EA_CI_ROOT"]) / "windows-uv-attempt"
+          root.mkdir()
+          report_path = root / "uv-runtime-qualification.json"
+          attempt_path = root / "attempt.json"
+          attempt = {"actions_startup": "failed", "production_runtime": "running",
+              "overall_gate": "blocked", "runtime_distribution": "uv_managed",
+              "timeout_seconds": 720, "output_limit_bytes": 1048576}
+          attempt_path.write_text(json.dumps(attempt) + "\n", encoding="utf-8")
+          code = 1
+          try:
+              code, output = run_bounded_windows([
+                  str(Path(sys.executable).resolve()),
+                  str(Path("scripts/qualify_installation.py").resolve()),
+                  "--output", str(report_path),
+              ], cwd=Path.cwd(), environment=dict(os.environ),
+                  timeout_seconds=720, output_limit_bytes=1048576)
+              (root / "attempt.log").write_bytes(output)
+              attempt["exit_code"] = code
+              attempt["output_bytes"] = len(output)
+              if code == 0:
+                  report = json.loads(report_path.read_text(encoding="utf-8"))
+                  if (report.get("status") != "runtime_qualified"
+                          or report.get("target") != "windows-x64"
+                          or {item.get("agent") for item in report.get("results", [])}
+                          != {"codex", "hermes", "claude-code"}):
+                      raise ValueError("unexpected Runtime qualification result")
+                  attempt["production_runtime"] = "qualified"
+              else:
+                  attempt["production_runtime"] = "failed"
+          except (OSError, ValueError, subprocess.SubprocessError) as error:
+              attempt["production_runtime"] = "failed"
+              attempt["error_type"] = type(error).__name__
+              code = 1
+          attempt_path.write_text(json.dumps(attempt) + "\n", encoding="utf-8")
+          print(json.dumps(attempt), flush=True)
+          raise SystemExit(code)
+          PYTHON
       - name: 全量回归与不可跳过的原生安全验证
         run: |
           python - <<'PY'

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import io
+import json
 import struct
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -174,12 +177,12 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
             fixture.mkdir(parents=True)
             (fixture / "windows_startup_probe.rs").write_bytes(b"changed source")
             with patch.object(probe, "ROOT", base), patch.object(probe, "run_bounded_windows") as runner:
-                with self.assertRaisesRegex(ValueError, "invalid native probe source"):
+                with self.assertRaisesRegex(ValueError, "source_identity_mismatch"):
                     probe.build_probe(base)
                 runner.assert_not_called()
             with patch.object(probe.shutil, "which", return_value=str(base / "rustc")), \
                  patch.object(probe, "run_bounded_windows", return_value=(0, b"rustc 1.89.0\n")) as runner:
-                with self.assertRaisesRegex(ValueError, "fixed Rust 1.90.0"):
+                with self.assertRaisesRegex(ValueError, "version_mismatch"):
                     probe.build_probe(base)
                 self.assertEqual(1, runner.call_count)
             self.assertFalse((base / "probe.exe").exists())
@@ -203,7 +206,8 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         with patch.object(probe.sys, "argv", ["diagnose_windows_native.py"]), \
              patch.object(probe, "diagnose", side_effect=failure), redirect_stdout(output):
             self.assertEqual(1, probe.main())
-        self.assertIn("TimeoutExpired", output.getvalue())
+        self.assertEqual({"stage": "diagnostic", "error": "operation_timeout"},
+                         json.loads(output.getvalue())["error"])
         self.assertNotIn("secret", output.getvalue())
         self.assertNotIn("user@", output.getvalue())
 
@@ -213,6 +217,84 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         separated = probe._observe(0, self.output(), b"unrecognized secret error")
         self.assertIs(separated["stderr_present"], True)
         self.assertNotIn("secret", str(separated))
+
+    def test_crlf_source_is_rejected_before_compiler_with_specific_identity_error(self) -> None:
+        source = (ROOT / "tests/fixtures/windows_startup_probe.rs").read_bytes()
+        self.assertEqual(probe.SOURCE_SHA256, hashlib.sha256(source).hexdigest())
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            fixture = base / "tests/fixtures/windows_startup_probe.rs"
+            fixture.parent.mkdir(parents=True)
+            fixture.write_bytes(source.replace(b"\n", b"\r\n"))
+            with patch.object(probe, "ROOT", base), patch.object(probe, "run_bounded_windows") as runner:
+                with self.assertRaises(probe.ProbeFailure) as caught:
+                    probe.build_probe(base)
+                self.assertEqual({"stage": "source", "error": "source_identity_mismatch"},
+                                 probe._error_record(caught.exception))
+                runner.assert_not_called()
+
+    def test_fixture_lf_rule_preserves_bound_bytes_in_autocrlf_checkout(self) -> None:
+        rule = (ROOT / ".gitattributes").read_text(encoding="utf-8").encode("utf-8")
+        source = (ROOT / "tests/fixtures/windows_startup_probe.rs").read_bytes()
+        for newline in (b"\n", b"\r\n"):
+            with self.subTest(newline=newline), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                attributes_source = base / "attributes-source"
+                attributes_source.write_bytes(rule.replace(b"\r\n", b"\n").replace(b"\n", newline))
+                checkout_rule = attributes_source.read_text(encoding="utf-8").encode("utf-8")
+                self.assertEqual(b"tests/fixtures/windows_startup_probe.rs text eol=lf\n", checkout_rule)
+                fixture = base / "tests/fixtures/windows_startup_probe.rs"
+                fixture.parent.mkdir(parents=True)
+                fixture.write_bytes(source)
+                (base / ".gitattributes").write_bytes(checkout_rule)
+                def git(*args):
+                    result = subprocess.run(["git", *args], cwd=base, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE, timeout=10, check=False)
+                    self.assertEqual(0, result.returncode, "isolated Git fixture operation failed")
+                git("init", "-q")
+                git("config", "core.autocrlf", "true")
+                git("add", ".gitattributes", "tests/fixtures/windows_startup_probe.rs")
+                fixture.unlink()
+                git("checkout-index", "--", "tests/fixtures/windows_startup_probe.rs")
+                checked_out = fixture.read_bytes()
+                self.assertNotIn(b"\r", checked_out)
+                self.assertEqual(probe.SOURCE_SHA256, hashlib.sha256(checked_out).hexdigest())
+
+    def test_build_failures_identify_fixed_stage_without_raw_messages(self) -> None:
+        cases = (("source_read_failed", "source", OSError(5, "secret-token C:\\private")),
+                 ("version_mismatch", "toolchain", (0, b"secret-token unknown compiler")),
+                 ("compiler_rejected", "build", (17, b"user@example.org C:\\private")),
+                 ("image_contract_rejected", "pe", b"secret-token invalid image"))
+        for error, stage, value in cases:
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                def run(command, **_):
+                    if command[-1] == "--version":
+                        return value if stage == "toolchain" else (0, b"rustc 1.90.0 (1159e78c4 2025-09-14)\n")
+                    if stage == "build":
+                        return value
+                    Path(command[-1]).write_bytes(value)
+                    return 0, b"discard compiler output"
+                with patch.object(probe.shutil, "which", return_value=str(base / "rustc")), \
+                     patch.object(probe, "run_bounded_windows", side_effect=run):
+                    if stage == "source":
+                        with patch.object(probe, "_read_file", side_effect=value), \
+                             self.assertRaises(probe.ProbeFailure) as caught:
+                            probe.build_probe(base)
+                    else:
+                        with self.assertRaises(probe.ProbeFailure) as caught:
+                            probe.build_probe(base)
+                record = probe._error_record(caught.exception)
+                self.assertEqual(stage, record["stage"])
+                self.assertEqual(error, record["error"])
+                self.assertNotIn("secret", json.dumps(record))
+                self.assertNotIn("user@", json.dumps(record))
+                self.assertNotIn("private", str(caught.exception))
+                output = io.StringIO()
+                with patch.object(probe.sys, "argv", ["diagnose_windows_native.py"]), \
+                     patch.object(probe, "diagnose", side_effect=caught.exception), redirect_stdout(output):
+                    self.assertEqual(1, probe.main())
+                self.assertEqual(record, json.loads(output.getvalue())["error"])
 
 
 if __name__ == "__main__":

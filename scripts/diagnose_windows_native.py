@@ -31,6 +31,27 @@ SOURCE_SHA256 = "e6a506468cba2431035a6e52810eafa33bf0dca6f78164f93a8cde328793db9
 MAX_IMAGE = 1_048_576
 
 
+class ProbeFailure(ValueError):
+    """Fixed maintainer diagnostic codes; never retain tool text or paths."""
+
+    def __init__(self, stage: str, error: str, code: int | None = None):
+        self.stage, self.error, self.code = stage, error, code
+        super().__init__(stage + "/" + error)
+
+
+def _error_record(exc, stage="diagnostic") -> dict:
+    if isinstance(exc, ProbeFailure):
+        result = {"stage": exc.stage, "error": exc.error}
+        code = exc.code
+    else:
+        result = {"stage": stage, "error": "operation_timeout" if isinstance(
+            exc, subprocess.TimeoutExpired) else "operation_failed"}
+        code = getattr(exc, "errno", None)
+    if isinstance(code, int):
+        result["code"] = code
+    return result
+
+
 def parse_output(data: bytes) -> dict:
     result = {"entry": False, "complete": False, "loads": []}
     if not data:
@@ -178,12 +199,15 @@ def replace_runtime(destination: Path, image: bytes, original) -> Path:
 
 
 def build_probe(destination: Path) -> bytes:
-    source = _read_file(ROOT / "tests/fixtures/windows_startup_probe.rs", 16384)
+    try:
+        source = _read_file(ROOT / "tests/fixtures/windows_startup_probe.rs", 16384)
+    except (OSError, ValueError) as exc:
+        raise ProbeFailure("source", "source_read_failed", getattr(exc, "errno", None)) from None
     if hashlib.sha256(source).hexdigest() != SOURCE_SHA256:
-        raise ValueError("invalid native probe source")
+        raise ProbeFailure("source", "source_identity_mismatch")
     compiler = shutil.which("rustc")
     if not compiler:
-        raise ValueError("native probe needs the CI Rust toolchain")
+        raise ProbeFailure("toolchain", "compiler_unavailable")
     # Preserve rustc's shim basename: resolving a rustup symlink changes its
     # argv[0] dispatch into rustup and loses the selected compiler operation.
     compiler = str(Path(compiler).absolute())
@@ -193,23 +217,40 @@ def build_probe(destination: Path) -> bytes:
         "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
         "RUSTC_BOOTSTRAP", "CL", "_CL_", "LINK", "_LINK_",
     }}
-    code, version = run_bounded_windows([compiler, "+1.90.0", "--version"], cwd=destination,
-                                       environment=environment, timeout_seconds=10, output_limit_bytes=4096)
+    try:
+        code, version = run_bounded_windows([compiler, "+1.90.0", "--version"], cwd=destination,
+                                           environment=environment, timeout_seconds=10, output_limit_bytes=4096)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        error = "compiler_check_timeout" if isinstance(exc, subprocess.TimeoutExpired) else "compiler_check_failed"
+        raise ProbeFailure("toolchain", error, getattr(exc, "errno", None)) from None
     if code or not re.fullmatch(rb"rustc 1\.90\.0 \([0-9a-f]{9} 2025-09-14\)\s*", version):
-        raise ValueError("native probe requires the fixed Rust 1.90.0 compiler")
+        raise ProbeFailure("toolchain", "version_mismatch", code if code else None)
     snapshot, output = destination / "probe.rs", destination / "probe.exe"
-    snapshot.write_bytes(source)
+    try:
+        snapshot.write_bytes(source)
+    except OSError as exc:
+        raise ProbeFailure("build", "snapshot_write_failed", exc.errno) from None
     command = [compiler, "+1.90.0", str(snapshot), "--target", "x86_64-pc-windows-msvc", "--edition=2021",
                "-C", "panic=abort", "-C", "opt-level=2", "-C", "debuginfo=0", "-C", "codegen-units=1",
                "-C", "link-arg=/NODEFAULTLIB", "-C", "link-arg=/ENTRY:probe_entry",
                "-C", "link-arg=/SUBSYSTEM:CONSOLE", "-C", "link-arg=/INCREMENTAL:NO", "-C", "link-arg=/BREPRO",
                "-o", str(output)]
-    code, _ = run_bounded_windows(command, cwd=destination, environment=environment,
-                                timeout_seconds=60, output_limit_bytes=65536)
+    try:
+        code, _ = run_bounded_windows(command, cwd=destination, environment=environment,
+                                    timeout_seconds=60, output_limit_bytes=65536)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        error = "compiler_timeout" if isinstance(exc, subprocess.TimeoutExpired) else "compiler_execution_failed"
+        raise ProbeFailure("build", error, getattr(exc, "errno", None)) from None
     if code:
-        raise ValueError("native probe build failed")
-    image = _read_file(output, MAX_IMAGE)
-    verify_pe(image)
+        raise ProbeFailure("build", "compiler_rejected", code)
+    try:
+        image = _read_file(output, MAX_IMAGE)
+    except (OSError, ValueError) as exc:
+        raise ProbeFailure("pe", "image_read_failed", getattr(exc, "errno", None)) from None
+    try:
+        verify_pe(image)
+    except ValueError:
+        raise ProbeFailure("pe", "image_contract_rejected") from None
     return image
 
 
@@ -235,7 +276,7 @@ def diagnose() -> dict:
     if not available["supported"]:
         return report
     if sys.version_info[:3] != (3, 13, 13):
-        raise ValueError("native probe requires the CI Python 3.13.13 runtime")
+        raise ProbeFailure("runtime", "python_version_mismatch")
     started = time.monotonic()
     api = windows._Api()
     owner = api.owner_sid()
@@ -276,7 +317,7 @@ def diagnose() -> dict:
                                 environment, 10, 4096, diagnostics=observation, _console_diagnostic=detached)
                         observation.update(_observe(code, output, stderr))
             except (OSError, ValueError, subprocess.SubprocessError) as exc:
-                observation["error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
+                observation["error"] = _error_record(exc, "execution")
             observation["total_seconds"] = round(time.monotonic() - case_started, 3)
     report["total_seconds"] = round(time.monotonic() - started, 3)
     return report
@@ -285,11 +326,11 @@ def diagnose() -> dict:
 def main() -> int:
     try:
         if len(sys.argv) != 1:
-            raise ValueError("native probe accepts no command or executable argument")
+            raise ProbeFailure("arguments", "unsupported_arguments")
         report = diagnose()
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         report = {"diagnostic_only": True, "qualified": False,
-                  "error": {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}}
+                  "error": _error_record(exc)}
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     baseline = report.get("baseline", {})
     valid = (baseline.get("exit_code") == "0x00000000" and baseline.get("complete") is True
