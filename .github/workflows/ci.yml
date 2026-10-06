@@ -113,6 +113,10 @@ jobs:
                   sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", mode,
               ], timeout=120, check=False)
               print("Windows startup diagnostic exit:", mode, diagnostic.returncode, flush=True)
+          native_diagnostic = subprocess.run([
+              sys.executable, "scripts/diagnose_windows_native.py",
+          ], timeout=180, check=False)
+          print("Windows native DLL diagnostic exit:", native_diagnostic.returncode, flush=True)
           subprocess.run([
               sys.executable, "-m", "unittest", "discover", "-s", "tests",
               "-p", "test_provider_runtime.py", "-k",
