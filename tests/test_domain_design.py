@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -112,19 +113,24 @@ class DomainDesignTests(unittest.TestCase):
 
     def test_registry_schema_accepts_only_declared_v2_fields(self) -> None:
         schema = json.loads((ROOT / "schemas" / "design-source-registry.schema.json").read_text())
-        validate_instance(self.registry_v2(), schema, "design-source-registry")
-        with self.assertRaises(ValidationFailure):
-            validate_instance(
-                self.registry_base() | {"version": "1"},
-                schema,
-                "design-source-registry",
-            )
-        with self.assertRaises(ValidationFailure):
-            validate_instance(
-                self.registry_v2() | {"unexpected": "field"},
-                schema,
-                "design-source-registry",
-            )
+        from engineering_assistant import validation
+
+        for backend in (validation.Draft202012Validator, None):
+            with self.subTest(backend=backend), mock.patch.object(
+                validation, "Draft202012Validator", backend
+            ):
+                validate_instance(self.registry_v2(), schema, "design-source-registry")
+                invalid_registries = [
+                    self.registry_base() | {"version": "1"},
+                    self.registry_v2() | {"unexpected": "field"},
+                    self.registry_v2() | {"owners": {"business": "owner", "architecture": "owner", "unexpected": True}},
+                ]
+                invalid_source = self.registry_v2()
+                invalid_source["sources"][0]["unexpected"] = True
+                invalid_registries.append(invalid_source)
+                for registry in invalid_registries:
+                    with self.subTest(registry=registry), self.assertRaises(ValidationFailure):
+                        validate_instance(registry, schema, "design-source-registry")
 
     def test_registry_requires_v2(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

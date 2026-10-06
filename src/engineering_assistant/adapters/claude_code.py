@@ -12,6 +12,9 @@ from ..version import platform_version
 class ClaudeCodeAdapter:
     id = "claude-code"
 
+    def __init__(self, target: str | None = None) -> None:
+        self.target = target
+
     PLUGIN_NAME = "engineering-assistant"
     MCP_SERVER_NAME = "engineering-assistant"
     MCP_TOOL_MATCHER = (
@@ -43,7 +46,7 @@ class ClaudeCodeAdapter:
                 {
                     "mcpServers": {
                         self.MCP_SERVER_NAME: {
-                            "command": "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea",
+                            "command": "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea.exe" if self.target == "windows-x64" else "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea",
                             "args": ["mcp-serve"],
                             "cwd": "${CLAUDE_PLUGIN_ROOT}",
                         }
@@ -60,7 +63,8 @@ class ClaudeCodeAdapter:
         hook_path = hooks_dir / "hooks.json"
         hook_handler = {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/feedback_capture.py",
+            "command": "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea.exe" if self.target == "windows-x64" else "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea",
+            "args": ["hook"],
             "timeout": 10,
         }
         hook_path.write_text(

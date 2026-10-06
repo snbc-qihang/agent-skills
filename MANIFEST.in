@@ -1,0 +1,9 @@
+include ea_build_backend.py VERSIONING.md
+recursive-include catalog *.json
+recursive-include skills *.md
+recursive-include packs *.md
+recursive-include schemas *.json
+recursive-include evals *.json
+recursive-include config *.json *.txt
+recursive-include native *.toml *.lock *.rs
+global-exclude __pycache__ *.py[cod]

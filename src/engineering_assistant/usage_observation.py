@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Mapping
 
-from .artifact_io import ArtifactConflict, ArtifactIO
+from .artifact_io import ArtifactConflict, ArtifactIO, artifact_fs
 from .codec import usage_observation_ledger_from_dict
 from .hook_gate import (
     OBSERVATION_ROOT,
@@ -202,13 +202,13 @@ class UsageObservationStore:
             removed = 0
             scanned = 0
             scanned_directories = 0
-            directory_flags = os.O_RDONLY
-            if hasattr(os, "O_DIRECTORY"):
-                directory_flags |= os.O_DIRECTORY
-            if hasattr(os, "O_NOFOLLOW"):
-                directory_flags |= os.O_NOFOLLOW
+            directory_flags = artifact_fs.O_RDONLY
+            if hasattr(artifact_fs, "O_DIRECTORY"):
+                directory_flags |= artifact_fs.O_DIRECTORY
+            if hasattr(artifact_fs, "O_NOFOLLOW"):
+                directory_flags |= artifact_fs.O_NOFOLLOW
             try:
-                with os.scandir(root_fd) as sessions:
+                with artifact_fs.scandir(root_fd) as sessions:
                     for session_entry in sessions:
                         session_name = session_entry.name
                         if not _SESSION_REF.fullmatch(session_name):
@@ -217,7 +217,7 @@ class UsageObservationStore:
                             break
                         scanned_directories += 1
                         try:
-                            session_fd = os.open(
+                            session_fd = artifact_fs.open(
                                 session_name,
                                 directory_flags,
                                 dir_fd=root_fd,
@@ -225,9 +225,9 @@ class UsageObservationStore:
                         except OSError:
                             continue
                         try:
-                            if not stat.S_ISDIR(os.fstat(session_fd).st_mode):
+                            if not stat.S_ISDIR(artifact_fs.fstat(session_fd).st_mode):
                                 continue
-                            with os.scandir(session_fd) as turns:
+                            with artifact_fs.scandir(session_fd) as turns:
                                 for turn_entry in turns:
                                     if scanned >= MAX_STALE_LEDGER_SCAN_FILES:
                                         break
@@ -236,7 +236,7 @@ class UsageObservationStore:
                                         continue
                                     scanned += 1
                                     try:
-                                        metadata = os.stat(
+                                        metadata = artifact_fs.stat(
                                             turn_name,
                                             dir_fd=session_fd,
                                             follow_symlinks=False,
@@ -256,12 +256,12 @@ class UsageObservationStore:
                                             )
                                         )
                         finally:
-                            os.close(session_fd)
+                            artifact_fs.close(session_fd)
                         self.artifacts.remove_empty_directory(session_name)
                         if scanned >= MAX_STALE_LEDGER_SCAN_FILES:
                             break
             finally:
-                os.close(root_fd)
+                artifact_fs.close(root_fd)
             return removed
 
     def _validate(self, ledger: UsageObservationLedger) -> None:

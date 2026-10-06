@@ -14,7 +14,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactConflict, ArtifactIO  # noqa: E402
+from engineering_assistant.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs  # noqa: E402
 from engineering_assistant.feedback import FeedbackStore  # noqa: E402
 from engineering_assistant.model import FeedbackCapture  # noqa: E402
 from engineering_assistant.state_store import StateStore  # noqa: E402
@@ -38,7 +38,8 @@ class ArtifactIOTests(unittest.TestCase):
         )
 
         with patch(
-            "engineering_assistant.artifact_io.fcntl.flock",
+            ("engineering_assistant.artifact_io.msvcrt.locking" if os.name == "nt"
+             else "engineering_assistant.artifact_io.fcntl.flock"),
             side_effect=BlockingIOError,
         ):
             with self.assertRaisesRegex(ValidationFailure, "lock is busy"):
@@ -321,7 +322,7 @@ class ArtifactIOTests(unittest.TestCase):
         outside_candidate = outside / candidate.name
         outside_candidate.write_text("outside", encoding="utf-8")
         moved = staging.with_name("staging-moved")
-        real_stat = os.stat
+        real_stat = artifact_fs.stat
         swapped = False
 
         def replace_parent_before_stat(path, *args, **kwargs):

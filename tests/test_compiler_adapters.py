@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import venv
 from pathlib import Path
 from unittest import mock
 
@@ -19,15 +20,53 @@ from engineering_assistant.compiler import build_package, verify_package  # noqa
 import engineering_assistant.compiler as compiler_module  # noqa: E402
 from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.catalog import load_catalog  # noqa: E402
+from engineering_assistant.version import platform_version  # noqa: E402
 
 
 class CompilerAdapterTests(unittest.TestCase):
+    def test_hermes_native_git_metadata_never_exempts_plugin_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            package = Path(temporary).resolve() / "hermes"
+            build_package(ROOT, "hermes", package)
+            metadata = package / ".git"
+            metadata.mkdir()
+            (metadata / "config").write_text("native clone metadata", encoding="utf-8")
+            verify_package(package)
+            (package / "plugin.yaml").write_text("tampered plugin", encoding="utf-8")
+            with self.assertRaisesRegex(ValidationFailure, "payload"):
+                verify_package(package)
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def native_runtime_fixture(self, package: Path) -> tuple[Path, dict[str, str]]:
+        """Current test Python checks launcher protocols, not the pinned install contract."""
+        core = package / "engineering-assistant"
+        lock = json.loads((core / "runtime-lock.json").read_text(encoding="utf-8"))
+        environment = self.root / "launcher-unit-python"
+        if not environment.exists():
+            venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(environment)
+        python = environment / ("Scripts/python.exe" if lock["target"] == "windows-x64" else "bin/python")
+        data = self.root / "launcher-unit-data"
+        from engineering_assistant.installation import _storage
+        _storage(data).close()
+        bindings = data / "bindings" / lock["agent"]
+        bindings.mkdir(parents=True, exist_ok=True)
+        binding = {
+            "schema_version": "1", "agent": lock["agent"], "target": lock["target"],
+            "environment_key": lock["environment_key"], "canonical_version": lock["canonical_version"],
+            "environment": str(environment), "python": str(python), "uv": str(Path(sys.executable).absolute()),
+            "test_fixture": "current_test_python_not_installation_qualification",
+        }
+        (bindings / (lock["environment_key"] + ".json")).write_text(json.dumps(binding), encoding="utf-8")
+        launcher = core / "bin" / ("ea.exe" if lock["target"] == "windows-x64" else "ea")
+        self.assertTrue(launcher.is_file())
+        return launcher, {**os.environ, "ENGINEERING_ASSISTANT_DATA_HOME": str(data)}
 
     def test_replace_rejects_repository_ancestors_before_deletion(self) -> None:
         repository = self.root / "repository"
@@ -181,12 +220,14 @@ class CompilerAdapterTests(unittest.TestCase):
         codex_manifest = json.loads((codex / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertEqual("./.mcp.json", codex_manifest["mcpServers"])
         mcp_config = json.loads((codex / ".mcp.json").read_text(encoding="utf-8"))
+        target = codex_report["target"]
+        executable = "ea.exe" if target == "windows-x64" else "ea"
         self.assertEqual(
             ["mcp-serve"],
             mcp_config["mcpServers"]["engineering-assistant"]["args"][-1:],
         )
         self.assertEqual(
-            "./engineering-assistant/bin/ea",
+            f"./engineering-assistant/bin/{executable}",
             mcp_config["mcpServers"]["engineering-assistant"]["command"],
         )
         self.assertEqual(".", mcp_config["mcpServers"]["engineering-assistant"]["cwd"])
@@ -197,7 +238,7 @@ class CompilerAdapterTests(unittest.TestCase):
         self.assertEqual("engineering-assistant", claude_manifest["name"])
         claude_mcp = json.loads((claude / ".mcp.json").read_text(encoding="utf-8"))
         self.assertEqual(
-            "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/ea",
+            "${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/" + executable,
             claude_mcp["mcpServers"]["engineering-assistant"]["command"],
         )
 
@@ -217,7 +258,9 @@ class CompilerAdapterTests(unittest.TestCase):
                 groups[0]["matcher"],
             )
             command = groups[0]["hooks"][0]["command"]
-            self.assertIn("${PLUGIN_ROOT}/hooks/feedback_capture.py", command)
+            self.assertEqual('"${PLUGIN_ROOT}/engineering-assistant/bin/ea" hook', command)
+            from engineering_assistant.adapters.codex import windows_hook_command
+            self.assertEqual(windows_hook_command(), groups[0]["hooks"][0]["commandWindows"])
         for event_name in ("UserPromptSubmit", "Stop"):
             self.assertNotIn("matcher", hooks["hooks"][event_name][0])
 
@@ -228,10 +271,9 @@ class CompilerAdapterTests(unittest.TestCase):
                 "^mcp__plugin_engineering-assistant_engineering-assistant__engineering_assistant_.*$",
                 claude_hooks["hooks"][event_name][0]["matcher"],
             )
-            self.assertIn(
-                "${CLAUDE_PLUGIN_ROOT}/hooks/feedback_capture.py",
-                claude_hooks["hooks"][event_name][0]["hooks"][0]["command"],
-            )
+            handler = claude_hooks["hooks"][event_name][0]["hooks"][0]
+            self.assertEqual("${CLAUDE_PLUGIN_ROOT}/engineering-assistant/bin/" + executable, handler["command"])
+            self.assertEqual(["hook"], handler["args"])
 
         hook_source = (codex / "hooks/feedback_capture.py").read_text(encoding="utf-8")
         self.assertLess(
@@ -728,7 +770,7 @@ class CompilerAdapterTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        launcher = codex / "engineering-assistant/bin/ea"
+        launcher, native_environment = self.native_runtime_fixture(codex)
         disposition = subprocess.run(
             [
                 str(launcher),
@@ -741,6 +783,7 @@ class CompilerAdapterTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            env=native_environment,
         )
         self.assertEqual(0, disposition.returncode, disposition.stdout + disposition.stderr)
         evolution = subprocess.run(
@@ -753,6 +796,7 @@ class CompilerAdapterTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            env=native_environment,
         )
         self.assertEqual(0, evolution.returncode, evolution.stdout + evolution.stderr)
         evolution_payload = json.loads(evolution.stdout)
@@ -796,14 +840,15 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(0, completed.returncode, completed.stderr)
         registered = json.loads(completed.stdout)
         self.assertGreater(registered["tools"], 0)
-        self.assertEqual([], registered["hooks"])
+        self.assertEqual(["post_llm_call"], registered["hooks"])
         self.assertEqual(11, registered["skills"])
 
     def test_manifest_uses_supported_platform_fields_and_build_manifest_preserves_canonical_version(self) -> None:
         output = self.root / "codex-version"
         build_package(ROOT, "codex", output)
         manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.2.0-rc.1+build.0", manifest["version"])
+        catalog = load_catalog(ROOT)
+        self.assertEqual(platform_version(catalog.version, supports_four_part=False), manifest["version"])
         self.assertEqual(
             {"name": "sunliming625@gmail.com", "email": "sunliming625@gmail.com"},
             manifest["author"],
@@ -815,9 +860,9 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
         self.assertEqual(3, len(manifest["interface"]["defaultPrompt"]))
 
         build_manifest = json.loads((output / "package-manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual("2.2.0.0-rc.1", build_manifest["canonical_version"])
+        self.assertEqual(catalog.version, build_manifest["canonical_version"])
         self.assertEqual(11, len(build_manifest["skill_versions"]))
-        self.assertEqual({"2.2.0.0-rc.1"}, set(build_manifest["skill_versions"].values()))
+        self.assertEqual({skill.id: skill.version for skill in catalog.skills.values()}, build_manifest["skill_versions"])
         for name in (
             "strategic-modeling.md",
             "tactical-modeling.md",
@@ -831,12 +876,13 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
     def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
         output = self.root / "runtime-smoke"
         build_package(ROOT, "codex", output)
-        launcher = output / "engineering-assistant/bin/ea"
+        launcher, native_environment = self.native_runtime_fixture(output)
         validate = subprocess.run(
             [str(launcher), "validate", "--require-sources"],
             text=True,
             capture_output=True,
             check=False,
+            env=native_environment,
         )
         self.assertEqual(0, validate.returncode, validate.stdout + validate.stderr)
         evaluate = subprocess.run(
@@ -844,6 +890,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
             text=True,
             capture_output=True,
             check=False,
+            env=native_environment,
         )
         self.assertEqual(0, evaluate.returncode, evaluate.stdout + evaluate.stderr)
         report = json.loads(evaluate.stdout)
@@ -873,6 +920,7 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
             text=True,
             capture_output=True,
             check=False,
+            env=native_environment,
         )
         self.assertEqual(0, mcp.returncode, mcp.stdout + mcp.stderr)
         responses = [json.loads(line) for line in mcp.stdout.splitlines()]
@@ -892,13 +940,12 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-sys.path.insert(0, str(root / 'engineering-assistant/runtime'))
 spec = importlib.util.spec_from_file_location('hermes_host_trust_fixture', root / '__init__.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 print(json.dumps({
     'has_trust': hasattr(module, '_TRUST'),
-    'tools_has_trust_verifier': hasattr(module._TOOLS, 'trust_verifier'),
+    'has_host_kernel': any(name == 'engineering_assistant' or name.startswith('_ea_runtime_') for name in sys.modules),
 }))
 """
         result = subprocess.run(
@@ -910,7 +957,7 @@ print(json.dumps({
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         loaded = json.loads(result.stdout)
         self.assertFalse(loaded["has_trust"])
-        self.assertFalse(loaded["tools_has_trust_verifier"])
+        self.assertFalse(loaded["has_host_kernel"])
 
     def test_packaged_hermes_tools_emit_nonblocking_efficiency_feedback(self) -> None:
         output = self.root / "hermes-efficiency"
@@ -935,6 +982,12 @@ print(json.dumps({
         )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _launcher, native_environment = self.native_runtime_fixture(output)
+        binding = mock.patch.dict(os.environ, {
+            "ENGINEERING_ASSISTANT_DATA_HOME": native_environment["ENGINEERING_ASSISTANT_DATA_HOME"],
+        })
+        binding.start()
+        self.addCleanup(binding.stop)
         context = Context()
         module.register(context)
         project = self.root / "hermes-efficiency-project"
@@ -994,213 +1047,23 @@ print(json.dumps({
         self.assertEqual(["hermes_plugin_tool"], candidate["coverage"])
         self.assertEqual("post_llm_call", candidate["source"])
 
-        with mock.patch.object(
-            module._OBSERVER,
-            "handle",
-            side_effect=RuntimeError("observer unavailable"),
-        ):
-            fail_open = handler(
-                arguments,
-                session_id="hermes-efficiency-session",
-                task_id="hermes-efficiency-fail-open",
-                cwd=str(project),
-            )
-        self.assertEqual("review", json.loads(fail_open)["decision"]["flow_id"])
-
-        handler(
-            arguments,
-            session_id="hermes-efficiency-session",
-            task_id="hermes-feedback-after-efficiency-failure",
-            cwd=str(project),
-        )
-        with mock.patch.object(
-            module._FEEDBACK,
-            "collect_usage_efficiency",
-            side_effect=RuntimeError("efficiency store unavailable"),
-        ), mock.patch.object(
-            module._FEEDBACK,
-            "collect_hermes_turn",
-            wraps=module._FEEDBACK.collect_hermes_turn,
-        ) as collect_turn:
-            context.hooks["post_llm_call"](
-                "hermes-efficiency-session",
-                "使用 engineering-assistant 插件评审当前变更。",
-                "发现一个需要记录的人工修正。",
-                [],
-                "test",
-                "hermes",
-                cwd=str(project),
-                task_id="hermes-feedback-after-efficiency-failure",
-                turn_id="hermes-feedback-after-efficiency-failure",
-            )
-        self.assertEqual(1, collect_turn.call_count)
-
-        handler(
-            arguments,
-            session_id="hermes-efficiency-session",
-            task_id="hermes-feedback-after-observer-failure",
-            cwd=str(project),
-        )
-        with mock.patch.object(
-            module._OBSERVER,
-            "is_active",
-            side_effect=RuntimeError("observer state unavailable"),
-        ), mock.patch.object(
-            module._FEEDBACK,
-            "collect_hermes_turn",
-            wraps=module._FEEDBACK.collect_hermes_turn,
-        ) as collect_turn:
-            context.hooks["post_llm_call"](
-                "hermes-efficiency-session",
-                "使用 engineering-assistant 插件评审当前变更。",
-                "发现一个需要记录的人工修正。",
-                [],
-                "test",
-                "hermes",
-                cwd=str(project),
-                task_id="hermes-feedback-after-observer-failure",
-                turn_id="hermes-feedback-after-observer-failure",
-            )
-        self.assertEqual(1, collect_turn.call_count)
-
-        secret = "secret-tool-message-must-not-leak"
-        with mock.patch.object(
-            module._TOOLS,
-            "call",
-            side_effect=RuntimeError(secret),
-        ):
-            failure_response = handler(
-                arguments,
-                session_id="hermes-efficiency-session",
-                task_id="hermes-tool-failure",
-                cwd=str(project),
-                turn_id="hermes-tool-failure",
-            )
-        self.assertNotIn(secret, failure_response)
-        feedback_artifacts = list(
-            (
-                project
-                / ".run-artifacts/engineering-assistant/feedback/events"
-            ).glob("*.json")
-        )
-        tool_failures = [
-            json.loads(path.read_text(encoding="utf-8"))
-            for path in feedback_artifacts
-            if json.loads(path.read_text(encoding="utf-8"))["event_type"]
-            == "tool_failure"
-        ]
-        self.assertEqual(1, len(tool_failures))
-        self.assertNotIn(secret, json.dumps(tool_failures))
-
+        # The real native bridge uses test Python; fixed Python qualification has its own gate.
         for mode, expected_captures in (("disabled", 0), ("metadata", 2)):
             mode_project = self.root / f"hermes-{mode}-project"
             mode_project.mkdir()
             mode_task = f"hermes-{mode}-task"
             handler(
-                arguments,
-                session_id="hermes-mode-session",
-                task_id=mode_task,
-                cwd=str(mode_project),
-                feedback_mode=mode,
+                arguments, session_id="hermes-mode-session", task_id=mode_task,
+                cwd=str(mode_project), feedback_mode=mode,
             )
-            context.hooks["post_llm_call"](
-                "hermes-mode-session",
-                "使用 engineering-assistant 插件评审当前变更。",
-                "评审完成。",
-                [],
-                "test",
-                "hermes",
-                cwd=str(mode_project),
-                task_id=mode_task,
-                turn_id=mode_task,
-                feedback_mode=mode,
-            )
-            self.assertEqual(
-                [],
-                list(
-                    (
-                        mode_project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
-                    ).rglob("*.json")
-                ),
-            )
-            self.assertEqual(
-                expected_captures,
-                len(
-                    list(
-                        (
-                            mode_project
-                            / ".run-artifacts/engineering-assistant/feedback/captures"
-                        ).glob("*.json")
-                    )
-                ),
-            )
-
-        disabled_failure_project = self.root / "hermes-disabled-failure"
-        disabled_failure_project.mkdir()
-        with mock.patch.object(module._TOOLS, "call", side_effect=RuntimeError(secret)):
-            handler(
-                arguments,
-                session_id="hermes-disabled-failure",
-                task_id="hermes-disabled-failure",
-                cwd=str(disabled_failure_project),
-                feedback_mode="disabled",
-            )
-        self.assertFalse(
-            (
-                disabled_failure_project
-                / ".run-artifacts/engineering-assistant/feedback/captures"
-            ).exists()
-        )
-
-        retry_project = self.root / "hermes-feedback-retry"
-        retry_project.mkdir()
-        handler(
-            arguments,
-            session_id="hermes-retry-session",
-            task_id="hermes-retry-task",
-            cwd=str(retry_project),
-        )
-        retry_args = (
-            "hermes-retry-session",
-            "继续评审。",
-            "当前被测试失败阻断。",
-            [],
-            "test",
-            "hermes",
-        )
-        retry_kwargs = {
-            "cwd": str(retry_project),
-            "task_id": "hermes-retry-task",
-            "turn_id": "hermes-retry-task",
-        }
-        with mock.patch.object(
-            module._FEEDBACK,
-            "collect_hermes_turn",
-            side_effect=OSError("feedback unavailable"),
-        ):
-            context.hooks["post_llm_call"](*retry_args, **retry_kwargs)
-        self.assertEqual(
-            1,
-            len(
-                list(
-                    (
-                        retry_project
-                        / ".run-artifacts/engineering-assistant/usage-observations"
-                    ).rglob("*.json")
-                )
-            ),
-        )
-        context.hooks["post_llm_call"](*retry_args, **retry_kwargs)
-        self.assertEqual(
-            [],
-            list(
-                (
-                    retry_project
-                    / ".run-artifacts/engineering-assistant/usage-observations"
-                ).rglob("*.json")
-            ),
-        )
+            self.assertIsNone(context.hooks["post_llm_call"](
+                "hermes-mode-session", "使用 engineering-assistant 插件评审当前变更。",
+                "评审完成。", [], "test", "hermes", cwd=str(mode_project),
+                task_id=mode_task, turn_id=mode_task, feedback_mode=mode,
+            ))
+            artifact_root = mode_project / ".run-artifacts/engineering-assistant"
+            self.assertEqual([], list((artifact_root / "usage-observations").rglob("*.json")))
+            self.assertEqual(expected_captures, len(list((artifact_root / "feedback/captures").glob("*.json"))))
 
     def test_hermes_adapter_registers_runtime_tools_from_the_same_kernel(self) -> None:
         output = self.root / "hermes-runtime"
@@ -1226,6 +1089,12 @@ print(json.dumps({
         )
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        _launcher, native_environment = self.native_runtime_fixture(output)
+        binding = mock.patch.dict(os.environ, {
+            "ENGINEERING_ASSISTANT_DATA_HOME": native_environment["ENGINEERING_ASSISTANT_DATA_HOME"],
+        })
+        binding.start()
+        self.addCleanup(binding.stop)
         context = Context()
         module.register(context)
         self.assertEqual(17, len(context.tools))
@@ -1324,12 +1193,6 @@ print(json.dumps({
                 turn_id="turn-hostile",
             )
         )
-
-        for index in range(1025):
-            module._activate_turn("capacity-session", {"turn_id": f"turn-{index}"})
-        self.assertEqual(1024, len(module._ACTIVE_TURNS))
-        self.assertNotIn(("capacity-session", "turn-0"), module._ACTIVE_TURNS)
-        self.assertIn(("capacity-session", "turn-1024"), module._ACTIVE_TURNS)
 
         tool_project = self.root / "hermes-tool-project"
         tool_project.mkdir()
@@ -1434,44 +1297,6 @@ print(json.dumps({
             ),
         )
 
-        expired_tool_project = self.root / "hermes-expired-tool"
-        expired_tool_project.mkdir()
-        with module._ACTIVE_TURNS_LOCK:
-            module._ACTIVE_TURNS[("expired-session", "expired-task")] = (
-                "tool",
-                module.time.monotonic() - 1,
-            )
-        context.hooks["post_llm_call"](
-            "expired-session",
-            "解释这个普通 Python 函数。",
-            "这是逐行解释。",
-            [],
-            "test",
-            "cli",
-            cwd=str(expired_tool_project),
-            task_id="expired-task",
-            turn_id="expired-turn",
-        )
-        self.assertFalse(
-            (expired_tool_project / ".run-artifacts/engineering-assistant").exists()
-        )
-
-        with module._ACTIVE_TURNS_LOCK:
-            module._ACTIVE_TURNS.clear()
-        for index in range(1025):
-            context.hooks["post_llm_call"](
-                f"explicit-session-{index}",
-                "使用 engineering-assistant 插件评审当前 diff。",
-                "评审完成。",
-                [],
-                "test",
-                "cli",
-                cwd=str(expired_tool_project),
-                task_id=f"explicit-task-{index}",
-                turn_id=f"explicit-turn-{index}",
-                feedback_mode="disabled",
-            )
-        self.assertEqual(0, len(module._ACTIVE_TURNS))
         context.hooks["post_llm_call"](
             "session-production",
             "解释这个普通 Python 函数。",

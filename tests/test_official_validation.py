@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 import tempfile
@@ -23,6 +25,178 @@ from engineering_assistant.validation import ValidationFailure  # noqa: E402
 
 
 class OfficialValidationTests(unittest.TestCase):
+    def test_default_uv_uses_path_without_a_codex_account_directory(self) -> None:
+        from engineering_assistant.official_validation import _default_uv
+
+        with tempfile.TemporaryDirectory() as temporary:
+            uv = Path(temporary).resolve() / ("uv.exe" if os.name == "nt" else "uv")
+            uv.write_text("fixture\n", encoding="utf-8")
+            uv.chmod(0o755)
+            with mock.patch.dict(os.environ, {"PATH": str(uv.parent)}, clear=True), mock.patch(
+                "engineering_assistant.official_validation._account_home",
+                return_value=Path(temporary) / "account-without-uv",
+            ), mock.patch.object(
+                Path, "is_file", autospec=True,
+                side_effect=lambda candidate: candidate == uv,
+            ), mock.patch(
+                "engineering_assistant.official_validation.os.access",
+                side_effect=lambda candidate, _mode: Path(candidate) == uv,
+            ):
+                self.assertEqual(uv.resolve(), _default_uv())
+
+    def source(self, payload: bytes) -> dict[str, str]:
+        return {
+            "url": "https://raw.githubusercontent.com/openai/skills/" + "a" * 40 + "/quick_validate.py",
+            "revision": "a" * 40,
+            "filename": "quick_validate.py",
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+
+    def test_verified_cache_bootstraps_without_codex_and_reuses_offline(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = _open_cache(Path(temporary) / "cache", ROOT)
+            try:
+                with mock.patch(
+                    "engineering_assistant.official_validation._download_validator", return_value=payload
+                ) as download:
+                    self.assertEqual(payload, _validator_bytes(self.source(payload), cache))
+                    self.assertEqual(payload, _validator_bytes(self.source(payload), cache))
+                    self.assertEqual(1, download.call_count)
+            finally:
+                cache.close()
+
+    def test_invalid_download_preserves_corrupt_old_cache(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        source = self.source(payload)
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = _open_cache(Path(temporary) / "cache", ROOT)
+            try:
+                cache.write_bytes_exclusive(b"old-corrupt", source["sha256"], source["filename"])
+                with mock.patch(
+                    "engineering_assistant.official_validation._download_validator", return_value=b"wrong"
+                ):
+                    with self.assertRaisesRegex(ValidationFailure, "digest"):
+                        _validator_bytes(source, cache)
+                self.assertEqual(b"old-corrupt", cache.read_bytes_limited(64, source["sha256"], source["filename"]))
+            finally:
+                cache.close()
+
+    def test_symlink_cache_and_repository_cache_are_rejected(self) -> None:
+        from engineering_assistant.official_validation import _open_cache
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            outside = root / "outside"
+            outside.mkdir()
+            linked = root / "cache"
+            linked.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(ValidationFailure, "symlink|reparse"):
+                _open_cache(linked, ROOT)
+            with self.assertRaisesRegex(ValidationFailure, "outside"):
+                _open_cache(ROOT / "validator-cache", ROOT)
+            self.assertEqual([], list(outside.iterdir()))
+
+    def test_download_is_bounded_and_redirects_never_run(self) -> None:
+        from engineering_assistant.official_validation import _download_validator, MAX_VALIDATOR_SCRIPT_BYTES
+
+        url = self.source(b"x")["url"]
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.geturl.return_value = url
+        response.read.return_value = b"x" * (MAX_VALIDATOR_SCRIPT_BYTES + 1)
+        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response):
+            with self.assertRaisesRegex(ValidationFailure, "bounded|size"):
+                _download_validator(url)
+        response.read.assert_called_once_with(MAX_VALIDATOR_SCRIPT_BYTES + 1)
+        response.geturl.return_value = "https://example.com/replacement.py"
+        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response):
+            with self.assertRaisesRegex(ValidationFailure, "redirect"):
+                _download_validator(url)
+
+    def test_cache_leaf_symlink_is_rejected_without_download(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        source = self.source(payload)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            cache = _open_cache(root / "cache", ROOT)
+            try:
+                cache.ensure_directory(source["sha256"])
+                outside = root / "outside.py"
+                outside.write_bytes(payload)
+                cache.path(source["sha256"]).joinpath(source["filename"]).symlink_to(outside)
+                with mock.patch("engineering_assistant.official_validation._download_validator") as download:
+                    with self.assertRaises(ValidationFailure):
+                        _validator_bytes(source, cache)
+                download.assert_not_called()
+                self.assertEqual(payload, outside.read_bytes())
+            finally:
+                cache.close()
+
+    def test_failed_cache_write_removes_partial_staging(self) -> None:
+        from engineering_assistant.artifact_io import ArtifactIO
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        source = self.source(payload)
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = _open_cache(Path(temporary) / "cache", ROOT)
+            original = ArtifactIO.write_bytes_exclusive
+
+            def interrupted(instance, content, *parts, **kwargs):
+                original(instance, content, *parts, **kwargs)
+                raise OSError("simulated interrupted staging write")
+
+            try:
+                with mock.patch("engineering_assistant.official_validation._download_validator", return_value=payload), mock.patch.object(
+                    ArtifactIO, "write_bytes_exclusive", interrupted
+                ):
+                    with self.assertRaisesRegex(OSError, "interrupted"):
+                        _validator_bytes(source, cache)
+                with cache.open_directory(source["sha256"]):
+                    self.assertEqual([".artifact.lock"], [path.name for path in cache.path(source["sha256"]).iterdir()])
+            finally:
+                cache.close()
+
+    def test_concurrent_downloads_publish_one_intact_validator(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        source = self.source(payload)
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = _open_cache(Path(temporary) / "cache", ROOT)
+            try:
+                with mock.patch("engineering_assistant.official_validation._download_validator", return_value=payload):
+                    with ThreadPoolExecutor(max_workers=4) as pool:
+                        outputs = list(pool.map(lambda _index: _validator_bytes(source, cache), range(8)))
+                self.assertEqual([payload] * 8, outputs)
+                self.assertEqual(payload, cache.read_bytes_limited(256, source["sha256"], source["filename"]))
+                names = [path.name for path in cache.path(source["sha256"]).iterdir()]
+                self.assertEqual({".artifact.lock", source["filename"]}, set(names))
+            finally:
+                cache.close()
+
+    def test_uv_configuration_precedes_path(self) -> None:
+        from engineering_assistant.official_validation import _default_uv
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            configured, discovered = root / "configured-uv", root / "path-uv"
+            for path in (configured, discovered):
+                path.write_text("fixture\n", encoding="utf-8")
+                path.chmod(0o755)
+            with mock.patch.dict(os.environ, {"ENGINEERING_ASSISTANT_UV": str(configured)}), mock.patch(
+                "engineering_assistant.official_validation.shutil.which", return_value=str(discovered)
+            ) as which:
+                self.assertEqual(configured, _default_uv())
+                which.assert_not_called()
+
     def fixture(self, root: Path) -> tuple[Path, dict[str, Path]]:
         repository = root / "repository"
         skill = repository / "skills/research"
@@ -75,8 +249,8 @@ class OfficialValidationTests(unittest.TestCase):
         self.assertEqual([str(tools["uv_executable"].resolve()), "--version"], calls[0][0])
         for command, kwargs in calls[1:]:
             self.assertEqual(
-                ["run", "--no-project", "--with", PY_YAML_REQUIREMENT],
-                command[1:5],
+                ["run", "--no-project", "--python", "3.13.13", "--managed-python", "--with", PY_YAML_REQUIREMENT],
+                command[1:8],
             )
             self.assertFalse(kwargs.get("shell", False))
             self.assertTrue(kwargs["check"] is False)
@@ -235,42 +409,70 @@ class OfficialValidationTests(unittest.TestCase):
                     environment={},
                 )
 
-    def test_caller_home_cannot_replace_default_official_tools(self) -> None:
+    def test_caller_home_and_cache_swap_cannot_replace_execution_snapshot(self) -> None:
+        from engineering_assistant.official_validation import OFFICIAL_VALIDATORS
+
+        payload = b"print('official')\n"
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            package, _tools = self.fixture(root)
-            trusted_home = root / "trusted-home"
-            quick = trusted_home / ".codex/skills/.system/skill-creator/scripts/quick_validate.py"
-            plugin = trusted_home / ".codex/skills/.system/plugin-creator/scripts/validate_plugin.py"
-            uv = trusted_home / ".local/bin/uv"
-            for path in (quick, plugin, uv):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("trusted fixture\n", encoding="utf-8")
-            uv.chmod(0o755)
-            calls = []
+            root = Path(temporary).resolve()
+            package, tools = self.fixture(root)
+            home = root / "attacker-home"
+            attacker = home / ".codex/skills/.system/skill-creator/scripts/quick_validate.py"
+            attacker.parent.mkdir(parents=True)
+            attacker.write_bytes(b"print('attacker')\n")
+            pins = {}
+            for key, old in OFFICIAL_VALIDATORS.items():
+                pins[key] = {**self.source(payload), "filename": old["filename"]}
+            seen = []
 
             def runner(command, **_kwargs):
-                calls.append(command)
-                return SimpleNamespace(
-                    returncode=0,
-                    stdout="uv 0.8.0\n" if command[1:] == ["--version"] else "passed\n",
-                )
+                if command[1:] == ["--version"]:
+                    cached = root / "tools-cache" / pins["quick_validate"]["sha256"] / "quick_validate.py"
+                    cached.write_bytes(b"changed-after-verification")
+                    return SimpleNamespace(returncode=0, stdout="uv 0.8.0\n")
+                path = Path(command[-2])
+                seen.append(path)
+                self.assertEqual(payload, path.read_bytes())
+                self.assertNotIn(str(home), str(path))
+                return SimpleNamespace(returncode=0, stdout="passed\n")
 
-            with mock.patch.dict("os.environ", {"HOME": str(root / "attacker-home")}), mock.patch(
-                "engineering_assistant.official_validation._account_home",
-                return_value=trusted_home,
+            with mock.patch.dict(os.environ, {"HOME": str(home)}), mock.patch(
+                "engineering_assistant.official_validation.OFFICIAL_VALIDATORS", pins
+            ), mock.patch(
+                "engineering_assistant.official_validation._download_validator", return_value=payload
             ):
                 report = validate_with_official_tools(
-                    root / "repository",
-                    package,
-                    runner=runner,
-                    uv_cache_dir=root / "cache",
+                    root / "repository", package, runner=runner,
+                    uv_executable=tools["uv_executable"], uv_cache_dir=root / "uv-cache",
+                    official_tools_cache_dir=root / "tools-cache",
                 )
+            self.assertEqual("passed", report["status"])
+            self.assertEqual(2, len(seen))
+            self.assertTrue(all(not path.exists() for path in seen))
+            self.assertEqual("sha256:" + hashlib.sha256(payload).hexdigest(), report["quick_validate_digest"])
 
-        self.assertEqual("passed", report["status"])
-        self.assertEqual(str(uv.resolve()), calls[0][0])
-        self.assertEqual(str(quick.resolve()), calls[1][-2])
-        self.assertEqual(str(plugin.resolve()), calls[2][-2])
+    def test_windows_output_uses_native_job_runner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with mock.patch("engineering_assistant.official_validation.sys.platform", "win32"), mock.patch(
+                "engineering_assistant.windows_process.run_bounded_windows", return_value=(0, b"passed\n")
+            ) as run:
+                result = _run_streaming(
+                    [sys.executable, "-c", "print('passed')"], label="native fixture",
+                    repository_root=Path(temporary), environment={},
+                )
+            self.assertEqual("passed", result)
+            self.assertEqual(MAX_VALIDATOR_OUTPUT_BYTES, run.call_args.kwargs["output_limit_bytes"])
+
+    def test_closed_stdout_does_not_escape_timeout(self) -> None:
+        if os.name != "posix":
+            self.skipTest("POSIX stdout descriptor fixture")
+        with tempfile.TemporaryDirectory() as temporary:
+            with mock.patch("engineering_assistant.official_validation.VALIDATOR_TIMEOUT_SECONDS", 0.2):
+                with self.assertRaisesRegex(ValidationFailure, "timed out"):
+                    _run_streaming(
+                        [sys.executable, "-c", "import os,time; os.close(1); os.close(2); time.sleep(30)"],
+                        label="closed pipe fixture", repository_root=Path(temporary), environment={},
+                    )
 
     @unittest.skipUnless(os.name == "posix", "process-group cleanup is POSIX-specific")
     def test_timeout_cleans_child_after_validator_parent_exits(self) -> None:

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Mapping, TextIO
 
-from .artifact_io import ArtifactConflict, ArtifactIO
+from .artifact_io import ArtifactConflict, ArtifactIO, artifact_fs
 from .catalog import DEFAULT_REPOSITORY_ROOT
 from .model import (
     FeedbackCapture,
@@ -443,7 +443,7 @@ class FeedbackStore:
                 "efficiency candidate directory is not a safe directory"
             ) from exc
         try:
-            metadata = os.fstat(directory_fd)
+            metadata = artifact_fs.fstat(directory_fd)
             if not stat.S_ISDIR(metadata.st_mode):
                 raise ValidationFailure(
                     "efficiency candidate directory is not a safe directory"
@@ -451,7 +451,7 @@ class FeedbackStore:
             schema = load_json(
                 self.schema_root / "usage-efficiency-feedback.schema.json"
             )
-            with os.scandir(directory_fd) as entries:
+            with artifact_fs.scandir(directory_fd) as entries:
                 for entry in entries:
                     name = entry.name
                     if not name.endswith(".json"):
@@ -501,10 +501,10 @@ class FeedbackStore:
         except OSError as exc:
             raise ValidationFailure("feedback artifact directory is unsafe") from exc
         try:
-            if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+            if not stat.S_ISDIR(artifact_fs.fstat(directory_fd).st_mode):
                 raise ValidationFailure("feedback artifact directory is unsafe")
             schema = load_json(self.schema_root / schema_name)
-            with os.scandir(directory_fd) as entries:
+            with artifact_fs.scandir(directory_fd) as entries:
                 for entry in entries:
                     name = entry.name
                     if not name.endswith(".json"):
@@ -524,17 +524,19 @@ class FeedbackStore:
 
     @staticmethod
     def _read_safe_candidate(directory_fd: int, name: str) -> dict:
-        flags = os.O_RDONLY
-        if hasattr(os, "O_NOFOLLOW"):
-            flags |= os.O_NOFOLLOW
-        descriptor = os.open(name, flags, dir_fd=directory_fd)
+        flags = artifact_fs.O_RDONLY
+        if hasattr(artifact_fs, "O_NOFOLLOW"):
+            flags |= artifact_fs.O_NOFOLLOW
+        if hasattr(artifact_fs, "O_NONBLOCK"):
+            flags |= artifact_fs.O_NONBLOCK
+        descriptor = artifact_fs.open(name, flags, dir_fd=directory_fd)
         try:
-            metadata = os.fstat(descriptor)
+            metadata = artifact_fs.fstat(descriptor)
             if not stat.S_ISREG(metadata.st_mode):
                 raise ValidationFailure("efficiency candidate is not a regular file")
             if metadata.st_size > MAX_FEEDBACK_ARTIFACT_BYTES:
                 raise ValidationFailure("efficiency candidate is too large")
-            raw = os.read(descriptor, MAX_FEEDBACK_ARTIFACT_BYTES + 1)
+            raw = artifact_fs.read(descriptor, MAX_FEEDBACK_ARTIFACT_BYTES + 1)
             if len(raw) > MAX_FEEDBACK_ARTIFACT_BYTES:
                 raise ValidationFailure("efficiency candidate is too large")
             payload = json.loads(raw.decode("utf-8"))
@@ -542,7 +544,7 @@ class FeedbackStore:
                 raise ValidationFailure("efficiency candidate must be an object")
             return payload
         finally:
-            os.close(descriptor)
+            artifact_fs.close(descriptor)
 
     @staticmethod
     def _assert_artifact_size(payload: dict) -> None:

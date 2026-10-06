@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,37 +23,62 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 
 class RepositorySurfaceTests(unittest.TestCase):
     def test_ci_bootstraps_pinned_official_validators_for_clean_runner(self) -> None:
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        from engineering_assistant.official_validation import OFFICIAL_VALIDATORS
 
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("branches: [main, teamwork]", workflow)
-        self.assertIn(
-            "openai/skills/49f948faa9258a0c61caceaf225e179651397431/"
-            "skills/.system/skill-creator/scripts/quick_validate.py",
-            workflow,
-        )
-        self.assertIn(
-            "openai/codex/963cda85aa2a4cfb85e52d771d22d9f3069951fa/"
-            "codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py",
-            workflow,
-        )
-        self.assertIn(
+        self.assertIn("validate_with_official_tools", workflow)
+        self.assertIn("uv==0.11.7", workflow)
+        self.assertNotIn("$HOME/.codex", workflow)
+        self.assertNotIn("sha256sum", workflow)
+        self.assertEqual(
             "6cc9dc3199c935916cf6f73fcbbbb0e3bb1b58c8f5109fefa499978908164f51",
-            workflow,
+            OFFICIAL_VALIDATORS["quick_validate"]["sha256"],
         )
-        self.assertIn(
+        self.assertEqual(
             "ebda00d55d7518b127f675f062fb5c6e7a1ffdc0a99df1a55ac594400d7d3228",
-            workflow,
+            OFFICIAL_VALIDATORS["plugin_validate"]["sha256"],
         )
-        self.assertIn(
-            '$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py',
-            workflow,
-        )
-        self.assertIn(
-            '$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py',
-            workflow,
-        )
-        self.assertIn('uv==0.11.7', workflow)
-        self.assertIn('"$HOME/.local/bin/uv" --version', workflow)
+
+    def test_ci_runs_each_native_target_with_fixed_tools_and_runtime_qualification(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        for runner, target in {
+            "macos-14": "macos-arm64", "macos-15-intel": "macos-x64",
+            "ubuntu-24.04": "linux-x64", "windows-2025": "windows-x64",
+        }.items():
+            self.assertRegex(workflow, rf"- runner: {re.escape(runner)}\n\s+target: {target}\n")
+        for contract in (
+            'python-version: "3.13.13"', 'RUSTUP_TOOLCHAIN: "1.90.0"',
+            'node-version: "22.20.0"', '@anthropic-ai/claude-code@2.1.241',
+            'ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX: "1"',
+            'fail-fast: false', 'scripts/qualify_installation.py',
+            'scripts/publish_local.py --platform all --dry-run',
+            'Windows Server', 'agent_host_qualification', 'not_run',
+        ):
+            self.assertIn(contract, workflow)
+        self.assertNotIn("continue-on-error", workflow)
+
+    def test_ci_native_gate_rejects_skips_missing_tests_and_failures(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        functions = []
+        for block in re.findall(r"python - <<'PY'\n(.*?)\n          PY", workflow, flags=re.DOTALL):
+            module = ast.parse(textwrap.dedent(block))
+            functions.extend(node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == "require_native_test_results")
+        self.assertEqual(1, len(functions), "CI must mechanically reject unexecuted native safety tests")
+        namespace = {}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(ROOT / ".github/workflows/ci.yml"), "exec"), namespace)
+        gate = namespace["require_native_test_results"]
+        required = {"test.native.contract"}
+        native = SimpleNamespace(id=lambda: "test.native.contract")
+        foreign = SimpleNamespace(id=lambda: "test.other_os.contract")
+        for result, observed in (
+            (SimpleNamespace(skipped=[(native, "unsupported")], wasSuccessful=lambda: True), required),
+            (SimpleNamespace(skipped=[], wasSuccessful=lambda: True), set()),
+            (SimpleNamespace(skipped=[], wasSuccessful=lambda: False), required),
+        ):
+            with self.assertRaises(SystemExit):
+                gate(result, required, observed)
+        self.assertIsNone(gate(SimpleNamespace(skipped=[(foreign, "other OS")], wasSuccessful=lambda: True), required, required))
 
     def test_repository_contains_only_current_product_surfaces(self) -> None:
         catalog = load_catalog(ROOT, require_sources=True)

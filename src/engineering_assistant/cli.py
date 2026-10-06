@@ -320,6 +320,7 @@ def command_build(args: argparse.Namespace) -> int:
         args.platform,
         args.output,
         replace=args.replace,
+        target=args.target,
     )
     _emit(report)
     return 0
@@ -595,6 +596,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build.add_argument("--output", required=True)
     build.add_argument("--replace", action="store_true")
+    build.add_argument("--target", choices=("macos-arm64", "macos-x64", "linux-x64", "windows-x64"))
     build.set_defaults(handler=command_build)
 
     verify = subparsers.add_parser("verify-package")

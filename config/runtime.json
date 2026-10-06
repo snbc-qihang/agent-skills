@@ -1,0 +1,6 @@
+{
+  "schema_version": "1",
+  "python_version": "3.13.13",
+  "requirements": "runtime-requirements.txt",
+  "targets": ["macos-arm64", "macos-x64", "linux-x64", "windows-x64"]
+}

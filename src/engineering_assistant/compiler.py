@@ -20,7 +20,7 @@ ADAPTERS = {
     "codex": CodexAdapter,
     "hermes": HermesAdapter,
 }
-BUILD_FORMAT_VERSION = "1.0"
+BUILD_FORMAT_VERSION = "2.0"
 MAX_BUILD_MANIFEST_BYTES = 1024 * 1024
 MAX_BUILD_PAYLOAD_FILE_BYTES = 32 * 1024 * 1024
 _VERSION = re.compile(r"^\d+\.\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
@@ -74,7 +74,10 @@ def build_package(
     *,
     replace: bool = False,
     codex_cachebuster: str | None = None,
+    target: str | None = None,
 ) -> dict:
+    from .native_launcher import host_target
+    target = target or host_target()
     repository_root = Path(repository_root).resolve()
     raw_output = Path(output).absolute()
     if raw_output.is_symlink():
@@ -135,6 +138,7 @@ def build_package(
             working_io,
             catalog,
             codex_cachebuster,
+            target,
         )
         _output_path, output_fd, output_metadata = (
             output_io.create_directory_exclusive_open(output.name)
@@ -181,7 +185,10 @@ def _compile_package(
     output_io: ArtifactIO,
     catalog,
     codex_cachebuster: str | None,
+    target: str,
 ) -> dict:
+    from .installation import runtime_lock
+    from .native_launcher import build_launcher
     output = _BuildPath(output_io)
     _copy_tree(repository_root / "skills", output / "skills")
     runtime_root = output / "engineering-assistant"
@@ -200,20 +207,17 @@ def _compile_package(
         )
     finally:
         repository_io.close()
-    launcher = runtime_root / "bin/ea"
+    lock, requirements = runtime_lock(repository_root, platform, target, catalog.version)
+    (runtime_root / "runtime-lock.json").write_text(json.dumps(lock, sort_keys=True) + "\n", encoding="utf-8")
+    (runtime_root / "runtime-requirements.txt").write_bytes(requirements)
+    _copy_tree(repository_root / "config", runtime_root / "config")
+    (runtime_root / "runtime_boot.py").write_bytes((repository_root / "src/engineering_assistant/runtime_boot.py").read_bytes())
+    launcher = runtime_root / ("bin/ea.exe" if target == "windows-x64" else "bin/ea")
     launcher.parent.mkdir(parents=True)
-    launcher.write_text(
-        "#!/usr/bin/env python3\n"
-        "import sys\n"
-        "from pathlib import Path\n"
-        "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'runtime'))\n"
-        "from engineering_assistant.cli import main\n"
-        "raise SystemExit(main())\n",
-        encoding="utf-8",
-    )
+    launcher.write_bytes(build_launcher(repository_root, target).read_bytes())
     launcher.chmod(0o755)
 
-    adapter = ADAPTERS[platform](cachebuster=codex_cachebuster) if platform == "codex" else ADAPTERS[platform]()
+    adapter = ADAPTERS[platform](cachebuster=codex_cachebuster, target=target) if platform == "codex" else ADAPTERS[platform](target=target)
     adapter.write_platform_files(output, catalog)
     payload_files = output_io.sha256_file_digests(
         max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,
@@ -223,6 +227,8 @@ def _compile_package(
     ).hexdigest()
     report = {
         "build_format_version": BUILD_FORMAT_VERSION,
+        "target": target,
+        "runtime_environment_key": lock["environment_key"],
         "status": "built",
         "platform": platform,
         "canonical_version": catalog.version,
@@ -245,20 +251,20 @@ def _compile_package(
 
 def verify_package(package_root: Path | str) -> dict:
     raw_package_root = Path(package_root)
-    if raw_package_root.is_symlink():
+    if raw_package_root.is_symlink() or (raw_package_root.exists() and getattr(raw_package_root.lstat(), "st_file_attributes", 0) & 0x400):
         raise ValidationFailure("package root cannot be a symlink")
     package_root = raw_package_root.resolve()
     manifest_path = package_root / "package-manifest.json"
-    if manifest_path.is_symlink() or not manifest_path.is_file():
-        raise ValidationFailure(f"missing package manifest: {manifest_path}")
-    if manifest_path.stat().st_size > MAX_BUILD_MANIFEST_BYTES:
-        raise ValidationFailure("package manifest is too large")
+    storage = ArtifactIO(package_root, ".")
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValidationFailure("package manifest contains invalid JSON") from exc
+        manifest = storage.read_json_limited(MAX_BUILD_MANIFEST_BYTES, "package-manifest.json")[0]
+    except FileNotFoundError as exc:
+        raise ValidationFailure(f"missing package manifest: {manifest_path}") from exc
+    finally:
+        storage.close()
     _validate_build_manifest(manifest, package_root)
-    actual = _file_digests(package_root, exclude={"package-manifest.json"})
+    actual = _file_digests(package_root, exclude={"package-manifest.json"},
+                           native_git_metadata=manifest["platform"] == "hermes")
     if actual != manifest.get("payload_files"):
         raise ValidationFailure("package payload differs from its build manifest")
     digest = hashlib.sha256(
@@ -266,6 +272,20 @@ def verify_package(package_root: Path | str) -> dict:
     ).hexdigest()
     if f"sha256:{digest}" != manifest.get("payload_digest"):
         raise ValidationFailure("package payload digest differs from its build manifest")
+    if manifest.get("build_format_version") == "2.0":
+        from .installation import _package_lock
+        from .native_launcher import _binary_target
+        lock = _package_lock(package_root)
+        if (lock["agent"] != manifest["platform"] or lock["target"] != manifest["target"]
+            or lock["canonical_version"] != manifest["canonical_version"]
+            or lock["environment_key"] != manifest["runtime_environment_key"]):
+            raise ValidationFailure("Runtime contract differs from its package manifest")
+        requirements_digest = actual["engineering-assistant/runtime-requirements.txt"]
+        if requirements_digest != "sha256:" + lock["requirements_digest"]:
+            raise ValidationFailure("Runtime dependency lock differs from its package manifest")
+        native = package_root / "engineering-assistant/bin" / ("ea.exe" if manifest["target"] == "windows-x64" else "ea")
+        if _binary_target(native) != manifest["target"]:
+            raise ValidationFailure("native launcher target differs from its package manifest")
     return manifest
 
 
@@ -286,14 +306,17 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
         "payload_files",
     }
     previous_required = required - {"build_format_version", "source_count"}
+    native_required = required | {"target", "runtime_environment_key"}
     if not isinstance(manifest, dict) or set(manifest) not in (
         required,
         previous_required,
+        native_required,
     ):
         raise ValidationFailure("package manifest does not match the builder contract")
     previous_contract = set(manifest) == previous_required
+    native_contract = set(manifest) == native_required
     if (
-        (not previous_contract and manifest["build_format_version"] != BUILD_FORMAT_VERSION)
+        (not previous_contract and manifest["build_format_version"] != (BUILD_FORMAT_VERSION if native_contract else "1.0"))
         or manifest["status"] != "built"
         or manifest["platform"] not in ADAPTERS
         or not isinstance(manifest["canonical_version"], str)
@@ -303,6 +326,10 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
         or not isinstance(manifest["payload_digest"], str)
     ):
         raise ValidationFailure("package manifest does not match the builder contract")
+    if native_contract:
+        from .installation import TARGETS
+        if manifest["target"] not in TARGETS or not isinstance(manifest["runtime_environment_key"], str) or re.fullmatch(r"[0-9a-f]{64}", manifest["runtime_environment_key"]) is None:
+            raise ValidationFailure("package native Runtime target is invalid")
     count_keys = [
         "skill_count",
         "flow_count",
@@ -347,6 +374,10 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
         ),
     }
     required_files = required_layouts[manifest["platform"]]
+    if native_contract:
+        executable = "ea.exe" if manifest["target"] == "windows-x64" else "ea"
+        required_files += (f"engineering-assistant/bin/{executable}", "engineering-assistant/runtime_boot.py",
+                           "engineering-assistant/runtime-lock.json", "engineering-assistant/runtime-requirements.txt")
     if any(
         relative not in manifest["payload_files"]
         or not (package_root / relative).is_file()
@@ -373,12 +404,20 @@ def _copy_tree(source: Path, target: _BuildPath) -> None:
         destination.close()
 
 
-def _file_digests(root: Path, exclude: set[str] | None = None) -> dict[str, str]:
+def _file_digests(root: Path, exclude: set[str] | None = None,
+                  native_git_metadata: bool = False) -> dict[str, str]:
     exclude = exclude or set()
-    result: dict[str, str] = {}
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
-        relative = path.relative_to(root).as_posix()
-        if relative in exclude:
-            continue
-        result[relative] = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-    return result
+    storage = ArtifactIO(root, ".")
+    try:
+        if native_git_metadata and storage.entry_exists(".git"):
+            # Hermes owns this native clone metadata. Traverse it with the same
+            # bounds and no-follow rules; exclude only its top-level namespace
+            # from the precompiled payload contract, never plugin files.
+            with storage.open_directory(".git"):
+                pass
+        return {name: digest for name, digest in storage.sha256_file_digests(
+            max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES, max_entries=4096,
+            max_total_bytes=256 * 1024 * 1024).items()
+            if name not in exclude and not (native_git_metadata and name.startswith(".git/"))}
+    finally:
+        storage.close()
