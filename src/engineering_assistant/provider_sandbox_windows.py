@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import ntpath
 import os
 import platform
 import shutil
@@ -23,7 +24,6 @@ import sys
 import tempfile
 import time
 import uuid
-from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 
@@ -110,28 +110,50 @@ class _AceHeader(ctypes.Structure):
     _fields_ = [("type", ctypes.c_uint8), ("flags", ctypes.c_uint8), ("size", ctypes.c_uint16)]
 
 
+class _ExceptionRecord(ctypes.Structure):
+    _fields_ = [("code", DWORD), ("flags", DWORD), ("related", HANDLE), ("address", HANDLE),
+                ("count", DWORD), ("parameters", SIZE_T * 15)]
+
+
+class _ExceptionDebugInfo(ctypes.Structure):
+    _fields_ = [("record", _ExceptionRecord), ("first_chance", DWORD)]
+
+
+class _CreateProcessDebugInfo(ctypes.Structure):
+    _fields_ = [("file", HANDLE), ("process", HANDLE), ("thread", HANDLE), ("base", HANDLE),
+                ("offset", DWORD), ("size", DWORD), ("thread_local_base", HANDLE),
+                ("start", HANDLE), ("image_name", HANDLE), ("unicode", ctypes.c_uint16)]
+
+
+class _CreateThreadDebugInfo(ctypes.Structure):
+    _fields_ = [("thread", HANDLE), ("thread_local_base", HANDLE), ("start", HANDLE)]
+
+
+class _LoadDllDebugInfo(ctypes.Structure):
+    _fields_ = [("file", HANDLE), ("base", HANDLE), ("offset", DWORD), ("size", DWORD),
+                ("image_name", HANDLE), ("unicode", ctypes.c_uint16)]
+
+
+class _DebugStringInfo(ctypes.Structure):
+    _fields_ = [("data", HANDLE), ("unicode", ctypes.c_uint16), ("length", ctypes.c_uint16)]
+
+
+class _RipInfo(ctypes.Structure):
+    _fields_ = [("error", DWORD), ("kind", DWORD)]
+
+
+class _DebugData(ctypes.Union):
+    _fields_ = [("exception", _ExceptionDebugInfo), ("create_process", _CreateProcessDebugInfo),
+                ("create_thread", _CreateThreadDebugInfo), ("exit_thread", DWORD),
+                ("exit_process", DWORD), ("dll", _LoadDllDebugInfo), ("unload_base", HANDLE),
+                ("debug_string", _DebugStringInfo), ("rip", _RipInfo)]
+
+
+class _DebugEvent(ctypes.Structure):
+    _fields_ = [("code", DWORD), ("pid", DWORD), ("tid", DWORD), ("data", _DebugData)]
+
+
 _STARTUP_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
-_PROFILE_ENVIRONMENT_KEYS = ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "TEMP", "TMP", "TMPDIR")
-_PROFILE_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", """
-import json, ntpath, os, sys
-def category(value):
-    if not value:
-        return 'missing'
-    path = ntpath.normcase(ntpath.normpath(value))
-    for label, root in (('work', sys.argv[1]), ('new_profile', sys.argv[2])):
-        if root:
-            root = ntpath.normcase(ntpath.normpath(root))
-            try:
-                if ntpath.commonpath((path, root)) == root:
-                    return label
-            except ValueError:
-                pass
-    return 'other'
-print(json.dumps({'marker': 'EA_LPAC_STARTUP_OK', 'environment': {
-    key: category(os.environ.get(key))
-    for key in ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')
-}}), flush=True)
-"""]
 
 
 def capability() -> dict:
@@ -232,14 +254,11 @@ class _Api:
         finally:
             self.close(token)
 
-    def acl(self, path: Path, owner: str, sandbox: str | None, writable: bool = False, *, traverse_only: bool = False) -> None:
+    def acl(self, path: Path, owner: str, sandbox: str | None, writable: bool = False) -> None:
         if _reparse(path):
             raise OSError("Windows sandbox ACL target is a reparse point")
-        if traverse_only and (writable or sandbox is None or not path.is_dir()):
-            raise OSError("Windows diagnostic traverse grant needs a private directory")
-        rights = "0x00000020" if traverse_only else "FA" if writable else "FRFX"
-        inheritance = "" if traverse_only else "OICI"
-        grant = f"(A;{inheritance};{rights};;;{sandbox})" if sandbox else ""
+        rights = "FA" if writable else "FRFX"
+        grant = f"(A;OICI;{rights};;;{sandbox})" if sandbox else ""
         descriptor = HANDLE()
         # A protected DACL excludes ambient Users/All Application Packages ACEs.
         sddl = f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{owner}){grant}"
@@ -349,15 +368,14 @@ def run(
 def _run_lpac(
     command: list[str], bundle: Path, work: Path, environment: dict[str, str],
     timeout: int, output_limit: int, *, diagnostics: dict | None = None,
-    _experiment: str | None = None,
+    _console_diagnostic: bool = False, _loader_diagnostic: bool = False,
 ) -> tuple[int, bytes, bytes]:
-    # Production run() has no experiment or capabilities argument. Independent
-    # diagnostics can launch only their exact, fixed trusted commands.
-    expected_command = _PROFILE_COMMAND if _experiment == "profile_readonly" else _STARTUP_COMMAND
-    if _experiment is not None and (_experiment not in {
-        "parent_only", "registry_only", "parent_and_registry", "profile_readonly", "detached_console",
-    } or command != expected_command or diagnostics is None):
-        raise OSError("experimental access is restricted to the fixed startup diagnostic")
+    # Production run() has no console override. The alternative flag is only
+    # available to the independent diagnostic's exact, fixed trusted command.
+    if type(_console_diagnostic) is not bool or type(_loader_diagnostic) is not bool or (
+            (_console_diagnostic or _loader_diagnostic) and (
+            command != _STARTUP_COMMAND or diagnostics is None)):
+        raise OSError("console override is restricted to the fixed startup diagnostic")
     available = capability()
     if not available["supported"]:
         raise OSError(available["reason"])
@@ -371,7 +389,7 @@ def _run_lpac(
     attributes_initialized = False
     job = None
     job_assigned = False
-    startup_resources = ExitStack()
+    loader = None
     try:
         if diagnostics is not None:
             diagnostics["stage"] = "private_runtime_and_acl"
@@ -388,11 +406,7 @@ def _run_lpac(
         if result < 0 or not profile_folder.value:
             raise OSError("Windows LPAC profile folder could not be isolated")
         try:
-            profile_path = Path(profile_folder.value)
-            # Only the diagnostic's fresh, successful profile creation may
-            # receive read access. Production always removes the package grant.
-            _secure_tree(api, profile_path, owner,
-                         sandbox if _experiment == "profile_readonly" else None, False)
+            _secure_tree(api, Path(profile_folder.value), owner, None, False)
         finally:
             # GetAppContainerFolderPath allocates with CoTaskMemAlloc.
             ole = ctypes.WinDLL("ole32", use_last_error=True)
@@ -403,17 +417,9 @@ def _run_lpac(
         _secure_tree(api, runtime, owner, sandbox, False)
         _secure_tree(api, bundle, owner, sandbox, False)
         _secure_tree(api, work, owner, sandbox, True)
-        if _experiment in {"parent_only", "parent_and_registry"}:
-            # Exactly this newly created private root, without inheritance or
-            # directory listing. Never re-ACL Temp, AppData, Users or ancestors.
-            api.acl(work.parent, owner, sandbox, traverse_only=True)
         if diagnostics is not None:
             diagnostics["preparation_seconds"] = round(time.monotonic() - preparation_started, 3)
         actual_command = [str(executable), *command[1:]]
-        if command == _PROFILE_COMMAND and diagnostics is not None:
-            # These paths are used only for lexical classification by fixed
-            # trusted code. They are never accepted from a diagnostic caller.
-            actual_command.extend((str(work), str(profile_path)))
         security = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), None, True)
         readers, writers = [], []
         for _ in range(2):
@@ -437,9 +443,6 @@ def _run_lpac(
         api.check(api.kernel.InitializeProcThreadAttributeList(attributes, 4, 0, ctypes.byref(length)), "process attributes")
         attributes_initialized = True
         capabilities = _SecurityCapabilities(sid, None, 0, 0)
-        if _experiment in {"registry_only", "parent_and_registry"}:
-            entries = startup_resources.enter_context(_registry_capability(api))
-            capabilities = _SecurityCapabilities(sid, ctypes.cast(entries, HANDLE), 1, 0)
         opt_out, children = DWORD(1), DWORD(1)
         inherited = (HANDLE * 3)(stdin, *writers)
         for attribute, value in (
@@ -458,13 +461,21 @@ def _run_lpac(
         command_line = ctypes.create_unicode_buffer(subprocess.list2cmdline(actual_command))
         # Swap only this fixed-code experiment's console mode. Production keeps
         # CREATE_NO_WINDOW; DETACHED_PROCESS does not allocate/inherit a console.
-        console_flag = 0x8 if _experiment == "detached_console" else 0x08000000
+        console_flag = 0x8 if _console_diagnostic else 0x08000000
         flags = 0x80000 | 0x400 | 0x4 | console_flag
+        if _loader_diagnostic:
+            flags |= 0x2  # DEBUG_ONLY_THIS_PROCESS: fixed trusted diagnostic only.
+            diagnostics["loader_events"] = []
+            diagnostics["debug_observer"] = True
+            loader = _LoaderTrace(api, 0, diagnostics["loader_events"], process, handles)
         if diagnostics is not None:
             diagnostics["stage"] = "create_lpac_process"
-            diagnostics["console_mode"] = "detached" if _experiment == "detached_console" else "no_window"
+            diagnostics["console_mode"] = "detached" if console_flag == 0x8 else "no_window"
         api.check(api.kernel.CreateProcessW(str(executable), command_line, None, None, True, flags, environment_block, str(work), ctypes.byref(startup), ctypes.byref(process)), "LPAC process creation")
         handles.extend([process.process, process.thread])
+        if loader:
+            loader.pid = process.pid
+            loader.retain_process()
         if diagnostics is not None:
             diagnostics["stage"] = "suspended_lpac_access"
             try:
@@ -496,6 +507,10 @@ def _run_lpac(
         streams = [bytearray(), bytearray()]
         deadline = time.monotonic() + timeout
         while True:
+            if time.monotonic() >= deadline:
+                raise OSError("provider execution timed out")
+            if loader and not loader.exited:
+                loader.poll(0)
             for reader, stream in zip(readers, streams):
                 while True:
                     available_bytes = DWORD()
@@ -532,7 +547,10 @@ def _run_lpac(
         cleanup_error = None
         if process.process:
             try:
-                _terminate_process(api, process.process, job, job_assigned)
+                if loader:
+                    loader.terminate(process.process, job, job_assigned)
+                else:
+                    _terminate_process(api, process.process, job, job_assigned)
             except OSError as exc:
                 cleanup_error = exc
         if attributes_initialized:
@@ -545,37 +563,155 @@ def _run_lpac(
             result = api.userenv.DeleteAppContainerProfile(name)
             if result < 0:
                 cleanup_error = OSError(f"Windows LPAC profile cleanup failed: HRESULT {result & 0xFFFFFFFF:08x}")
-        startup_resources.close()
         if cleanup_error:
             raise cleanup_error
 
 
-@contextmanager
-def _registry_capability(api: _Api):
-    """One hardcoded capability for trusted startup experiments only."""
-    library = ctypes.WinDLL("kernelbase", use_last_error=True)
-    derive = library.DeriveCapabilitySidsFromName
-    derive.restype = BOOL
-    derive.argtypes = [LPWSTR, ctypes.POINTER(ctypes.POINTER(HANDLE)), ctypes.POINTER(DWORD),
-                       ctypes.POINTER(ctypes.POINTER(HANDLE)), ctypes.POINTER(DWORD)]
-    groups, capabilities = ctypes.POINTER(HANDLE)(), ctypes.POINTER(HANDLE)()
-    group_count, capability_count = DWORD(), DWORD()
-    try:
-        api.check(derive("registryRead", ctypes.byref(groups), ctypes.byref(group_count),
-                         ctypes.byref(capabilities), ctypes.byref(capability_count)), "diagnostic registry capability")
-        if capability_count.value != 1 or not capabilities or not capabilities[0]:
-            raise OSError("Windows diagnostic registry capability returned an invalid SID count")
-        entries = (_SidAndAttributes * 1)(_SidAndAttributes(capabilities[0], 4))
-        yield entries
-    finally:
-        # These allocations belong to LocalAlloc, unlike the profile SID.
-        # Keep every capability SID alive until process exit and cleanup.
-        for array, count in ((groups, group_count.value), (capabilities, capability_count.value)):
-            if array:
-                for index in range(count):
-                    if array[index]:
-                        api.kernel.LocalFree(array[index])
-                api.kernel.LocalFree(ctypes.cast(array, HANDLE))
+def _debug_module(api: _Api, file) -> str:
+    if not file:
+        return "unavailable"
+    buffer = ctypes.create_unicode_buffer(1024)
+    length = api.kernel.GetFinalPathNameByHandleW(file, buffer, len(buffer), 0xC)
+    if not 0 < length < len(buffer):
+        return "unavailable"
+    name = ntpath.basename(buffer.value)
+    if not name or len(name) > 128 or any(character not in
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-" for character in name):
+        return "unavailable"
+    return name
+
+
+class _LoaderTrace:
+    """Fixed-code debugger on the creating thread; no target memory reads."""
+
+    def __init__(self, api: _Api, pid: int, report: list, process=None, handles=None) -> None:
+        self.api, self.pid, self.report = api, pid, report
+        self.process, self.handles = process, handles
+        self.owned_process = None
+        self.saw_create = False
+        self.pending = None
+        self.pending_status = 0x10002
+        self.initial_breakpoint = False
+        self.exited, self.count = False, 0
+        for name, result, arguments in (
+            ("WaitForDebugEventEx", BOOL, [ctypes.POINTER(_DebugEvent), DWORD]),
+            ("ContinueDebugEvent", BOOL, [DWORD, DWORD, DWORD]),
+            ("GetFinalPathNameByHandleW", DWORD, [HANDLE, LPWSTR, DWORD, DWORD]),
+            ("DuplicateHandle", BOOL, [HANDLE, HANDLE, HANDLE, ctypes.POINTER(HANDLE), DWORD, BOOL, DWORD]),
+            ("DebugActiveProcessStop", BOOL, [DWORD]),
+        ):
+            function = getattr(api.kernel, name)
+            function.restype, function.argtypes = result, arguments
+
+    def retain_process(self) -> None:
+        # Own a duplicate before any debug events are continued. In particular,
+        # EXIT_PROCESS continuation can close the event's original handles.
+        duplicate = HANDLE()
+        current = self.api.kernel.GetCurrentProcess()
+        self.api.check(self.api.kernel.DuplicateHandle(current, self.process.process, current,
+                                                       ctypes.byref(duplicate), 0, False, 2),
+                       "diagnostic process handle retention")
+        if not duplicate.value:
+            raise OSError("Windows loader diagnostic has no retained process handle")
+        self.owned_process = duplicate.value
+        self.process.process = duplicate.value
+        self.handles.append(duplicate.value)
+
+    def _continue(self) -> None:
+        if self.pending is None:
+            return
+        event = self.pending
+        self.api.check(self.api.kernel.ContinueDebugEvent(event.pid, event.tid, self.pending_status),
+                       "diagnostic debug event continuation")
+        self.exited = self.exited or event.code == 5
+        self.pending = None
+
+    def poll(self, milliseconds: int, *, record: bool = True) -> None:
+        if self.pending is not None:
+            raise OSError("Windows loader diagnostic has an uncontinued event")
+        event = _DebugEvent()
+        if not self.api.kernel.WaitForDebugEventEx(ctypes.byref(event), min(milliseconds, 50)):
+            if ctypes.get_last_error() == 121:  # ERROR_SEM_TIMEOUT
+                return
+            self.api.check(False, "diagnostic debug wait")
+        self.pending = event
+        self.pending_status = 0x80010001 if event.code == 1 else 0x10002
+        file = event.data.create_process.file if event.code == 3 else event.data.dll.file if event.code == 6 else None
+        try:
+            if event.pid != self.pid:
+                raise OSError("Windows loader diagnostic received another process event")
+            if record:
+                self.count += 1
+                if self.count > 128:
+                    raise OSError("Windows loader diagnostic event limit exceeded")
+            observation = {"event": {2: "thread_created", 3: "process_created", 4: "thread_exited",
+                                     7: "dll_unloaded", 8: "debug_string_ignored", 9: "rip"}.get(event.code, "unknown")}
+            if event.code == 3:
+                self.saw_create = True
+                # These event handles belong to Windows, even if their values
+                # alias the originals returned by CreateProcess. Our retained
+                # duplicate remains valid after Continue(EXIT_PROCESS).
+                if self.process is not None:
+                    for borrowed in (event.data.create_process.process, event.data.create_process.thread):
+                        if borrowed in self.handles:
+                            self.handles.remove(borrowed)
+            elif event.code == 6:
+                observation = {"event": "dll_loaded", "module": _debug_module(self.api, file)}
+            elif event.code == 1:
+                code = event.data.exception.record.code
+                first = bool(event.data.exception.first_chance)
+                if code == 0x80000003 and first and not self.initial_breakpoint:
+                    self.initial_breakpoint = True
+                    self.pending_status = 0x10002
+                observation = {"event": "exception", "status": f"0x{code:08X}", "first_chance": first}
+            elif event.code == 5:
+                observation = {"event": "process_exited", "status": f"0x{event.data.exit_process:08X}"}
+            if record:
+                self.report.append(observation)
+        finally:
+            try:
+                if file:
+                    self.api.close(file)
+            finally:
+                self._continue()
+
+    def terminate(self, process, job, job_assigned: bool) -> None:
+        # Never block on a debuggee's ordinary wait while an event is pending.
+        # If event continuation/draining fails, detach this trusted diagnostic
+        # as a final cleanup fallback, then still terminate and confirm exit.
+        deadline = time.monotonic() + 3
+        try:
+            try:
+                self._continue()
+            except OSError:
+                pass
+            if job_assigned:
+                self.api.kernel.TerminateJobObject(job, 1)
+            self.api.kernel.TerminateProcess(self.owned_process or process, 1)
+            for _ in range(128):
+                if self.exited or time.monotonic() >= deadline:
+                    break
+                try:
+                    if self.pending is not None:
+                        self._continue()
+                    else:
+                        self.poll(50, record=False)
+                except OSError:
+                    break
+            if not self.exited:
+                self.api.check(self.api.kernel.DebugActiveProcessStop(self.pid), "diagnostic debugger detach")
+                self.pending = None
+                if self.saw_create and not self.owned_process:
+                    raise OSError("Windows loader diagnostic cleanup has no retained handle to confirm exit")
+                self.api.kernel.TerminateProcess(self.owned_process or process, 1)
+            if self.saw_create and not self.owned_process:
+                raise OSError("Windows loader diagnostic cleanup has no retained handle to confirm exit")
+            if self.api.kernel.WaitForSingleObject(self.owned_process or process, 2000) != 0:
+                raise OSError("Windows loader diagnostic cleanup could not confirm exit")
+        finally:
+            if self.process is None:
+                self.api.close(self.owned_process)
+                self.owned_process = None
 
 
 def _terminate_process(api: _Api, process, job, job_assigned: bool) -> None:
@@ -861,45 +997,13 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
         api.close(token)
 
 
-def _profile_result(code: int, output: bytes) -> dict:
-    """Reject anything except the fixed script's non-sensitive categories."""
-    if not output:
-        return {"marker": False}
-    try:
-        payload = json.loads(output)
-        environment = payload["environment"]
-        if (set(payload) != {"marker", "environment"} or payload["marker"] != "EA_LPAC_STARTUP_OK"
-                or not isinstance(environment, dict) or set(environment) != set(_PROFILE_ENVIRONMENT_KEYS)
-                or any(value not in {"work", "new_profile", "missing", "other"} for value in environment.values())):
-            raise ValueError("invalid categories")
-        return {"marker": code == 0, "environment": environment}
-    except (ValueError, KeyError, TypeError):
-        return {"marker": False, "payload_error": "invalid_fixed_payload"}
-
-
-def diagnose() -> dict:
-    """Retain the original parent/registry startup experiment."""
-    return _diagnose(profile=False)
-
-
-def diagnose_profile() -> dict:
-    """Compare sealed and freshly created read-only profiles, with zero caps."""
-    return _diagnose(profile=True)
-
-
-def diagnose_console() -> dict:
-    """Compare only NO_WINDOW and DETACHED_PROCESS for fixed trusted code."""
-    return _diagnose(profile=False, console=True)
-
-
-def _diagnose(*, profile: bool, console: bool = False) -> dict:
-    """Bounded fixed-code startup experiment, explicitly not qualification."""
+def diagnose_console(*, _loader_diagnostic: bool = False) -> dict:
+    """Compare only NO_WINDOW and DETACHED_PROCESS, never qualification."""
     available = capability()
     report = {**available, "qualified": False, "assurance": "startup_diagnostic_only",
-              "execution_timeout_seconds_per_case": 10, **_host_information()}
+              "execution_timeout_seconds_per_case": 10, "debug_observer": _loader_diagnostic, **_host_information()}
     if not available["supported"]:
         return report
-    command = _PROFILE_COMMAND if profile else _STARTUP_COMMAND
     started = time.monotonic()
     try:
         with tempfile.TemporaryDirectory(prefix="ea-windows-startup-") as temporary:
@@ -916,29 +1020,15 @@ def _diagnose(*, profile: bool, console: bool = False) -> dict:
             copy_started = time.monotonic()
             executable = _private_runtime(base / "baseline-runtime")
             report["baseline_copy_seconds"] = round(time.monotonic() - copy_started, 3)
-            baseline_command = [str(executable), *command[1:]]
-            if profile:
-                baseline_command.extend((str(work), ""))
+            baseline_command = [str(executable), *_STARTUP_COMMAND[1:]]
             baseline = subprocess.run(baseline_command, cwd=work, env=private_environment,
                                       stdin=subprocess.DEVNULL, capture_output=True, timeout=10, check=False)
             report["copied_runtime_baseline"] = {"exit_code": f"0x{baseline.returncode & 0xFFFFFFFF:08X}",
-                                                **(_profile_result(baseline.returncode, baseline.stdout) if profile else {
-                                                    "marker": baseline.returncode == 0 and baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"})}
-        # Each experiment has a fresh root and profile; neither ACL changes nor
-        # capabilities from one case can contaminate the next. Parent-only is
-        # tried first. If it succeeds, no registry-reading case is needed.
-        if profile:
-            cases = (("strict_lpac", None), ("new_profile_readonly", "profile_readonly"))
-        elif console:
-            cases = (("strict_lpac", None), ("detached_console", "detached_console"))
-        else:
-            cases = (("strict_lpac", None), ("parent_only", "parent_only"),
-                     ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
-        for name, experiment in cases:
-            if experiment in {"registry_only", "parent_and_registry"} and report["parent_only"].get("marker"):
-                report[name] = {"not_run": "private_parent_startup_succeeded"}
-                continue
-            observation = {"experiment": experiment or "none"}
+                                                "marker": baseline.returncode == 0 and baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"}
+        # Each console case has a fresh private root and profile. Both keep
+        # zero capabilities, the sealed profile and all required LPAC attributes.
+        for name, alternative_console in (("strict_lpac", False), ("detached_console", True)):
+            observation = {}
             report[name] = observation
             try:
                 with tempfile.TemporaryDirectory(prefix="ea-windows-startup-") as temporary:
@@ -948,10 +1038,10 @@ def _diagnose(*, profile: bool, console: bool = False) -> dict:
                     work, bundle = base / "work", base / "bundle"
                     work.mkdir()
                     bundle.mkdir()
-                    code, output, _ = _run_lpac(list(command), bundle, work, environment,
-                                                10, 4096, diagnostics=observation, _experiment=experiment)
-                    observation.update(_profile_result(code, output) if profile else {
-                        "marker": code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"})
+                    code, output, _ = _run_lpac(list(_STARTUP_COMMAND), bundle, work, environment,
+                                                10, 4096, diagnostics=observation, _console_diagnostic=alternative_console,
+                                                _loader_diagnostic=_loader_diagnostic)
+                    observation["marker"] = code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"
             except (OSError, subprocess.SubprocessError) as exc:
                 observation["diagnostic_error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
     except (OSError, subprocess.SubprocessError) as exc:
@@ -961,9 +1051,8 @@ def _diagnose(*, profile: bool, console: bool = False) -> dict:
 
 
 if __name__ == "__main__":
-    entrypoints = {"--diagnose": diagnose, "--diagnose-profile": diagnose_profile, "--diagnose-console": diagnose_console}
-    if len(sys.argv) != 2 or sys.argv[1] not in entrypoints:
-        raise SystemExit("use --diagnose, --diagnose-profile or --diagnose-console for fixed Windows startup experiments")
-    result = entrypoints[sys.argv[1]]()
+    if len(sys.argv) != 2 or sys.argv[1] not in {"--diagnose-console", "--diagnose-loader"}:
+        raise SystemExit("use --diagnose-console or --diagnose-loader for fixed Windows startup diagnostics")
+    result = diagnose_console(_loader_diagnostic=sys.argv[1] == "--diagnose-loader")
     print(json.dumps(result, sort_keys=True))
     raise SystemExit(0 if result.get("strict_lpac", {}).get("marker") else 1)

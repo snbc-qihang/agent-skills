@@ -108,17 +108,18 @@ jobs:
           python - <<'PYTHON'
           import subprocess
           import sys
-          diagnostic = subprocess.run([
-              sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", "--diagnose-console",
-          ], timeout=120, check=False)
-          print("Windows startup diagnostic exit:", diagnostic.returncode, flush=True)
+          for mode in ("--diagnose-console", "--diagnose-loader"):
+              diagnostic = subprocess.run([
+                  sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", mode,
+              ], timeout=120, check=False)
+              print("Windows startup diagnostic exit:", mode, diagnostic.returncode, flush=True)
           subprocess.run([
               sys.executable, "-m", "unittest", "discover", "-s", "tests",
               "-p", "test_provider_runtime.py", "-k",
               "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work", "-v",
           ], check=True)
           PYTHON
-      - name: Windows 启动失败后的独立 Runtime 与存储回归
+      - name: Windows 启动失败后的独立 Hook、启动器与存储回归
         if: matrix.target == 'windows-x64' && failure() && steps.windows_provider_startup.outcome == 'failure'
         run: |
           python - <<'PYTHON'
@@ -126,8 +127,8 @@ jobs:
           suite = unittest.TestSuite()
           loader = unittest.TestLoader()
           for pattern in (
-              "test_compiler_adapters.py", "test_windows_hooks.py",
-              "test_native_launcher.py", "test_windows_artifact_fs.py",
+              "test_windows_hooks.py", "test_native_launcher.py",
+              "test_windows_artifact_fs.py",
           ):
               suite.addTests(loader.discover("tests", pattern=pattern))
           result = unittest.TextTestRunner(verbosity=2).run(suite)
