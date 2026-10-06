@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import ctypes
+import json
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -332,6 +336,175 @@ class ProviderSandboxContractTests(unittest.TestCase):
                     self.assertEqual("private_parent_startup_succeeded", result["registry_only"]["not_run"])
                 else:
                     self.assertEqual([None, "parent_only", "registry_only", "parent_and_registry"], modes)
+
+    def test_profile_diagnostic_payload_reports_only_six_path_categories(self) -> None:
+        environment = dict(os.environ)
+        environment.update({"LOCALAPPDATA": "C:\\fresh-profile\\AC", "TEMP": "C:\\fresh-profile\\AC\\Temp",
+                            "TMP": "C:\\private-work\\tmp", "TMPDIR": "D:\\outside-secret",
+                            "APPDATA": "C:\\private-work-lookalike", "USERPROFILE": ""})
+        process = subprocess.run([sys.executable, *windows._PROFILE_COMMAND[1:],
+                                  "C:\\private-work", "C:\\fresh-profile\\AC"],
+                                 env=environment, capture_output=True, timeout=5, check=True)
+        self.assertEqual({"marker": True, "environment": {
+            "LOCALAPPDATA": "new_profile", "TEMP": "new_profile", "TMP": "work",
+            "TMPDIR": "other", "APPDATA": "other", "USERPROFILE": "missing",
+        }}, windows._profile_result(process.returncode, process.stdout))
+        self.assertNotIn(b"fresh-profile", process.stdout)
+        self.assertNotIn(b"outside-secret", process.stdout)
+        malformed = json.dumps({"marker": "EA_LPAC_STARTUP_OK", "environment": {"TEMP": "host-secret"}}).encode()
+        self.assertEqual({"marker": False, "payload_error": "invalid_fixed_payload"},
+                         windows._profile_result(0, malformed))
+
+    def test_profile_readonly_is_only_for_exact_trusted_command_and_observer(self) -> None:
+        for command, observer in ((windows._STARTUP_COMMAND, {}), (["provider.exe"], {}),
+                                  (windows._PROFILE_COMMAND + ["external-path"], {}),
+                                  (windows._PROFILE_COMMAND, None)):
+            with self.subTest(command=command):
+                with patch.object(windows, "_Api") as api:
+                    with self.assertRaisesRegex(OSError, "fixed startup diagnostic"):
+                        windows._run_lpac(command, Path("bundle"), Path("work"), {}, 1, 4096,
+                                          diagnostics=observer, _experiment="profile_readonly")
+                api.assert_not_called()
+
+    def test_profile_readonly_changes_only_new_profile_and_seals_production(self) -> None:
+        # WinAPI preparation seam only. A deliberate stop occurs before any
+        # process creation; this does not claim a Windows startup result.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "fresh-profile"
+            profile.mkdir()
+            (profile / "Temp").mkdir()
+            for experiment in (None, "profile_readonly"):
+                with self.subTest(experiment=experiment):
+                    api = Mock()
+                    api.owner_sid.return_value = "owner"
+                    api.sid_text.return_value = "package"
+                    api.userenv.CreateAppContainerProfile.side_effect = lambda *args: setattr(args[-1]._obj, "value", 77) or 0
+                    api.userenv.GetAppContainerFolderPath.side_effect = lambda sid, output: setattr(output._obj, "value", str(profile)) or 0
+                    api.userenv.DeleteAppContainerProfile.return_value = 0
+                    with patch.object(windows, "capability", return_value={"supported": True}), \
+                         patch.object(windows, "_Api", return_value=api), \
+                         patch("ctypes.WinDLL", create=True), \
+                         patch.object(windows, "_private_runtime", side_effect=RuntimeError("stop before launch")):
+                        with self.assertRaisesRegex(RuntimeError, "stop before launch"):
+                            windows._run_lpac(list(windows._PROFILE_COMMAND), root / "bundle", root / "work", {}, 1, 4096,
+                                              diagnostics={}, _experiment=experiment)
+                    expected_sid = "package" if experiment else None
+                    self.assertEqual([(profile, "owner", expected_sid, False),
+                                      (profile / "Temp", "owner", expected_sid, False)],
+                                     [call.args for call in api.acl.call_args_list])
+                    api.kernel.CreateProcessW.assert_not_called()
+                    api.userenv.DeleteAppContainerProfile.assert_called_once()
+
+    def test_profile_startup_matrix_has_fresh_roots_zero_capabilities_and_no_qualification(self) -> None:
+        modes, roots = [], []
+        payload = json.dumps({"marker": "EA_LPAC_STARTUP_OK", "environment": {
+            name: "work" for name in ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "TEMP", "TMP", "TMPDIR")
+        }}).encode()
+
+        def launch(command, bundle, work, environment, timeout, output_limit, **options):
+            self.assertEqual(windows._PROFILE_COMMAND, command)
+            self.assertEqual((10, 4096), (timeout, output_limit))
+            self.assertEqual(work.parent, bundle.parent)
+            modes.append(options["_experiment"])
+            roots.append(str(work.parent))
+            return (0, payload, b"") if options["_experiment"] == "profile_readonly" else (0xC0000142, b"", b"")
+
+        with patch.object(windows, "capability", return_value={"supported": True, "backend": "windows-lpac"}), \
+             patch.object(windows, "_Api"), \
+             patch.object(windows, "_private_runtime", return_value=Path("python.exe")), \
+             patch.object(windows.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=payload)), \
+             patch.object(windows, "_registry_capability") as registry, \
+             patch.object(windows, "_run_lpac", side_effect=launch):
+            result = windows.diagnose_profile()
+        self.assertEqual([None, "profile_readonly"], modes)
+        self.assertEqual(2, len(set(roots)))
+        self.assertIs(result["qualified"], False)
+        self.assertIs(result["strict_lpac"]["marker"], False)
+        self.assertIs(result["new_profile_readonly"]["marker"], True)
+        registry.assert_not_called()
+
+    def test_profile_readonly_keeps_all_four_process_attributes_and_zero_capabilities(self) -> None:
+        # Inspect the SDK call boundary and deliberately stop CreateProcess.
+        # This checks configuration; real LPAC execution still needs Windows.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "fresh-profile"
+            profile.mkdir()
+            api = Mock()
+            api.check = lambda value, operation: value
+            api.owner_sid.return_value = "owner"
+            api.sid_text.return_value = "package"
+            api.userenv.CreateAppContainerProfile.side_effect = lambda *args: setattr(args[-1]._obj, "value", 77) or 0
+            api.userenv.GetAppContainerFolderPath.side_effect = lambda sid, output: setattr(output._obj, "value", str(profile)) or 0
+            api.userenv.DeleteAppContainerProfile.return_value = 0
+            api.kernel.CreateFileW.return_value = 99
+            attributes = {}
+
+            def pipe(reader, writer, security, size):
+                reader._obj.value, writer._obj.value = 101, 102
+                return 1
+
+            def initialize(pointer, count, flags, length):
+                self.assertEqual(4, count)
+                length._obj.value = 128
+                return int(bool(pointer))
+
+            def update(pointer, flags, attribute, value, size, old, length):
+                if attribute == 0x20009:
+                    self.assertEqual(ctypes.sizeof(windows._SecurityCapabilities), size)
+                    self.assertEqual((77, None, 0, 0),
+                                     (value._obj.sid, value._obj.capabilities, value._obj.count, value._obj.reserved))
+                    attributes[attribute] = "zero_capabilities"
+                elif attribute == 0x20002:
+                    self.assertEqual(3 * ctypes.sizeof(windows.HANDLE), size)
+                    attributes[attribute] = list(value._obj)
+                else:
+                    attributes[attribute] = value._obj.value
+                return 1
+
+            def create(executable, command, process_security, thread_security, inherit, flags, environment, cwd, startup, process):
+                self.assertEqual({0x20009: "zero_capabilities", 0x2000F: 1,
+                                  0x2000E: 1, 0x20002: [99, 102, 102]}, attributes)
+                self.assertEqual(0x80000 | 0x400 | 0x4 | 0x08000000, flags)
+                self.assertTrue(inherit)
+                self.assertEqual(0x100, startup._obj.startup.flags)
+                self.assertTrue(command.value.endswith(subprocess.list2cmdline([str(root / "work"), str(profile)])))
+                raise RuntimeError("stop before native process")
+
+            api.kernel.CreatePipe.side_effect = pipe
+            api.kernel.InitializeProcThreadAttributeList.side_effect = initialize
+            api.kernel.UpdateProcThreadAttribute.side_effect = update
+            api.kernel.CreateProcessW.side_effect = create
+            with patch.object(windows, "capability", return_value={"supported": True}), \
+                 patch.object(windows, "_Api", return_value=api), \
+                 patch("ctypes.WinDLL", create=True), \
+                 patch.object(windows, "_registry_capability") as registry, \
+                 patch.object(windows, "_private_runtime", return_value=root / "runtime" / "python.exe"):
+                with self.assertRaisesRegex(RuntimeError, "stop before native process"):
+                    windows._run_lpac(list(windows._PROFILE_COMMAND), root / "bundle", root / "work", {}, 1, 4096,
+                                      diagnostics={}, _experiment="profile_readonly")
+            registry.assert_not_called()
+            api.kernel.DeleteProcThreadAttributeList.assert_called_once()
+            api.userenv.DeleteAppContainerProfile.assert_called_once()
+
+    def test_profile_readonly_refuses_existing_profile_and_reparse_acl_targets(self) -> None:
+        api = Mock()
+        api.userenv.CreateAppContainerProfile.return_value = ctypes.c_int32(0x800700B7).value
+        with patch.object(windows, "capability", return_value={"supported": True}), \
+             patch.object(windows, "_Api", return_value=api):
+            with self.assertRaisesRegex(OSError, "profile creation failed"):
+                windows._run_lpac(list(windows._PROFILE_COMMAND), Path("bundle"), Path("work"), {}, 1, 4096,
+                                  diagnostics={}, _experiment="profile_readonly")
+        api.userenv.GetAppContainerFolderPath.assert_not_called()
+        api.acl.assert_not_called()
+        api.userenv.DeleteAppContainerProfile.assert_not_called()
+        native = object.__new__(windows._Api)
+        native.advapi = Mock()
+        with patch.object(windows, "_reparse", return_value=True):
+            with self.assertRaisesRegex(OSError, "ACL target is a reparse point"):
+                windows._secure_tree(native, Path("fresh-profile"), "owner", "package", False)
+        native.advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW.assert_not_called()
 
 
 if __name__ == "__main__":

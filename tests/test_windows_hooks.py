@@ -39,6 +39,25 @@ def manifest_command(root: Path) -> str:
 
 
 class WindowsHookManifestTests(unittest.TestCase):
+    def test_windows_bridge_disables_encoding_preamble_before_start(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            command = manifest_command(Path(temporary))
+        script = base64.b64decode(command.split()[-1], validate=True).decode("utf-16le")
+        # Framework Process.Start constructs an AutoFlush StreamWriter using
+        # Console.InputEncoding, which emits its preamble before BaseStream copy.
+        encoding = "[Console]::InputEncoding = New-Object Text.UTF8Encoding $false"
+        self.assertIn(encoding, script)
+        self.assertLess(script.index(encoding), script.index("$process.Start()"))
+        self.assertNotIn("StandardInputEncoding", script, "Windows PowerShell uses .NET Framework")
+
+    def test_windows_bridge_suppresses_powershell_progress_before_module_load(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            command = manifest_command(Path(temporary))
+        script = base64.b64decode(command.split()[-1], validate=True).decode("utf-16le")
+        progress = "$ProgressPreference = 'SilentlyContinue'"
+        self.assertIn(progress, script)
+        self.assertLess(script.index(progress), script.index("New-Object"))
+
     def test_new_fixture_directory_keeps_inherited_private_acl(self) -> None:
         filesystem = SimpleNamespace(open=Mock(return_value=7), O_DIRECTORY=0x4000,
             set_private_owner=Mock(), assert_private_directory=Mock(), fchmod=Mock(), close=Mock())
@@ -150,7 +169,11 @@ class WindowsHookExecutionTests(unittest.TestCase):
             # Codex's CMD runner uses raw_arg for one outer quoted command.
             command = subprocess.list2cmdline([str(program), "/c"]) + ' "' + self.command + '"'
         elif shell == "powershell":
-            command = [str(self.powershell), "-NoProfile", "-Command", self.command]
+            # -Command otherwise maps a native nonzero exit to Boolean failure
+            # (1). This runner fixture explicitly preserves native exit status;
+            # it does not establish an authenticated Agent's runner contract.
+            command = [str(self.powershell), "-NoProfile", "-Command",
+                       self.command + "; exit $LASTEXITCODE"]
         elif shell == "git-bash":
             candidates = [Path(os.environ["ENGINEERING_ASSISTANT_TEST_GIT_BASH"])] if os.environ.get(
                 "ENGINEERING_ASSISTANT_TEST_GIT_BASH") else [
@@ -206,6 +229,8 @@ class WindowsHookExecutionTests(unittest.TestCase):
             with self.subTest(shell=shell):
                 result = self.invoke(shell)
                 self.assertEqual(0, result.returncode, result.stderr)
+                self.assertTrue(result.stdout.strip().startswith(b"{"), result.stdout)
+                self.assertTrue(result.stderr.strip().startswith(b"{"), result.stderr)
                 self.assertEqual({}, json.loads(result.stdout))
                 self.assertEqual("needs_preparation", json.loads(result.stderr)["status"])
 
@@ -213,21 +238,24 @@ class WindowsHookExecutionTests(unittest.TestCase):
         from engineering_assistant.windows_process import run_bounded_windows
 
         sentinel = self.base / "子进程 survived"
-        child_code = "import pathlib,sys,time; time.sleep(2); pathlib.Path(sys.argv[1]).write_text('survived')"
+        child_code = "import pathlib,sys,time; time.sleep(60); pathlib.Path(sys.argv[1]).write_text('survived')"
         self.boot.write_text(
             "import json,os,subprocess,sys,time\n"
             f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}, {str(sentinel)!r}])\n"
             "print(json.dumps({'runtime_pid': os.getpid(), 'child_pid': child.pid}), flush=True)\n"
             "sys.stdin.buffer.read()\n"
-            "time.sleep(30)\n",
+            "time.sleep(60)\n",
             encoding="utf-8",
         )
         # This is the installer's Job boundary around the actual manifest bridge.
+        # The total ten-second budget includes PowerShell's cold initialization
+        # and Runtime execution. Both target processes remain live beyond it.
         # It does not establish an authenticated Agent's Hook deadline behavior.
         command = [str(self.powershell), *self.command.split()[1:]]
         with self.assertRaises(subprocess.TimeoutExpired) as raised:
             run_bounded_windows(command, cwd=self.base, environment=self.env,
-                timeout_seconds=1, output_limit_bytes=65536, input_data=self.payload)
+                timeout_seconds=10, output_limit_bytes=65536, input_data=self.payload)
+        self.assertTrue(raised.exception.output.strip().startswith(b"{"), raised.exception.output)
         pids = json.loads(raised.exception.output)
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.OpenProcess.restype = ctypes.c_void_p

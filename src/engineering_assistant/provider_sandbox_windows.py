@@ -99,6 +99,27 @@ class _LuidAndAttributes(ctypes.Structure):
 
 
 _STARTUP_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
+_PROFILE_ENVIRONMENT_KEYS = ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "TEMP", "TMP", "TMPDIR")
+_PROFILE_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", """
+import json, ntpath, os, sys
+def category(value):
+    if not value:
+        return 'missing'
+    path = ntpath.normcase(ntpath.normpath(value))
+    for label, root in (('work', sys.argv[1]), ('new_profile', sys.argv[2])):
+        if root:
+            root = ntpath.normcase(ntpath.normpath(root))
+            try:
+                if ntpath.commonpath((path, root)) == root:
+                    return label
+            except ValueError:
+                pass
+    return 'other'
+print(json.dumps({'marker': 'EA_LPAC_STARTUP_OK', 'environment': {
+    key: category(os.environ.get(key))
+    for key in ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')
+}}), flush=True)
+"""]
 
 
 def capability() -> dict:
@@ -318,11 +339,12 @@ def _run_lpac(
     timeout: int, output_limit: int, *, diagnostics: dict | None = None,
     _experiment: str | None = None,
 ) -> tuple[int, bytes, bytes]:
-    # Production run() has no experiment or capabilities argument. Only the
-    # independent diagnostic may launch this exact trusted print command.
+    # Production run() has no experiment or capabilities argument. Independent
+    # diagnostics can launch only their exact, fixed trusted commands.
+    expected_command = _PROFILE_COMMAND if _experiment == "profile_readonly" else _STARTUP_COMMAND
     if _experiment is not None and (_experiment not in {
-        "parent_only", "registry_only", "parent_and_registry",
-    } or command != _STARTUP_COMMAND or diagnostics is None):
+        "parent_only", "registry_only", "parent_and_registry", "profile_readonly",
+    } or command != expected_command or diagnostics is None):
         raise OSError("experimental access is restricted to the fixed startup diagnostic")
     available = capability()
     if not available["supported"]:
@@ -354,7 +376,11 @@ def _run_lpac(
         if result < 0 or not profile_folder.value:
             raise OSError("Windows LPAC profile folder could not be isolated")
         try:
-            _secure_tree(api, Path(profile_folder.value), owner, None, False)
+            profile_path = Path(profile_folder.value)
+            # Only the diagnostic's fresh, successful profile creation may
+            # receive read access. Production always removes the package grant.
+            _secure_tree(api, profile_path, owner,
+                         sandbox if _experiment == "profile_readonly" else None, False)
         finally:
             # GetAppContainerFolderPath allocates with CoTaskMemAlloc.
             ole = ctypes.WinDLL("ole32", use_last_error=True)
@@ -372,6 +398,10 @@ def _run_lpac(
         if diagnostics is not None:
             diagnostics["preparation_seconds"] = round(time.monotonic() - preparation_started, 3)
         actual_command = [str(executable), *command[1:]]
+        if command == _PROFILE_COMMAND and diagnostics is not None:
+            # These paths are used only for lexical classification by fixed
+            # trusted code. They are never accepted from a diagnostic caller.
+            actual_command.extend((str(work), str(profile_path)))
         security = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), None, True)
         readers, writers = [], []
         for _ in range(2):
@@ -657,13 +687,40 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
         api.close(token)
 
 
+def _profile_result(code: int, output: bytes) -> dict:
+    """Reject anything except the fixed script's non-sensitive categories."""
+    if not output:
+        return {"marker": False}
+    try:
+        payload = json.loads(output)
+        environment = payload["environment"]
+        if (set(payload) != {"marker", "environment"} or payload["marker"] != "EA_LPAC_STARTUP_OK"
+                or not isinstance(environment, dict) or set(environment) != set(_PROFILE_ENVIRONMENT_KEYS)
+                or any(value not in {"work", "new_profile", "missing", "other"} for value in environment.values())):
+            raise ValueError("invalid categories")
+        return {"marker": code == 0, "environment": environment}
+    except (ValueError, KeyError, TypeError):
+        return {"marker": False, "payload_error": "invalid_fixed_payload"}
+
+
 def diagnose() -> dict:
+    """Retain the original parent/registry startup experiment."""
+    return _diagnose(profile=False)
+
+
+def diagnose_profile() -> dict:
+    """Compare sealed and freshly created read-only profiles, with zero caps."""
+    return _diagnose(profile=True)
+
+
+def _diagnose(*, profile: bool) -> dict:
     """Bounded fixed-code startup experiment, explicitly not qualification."""
     available = capability()
     report = {**available, "qualified": False, "assurance": "startup_diagnostic_only",
               "execution_timeout_seconds_per_case": 10}
     if not available["supported"]:
         return report
+    command = _PROFILE_COMMAND if profile else _STARTUP_COMMAND
     started = time.monotonic()
     try:
         with tempfile.TemporaryDirectory(prefix="ea-windows-startup-") as temporary:
@@ -680,15 +737,20 @@ def diagnose() -> dict:
             copy_started = time.monotonic()
             executable = _private_runtime(base / "baseline-runtime")
             report["baseline_copy_seconds"] = round(time.monotonic() - copy_started, 3)
-            baseline = subprocess.run([str(executable), *_STARTUP_COMMAND[1:]], cwd=work, env=private_environment,
+            baseline_command = [str(executable), *command[1:]]
+            if profile:
+                baseline_command.extend((str(work), ""))
+            baseline = subprocess.run(baseline_command, cwd=work, env=private_environment,
                                       stdin=subprocess.DEVNULL, capture_output=True, timeout=10, check=False)
             report["copied_runtime_baseline"] = {"exit_code": f"0x{baseline.returncode & 0xFFFFFFFF:08X}",
-                                                "marker": baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"}
+                                                **(_profile_result(baseline.returncode, baseline.stdout) if profile else {
+                                                    "marker": baseline.returncode == 0 and baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"})}
         # Each experiment has a fresh root and profile; neither ACL changes nor
         # capabilities from one case can contaminate the next. Parent-only is
         # tried first. If it succeeds, no registry-reading case is needed.
-        cases = (("strict_lpac", None), ("parent_only", "parent_only"),
-                 ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
+        cases = (("strict_lpac", None), ("new_profile_readonly", "profile_readonly")) if profile else (
+            ("strict_lpac", None), ("parent_only", "parent_only"),
+            ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
         for name, experiment in cases:
             if experiment in {"registry_only", "parent_and_registry"} and report["parent_only"].get("marker"):
                 report[name] = {"not_run": "private_parent_startup_succeeded"}
@@ -703,9 +765,10 @@ def diagnose() -> dict:
                     work, bundle = base / "work", base / "bundle"
                     work.mkdir()
                     bundle.mkdir()
-                    code, output, _ = _run_lpac(list(_STARTUP_COMMAND), bundle, work, environment,
+                    code, output, _ = _run_lpac(list(command), bundle, work, environment,
                                                 10, 4096, diagnostics=observation, _experiment=experiment)
-                    observation["marker"] = code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"
+                    observation.update(_profile_result(code, output) if profile else {
+                        "marker": code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"})
             except (OSError, subprocess.SubprocessError) as exc:
                 observation["diagnostic_error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
     except (OSError, subprocess.SubprocessError) as exc:
@@ -715,8 +778,8 @@ def diagnose() -> dict:
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["--diagnose"]:
-        raise SystemExit("use --diagnose for the fixed Windows startup experiment")
-    result = diagnose()
+    if sys.argv[1:] not in (["--diagnose"], ["--diagnose-profile"]):
+        raise SystemExit("use --diagnose or --diagnose-profile for fixed Windows startup experiments")
+    result = diagnose_profile() if sys.argv[1:] == ["--diagnose-profile"] else diagnose()
     print(json.dumps(result, sort_keys=True))
     raise SystemExit(0 if result.get("strict_lpac", {}).get("marker") else 1)

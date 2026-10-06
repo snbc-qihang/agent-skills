@@ -18,7 +18,9 @@ def windows_hook_command() -> str:
     works with CMD, PowerShell and Git Bash; Windows PowerShell must be available
     in the Agent's environment. Process streams bypass PowerShell text encoding.
     """
-    script = """$ErrorActionPreference = 'Stop'
+    script = """$ProgressPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = New-Object Text.UTF8Encoding $false
 $start = New-Object System.Diagnostics.ProcessStartInfo
 $start.FileName = [IO.Path]::Combine($env:PLUGIN_ROOT, 'engineering-assistant', 'bin', 'ea.exe')
 $start.Arguments = 'hook'
