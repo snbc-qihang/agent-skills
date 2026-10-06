@@ -355,6 +355,208 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                 if eligible:
                     self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
                     self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
+                self.assertEqual("native_control_not_verified", result["python_startup_registry_read"]["reason"])
+
+    def test_python_startup_requires_complete_single_capability_native_difference(self) -> None:
+        report = self.comparison()
+        report["detached_registry_read"] = {**probe._observe(0, self.output()),
+            "diagnostic_only": True, "qualified": False, "capability_requested": "registryRead",
+            "requested_capability_count": 1, "requested_sid_attributes": 4, "constructed_capability_count": 1}
+        self.assertTrue(probe._python_startup_control_ready(report))
+        for name, key, value in (("baseline", "error", {}), ("detached_console", "error", {}),
+                ("detached_registry_read", "error", {}), ("detached_registry_read", "complete", False),
+                ("detached_registry_read", "exit_code", "0x00000005"),
+                ("detached_registry_read", "qualified", True), ("detached_registry_read", "diagnostic_only", 1),
+                ("detached_registry_read", "requested_capability_count", 0),
+                ("detached_registry_read", "requested_capability_count", True),
+                ("detached_registry_read", "constructed_capability_count", 2),
+                ("detached_registry_read", "constructed_capability_count", True),
+                ("detached_registry_read", "requested_sid_attributes", 0),
+                ("detached_registry_read", "capability_requested", "internetClient")):
+            changed = copy.deepcopy(report)
+            changed[name][key] = value
+            with self.subTest(name=name, key=key):
+                self.assertFalse(probe._python_startup_control_ready(changed))
+        report["detached_registry_read"]["checks"][6]["win32_error"] = "0x00000005"
+        self.assertFalse(probe._python_startup_control_ready(report))
+
+    def test_pinned_python_source_recomputes_author_contract_build_receipt_and_download_metadata(self) -> None:
+        from engineering_assistant import installation as inst
+        lock = inst.runtime_lock(ROOT, "codex", "windows-x64", "2.3.0.0-rc.1")[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = Path(temporary).resolve() / lock["python_artifact_digest"]
+            base = artifact / lock["python_artifact"]["key"]
+            base.mkdir(parents=True)
+            executable = base / "python.exe"
+            executable.write_bytes(b"trusted source fixture; never executed")
+            records = ((base / "BUILD", lock["python_artifact"]["build"].encode()),
+                       (base / "runtime-python.json", json.dumps(inst._python_receipt(lock)).encode()),
+                       (artifact / "runtime-python-downloads.json", inst.python_download_metadata(lock)))
+            for path, value in records:
+                path.write_bytes(value)
+            with patch.object(probe.sys, "base_prefix", str(base)), \
+                 patch.object(probe.sys, "executable", str(executable)), \
+                 patch.object(probe.sys, "version_info", (3, 13, 13)):
+                self.assertEqual(base, probe._pinned_python_base())
+                for path, value in records:
+                    for malformed in (b"{}", None):
+                        with self.subTest(name=path.name, missing=malformed is None):
+                            path.unlink() if malformed is None else path.write_bytes(malformed)
+                            with self.assertRaises(probe.ProbeFailure):
+                                probe._pinned_python_base()
+                            path.write_bytes(value)
+                with patch.object(probe.sys, "executable", str(base / "other.exe")), self.assertRaises(probe.ProbeFailure):
+                    probe._pinned_python_base()
+                with patch.object(probe.windows, "_reparse", side_effect=lambda path: path == executable), \
+                     self.assertRaises(probe.ProbeFailure):
+                    probe._pinned_python_base()
+
+    def test_unverified_python_source_is_not_run_and_never_derives_or_launches(self) -> None:
+        with patch.object(probe, "_pinned_python_base", side_effect=probe.ProbeFailure("runtime", "pinned_runtime_not_verified")), \
+             patch.object(probe.ctypes, "WinDLL", create=True) as derive, \
+             patch.object(probe.windows, "_run_lpac") as run, \
+             patch.object(probe, "run_bounded_windows") as baseline:
+            result = probe._python_startup_control(lambda path: path, SimpleNamespace(), "owner", {})
+        self.assertEqual("not_run", result["status"])
+        self.assertEqual("pinned_runtime_not_verified", result["reason"])
+        self.assertIs(result["qualified"], False)
+        self.assertIs(result["archive_rehashed"], False)
+        derive.assert_not_called()
+        run.assert_not_called()
+        baseline.assert_not_called()
+
+    def test_python_startup_error_affects_only_diagnostic_exit_and_never_qualification(self) -> None:
+        baseline = probe._observe(0, self.output())
+        for fifth, expected in (({"status": "not_run", "reason": "pinned_runtime_not_verified"}, 0),
+                ({"status": "observed", "detached_registry_read": {"marker": True}}, 0),
+                ({"status": "error", "error": {"error": "python_startup_incomplete"}}, 1)):
+            report = {"baseline": baseline, "strict_lpac": {}, "detached_console": {},
+                      "diagnostic_only": True, "qualified": False, "python_startup_registry_read": fifth}
+            output = io.StringIO()
+            with patch.object(probe, "diagnose", return_value=report), patch.object(probe.sys, "argv", ["fixed-probe"]), \
+                 redirect_stdout(output):
+                self.assertEqual(expected, probe.main())
+            self.assertIs(json.loads(output.getvalue())["qualified"], False)
+
+    def test_python_startup_has_fresh_copies_fixed_command_strict_marker_and_restores_factory_before_free(self) -> None:
+        marker = b"EA_LPAC_STARTUP_OK\r\n"
+        for output, code, stderr in ((marker, 0, b""), (b" EA_LPAC_STARTUP_OK\n", 0, b""),
+                (marker + b"secret", 0, b""), (marker, 1, b""), (marker, 0, b"secret")):
+            with self.subTest(code=code, exact=output == marker, stderr=bool(stderr)):
+                api, library, allocations, freed = self.capability_api()
+                api.acl = lambda *args: None
+                roots, source_checks = [], []
+                expected = Path("/pinned/source")
+                original_factory, original_runtime = probe.windows._SecurityCapabilities, probe.windows._private_runtime
+                def source():
+                    source_checks.append(True)
+                    return expected
+                def copy_runtime(path):
+                    roots.append(path)
+                    path.mkdir()
+                    (path / "python.exe").write_bytes(b"original unchanged executable")
+                    return path / "python.exe"
+                backend_finished = [False]
+                def release(address):
+                    self.assertTrue(backend_finished[0])
+                    self.assertIs(probe.windows._SecurityCapabilities, original_factory)
+                    self.assertIs(probe.windows._private_runtime, original_runtime)
+                    freed.append(address)
+                api.kernel.LocalFree = release
+                def run(command, bundle, work, environment, timeout, maximum, **options):
+                    try:
+                        self.assertEqual(probe.windows._STARTUP_COMMAND, command)
+                        self.assertEqual((10, 4096, True), (timeout, maximum, options["_console_diagnostic"]))
+                        probe.windows._private_runtime(work.parent / "runtime")
+                        security = probe.windows._SecurityCapabilities(probe.windows.HANDLE(123), None, 0, 0)
+                        self.assertEqual(1, security.count)
+                        return code, output, stderr
+                    finally:
+                        backend_finished[0] = True
+                with patch.object(probe, "_pinned_python_base", side_effect=source), \
+                     patch.object(probe.ctypes, "WinDLL", return_value=library, create=True), \
+                     patch.object(probe.windows, "_run_lpac", side_effect=run), \
+                     patch.object(probe.windows, "_secure_tree"), \
+                     patch.object(probe.windows, "_environment_block", return_value=ctypes.create_unicode_buffer("SYSTEMROOT=C:\\Windows\0\0")), \
+                     patch.object(probe, "run_bounded_windows", return_value=(0, marker)) as baseline:
+                    result = probe._python_startup_control(copy_runtime, api, "owner", {"SYSTEMROOT": "C:\\Windows"})
+                self.assertEqual(2, len(roots))
+                self.assertNotEqual(roots[0].parent, roots[1].parent)
+                self.assertGreaterEqual(len(source_checks), 5)
+                self.assertEqual([str(roots[0] / "python.exe"), *probe.windows._STARTUP_COMMAND[1:]], baseline.call_args.args[0])
+                self.assertEqual((10, 4096), (baseline.call_args.kwargs["timeout_seconds"], baseline.call_args.kwargs["output_limit_bytes"]))
+                self.assertTrue(result["copied_runtime_baseline"]["marker"])
+                self.assertEqual(output == marker and code == 0 and not stderr,
+                                 result["detached_registry_read"]["marker"])
+                self.assertEqual(output != marker or code != 0 or bool(stderr), "error" in result)
+                self.assertIs(result["qualified"], False)
+                self.assertIs(result["archive_rehashed"], False)
+                self.assertNotIn("secret", str(result))
+                self.assertCountEqual(allocations, freed)
+
+    def test_python_startup_source_drift_and_wrong_or_missing_fresh_copy_fail_without_reusing_baseline(self) -> None:
+        marker = b"EA_LPAC_STARTUP_OK\n"
+        for changed_at, copy_mode in ((2, "normal"), (3, "normal"), (4, "normal"),
+                                      (None, "missing"), (None, "wrong_path"), (None, "wrong_leaf")):
+            with self.subTest(changed_at=changed_at, copy_mode=copy_mode):
+                api, library, allocations, freed = self.capability_api()
+                api.acl = lambda *args: None
+                count, roots = [0], []
+                expected = Path("/pinned/source")
+                def source():
+                    call = count[0]
+                    count[0] += 1
+                    return Path("/changed/source") if call == changed_at else expected
+                def copy_runtime(path):
+                    roots.append(path)
+                    path.mkdir()
+                    leaf = path / ("other.exe" if copy_mode == "wrong_leaf" and len(roots) == 2 else "python.exe")
+                    leaf.write_bytes(b"fixed source copy")
+                    return leaf
+                def run(command, bundle, work, environment, timeout, maximum, **options):
+                    if copy_mode != "missing":
+                        probe.windows._private_runtime(work.parent / ("other" if copy_mode == "wrong_path" else "runtime"))
+                    probe.windows._SecurityCapabilities(probe.windows.HANDLE(123), None, 0, 0)
+                    return 0, marker, b""
+                original_factory, original_runtime = probe.windows._SecurityCapabilities, probe.windows._private_runtime
+                with patch.object(probe, "_pinned_python_base", side_effect=source), \
+                     patch.object(probe.ctypes, "WinDLL", return_value=library, create=True) as derive, \
+                     patch.object(probe.windows, "_run_lpac", side_effect=run), \
+                     patch.object(probe.windows, "_secure_tree"), \
+                     patch.object(probe.windows, "_environment_block", return_value=ctypes.create_unicode_buffer("SYSTEMROOT=C:\\Windows\0\0")), \
+                     patch.object(probe, "run_bounded_windows", return_value=(0, marker)):
+                    result = probe._python_startup_control(copy_runtime, api, "owner", {})
+                self.assertEqual("error", result["status"])
+                self.assertIn("error", result)
+                self.assertIs(result["qualified"], False)
+                self.assertNotIn("/changed/source", str(result))
+                self.assertIs(probe.windows._SecurityCapabilities, original_factory)
+                self.assertIs(probe.windows._private_runtime, original_runtime)
+                if changed_at == 2:
+                    derive.assert_not_called()
+                    self.assertEqual([], freed)
+                else:
+                    self.assertCountEqual(allocations, freed)
+
+    def test_python_failed_baseline_cannot_derive_capability_or_start_lpac(self) -> None:
+        api = SimpleNamespace(acl=lambda *args: None)
+        def original(path):
+            path.mkdir()
+            (path / "python.exe").write_bytes(b"fixed source copy")
+            return path / "python.exe"
+        with patch.object(probe, "_pinned_python_base", return_value=Path("/pinned/source")), \
+             patch.object(probe.windows, "_secure_tree"), \
+             patch.object(probe.windows, "_environment_block", return_value=ctypes.create_unicode_buffer("SYSTEMROOT=C:\\Windows\0\0")), \
+             patch.object(probe.ctypes, "WinDLL", create=True) as derive, \
+             patch.object(probe.windows, "_run_lpac") as run, \
+             patch.object(probe, "run_bounded_windows", return_value=(0, b"secret")):
+            result = probe._python_startup_control(original, api, "owner", {})
+        self.assertEqual("error", result["status"])
+        self.assertFalse(result["copied_runtime_baseline"]["marker"])
+        self.assertNotIn("detached_registry_read", result)
+        self.assertNotIn("secret", str(result))
+        derive.assert_not_called()
+        run.assert_not_called()
 
     def test_output_rejects_raw_text_paths_duplicates_reordering_and_truncation(self) -> None:
         bad = (b"user@example.org secret-token C:\\private\n", self.output() + b"secret\n",

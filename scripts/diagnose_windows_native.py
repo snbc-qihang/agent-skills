@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import sysconfig
 from pathlib import Path
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -22,6 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant import provider_sandbox_windows as windows  # noqa: E402
+from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
+from engineering_assistant.catalog import load_catalog  # noqa: E402
+from engineering_assistant.installation import (  # noqa: E402
+    MAX_CONTROL_BYTES, _check_python_base, python_download_metadata, runtime_lock,
+)
 from engineering_assistant.windows_process import run_bounded_windows  # noqa: E402
 
 
@@ -317,7 +323,7 @@ def _registry_read_control_ready(report: dict) -> bool:
 
 @contextmanager
 def _registry_read_factory(api, image_ready, observation):
-    """Only the fresh, source/PE-bound native control gets this named SID."""
+    """Only the fresh, source-bound fixed control gets this named SID."""
     original = windows._SecurityCapabilities
     if ctypes.sizeof(original) != 24 or ctypes.sizeof(windows._SidAndAttributes) != 16:
         raise ProbeFailure("capability", "abi_mismatch")
@@ -411,6 +417,109 @@ def _registry_read_control(image: bytes, original, api, owner: str, environment:
     return observation
 
 
+def _python_startup_control_ready(report: dict) -> bool:
+    observation = report.get("detached_registry_read", {})
+    zero = "0x00000000"
+    return (_registry_read_control_ready(report)
+            and all("error" not in report.get(name, {"error": None})
+                    for name in ("baseline", "detached_console", "detached_registry_read"))
+            and _fixed_results(observation, (zero,) * len(FILE_CHECKS), (zero,) * len(MODULES))
+            and observation.get("diagnostic_only") is True and observation.get("qualified") is False
+            and observation.get("capability_requested") == "registryRead"
+            and type(observation.get("requested_capability_count")) is int
+            and observation.get("requested_capability_count") == 1
+            and type(observation.get("constructed_capability_count")) is int
+            and observation.get("constructed_capability_count") == 1
+            and observation.get("requested_sid_attributes") == 4)
+
+
+def _pinned_python_base() -> Path:
+    """Recheck local download/BUILD/receipt binding, not the downloaded archive."""
+    try:
+        lock, _ = runtime_lock(ROOT, "codex", "windows-x64", load_catalog(ROOT).version)
+        base = Path(sys.base_prefix)
+        executable = base / "python.exe"
+        if (sys.version_info[:3] != (3, 13, 13) or sys.implementation.name != "cpython"
+                or bool(sysconfig.get_config_var("Py_GIL_DISABLED")) or Path(sys.executable) != executable):
+            raise ValueError("interpreter contract")
+        for directory in (base, *list(base.parents)[:4]):
+            if not stat.S_ISDIR(directory.lstat().st_mode) or windows._reparse(directory):
+                raise ValueError("base directory contract")
+        if not stat.S_ISREG(executable.lstat().st_mode) or windows._reparse(executable):
+            raise ValueError("executable contract")
+        _check_python_base(base, lock)
+        storage = ArtifactIO(base.parent, ".")
+        try:
+            metadata = storage.read_bytes_limited(MAX_CONTROL_BYTES, "runtime-python-downloads.json")
+        finally:
+            storage.close()
+        if metadata != python_download_metadata(lock):
+            raise ValueError("download metadata contract")
+        return base
+    except (OSError, ValueError):
+        raise ProbeFailure("runtime", "pinned_runtime_not_verified") from None
+
+
+def _python_startup_control(original, api, owner: str, environment: dict) -> dict:
+    observation = {"diagnostic_only": True, "qualified": False, "archive_rehashed": False}
+    started = time.monotonic()
+    try:
+        source = _pinned_python_base()
+    except ProbeFailure:
+        return {**observation, "status": "not_run", "reason": "pinned_runtime_not_verified"}
+    observation["source_contract"] = "pinned_download_metadata_build_receipt"
+    copied, expected_runtime = False, None
+    def private_runtime(destination):
+        nonlocal copied
+        if copied or destination != expected_runtime or _pinned_python_base() != source:
+            raise ProbeFailure("runtime", "startup_copy_contract_rejected")
+        executable = original(destination)
+        if (_pinned_python_base() != source or executable != destination / "python.exe"
+                or not stat.S_ISREG(executable.lstat().st_mode) or windows._reparse(executable)):
+            raise ProbeFailure("runtime", "startup_copy_contract_rejected")
+        copied = True
+        return executable
+    try:
+        for name, capped in (("copied_runtime_baseline", False), ("detached_registry_read", True)):
+            current = {}
+            observation[name] = current
+            copied = False
+            with tempfile.TemporaryDirectory(prefix="ea-pinned-python-startup-") as temporary:
+                base = Path(temporary).resolve()
+                expected_runtime = base / "runtime"
+                api.acl(base, owner, None, False)
+                bundle, work = base / "bundle", base / "work"
+                bundle.mkdir()
+                work.mkdir()
+                if capped:
+                    with _registry_read_factory(api, lambda: copied, current) as factory:
+                        with patch.object(windows, "_private_runtime", private_runtime), \
+                             patch.object(windows, "_SecurityCapabilities", factory):
+                            code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
+                                environment, 10, 4096, diagnostics=current, _console_diagnostic=True)
+                    if current["constructed_capability_count"] != 1:
+                        raise ProbeFailure("capability", "factory_not_used")
+                    current["stderr_present"] = bool(stderr)
+                else:
+                    executable = private_runtime(expected_runtime)
+                    windows._secure_tree(api, expected_runtime, owner, None, False)
+                    block = windows._environment_block(environment, work)
+                    private_environment = dict(item.split("=", 1) for item in block[:].rstrip("\0").split("\0"))
+                    code, output = run_bounded_windows([str(executable), *windows._STARTUP_COMMAND[1:]],
+                        cwd=work, environment=private_environment, timeout_seconds=10, output_limit_bytes=4096)
+                    stderr = b""
+                current.update(exit_code=f"0x{code & 0xFFFFFFFF:08X}",
+                    marker=code == 0 and not stderr and output in (b"EA_LPAC_STARTUP_OK\n", b"EA_LPAC_STARTUP_OK\r\n"))
+                if current["marker"] is not True:
+                    raise ProbeFailure("execution", "python_startup_incomplete", code & 0xFFFFFFFF)
+        observation["status"] = "observed"
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        observation["status"] = "error"
+        observation["error"] = _error_record(exc, "execution")
+    observation["total_seconds"] = round(time.monotonic() - started, 3)
+    return observation
+
+
 def diagnose() -> dict:
     available = windows.capability()
     report = {**available, "diagnostic_only": True, "qualified": False,
@@ -471,6 +580,11 @@ def diagnose() -> dict:
             observation["total_seconds"] = round(time.monotonic() - case_started, 3)
         if _registry_read_control_ready(report):
             report["detached_registry_read"] = _registry_read_control(image, original, api, owner, environment)
+        if _python_startup_control_ready(report):
+            report["python_startup_registry_read"] = _python_startup_control(original, api, owner, environment)
+        else:
+            report["python_startup_registry_read"] = {"diagnostic_only": True, "qualified": False,
+                "status": "not_run", "reason": "native_control_not_verified"}
     report["total_seconds"] = round(time.monotonic() - started, 3)
     return report
 
@@ -487,6 +601,8 @@ def main() -> int:
     baseline = report.get("baseline", {})
     valid = _fixed_results(baseline, ("0x00000000",) * len(FILE_CHECKS), ("0x00000000",) * len(MODULES))
     cases = ("strict_lpac", "detached_console") + (("detached_registry_read",) if "detached_registry_read" in report else ())
+    if "python_startup_registry_read" in report:
+        cases += ("python_startup_registry_read",)
     # This exit means a usable diagnostic control, never Provider qualification.
     return 0 if valid and all("error" not in report.get(name, {"error": None})
                              for name in cases) else 1
