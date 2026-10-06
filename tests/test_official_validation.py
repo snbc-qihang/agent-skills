@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 import os
+import socket
+import ssl
 import sys
 import tempfile
 import time
@@ -10,6 +12,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+from urllib.error import HTTPError, URLError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,9 +82,10 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.write_bytes_exclusive(b"old-corrupt", source["sha256"], source["filename"])
                 with mock.patch(
                     "engineering_assistant.official_validation._download_validator", return_value=b"wrong"
-                ):
+                ) as download:
                     with self.assertRaisesRegex(ValidationFailure, "digest"):
                         _validator_bytes(source, cache)
+                download.assert_called_once()
                 self.assertEqual(b"old-corrupt", cache.read_bytes_limited(64, source["sha256"], source["filename"]))
             finally:
                 cache.close()
@@ -109,14 +113,85 @@ class OfficialValidationTests(unittest.TestCase):
         response.__enter__.return_value = response
         response.geturl.return_value = url
         response.read.return_value = b"x" * (MAX_VALIDATOR_SCRIPT_BYTES + 1)
-        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response):
+        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response) as download:
             with self.assertRaisesRegex(ValidationFailure, "bounded|size"):
                 _download_validator(url)
+        download.assert_called_once()
         response.read.assert_called_once_with(MAX_VALIDATOR_SCRIPT_BYTES + 1)
         response.geturl.return_value = "https://example.com/replacement.py"
-        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response):
+        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response) as download:
             with self.assertRaisesRegex(ValidationFailure, "redirect"):
                 _download_validator(url)
+        download.assert_called_once()
+
+    def test_transient_download_failures_retry_then_verify_and_reuse_cache(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        payload = b"print('official')\n"
+        source = self.source(payload)
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.geturl.return_value = source["url"]
+        response.read.return_value = payload
+        failures = (
+            URLError(socket.gaierror(8, "temporary DNS resolution failure")),
+            URLError(TimeoutError("temporary connection timeout")),
+            HTTPError(source["url"], 503, "temporarily unavailable", {}, None),
+        )
+        for failure in failures:
+            with self.subTest(error=type(failure.reason).__name__), tempfile.TemporaryDirectory() as temporary:
+                cache = _open_cache(Path(temporary) / "cache", ROOT)
+                try:
+                    with mock.patch("engineering_assistant.official_validation.urlopen", side_effect=[failure, response]) as download, mock.patch(
+                        "engineering_assistant.official_validation.time.sleep"
+                    ) as sleep:
+                        self.assertEqual(payload, _validator_bytes(source, cache))
+                        self.assertEqual(payload, _validator_bytes(source, cache))
+                    self.assertEqual(2, download.call_count)
+                    for call in download.call_args_list:
+                        self.assertEqual(source["url"], call.args[0].full_url)
+                        self.assertEqual({"timeout": 30}, call.kwargs)
+                    sleep.assert_called_once_with(1)
+                finally:
+                    cache.close()
+
+    def test_download_retry_budget_exhaustion_keeps_cache_unpublished(self) -> None:
+        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+
+        source = self.source(b"official")
+        failure = URLError(socket.gaierror(8, "temporary DNS resolution failure"))
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = _open_cache(Path(temporary) / "cache", ROOT)
+            try:
+                with mock.patch("engineering_assistant.official_validation.urlopen", side_effect=failure) as download, mock.patch(
+                    "engineering_assistant.official_validation.time.sleep"
+                ) as sleep:
+                    with self.assertRaisesRegex(ValidationFailure, "failed after 3 attempt") as raised:
+                        _validator_bytes(source, cache)
+                self.assertEqual(3, download.call_count)
+                self.assertIs(failure, raised.exception.__cause__)
+                self.assertEqual([mock.call(1), mock.call(2)], sleep.call_args_list)
+                self.assertEqual([], list(cache.path(source["sha256"]).iterdir()))
+            finally:
+                cache.close()
+
+    def test_download_trust_failures_never_retry(self) -> None:
+        from engineering_assistant.official_validation import _download_validator
+
+        url = self.source(b"official")["url"]
+        failures = (
+            URLError(ssl.SSLCertVerificationError("untrusted certificate")),
+            HTTPError(url, 403, "forbidden", {}, None),
+            HTTPError(url, 404, "missing pinned revision", {}, None),
+        )
+        for failure in failures:
+            with self.subTest(error=type(failure).__name__), mock.patch(
+                "engineering_assistant.official_validation.urlopen", side_effect=failure
+            ) as download, mock.patch("engineering_assistant.official_validation.time.sleep") as sleep:
+                with self.assertRaisesRegex(ValidationFailure, "download failed"):
+                    _download_validator(url)
+                download.assert_called_once()
+                sleep.assert_not_called()
 
     def test_cache_leaf_symlink_is_rejected_without_download(self) -> None:
         from engineering_assistant.official_validation import _open_cache, _validator_bytes

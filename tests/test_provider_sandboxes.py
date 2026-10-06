@@ -168,13 +168,170 @@ class ProviderSandboxContractTests(unittest.TestCase):
         user.GetThreadDesktop.return_value = 200
         with patch("ctypes.WinDLL", create=True, return_value=user), patch.object(
             windows, "_access_mask", return_value={"allowed": True, "mask": "0x00000022"},
-        ) as access:
+        ) as access, patch.object(windows, "_traverse_privilege", return_value={"present": True, "enabled": True}):
             result = windows._startup_access(api, 12, Path("runtime"), Path("bundle"), Path("work"))
         self.assertIs(result["appcontainer"], True)
         self.assertEqual({"error": 87}, result["lpac"])
         self.assertEqual(7, access.call_count)
         self.assertEqual({"allowed": True, "mask": "0x00000022"}, result["default_desktop"])
         self.assertEqual([456, 123], [call.args[0].value for call in api.close.call_args_list])
+
+    def test_private_parent_acl_grants_only_noninheriting_traverse(self) -> None:
+        api = object.__new__(windows._Api)
+        api.advapi, api.kernel = Mock(), Mock()
+        api.check = lambda result, operation: result
+        api.advapi.SetNamedSecurityInfoW.return_value = 0
+        with patch.object(windows, "_reparse", return_value=False), patch.object(Path, "is_dir", return_value=True):
+            api.acl(Path("private-root"), "owner", "package", traverse_only=True)
+        sddl = api.advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW.call_args.args[0]
+        self.assertIn("(A;;0x00000020;;;package)", sddl)
+        self.assertNotIn("OICI;0x00000020", sddl)
+        self.assertNotIn("FRFX;;;package", sddl)
+
+    def test_production_run_never_passes_a_startup_experiment(self) -> None:
+        arguments = (["provider.exe"], Path("bundle"), Path("work"), {}, 1, 4096)
+        observer = {}
+        with patch.object(windows, "_run_lpac", create=True, return_value=(0, b"", b"")) as launch:
+            self.assertEqual((0, b"", b""), windows.run(*arguments, diagnostics=observer))
+        launch.assert_called_once_with(*arguments, diagnostics=observer)
+        with self.assertRaises(TypeError):
+            windows.run(*arguments, experiment="registry_read")
+
+    def test_startup_experiments_reject_provider_commands_before_using_winapi(self) -> None:
+        for command, experiment, observer in (
+            (["provider.exe", "scripts/search.py"], "registry_only", {}),
+            (windows._STARTUP_COMMAND, "internetClient", {}),
+            (windows._STARTUP_COMMAND, "registry_only", None),
+        ):
+            with self.subTest(experiment=experiment, command=command):
+                with patch.object(windows, "_Api") as native:
+                    with self.assertRaisesRegex(OSError, "fixed startup diagnostic"):
+                        windows._run_lpac(command, Path("bundle"), Path("work"), {}, 1, 4096,
+                                          diagnostics=observer, _experiment=experiment)
+                native.assert_not_called()
+
+    def test_registry_diagnostic_frees_individual_sids_and_arrays_after_use(self) -> None:
+        groups = (windows.HANDLE * 2)(101, 102)
+        capabilities = (windows.HANDLE * 1)(201)
+        native = Mock()
+
+        def derive(name, group_output, group_count, capability_output, capability_count):
+            self.assertEqual("registryRead", name)
+            ctypes.cast(group_output, ctypes.POINTER(ctypes.POINTER(windows.HANDLE)))[0] = groups
+            ctypes.cast(capability_output, ctypes.POINTER(ctypes.POINTER(windows.HANDLE)))[0] = capabilities
+            group_count._obj.value = 2
+            capability_count._obj.value = 1
+            return 1
+
+        native.DeriveCapabilitySidsFromName.side_effect = derive
+        api = SimpleNamespace(kernel=Mock(), check=lambda result, operation: self.assertTrue(result))
+        with patch("ctypes.WinDLL", create=True, return_value=native):
+            with windows._registry_capability(api) as entries:
+                self.assertEqual(16, ctypes.sizeof(windows._SidAndAttributes))
+                self.assertEqual(201, entries[0].sid)
+                self.assertEqual(4, entries[0].attributes)
+                api.kernel.LocalFree.assert_not_called()
+        freed = [call.args[0].value if isinstance(call.args[0], ctypes.c_void_p) else call.args[0]
+                 for call in api.kernel.LocalFree.call_args_list]
+        self.assertEqual({101, 102, 201, ctypes.addressof(groups), ctypes.addressof(capabilities)}, set(freed))
+        self.assertEqual(5, len(freed))
+
+    def test_registry_sid_lifetime_cleanup_survives_failed_launch_and_invalid_count(self) -> None:
+        for invalid_count in (False, True):
+            with self.subTest(invalid_count=invalid_count):
+                groups = (windows.HANDLE * 1)(101)
+                capabilities = (windows.HANDLE * 2)(201, 202)
+                native = Mock()
+
+                def derive(name, group_output, group_count, capability_output, capability_count):
+                    ctypes.cast(group_output, ctypes.POINTER(ctypes.POINTER(windows.HANDLE)))[0] = groups
+                    ctypes.cast(capability_output, ctypes.POINTER(ctypes.POINTER(windows.HANDLE)))[0] = capabilities
+                    group_count._obj.value = 1
+                    capability_count._obj.value = 2 if invalid_count else 1
+                    return 1
+
+                native.DeriveCapabilitySidsFromName.side_effect = derive
+                api = SimpleNamespace(kernel=Mock(), check=lambda result, operation: self.assertTrue(result))
+                with patch("ctypes.WinDLL", create=True, return_value=native):
+                    with self.assertRaisesRegex(OSError if invalid_count else RuntimeError,
+                                                "invalid SID count" if invalid_count else "failed launch"):
+                        with windows._registry_capability(api):
+                            api.kernel.LocalFree.assert_not_called()
+                            raise RuntimeError("failed launch")
+                freed = [call.args[0].value if isinstance(call.args[0], ctypes.c_void_p) else call.args[0]
+                         for call in api.kernel.LocalFree.call_args_list]
+                expected = {101, 201, ctypes.addressof(groups), ctypes.addressof(capabilities)}
+                if invalid_count:
+                    expected.add(202)
+                self.assertEqual(expected, set(freed))
+                self.assertEqual(len(expected), len(freed))
+
+    def test_traverse_privilege_query_is_read_only_and_rejects_invalid_count(self) -> None:
+        for attributes, invalid_count in ((0, False), (2, False), (2, True)):
+            with self.subTest(attributes=attributes, invalid_count=invalid_count):
+                api = SimpleNamespace(advapi=Mock(), check=lambda result, operation: self.assertTrue(result))
+
+                def lookup(system, name, luid):
+                    self.assertIsNone(system)
+                    self.assertEqual("SeChangeNotifyPrivilege", name)
+                    luid._obj.low = 42
+                    return 1
+
+                entry = windows._LuidAndAttributes(windows._Luid(42, 0), attributes)
+                data = bytes(windows.DWORD(2 if invalid_count else 1)) + bytes(entry)
+
+                def information(token, kind, buffer, size, length):
+                    self.assertEqual(3, kind)
+                    length._obj.value = len(data)
+                    if buffer is None:
+                        return 0
+                    ctypes.memmove(buffer, data, len(data))
+                    return 1
+
+                api.advapi.LookupPrivilegeValueW.side_effect = lookup
+                api.advapi.GetTokenInformation.side_effect = information
+                if invalid_count:
+                    with self.assertRaisesRegex(OSError, "privilege count is invalid"):
+                        windows._traverse_privilege(api, 123)
+                else:
+                    self.assertEqual({"present": True, "enabled": bool(attributes & 2)},
+                                     windows._traverse_privilege(api, 123))
+                api.advapi.AdjustTokenPrivileges.assert_not_called()
+
+    def test_fixed_startup_matrix_has_fresh_roots_and_never_qualifies_experiments(self) -> None:
+        # Orchestration contract only: substitute launch outcomes do not prove
+        # any Windows native startup or sandbox boundary.
+        for parent_succeeded in (False, True):
+            with self.subTest(parent_succeeded=parent_succeeded):
+                modes, roots = [], []
+
+                def launch(command, bundle, work, environment, timeout, output_limit, **options):
+                    self.assertEqual(windows._STARTUP_COMMAND, command)
+                    self.assertEqual(10, timeout)
+                    self.assertEqual(4096, output_limit)
+                    self.assertTrue(work.is_dir())
+                    self.assertEqual(work.parent, bundle.parent)
+                    mode = options["_experiment"]
+                    modes.append(mode)
+                    roots.append(str(work.parent))
+                    return (0, b"EA_LPAC_STARTUP_OK", b"") if parent_succeeded and mode == "parent_only" else (0xC0000142, b"", b"")
+
+                api = Mock()
+                baseline = SimpleNamespace(returncode=0, stdout=b"EA_LPAC_STARTUP_OK", stderr=b"")
+                with patch.object(windows, "capability", return_value={"supported": True, "backend": "windows-lpac"}), \
+                     patch.object(windows, "_Api", return_value=api), \
+                     patch.object(windows, "_private_runtime", return_value=Path("python.exe")), \
+                     patch.object(windows.subprocess, "run", return_value=baseline), \
+                     patch.object(windows, "_run_lpac", side_effect=launch):
+                    result = windows.diagnose()
+                self.assertIs(result["qualified"], False)
+                self.assertIs(result["strict_lpac"]["marker"], False)
+                self.assertEqual(len(roots), len(set(roots)))
+                if parent_succeeded:
+                    self.assertEqual([None, "parent_only"], modes)
+                    self.assertEqual("private_parent_startup_succeeded", result["registry_only"]["not_run"])
+                else:
+                    self.assertEqual([None, "parent_only", "registry_only", "parent_and_registry"], modes)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import secrets
 import selectors
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -17,7 +18,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Mapping
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .artifact_io import ArtifactIO, artifact_fs
@@ -27,6 +28,8 @@ from .validation import ValidationFailure
 PY_YAML_REQUIREMENT = "pyyaml==6.0.2"
 VALIDATOR_PYTHON_VERSION = "3.13.13"
 VALIDATOR_TIMEOUT_SECONDS = 120
+VALIDATOR_DOWNLOAD_ATTEMPTS = 3
+VALIDATOR_DOWNLOAD_TIMEOUT_SECONDS = 30
 MAX_VALIDATOR_OUTPUT_BYTES = 65_536
 MAX_VALIDATOR_SCRIPT_BYTES = 262_144
 OFFICIAL_VALIDATORS = {
@@ -100,18 +103,29 @@ def _open_cache(path: Path, repository: Path) -> ArtifactIO:
 
 def _download_validator(url: str) -> bytes:
     request = Request(url, headers={"User-Agent": "engineering-assistant-official-validator"})
-    try:
-        with urlopen(request, timeout=30) as response:
-            if response.geturl() != url:
-                raise ValidationFailure("official validator download redirected away from its pinned source")
-            payload = response.read(MAX_VALIDATOR_SCRIPT_BYTES + 1)
-    except (OSError, URLError) as exc:
-        raise ValidationFailure(
-            "official validator download failed; retry with network access or a verified cache"
-        ) from exc
-    if len(payload) > MAX_VALIDATOR_SCRIPT_BYTES:
-        raise ValidationFailure("official validator download exceeded the bounded script size")
-    return payload
+    for attempt in range(VALIDATOR_DOWNLOAD_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=VALIDATOR_DOWNLOAD_TIMEOUT_SECONDS) as response:
+                if response.geturl() != url:
+                    raise ValidationFailure("official validator download redirected away from its pinned source")
+                payload = response.read(MAX_VALIDATOR_SCRIPT_BYTES + 1)
+            if len(payload) > MAX_VALIDATOR_SCRIPT_BYTES:
+                raise ValidationFailure("official validator download exceeded the bounded script size")
+            return payload
+        except (OSError, URLError) as exc:
+            if isinstance(exc, HTTPError):
+                transient = exc.code in {429, 500, 502, 503, 504}
+                exc.close()
+            else:
+                reason = exc.reason if isinstance(exc, URLError) else exc
+                transient = isinstance(reason, (socket.gaierror, TimeoutError, ConnectionError))
+            if transient and attempt + 1 < VALIDATOR_DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt + 1)
+                continue
+            raise ValidationFailure(
+                f"official validator download failed after {attempt + 1} attempt(s); "
+                "retry with network access or a verified cache"
+            ) from exc
 
 
 def _validator_bytes(source: Mapping[str, str], cache: ArtifactIO) -> bytes:

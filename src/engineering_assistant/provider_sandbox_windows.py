@@ -23,6 +23,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 
@@ -83,6 +84,21 @@ class _ExtendedLimits(ctypes.Structure):
 
 class _GenericMapping(ctypes.Structure):
     _fields_ = [(name, DWORD) for name in ("read", "write", "execute", "all")]
+
+
+class _SidAndAttributes(ctypes.Structure):
+    _fields_ = [("sid", HANDLE), ("attributes", DWORD)]
+
+
+class _Luid(ctypes.Structure):
+    _fields_ = [("low", DWORD), ("high", ctypes.c_int32)]
+
+
+class _LuidAndAttributes(ctypes.Structure):
+    _fields_ = [("luid", _Luid), ("attributes", DWORD)]
+
+
+_STARTUP_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
 
 
 def capability() -> dict:
@@ -183,11 +199,14 @@ class _Api:
         finally:
             self.close(token)
 
-    def acl(self, path: Path, owner: str, sandbox: str | None, writable: bool = False) -> None:
+    def acl(self, path: Path, owner: str, sandbox: str | None, writable: bool = False, *, traverse_only: bool = False) -> None:
         if _reparse(path):
             raise OSError("Windows sandbox ACL target is a reparse point")
-        rights = "FA" if writable else "FRFX"
-        grant = f"(A;OICI;{rights};;;{sandbox})" if sandbox else ""
+        if traverse_only and (writable or sandbox is None or not path.is_dir()):
+            raise OSError("Windows diagnostic traverse grant needs a private directory")
+        rights = "0x00000020" if traverse_only else "FA" if writable else "FRFX"
+        inheritance = "" if traverse_only else "OICI"
+        grant = f"(A;{inheritance};{rights};;;{sandbox})" if sandbox else ""
         descriptor = HANDLE()
         # A protected DACL excludes ambient Users/All Application Packages ACEs.
         sddl = f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{owner}){grant}"
@@ -291,6 +310,20 @@ def run(
     timeout: int, output_limit: int, *, diagnostics: dict | None = None,
 ) -> tuple[int, bytes, bytes]:
     """Execute with complete LPAC attributes or fail without running Provider."""
+    return _run_lpac(command, bundle, work, environment, timeout, output_limit, diagnostics=diagnostics)
+
+
+def _run_lpac(
+    command: list[str], bundle: Path, work: Path, environment: dict[str, str],
+    timeout: int, output_limit: int, *, diagnostics: dict | None = None,
+    _experiment: str | None = None,
+) -> tuple[int, bytes, bytes]:
+    # Production run() has no experiment or capabilities argument. Only the
+    # independent diagnostic may launch this exact trusted print command.
+    if _experiment is not None and (_experiment not in {
+        "parent_only", "registry_only", "parent_and_registry",
+    } or command != _STARTUP_COMMAND or diagnostics is None):
+        raise OSError("experimental access is restricted to the fixed startup diagnostic")
     available = capability()
     if not available["supported"]:
         raise OSError(available["reason"])
@@ -304,6 +337,7 @@ def run(
     attributes_initialized = False
     job = None
     job_assigned = False
+    startup_resources = ExitStack()
     try:
         if diagnostics is not None:
             diagnostics["stage"] = "private_runtime_and_acl"
@@ -331,6 +365,10 @@ def run(
         _secure_tree(api, runtime, owner, sandbox, False)
         _secure_tree(api, bundle, owner, sandbox, False)
         _secure_tree(api, work, owner, sandbox, True)
+        if _experiment in {"parent_only", "parent_and_registry"}:
+            # Exactly this newly created private root, without inheritance or
+            # directory listing. Never re-ACL Temp, AppData, Users or ancestors.
+            api.acl(work.parent, owner, sandbox, traverse_only=True)
         if diagnostics is not None:
             diagnostics["preparation_seconds"] = round(time.monotonic() - preparation_started, 3)
         actual_command = [str(executable), *command[1:]]
@@ -357,6 +395,9 @@ def run(
         api.check(api.kernel.InitializeProcThreadAttributeList(attributes, 4, 0, ctypes.byref(length)), "process attributes")
         attributes_initialized = True
         capabilities = _SecurityCapabilities(sid, None, 0, 0)
+        if _experiment in {"registry_only", "parent_and_registry"}:
+            entries = startup_resources.enter_context(_registry_capability(api))
+            capabilities = _SecurityCapabilities(sid, ctypes.cast(entries, HANDLE), 1, 0)
         opt_out, children = DWORD(1), DWORD(1)
         inherited = (HANDLE * 3)(stdin, *writers)
         for attribute, value in (
@@ -458,8 +499,37 @@ def run(
             result = api.userenv.DeleteAppContainerProfile(name)
             if result < 0:
                 cleanup_error = OSError(f"Windows LPAC profile cleanup failed: HRESULT {result & 0xFFFFFFFF:08x}")
+        startup_resources.close()
         if cleanup_error:
             raise cleanup_error
+
+
+@contextmanager
+def _registry_capability(api: _Api):
+    """One hardcoded capability for trusted startup experiments only."""
+    library = ctypes.WinDLL("kernelbase", use_last_error=True)
+    derive = library.DeriveCapabilitySidsFromName
+    derive.restype = BOOL
+    derive.argtypes = [LPWSTR, ctypes.POINTER(ctypes.POINTER(HANDLE)), ctypes.POINTER(DWORD),
+                       ctypes.POINTER(ctypes.POINTER(HANDLE)), ctypes.POINTER(DWORD)]
+    groups, capabilities = ctypes.POINTER(HANDLE)(), ctypes.POINTER(HANDLE)()
+    group_count, capability_count = DWORD(), DWORD()
+    try:
+        api.check(derive("registryRead", ctypes.byref(groups), ctypes.byref(group_count),
+                         ctypes.byref(capabilities), ctypes.byref(capability_count)), "diagnostic registry capability")
+        if capability_count.value != 1 or not capabilities or not capabilities[0]:
+            raise OSError("Windows diagnostic registry capability returned an invalid SID count")
+        entries = (_SidAndAttributes * 1)(_SidAndAttributes(capabilities[0], 4))
+        yield entries
+    finally:
+        # These allocations belong to LocalAlloc, unlike the profile SID.
+        # Keep every capability SID alive until process exit and cleanup.
+        for array, count in ((groups, group_count.value), (capabilities, capability_count.value)):
+            if array:
+                for index in range(count):
+                    if array[index]:
+                        api.kernel.LocalFree(array[index])
+                api.kernel.LocalFree(ctypes.cast(array, HANDLE))
 
 
 def _terminate_process(api: _Api, process, job, job_assigned: bool) -> None:
@@ -491,6 +561,30 @@ def _access_mask(api: _Api, descriptor, token, mapping: tuple[int, int, int, int
                                     privileges, ctypes.byref(length), ctypes.byref(granted),
                                     ctypes.byref(allowed)), "diagnostic access check")
     return {"allowed": bool(allowed.value), "mask": f"0x{granted.value:08x}"}
+
+
+def _traverse_privilege(api: _Api, token) -> dict:
+    """Observe only SeChangeNotifyPrivilege; never changes token privileges."""
+    lookup = api.advapi.LookupPrivilegeValueW
+    lookup.restype, lookup.argtypes = BOOL, [LPWSTR, LPWSTR, ctypes.POINTER(_Luid)]
+    sought = _Luid()
+    api.check(lookup(None, "SeChangeNotifyPrivilege", ctypes.byref(sought)), "diagnostic traverse privilege lookup")
+    length = DWORD()
+    api.advapi.GetTokenInformation(token, 3, None, 0, ctypes.byref(length))
+    if length.value < 4 or length.value > 65536:
+        raise OSError("Windows diagnostic token privileges size is invalid")
+    buffer = ctypes.create_string_buffer(length.value)
+    api.check(api.advapi.GetTokenInformation(token, 3, buffer, len(buffer), ctypes.byref(length)),
+              "diagnostic token privileges")
+    count = DWORD.from_buffer_copy(buffer, 0).value
+    entry_size = ctypes.sizeof(_LuidAndAttributes)
+    if length.value > len(buffer) or count > (length.value - 4) // entry_size:
+        raise OSError("Windows diagnostic token privilege count is invalid")
+    for index in range(count):
+        entry = _LuidAndAttributes.from_buffer_copy(buffer, 4 + index * entry_size)
+        if (entry.luid.low, entry.luid.high) == (sought.low, sought.high):
+            return {"present": True, "enabled": bool(entry.attributes & 2)}
+    return {"present": False, "enabled": False}
 
 
 def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path) -> dict:
@@ -525,6 +619,10 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
                 # that observation as unavailable and still inspect objects;
                 # absence of a query result cannot assert LPAC false or true.
                 observations[name] = {"error": exc.errno}
+        try:
+            observations["traverse_privilege"] = _traverse_privilege(api, token)
+        except OSError as exc:
+            observations["traverse_privilege"] = {"error": exc.errno}
 
         def read_access(reader, mapping):
             try:
@@ -562,7 +660,8 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
 def diagnose() -> dict:
     """Bounded fixed-code startup experiment, explicitly not qualification."""
     available = capability()
-    report = {**available, "qualified": False, "assurance": "startup_diagnostic_only"}
+    report = {**available, "qualified": False, "assurance": "startup_diagnostic_only",
+              "execution_timeout_seconds_per_case": 10}
     if not available["supported"]:
         return report
     started = time.monotonic()
@@ -578,18 +677,37 @@ def diagnose() -> dict:
                            if name.upper() in {"SYSTEMROOT", "WINDIR"}}
             block = _environment_block(environment, work)
             private_environment = dict(entry.split("=", 1) for entry in block[:].rstrip("\0").split("\0"))
-            command = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
             copy_started = time.monotonic()
             executable = _private_runtime(base / "baseline-runtime")
             report["baseline_copy_seconds"] = round(time.monotonic() - copy_started, 3)
-            baseline = subprocess.run([str(executable), *command[1:]], cwd=work, env=private_environment,
+            baseline = subprocess.run([str(executable), *_STARTUP_COMMAND[1:]], cwd=work, env=private_environment,
                                       stdin=subprocess.DEVNULL, capture_output=True, timeout=10, check=False)
             report["copied_runtime_baseline"] = {"exit_code": f"0x{baseline.returncode & 0xFFFFFFFF:08X}",
                                                 "marker": baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"}
-            strict = {}
-            report["strict_lpac"] = strict
-            code, output, _ = run(command, bundle, work, environment, 10, 4096, diagnostics=strict)
-            strict["marker"] = code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"
+        # Each experiment has a fresh root and profile; neither ACL changes nor
+        # capabilities from one case can contaminate the next. Parent-only is
+        # tried first. If it succeeds, no registry-reading case is needed.
+        cases = (("strict_lpac", None), ("parent_only", "parent_only"),
+                 ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
+        for name, experiment in cases:
+            if experiment in {"registry_only", "parent_and_registry"} and report["parent_only"].get("marker"):
+                report[name] = {"not_run": "private_parent_startup_succeeded"}
+                continue
+            observation = {"experiment": experiment or "none"}
+            report[name] = observation
+            try:
+                with tempfile.TemporaryDirectory(prefix="ea-windows-startup-") as temporary:
+                    base = Path(temporary).resolve()
+                    api = _Api()
+                    api.acl(base, api.owner_sid(), None, False)
+                    work, bundle = base / "work", base / "bundle"
+                    work.mkdir()
+                    bundle.mkdir()
+                    code, output, _ = _run_lpac(list(_STARTUP_COMMAND), bundle, work, environment,
+                                                10, 4096, diagnostics=observation, _experiment=experiment)
+                    observation["marker"] = code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"
+            except (OSError, subprocess.SubprocessError) as exc:
+                observation["diagnostic_error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
     except (OSError, subprocess.SubprocessError) as exc:
         report["diagnostic_error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
     report["total_seconds"] = round(time.monotonic() - started, 3)

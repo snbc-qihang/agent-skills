@@ -102,6 +102,7 @@ jobs:
       - name: 安装开发包
         run: python -m pip install --disable-pip-version-check -e .
       - name: Windows Provider 启动检查
+        id: windows_provider_startup
         if: matrix.target == 'windows-x64'
         run: |
           python - <<'PYTHON'
@@ -116,6 +117,21 @@ jobs:
               "-p", "test_provider_runtime.py", "-k",
               "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work", "-v",
           ], check=True)
+          PYTHON
+      - name: Windows 启动失败后的独立 Runtime 与存储回归
+        if: matrix.target == 'windows-x64' && failure() && steps.windows_provider_startup.outcome == 'failure'
+        run: |
+          python - <<'PYTHON'
+          import unittest
+          suite = unittest.TestSuite()
+          loader = unittest.TestLoader()
+          for pattern in (
+              "test_compiler_adapters.py", "test_windows_hooks.py",
+              "test_native_launcher.py", "test_windows_artifact_fs.py",
+          ):
+              suite.addTests(loader.discover("tests", pattern=pattern))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          raise SystemExit(0 if result.wasSuccessful() else 1)
           PYTHON
       - name: 全量回归与不可跳过的原生安全验证
         run: |
