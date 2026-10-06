@@ -273,7 +273,8 @@ class NativeLauncherTests(unittest.TestCase):
             if os.name == "nt":
                 for alternative in alternatives:
                     for directory in (alternative.parent, alternative):
-                        with storage.open_directory(*directory.relative_to(self.data_home).parts) as descriptor:
+                        # ArtifactIO expands Windows 8.3 paths before returning directories.
+                        with storage.open_directory(*directory.relative_to(storage.project_root).parts) as descriptor:
                             artifact_fs.set_private_owner(descriptor)
         finally:
             storage.close()

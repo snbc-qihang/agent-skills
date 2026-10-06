@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import ctypes
 import json
 import os
 import re
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from contextlib import contextmanager
 from unittest.mock import patch
 
 
@@ -297,6 +299,118 @@ def _observe(code: int, output: bytes, stderr: bytes | None = None) -> dict:
     return observation
 
 
+def _fixed_results(observation: dict, check_errors: tuple[str, ...], load_errors: tuple[str, ...]) -> bool:
+    return (isinstance(observation, dict) and observation.get("entry") is True
+            and observation.get("complete") is True and observation.get("exit_code") == "0x00000000"
+            and observation.get("checks") == [{"operation": name, "module": "python313.dll", "win32_error": error}
+                                               for name, error in zip(FILE_CHECKS, check_errors)]
+            and observation.get("loads") == [{"module": name, "win32_error": error}
+                                              for name, error in zip(MODULES, load_errors)])
+
+
+def _registry_read_control_ready(report: dict) -> bool:
+    zero, denied = "0x00000000", "0x00000005"
+    return (_fixed_results(report.get("baseline", {}), (zero,) * len(FILE_CHECKS), (zero,) * len(MODULES))
+            and _fixed_results(report.get("detached_console", {}), (zero,) * 6 + (denied,),
+                               (zero,) * 22 + (denied,)))
+
+
+@contextmanager
+def _registry_read_factory(api, image_ready, observation):
+    """Only the fresh, source/PE-bound native control gets this named SID."""
+    original = windows._SecurityCapabilities
+    if ctypes.sizeof(original) != 24 or ctypes.sizeof(windows._SidAndAttributes) != 16:
+        raise ProbeFailure("capability", "abi_mismatch")
+    try:
+        function = ctypes.WinDLL("kernelbase", use_last_error=True).DeriveCapabilitySidsFromName
+    except (OSError, AttributeError):
+        raise ProbeFailure("capability", "derive_unavailable") from None
+    sid_pointer = ctypes.POINTER(windows.HANDLE)
+    function.restype = windows.BOOL
+    function.argtypes = [windows.LPWSTR, ctypes.POINTER(sid_pointer), ctypes.POINTER(windows.DWORD),
+                         ctypes.POINTER(sid_pointer), ctypes.POINTER(windows.DWORD)]
+    groups, sids = sid_pointer(), sid_pointer()
+    group_count, sid_count = windows.DWORD(), windows.DWORD()
+    try:
+        if not function("registryRead", ctypes.byref(groups), ctypes.byref(group_count),
+                        ctypes.byref(sids), ctypes.byref(sid_count)):
+            raise ProbeFailure("capability", "derive_failed", ctypes.get_last_error())
+        if group_count.value != 1 or sid_count.value != 1 or not groups or not sids or not groups[0] or not sids[0]:
+            raise ProbeFailure("capability", "invalid_sid_result")
+        # Group SIDs are not capabilities and never enter the child token.
+        # Both returned arrays/SIDs stay alive until backend finally and patch
+        # restoration have completed. This one ctypes array owns no OS heap SID.
+        capability = (windows._SidAndAttributes * 1)(windows._SidAndAttributes(sids[0], 4))
+        observation.update(capability_requested="registryRead", requested_capability_count=1,
+                           requested_sid_attributes=4, constructed_capability_count=0)
+        constructed = False
+        def factory(sid, prior, count, reserved):
+            nonlocal constructed
+            if (constructed or image_ready() is not True or type(sid) is not windows.HANDLE or not sid.value
+                    or prior is not None or type(count) is not int or count != 0
+                    or type(reserved) is not int or reserved != 0):
+                raise ProbeFailure("capability", "factory_contract_rejected")
+            result = original(sid, ctypes.cast(capability, windows.HANDLE), 1, 0)
+            constructed = True
+            observation["constructed_capability_count"] = 1
+            return result
+        yield factory
+    finally:
+        cleanup_failed = False
+        for array, count in ((groups, group_count.value), (sids, sid_count.value)):
+            if array:
+                # The documented fixed name returns one SID. Refuse oversized
+                # API results without walking unbounded or unknown memory.
+                if count <= 16:
+                    for index in range(count):
+                        if array[index] and api.kernel.LocalFree(array[index]):
+                            cleanup_failed = True
+                else:
+                    cleanup_failed = True
+                if api.kernel.LocalFree(ctypes.cast(array, windows.HANDLE).value):
+                    cleanup_failed = True
+        if cleanup_failed:
+            raise ProbeFailure("capability", "allocation_cleanup_failed")
+
+
+def _registry_read_control(image: bytes, original, api, owner: str, environment: dict) -> dict:
+    observation = {"diagnostic_only": True, "qualified": False}
+    started = time.monotonic()
+    # This flag belongs only to the fourth fresh copy, never earlier cases.
+    copied = False
+    expected_runtime = None
+    def private_runtime(destination):
+        nonlocal copied
+        if copied or destination != expected_runtime:
+            raise ProbeFailure("capability", "runtime_copy_contract_rejected")
+        executable = replace_runtime(destination, image, original)
+        copied = True
+        return executable
+    try:
+        with tempfile.TemporaryDirectory(prefix="ea-native-registry-control-") as temporary:
+            base = Path(temporary).resolve()
+            expected_runtime = base / "runtime"
+            api.acl(base, owner, None, False)
+            bundle, work = base / "bundle", base / "work"
+            bundle.mkdir()
+            work.mkdir()
+            with _registry_read_factory(api, lambda: copied, observation) as factory:
+                with patch.object(windows, "_private_runtime", private_runtime), \
+                     patch.object(windows, "_SecurityCapabilities", factory):
+                    code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
+                        environment, 10, 4096, diagnostics=observation, _console_diagnostic=True)
+            if observation["constructed_capability_count"] != 1:
+                raise ProbeFailure("capability", "factory_not_used")
+            observation.update(_observe(code, output, stderr))
+            if (observation.get("entry") is not True or observation.get("complete") is not True
+                    or observation.get("exit_code") != "0x00000000"):
+                raise ProbeFailure("execution", "native_control_incomplete", code & 0xFFFFFFFF)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        observation["error"] = _error_record(exc, "execution")
+    observation["total_seconds"] = round(time.monotonic() - started, 3)
+    return observation
+
+
 def diagnose() -> dict:
     available = windows.capability()
     report = {**available, "diagnostic_only": True, "qualified": False,
@@ -322,8 +436,8 @@ def diagnose() -> dict:
         api.acl(build, owner, None, False)
         image = build_probe(build)
         report["source_bound"] = report["image_bound"] = True
-        # Patch is scoped to this fixed source-bound fixture. No product API,
-        # executable argument or capability/ACL override is introduced.
+        # Original cases retain zero capabilities. Patches stay inside this
+        # fixed source-bound fixture, with no product API or executable option.
         def private_runtime(destination):
             return replace_runtime(destination, image, original)
         environment = {name: value for name, value in os.environ.items()
@@ -355,6 +469,8 @@ def diagnose() -> dict:
             except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 observation["error"] = _error_record(exc, "execution")
             observation["total_seconds"] = round(time.monotonic() - case_started, 3)
+        if _registry_read_control_ready(report):
+            report["detached_registry_read"] = _registry_read_control(image, original, api, owner, environment)
     report["total_seconds"] = round(time.monotonic() - started, 3)
     return report
 
@@ -369,13 +485,11 @@ def main() -> int:
                   "error": _error_record(exc)}
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     baseline = report.get("baseline", {})
-    valid = (baseline.get("exit_code") == "0x00000000" and baseline.get("complete") is True
-             and len(baseline.get("checks", [])) == len(FILE_CHECKS)
-             and all(item.get("win32_error") == "0x00000000" for item in baseline.get("checks", []))
-             and all(item["win32_error"] == "0x00000000" for item in baseline.get("loads", [])))
+    valid = _fixed_results(baseline, ("0x00000000",) * len(FILE_CHECKS), ("0x00000000",) * len(MODULES))
+    cases = ("strict_lpac", "detached_console") + (("detached_registry_read",) if "detached_registry_read" in report else ())
     # This exit means a usable diagnostic control, never Provider qualification.
     return 0 if valid and all("error" not in report.get(name, {"error": None})
-                             for name in ("strict_lpac", "detached_console")) else 1
+                             for name in cases) else 1
 
 
 if __name__ == "__main__":

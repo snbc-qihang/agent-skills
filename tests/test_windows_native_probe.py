@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
+import ctypes
 import hashlib
 import io
 import json
@@ -11,6 +13,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from contextlib import redirect_stdout
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,6 +164,197 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         self.assertEqual(1, probe.MODULES.count("python313.dll"))
         self.assertEqual("python313.dll", probe.MODULES[-1])
         self.assertLessEqual(len(self.output()), 4096)
+
+    @classmethod
+    def comparison(cls) -> dict:
+        denied = cls.output().replace(b"CHECK_RESULT actctx_core_manifest python313.dll 0x00000000",
+                                     b"CHECK_RESULT actctx_core_manifest python313.dll 0x00000005")
+        denied = denied.replace(b"RESULT python313.dll 0x00000000", b"RESULT python313.dll 0x00000005")
+        return {"baseline": probe._observe(0, cls.output()), "detached_console": probe._observe(0, denied)}
+
+    @staticmethod
+    def capability_api(*, count=1, success=True):
+        group = ctypes.create_string_buffer(16)
+        capabilities = [ctypes.create_string_buffer(16) for _ in range(count)]
+        groups = (probe.windows.HANDLE * 1)(ctypes.addressof(group))
+        sids = (probe.windows.HANDLE * count)(*(ctypes.addressof(item) for item in capabilities))
+        freed = []
+        class Derive:
+            def __call__(self, name, out_groups, group_count, out_sids, sid_count):
+                assert name == "registryRead"
+                ctypes.cast(out_groups, ctypes.POINTER(ctypes.POINTER(probe.windows.HANDLE)))[0] = groups
+                ctypes.cast(group_count, ctypes.POINTER(probe.windows.DWORD))[0] = 1
+                ctypes.cast(out_sids, ctypes.POINTER(ctypes.POINTER(probe.windows.HANDLE)))[0] = sids
+                ctypes.cast(sid_count, ctypes.POINTER(probe.windows.DWORD))[0] = count
+                return success
+        api = SimpleNamespace(kernel=SimpleNamespace(LocalFree=lambda address: freed.append(address)))
+        library = SimpleNamespace(DeriveCapabilitySidsFromName=Derive())
+        allocations = [ctypes.addressof(group), *(ctypes.addressof(item) for item in capabilities),
+                       ctypes.addressof(groups), ctypes.addressof(sids)]
+        return api, library, allocations, freed
+
+    def test_registry_difference_requires_exact_successful_control_and_known_denial(self) -> None:
+        report = self.comparison()
+        self.assertTrue(probe._registry_read_control_ready(report))
+        mutations = (("baseline", "entry", 1), ("baseline", "complete", False),
+                     ("baseline", "exit_code", "0x00000005"),
+                     ("detached_console", "entry", False), ("detached_console", "complete", False),
+                     ("detached_console", "exit_code", "0xC0000022"),
+                     ("detached_console", "checks", report["detached_console"]["checks"][::-1]),
+                     ("detached_console", "loads", report["detached_console"]["loads"][:-1]))
+        for name, key, value in mutations:
+            changed = copy.deepcopy(report)
+            changed[name][key] = value
+            with self.subTest(name=name, key=key):
+                self.assertFalse(probe._registry_read_control_ready(changed))
+        for name, sequence, index, error in (("baseline", "checks", 0, "0x00000005"),
+                ("baseline", "loads", 0, "0x00000005"), ("detached_console", "checks", 2, "0x00000005"),
+                ("detached_console", "checks", 6, "0x00000000"), ("detached_console", "checks", 6, "0x00000057"),
+                ("detached_console", "loads", 0, "0x00000005"), ("detached_console", "loads", 22, "0x00000000")):
+            changed = copy.deepcopy(report)
+            changed[name][sequence][index]["win32_error"] = error
+            self.assertFalse(probe._registry_read_control_ready(changed))
+
+    def test_registry_factory_accepts_only_verified_fresh_copy_and_one_zero_capability_construction(self) -> None:
+        api, library, allocations, freed = self.capability_api()
+        observation, copied = {}, [False]
+        original = probe.windows._SecurityCapabilities
+        with patch.object(probe.ctypes, "WinDLL", return_value=library, create=True) as load:
+            with probe._registry_read_factory(api, lambda: copied[0], observation) as factory:
+                with self.assertRaises(probe.ProbeFailure):
+                    factory(probe.windows.HANDLE(123), None, 0, 0)
+                copied[0] = True
+                for arguments in ((probe.windows.HANDLE(), None, 0, 0), (123, None, 0, 0),
+                                  (probe.windows.HANDLE(123), 1, 0, 0), (probe.windows.HANDLE(123), None, 1, 0),
+                                  (probe.windows.HANDLE(123), None, 0, 1), (probe.windows.HANDLE(123), None, False, 0)):
+                    with self.assertRaises(probe.ProbeFailure):
+                        factory(*arguments)
+                value = factory(probe.windows.HANDLE(123), None, 0, 0)
+                self.assertIsInstance(value, original)
+                self.assertEqual((123, 1, 0), (value.sid, value.count, value.reserved))
+                sid = ctypes.cast(value.capabilities, ctypes.POINTER(probe.windows._SidAndAttributes))[0]
+                self.assertEqual(allocations[1], sid.sid)
+                self.assertEqual(4, sid.attributes)
+                self.assertEqual(1, observation["constructed_capability_count"])
+                self.assertNotIn("token_capabilities_observed", observation)
+                self.assertEqual([], freed)
+                with self.assertRaises(probe.ProbeFailure):
+                    factory(probe.windows.HANDLE(123), None, 0, 0)
+            load.assert_called_once_with("kernelbase", use_last_error=True)
+        self.assertCountEqual(allocations, freed)
+        self.assertEqual(probe.windows.BOOL, library.DeriveCapabilitySidsFromName.restype)
+        self.assertEqual(5, len(library.DeriveCapabilitySidsFromName.argtypes))
+
+    def test_registry_derivation_failure_and_extra_capability_free_all_allocations_without_constructing(self) -> None:
+        for count, success in ((1, False), (2, True)):
+            with self.subTest(count=count, success=success):
+                api, library, allocations, freed = self.capability_api(count=count, success=success)
+                observation = {}
+                with patch.object(probe.ctypes, "WinDLL", return_value=library, create=True), \
+                     patch.object(probe.ctypes, "get_last_error", return_value=5, create=True):
+                    with self.assertRaises(probe.ProbeFailure):
+                        with probe._registry_read_factory(api, lambda: True, observation):
+                            self.fail("invalid capability result must not yield a factory")
+                self.assertCountEqual(allocations, freed)
+                self.assertNotIn("constructed_capability_count", observation)
+
+    def test_registry_case_requires_its_own_runtime_path_and_complete_native_output(self) -> None:
+        for wrong_path, code, data, expected in ((True, 0, self.output(), "runtime_copy_contract_rejected"),
+                (False, 1, b"", "native_control_incomplete"), (False, 0, b"secret\n", "native_control_incomplete"),
+                (False, 0, self.output()[:-5], "native_control_incomplete"),
+                (False, 0, self.output(), None)):
+            with self.subTest(wrong_path=wrong_path, code=code, expected=expected):
+                api, library, allocations, freed = self.capability_api()
+                api.acl = lambda *args: None
+                def run(command, bundle, work, environment, timeout, maximum, **options):
+                    destination = work.parent / ("other-runtime" if wrong_path else "runtime")
+                    probe.windows._private_runtime(destination)
+                    probe.windows._SecurityCapabilities(probe.windows.HANDLE(123), None, 0, 0)
+                    return code, data, b""
+                original = probe.windows._SecurityCapabilities
+                with patch.object(probe.ctypes, "WinDLL", return_value=library, create=True), \
+                     patch.object(probe, "replace_runtime", side_effect=lambda destination, image, prior: destination / "python.exe"), \
+                     patch.object(probe.windows, "_run_lpac", side_effect=run):
+                    result = probe._registry_read_control(self.image(), probe.windows._private_runtime, api, "owner", {})
+                if expected:
+                    self.assertEqual(expected, result["error"]["error"])
+                else:
+                    self.assertNotIn("error", result)
+                self.assertNotIn("secret", str(result))
+                self.assertIs(result["qualified"], False)
+                self.assertIs(probe.windows._SecurityCapabilities, original)
+                self.assertEqual(0, original(probe.windows.HANDLE(123), None, 0, 0).count)
+                self.assertCountEqual(allocations, freed)
+
+    def test_registry_run_failure_restores_both_patches_before_sid_cleanup_and_is_not_a_negative_result(self) -> None:
+        for copied in (False, True):
+            with self.subTest(copied=copied):
+                api, library, allocations, freed = self.capability_api()
+                api.acl = lambda *args: None
+                original_factory, original_runtime = probe.windows._SecurityCapabilities, probe.windows._private_runtime
+                backend_finished = [False]
+                def release(address):
+                    self.assertTrue(backend_finished[0])
+                    self.assertIs(original_factory, probe.windows._SecurityCapabilities)
+                    self.assertIs(original_runtime, probe.windows._private_runtime)
+                    freed.append(address)
+                api.kernel.LocalFree = release
+                def run(command, bundle, work, environment, timeout, maximum, **options):
+                    self.assertEqual(probe.windows._STARTUP_COMMAND, command)
+                    self.assertEqual((10, 4096, True), (timeout, maximum, options["_console_diagnostic"]))
+                    try:
+                        if copied:
+                            probe.windows._private_runtime(work.parent / "runtime")
+                        probe.windows._SecurityCapabilities(probe.windows.HANDLE(123), None, 0, 0)
+                        raise OSError(5, "secret registry value")
+                    finally:
+                        backend_finished[0] = True
+                with patch.object(probe.ctypes, "WinDLL", return_value=library, create=True), \
+                     patch.object(probe, "replace_runtime", side_effect=lambda destination, image, original: destination / "python.exe"), \
+                     patch.object(probe.windows, "_run_lpac", side_effect=run):
+                    result = probe._registry_read_control(self.image(), original_runtime, api, "owner", {})
+                self.assertIn("error", result)
+                self.assertNotIn("secret", str(result))
+                self.assertNotIn("capability_ineffective", result)
+                self.assertIs(result["qualified"], False)
+                self.assertCountEqual(allocations, freed)
+
+    def test_registry_case_is_only_appended_after_zero_capability_controls_and_cannot_repair_their_result(self) -> None:
+        for eligible in (False, True):
+            with self.subTest(eligible=eligible):
+                api = SimpleNamespace(acl=lambda *args: None, owner_sid=lambda: "owner")
+                expected = self.comparison()
+                calls = []
+                def original(destination):
+                    destination.mkdir()
+                    (destination / "python.exe").write_bytes(b"original")
+                    return destination / "python.exe"
+                def run(command, bundle, work, environment, timeout, maximum, **options):
+                    self.assertEqual(0, probe.windows._SecurityCapabilities(probe.windows.HANDLE(123), None, 0, 0).count)
+                    calls.append(options["_console_diagnostic"])
+                    data = self.output()
+                    if eligible and options["_console_diagnostic"]:
+                        data = data.replace(b"CHECK_RESULT actctx_core_manifest python313.dll 0x00000000", b"CHECK_RESULT actctx_core_manifest python313.dll 0x00000005")
+                        data = data.replace(b"RESULT python313.dll 0x00000000", b"RESULT python313.dll 0x00000005")
+                    return 0, data, b""
+                with patch.object(probe.windows, "capability", return_value={"supported": True}), \
+                     patch.object(probe.windows, "_host_information", return_value={}), \
+                     patch.object(probe.windows, "_Api", return_value=api), \
+                     patch.object(probe.windows, "_private_runtime", side_effect=original), \
+                     patch.object(probe.windows, "_run_lpac", side_effect=run), \
+                     patch.object(probe.windows, "_secure_tree"), \
+                     patch.object(probe.windows, "_environment_block", return_value=ctypes.create_unicode_buffer("SYSTEMROOT=C:\\Windows\0\0")), \
+                     patch.object(probe.sys, "version_info", (3, 13, 13)), \
+                     patch.object(probe, "build_probe", return_value=self.image()), \
+                     patch.object(probe, "run_bounded_windows", return_value=(0, self.output())), \
+                     patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth:
+                    result = probe.diagnose()
+                self.assertEqual([False, True], calls)
+                self.assertIs(result["qualified"], False)
+                self.assertEqual(int(eligible), fourth.call_count)
+                if eligible:
+                    self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
+                    self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
 
     def test_output_rejects_raw_text_paths_duplicates_reordering_and_truncation(self) -> None:
         bad = (b"user@example.org secret-token C:\\private\n", self.output() + b"secret\n",
