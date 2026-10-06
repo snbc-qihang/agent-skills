@@ -109,7 +109,7 @@ jobs:
           import subprocess
           import sys
           diagnostic = subprocess.run([
-              sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", "--diagnose-profile",
+              sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", "--diagnose-console",
           ], timeout=120, check=False)
           print("Windows startup diagnostic exit:", diagnostic.returncode, flush=True)
           subprocess.run([

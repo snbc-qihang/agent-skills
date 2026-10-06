@@ -153,6 +153,9 @@ class ProviderSandboxContractTests(unittest.TestCase):
         def token_information(token, kind, value, size, length):
             if kind == 46:
                 return 0
+            if value is None:
+                length._obj.value = 4
+                return 0
             value._obj.value = 1
             length._obj.value = 4
             return 1
@@ -505,6 +508,279 @@ class ProviderSandboxContractTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "ACL target is a reparse point"):
                 windows._secure_tree(native, Path("fresh-profile"), "owner", "package", False)
         native.advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW.assert_not_called()
+
+    def test_windows_host_report_distinguishes_server_from_workstation_without_filtering(self) -> None:
+        for product_type, host_class in ((1, "workstation"), (2, "domain_controller"), (3, "server"), (7, "other")):
+            with self.subTest(product_type=product_type), patch.object(
+                windows.sys, "getwindowsversion", create=True,
+                return_value=SimpleNamespace(product_type=product_type),
+            ):
+                self.assertEqual({"product_type": product_type, "host_class": host_class}, windows._host_information())
+
+    def test_windows_session_observation_queries_without_changing_child_token(self) -> None:
+        api = SimpleNamespace(kernel=Mock(), advapi=Mock(), check=lambda value, operation: value)
+        api.kernel.GetCurrentProcessId.return_value = 101
+
+        def parent(pid, session):
+            self.assertEqual(101, pid)
+            session._obj.value = 0
+            return 1
+
+        def child(token, kind, value, size, length):
+            self.assertEqual((123, 12, 4), (token, kind, size))
+            value._obj.value = 0
+            length._obj.value = 4
+            return 1
+
+        api.kernel.ProcessIdToSessionId.side_effect = parent
+        api.advapi.GetTokenInformation.side_effect = child
+        self.assertEqual({"parent": 0, "child": 0, "same": True}, windows._session_information(api, 123))
+        api.advapi.SetTokenInformation.assert_not_called()
+
+    def test_windows_station_classification_never_reports_the_object_name(self) -> None:
+        for name, flags, expected in (("WinSta0", 1, "winsta0"), ("Service-user-secret$", 0, "service_or_other")):
+            with self.subTest(name=name):
+                user = Mock()
+                api = SimpleNamespace(check=lambda value, operation: value)
+
+                def information(handle, kind, buffer, size, length):
+                    self.assertEqual(123, handle)
+                    if kind == 2:
+                        length._obj.value = (len(name) + 1) * ctypes.sizeof(ctypes.c_wchar)
+                        if buffer is None:
+                            return 0
+                        self.assertGreaterEqual(size, length._obj.value)
+                        buffer.value = name
+                    else:
+                        self.assertEqual(1, kind)
+                        self.assertEqual(12, size)
+                        buffer._obj.flags = flags
+                        length._obj.value = 12
+                    return 1
+
+                user.GetUserObjectInformationW.side_effect = information
+                result = windows._station_information(api, user, 123)
+                self.assertEqual({"class": expected, "visible": bool(flags & 1)}, result)
+                self.assertNotIn(name, json.dumps(result))
+
+    def test_windows_integrity_token_sid_is_bounded_before_it_is_read(self) -> None:
+        for outside in (False, True):
+            with self.subTest(outside=outside):
+                api = SimpleNamespace(advapi=Mock(), check=lambda value, operation: value)
+                size = ctypes.sizeof(windows._SidAndAttributes) + 12
+
+                def information(token, kind, buffer, capacity, length):
+                    self.assertEqual((123, 25), (token, kind))
+                    length._obj.value = size
+                    if buffer is None:
+                        return 0
+                    sid = ctypes.addressof(buffer) + (capacity + 1 if outside else ctypes.sizeof(windows._SidAndAttributes))
+                    entry = windows._SidAndAttributes(sid, 0x20)
+                    ctypes.memmove(buffer, bytes(entry), ctypes.sizeof(entry))
+                    if not outside:
+                        ctypes.memmove(sid, b"\x01\x01\0\0\0\0\0\x10" + bytes(windows.DWORD(0x1000)), 12)
+                    return 1
+
+                api.advapi.GetTokenInformation.side_effect = information
+                if outside:
+                    with self.assertRaisesRegex(OSError, "integrity SID.*outside"):
+                        windows._token_integrity(api, 123)
+                else:
+                    self.assertEqual({"rid": 0x1000, "level": "low"}, windows._token_integrity(api, 123))
+                api.advapi.SetTokenInformation.assert_not_called()
+
+    def test_windows_mic_query_requests_only_label_and_preserves_borrowed_handles(self) -> None:
+        api = SimpleNamespace(advapi=Mock(), kernel=Mock(), close=Mock(), check=lambda value, operation: value)
+        user = Mock()
+        # Self-relative descriptor header + ACL header + one mandatory-label ACE.
+        data = b"\x01\0\x10\x80" + b"\0" * 8 + bytes(windows.DWORD(20)) + b"\0" * 4
+        data += b"\x02\0\x1c\0\x01\0\0\0"
+        data += b"\x11\0\x14\0" + bytes(windows.DWORD(1))
+        data += b"\x01\x01\0\0\0\0\0\x10" + bytes(windows.DWORD(0x2000))
+
+        def descriptor(handle, information, buffer, capacity, length):
+            self.assertEqual(123, handle)
+            self.assertEqual(0x10, information._obj.value)
+            length._obj.value = len(data)
+            if buffer is None:
+                return 0
+            ctypes.memmove(buffer, data, len(data))
+            return 1
+
+        def sacl(buffer, present, output, defaulted):
+            present._obj.value = 1
+            output._obj.value = ctypes.addressof(buffer) + 20
+            return 1
+
+        def acl_information(pointer, output, size, kind):
+            self.assertEqual((12, 2), (size, kind))
+            output._obj.count, output._obj.used = 1, 28
+            return 1
+
+        api.advapi.GetSecurityDescriptorSacl.side_effect = sacl
+        api.advapi.GetAclInformation.side_effect = acl_information
+        api.advapi.GetAce.side_effect = lambda pointer, index, output: setattr(output._obj, "value", pointer.value + 8) or 1
+        user.GetUserObjectSecurity.side_effect = descriptor
+        self.assertEqual({"label_present": True, "rid": 0x2000, "level": "medium", "policy_mask": "0x00000001"},
+                         windows._object_integrity(api, user, 123))
+        api.close.assert_not_called()
+        api.kernel.LocalFree.assert_not_called()
+        api.advapi.SetSecurityInfo.assert_not_called()
+
+    def test_windows_mic_inherit_only_and_absent_labels_do_not_invent_a_policy(self) -> None:
+        self.assertEqual({"label_present": False, "level": "implicit_medium"},
+                         windows._descriptor_integrity(SimpleNamespace(advapi=Mock()), ctypes.create_string_buffer(
+                             b"\x01\0\0\x80" + b"\0" * 16), 20))
+        for sid in (b"\x01\x02\0\0\0\0\0\x10" + b"\0" * 4,
+                    b"\x01\x01\0\0\0\0\0\x05" + b"\0" * 4):
+            with self.assertRaisesRegex(OSError, "invalid mandatory integrity SID"):
+                windows._integrity_sid(sid)
+
+    def test_windows_observation_failures_preserve_other_available_facts(self) -> None:
+        def checked(value, operation):
+            if not value:
+                raise OSError(5, operation)
+            return value
+
+        api = SimpleNamespace(kernel=Mock(), advapi=Mock(), check=checked)
+        api.kernel.ProcessIdToSessionId.side_effect = lambda pid, output: setattr(output._obj, "value", 0) or 1
+        api.advapi.GetTokenInformation.return_value = 0
+        self.assertEqual({"parent": 0, "child": {"unavailable": True, "error": 5},
+                          "same": {"unavailable": True}}, windows._session_information(api, 123))
+        user = Mock()
+
+        def information(handle, kind, output, size, length):
+            if kind == 2:
+                length._obj.value = 4097
+                return 0
+            output._obj.flags = 1
+            length._obj.value = 12
+            return 1
+
+        user.GetUserObjectInformationW.side_effect = information
+        result = windows._station_information(api, user, 123)
+        self.assertIs(result["class"]["unavailable"], True)
+        self.assertIs(result["visible"], True)
+
+    def test_windows_mic_rejects_out_of_bounds_sdk_pointers_and_ignores_inherit_only(self) -> None:
+        api = SimpleNamespace(advapi=Mock(), check=lambda value, operation: value)
+        data = b"\x01\0\x10\x80" + b"\0" * 8 + bytes(windows.DWORD(20)) + b"\0" * 4
+        data += b"\x02\0\x1c\0\x01\0\0\0"
+        data += b"\x11\x08\x14\0" + bytes(windows.DWORD(1))
+        data += b"\x01\x01\0\0\0\0\0\x10" + bytes(windows.DWORD(0x2000))
+        buffer = ctypes.create_string_buffer(data)
+
+        def sacl(descriptor, present, pointer, defaulted):
+            present._obj.value = 1
+            pointer._obj.value = ctypes.addressof(descriptor) + 20
+            return 1
+
+        def information(pointer, output, size, kind):
+            output._obj.count, output._obj.used = 1, 28
+            return 1
+
+        api.advapi.GetSecurityDescriptorSacl.side_effect = sacl
+        api.advapi.GetAclInformation.side_effect = information
+        api.advapi.GetAce.side_effect = lambda pointer, index, output: setattr(output._obj, "value", pointer.value + 8) or 1
+        self.assertEqual({"label_present": False, "level": "implicit_medium"},
+                         windows._descriptor_integrity(api, buffer, len(data)))
+        api.advapi.GetAce.side_effect = lambda pointer, index, output: setattr(output._obj, "value", ctypes.addressof(buffer) + len(data)) or 1
+        with self.assertRaisesRegex(OSError, "label ACE is outside"):
+            windows._descriptor_integrity(api, buffer, len(data))
+        api.advapi.GetSecurityDescriptorSacl.side_effect = lambda descriptor, present, pointer, defaulted: setattr(present._obj, "value", 1) or setattr(pointer._obj, "value", ctypes.addressof(descriptor) + len(data)) or 1
+        with self.assertRaisesRegex(OSError, "label ACL is outside"):
+            windows._descriptor_integrity(api, buffer, len(data))
+
+    def test_windows_console_diagnostic_changes_only_no_window_to_detached_process(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / "fresh-profile"
+            profile.mkdir()
+            for experiment, console_flag in ((None, 0x08000000), ("detached_console", 0x8)):
+                with self.subTest(experiment=experiment):
+                    api = Mock()
+                    api.check = lambda value, operation: value
+                    api.owner_sid.return_value = "owner"
+                    api.sid_text.return_value = "package"
+                    api.userenv.CreateAppContainerProfile.side_effect = lambda *args: setattr(args[-1]._obj, "value", 77) or 0
+                    api.userenv.GetAppContainerFolderPath.side_effect = lambda sid, output: setattr(output._obj, "value", str(profile)) or 0
+                    api.userenv.DeleteAppContainerProfile.return_value = 0
+                    api.kernel.CreateFileW.return_value = 99
+                    inherited, count = [], [100]
+
+                    def pipe(reader, writer, security, size):
+                        count[0] += 2
+                        reader._obj.value, writer._obj.value = count[0] - 1, count[0]
+                        return 1
+
+                    def initialize(pointer, amount, flags, length):
+                        self.assertEqual(4, amount)
+                        length._obj.value = 128
+                        return 1
+
+                    def attribute(pointer, flags, kind, value, size, old, length):
+                        if kind == 0x20009:
+                            self.assertEqual((None, 0), (value._obj.capabilities, value._obj.count))
+                        elif kind == 0x20002:
+                            inherited.extend(value._obj)
+                        else:
+                            self.assertEqual(1, value._obj.value)
+                        return 1
+
+                    def create(executable, command, process_security, thread_security, inherit, flags, environment, cwd, startup, process):
+                        self.assertEqual(0x80000 | 0x400 | 0x4 | console_flag, flags)
+                        self.assertFalse(flags & 0x10)  # CREATE_NEW_CONSOLE
+                        self.assertEqual([99, 102, 104], inherited)
+                        self.assertEqual((99, 102, 104), (startup._obj.startup.stdin, startup._obj.startup.stdout, startup._obj.startup.stderr))
+                        self.assertEqual(0x100, startup._obj.startup.flags)
+                        self.assertTrue(inherit)
+                        raise RuntimeError("stop before native console startup")
+
+                    api.kernel.CreatePipe.side_effect = pipe
+                    api.kernel.InitializeProcThreadAttributeList.side_effect = initialize
+                    api.kernel.UpdateProcThreadAttribute.side_effect = attribute
+                    api.kernel.CreateProcessW.side_effect = create
+                    with patch.object(windows, "capability", return_value={"supported": True}), \
+                         patch.object(windows, "_Api", return_value=api), \
+                         patch("ctypes.WinDLL", create=True), \
+                         patch.object(windows, "_registry_capability") as registry, \
+                         patch.object(windows, "_secure_tree") as secure, \
+                         patch.object(windows, "_private_runtime", return_value=root / "runtime" / "python.exe"):
+                        with self.assertRaisesRegex(RuntimeError, "stop before native console startup"):
+                            windows._run_lpac(list(windows._STARTUP_COMMAND), root / "bundle", root / "work", {}, 1, 4096,
+                                              diagnostics={}, _experiment=experiment)
+                    self.assertEqual((api, profile, "owner", None, False), secure.call_args_list[0].args)
+                    registry.assert_not_called()
+                    api.kernel.DeleteProcThreadAttributeList.assert_called_once()
+                    api.userenv.DeleteAppContainerProfile.assert_called_once()
+
+    def test_windows_console_diagnostic_refuses_untrusted_commands_and_has_two_fresh_cases(self) -> None:
+        for command, observer in ((["provider.exe"], {}), (windows._STARTUP_COMMAND, None), (windows._PROFILE_COMMAND, {})):
+            with patch.object(windows, "_Api") as api:
+                with self.assertRaisesRegex(OSError, "fixed startup diagnostic"):
+                    windows._run_lpac(command, Path("bundle"), Path("work"), {}, 1, 4096,
+                                      diagnostics=observer, _experiment="detached_console")
+            api.assert_not_called()
+        modes, roots = [], []
+
+        def launch(command, bundle, work, environment, timeout, output_limit, **options):
+            self.assertEqual(windows._STARTUP_COMMAND, command)
+            self.assertEqual((10, 4096), (timeout, output_limit))
+            modes.append(options["_experiment"])
+            roots.append(str(work.parent))
+            return (0, b"EA_LPAC_STARTUP_OK", b"") if options["_experiment"] else (0xC0000142, b"", b"")
+
+        with patch.object(windows, "capability", return_value={"supported": True, "backend": "windows-lpac"}), \
+             patch.object(windows, "_Api"), \
+             patch.object(windows, "_private_runtime", return_value=Path("python.exe")), \
+             patch.object(windows.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=b"EA_LPAC_STARTUP_OK")), \
+             patch.object(windows, "_run_lpac", side_effect=launch):
+            result = windows.diagnose_console()
+        self.assertEqual([None, "detached_console"], modes)
+        self.assertEqual(2, len(set(roots)))
+        self.assertIs(result["qualified"], False)
+        self.assertIs(result["strict_lpac"]["marker"], False)
+        self.assertIs(result["detached_console"]["marker"], True)
 
 
 if __name__ == "__main__":

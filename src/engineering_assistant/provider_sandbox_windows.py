@@ -98,6 +98,18 @@ class _LuidAndAttributes(ctypes.Structure):
     _fields_ = [("luid", _Luid), ("attributes", DWORD)]
 
 
+class _UserObjectFlags(ctypes.Structure):
+    _fields_ = [("inherit", BOOL), ("reserved", BOOL), ("flags", DWORD)]
+
+
+class _AclSizeInformation(ctypes.Structure):
+    _fields_ = [(name, DWORD) for name in ("count", "used", "free")]
+
+
+class _AceHeader(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_uint8), ("flags", ctypes.c_uint8), ("size", ctypes.c_uint16)]
+
+
 _STARTUP_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
 _PROFILE_ENVIRONMENT_KEYS = ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "TEMP", "TMP", "TMPDIR")
 _PROFILE_COMMAND = ["python.exe", "-I", "-B", "-S", "-c", """
@@ -343,7 +355,7 @@ def _run_lpac(
     # diagnostics can launch only their exact, fixed trusted commands.
     expected_command = _PROFILE_COMMAND if _experiment == "profile_readonly" else _STARTUP_COMMAND
     if _experiment is not None and (_experiment not in {
-        "parent_only", "registry_only", "parent_and_registry", "profile_readonly",
+        "parent_only", "registry_only", "parent_and_registry", "profile_readonly", "detached_console",
     } or command != expected_command or diagnostics is None):
         raise OSError("experimental access is restricted to the fixed startup diagnostic")
     available = capability()
@@ -444,9 +456,13 @@ def _run_lpac(
         startup.attributes = attributes
         environment_block = _environment_block(environment, work)
         command_line = ctypes.create_unicode_buffer(subprocess.list2cmdline(actual_command))
-        flags = 0x80000 | 0x400 | 0x4 | 0x08000000
+        # Swap only this fixed-code experiment's console mode. Production keeps
+        # CREATE_NO_WINDOW; DETACHED_PROCESS does not allocate/inherit a console.
+        console_flag = 0x8 if _experiment == "detached_console" else 0x08000000
+        flags = 0x80000 | 0x400 | 0x4 | console_flag
         if diagnostics is not None:
             diagnostics["stage"] = "create_lpac_process"
+            diagnostics["console_mode"] = "detached" if _experiment == "detached_console" else "no_window"
         api.check(api.kernel.CreateProcessW(str(executable), command_line, None, None, True, flags, environment_block, str(work), ctypes.byref(startup), ctypes.byref(process)), "LPAC process creation")
         handles.extend([process.process, process.thread])
         if diagnostics is not None:
@@ -617,6 +633,147 @@ def _traverse_privilege(api: _Api, token) -> dict:
     return {"present": False, "enabled": False}
 
 
+def _host_information() -> dict:
+    try:
+        product_type = int(sys.getwindowsversion().product_type)
+        return {"product_type": product_type, "host_class": {
+            1: "workstation", 2: "domain_controller", 3: "server",
+        }.get(product_type, "other")}
+    except AttributeError:
+        return {"product_type": None, "host_class": "unavailable"}
+
+
+def _session_information(api: _Api, token) -> dict:
+    observations = {}
+    for name in ("parent", "child"):
+        value, length = DWORD(), DWORD()
+        try:
+            if name == "parent":
+                api.check(api.kernel.ProcessIdToSessionId(api.kernel.GetCurrentProcessId(), ctypes.byref(value)),
+                          "diagnostic parent session")
+            else:
+                api.check(api.advapi.GetTokenInformation(token, 12, ctypes.byref(value), 4, ctypes.byref(length)),
+                          "diagnostic child session")
+                if length.value != 4:
+                    raise OSError("Windows diagnostic child session size is invalid")
+            observations[name] = value.value
+        except OSError as exc:
+            observations[name] = {"unavailable": True, "error": exc.errno}
+    observations["same"] = (observations["parent"] == observations["child"]
+                            if all(isinstance(value, int) for value in observations.values()) else {"unavailable": True})
+    return observations
+
+
+def _station_information(api: _Api, user, handle) -> dict:
+    observations = {}
+    try:
+        length = DWORD()
+        user.GetUserObjectInformationW(handle, 2, None, 0, ctypes.byref(length))
+        width = ctypes.sizeof(ctypes.c_wchar)
+        if length.value < width or length.value > 4096 or length.value % width:
+            raise OSError("Windows diagnostic window station name size is invalid")
+        buffer = ctypes.create_unicode_buffer(length.value // width)
+        api.check(user.GetUserObjectInformationW(handle, 2, buffer, ctypes.sizeof(buffer), ctypes.byref(length)),
+                  "diagnostic window station category")
+        if length.value > ctypes.sizeof(buffer) or length.value < width or length.value % width or buffer[length.value // width - 1] != "\0":
+            raise OSError("Windows diagnostic window station name is invalid")
+        observations["class"] = "winsta0" if buffer.value.casefold() == "winsta0" else "service_or_other"
+    except OSError as exc:
+        observations["class"] = {"unavailable": True, "error": exc.errno}
+    try:
+        flags, length = _UserObjectFlags(), DWORD()
+        api.check(user.GetUserObjectInformationW(handle, 1, ctypes.byref(flags), ctypes.sizeof(flags), ctypes.byref(length)),
+                  "diagnostic window station visibility")
+        if length.value != ctypes.sizeof(flags):
+            raise OSError("Windows diagnostic window station flags size is invalid")
+        observations["visible"] = bool(flags.flags & 1)
+    except OSError as exc:
+        observations["visible"] = {"unavailable": True, "error": exc.errno}
+    return observations
+
+
+def _integrity_sid(data: bytes) -> dict:
+    # Mandatory-label SIDs have revision 1, authority 16 and one 32-bit RID.
+    # Only the RID and a fixed category leave this function, never a SID string.
+    if len(data) != 12 or data[:8] != b"\x01\x01\0\0\0\0\0\x10":
+        raise OSError("Windows diagnostic has an invalid mandatory integrity SID")
+    rid = int.from_bytes(data[8:12], "little")
+    return {"rid": rid, "level": {
+        0: "untrusted", 0x1000: "low", 0x2000: "medium", 0x2100: "medium_plus",
+        0x3000: "high", 0x4000: "system", 0x5000: "protected_process",
+    }.get(rid, "other")}
+
+
+def _token_integrity(api: _Api, token) -> dict:
+    length = DWORD()
+    api.advapi.GetTokenInformation(token, 25, None, 0, ctypes.byref(length))
+    header_size = ctypes.sizeof(_SidAndAttributes)
+    if length.value < header_size + 12 or length.value > 65536:
+        raise OSError("Windows diagnostic token integrity size is invalid")
+    buffer = ctypes.create_string_buffer(length.value)
+    api.check(api.advapi.GetTokenInformation(token, 25, buffer, len(buffer), ctypes.byref(length)),
+              "diagnostic token integrity")
+    if length.value > len(buffer) or length.value < header_size + 12:
+        raise OSError("Windows diagnostic token integrity size is invalid")
+    sid = _SidAndAttributes.from_buffer_copy(buffer).sid
+    offset = sid - ctypes.addressof(buffer) if sid else -1
+    if offset < header_size or offset + 12 > length.value:
+        raise OSError("Windows diagnostic integrity SID is outside its token buffer")
+    return _integrity_sid(buffer.raw[offset:offset + 12])
+
+
+def _descriptor_integrity(api: _Api, buffer, size: int) -> dict:
+    absent = {"label_present": False, "level": "implicit_medium"}
+    data = buffer.raw[:size]
+    if size < 20 or size > len(buffer) or size > 65536 or data[0] != 1 or not int.from_bytes(data[2:4], "little") & 0x8000:
+        raise OSError("Windows diagnostic label descriptor is invalid")
+    if not int.from_bytes(data[2:4], "little") & 0x10:
+        return absent
+    present, defaulted, sacl = BOOL(), BOOL(), HANDLE()
+    api.check(api.advapi.GetSecurityDescriptorSacl(buffer, ctypes.byref(present), ctypes.byref(sacl), ctypes.byref(defaulted)),
+              "diagnostic mandatory label extraction")
+    if not present.value or not sacl.value:
+        return absent
+    start = sacl.value - ctypes.addressof(buffer)
+    if start < 20 or start + 8 > size:
+        raise OSError("Windows diagnostic label ACL is outside its descriptor")
+    information = _AclSizeInformation()
+    api.check(api.advapi.GetAclInformation(sacl, ctypes.byref(information), ctypes.sizeof(information), 2),
+              "diagnostic label ACL size")
+    end = start + information.used
+    if information.used < 8 or end > size or information.count > min(64, (information.used - 8) // 4):
+        raise OSError("Windows diagnostic label ACL bounds are invalid")
+    label = None
+    for index in range(information.count):
+        pointer = HANDLE()
+        api.check(api.advapi.GetAce(sacl, index, ctypes.byref(pointer)), "diagnostic label ACE")
+        offset = pointer.value - ctypes.addressof(buffer) if pointer.value else -1
+        if offset < start + 8 or offset + 4 > end:
+            raise OSError("Windows diagnostic label ACE is outside its ACL")
+        header = _AceHeader.from_buffer_copy(data, offset)
+        if header.size < 4 or header.size % 4 or offset + header.size > end:
+            raise OSError("Windows diagnostic label ACE bounds are invalid")
+        if header.type == 0x11 and not header.flags & 0x8:
+            if label is not None or header.size != 20:
+                raise OSError("Windows diagnostic effective mandatory label is invalid")
+            label = {"label_present": True, **_integrity_sid(data[offset + 8:offset + 20]),
+                     "policy_mask": f"0x{int.from_bytes(data[offset + 4:offset + 8], 'little'):08X}"}
+    return label or absent
+
+
+def _object_integrity(api: _Api, user, handle) -> dict:
+    # LABEL_SECURITY_INFORMATION requires only READ_CONTROL. Never request the
+    # full SACL, ACCESS_SYSTEM_SECURITY or an enabled SeSecurityPrivilege.
+    information, length = DWORD(0x10), DWORD()
+    user.GetUserObjectSecurity(handle, ctypes.byref(information), None, 0, ctypes.byref(length))
+    if length.value < 20 or length.value > 65536:
+        raise OSError("Windows diagnostic label descriptor size is invalid")
+    buffer = ctypes.create_string_buffer(length.value)
+    api.check(user.GetUserObjectSecurity(handle, ctypes.byref(information), buffer, len(buffer), ctypes.byref(length)),
+              "diagnostic object mandatory label")
+    return _descriptor_integrity(api, buffer, length.value)
+
+
 def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path) -> dict:
     """Read-only observations of the suspended process; never grants access."""
     user = ctypes.WinDLL("user32", use_last_error=True)
@@ -625,9 +782,14 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
         (api.advapi, "AccessCheck", BOOL, [HANDLE, HANDLE, DWORD, ctypes.POINTER(_GenericMapping), HANDLE,
                                          ctypes.POINTER(DWORD), ctypes.POINTER(DWORD), ctypes.POINTER(BOOL)]),
         (api.advapi, "GetFileSecurityW", BOOL, [LPWSTR, DWORD, HANDLE, DWORD, ctypes.POINTER(DWORD)]),
+        (api.advapi, "GetAclInformation", BOOL, [HANDLE, HANDLE, DWORD, ctypes.c_int]),
+        (api.advapi, "GetAce", BOOL, [HANDLE, DWORD, ctypes.POINTER(HANDLE)]),
         (api.kernel, "GetCurrentThreadId", DWORD, []),
+        (api.kernel, "GetCurrentProcessId", DWORD, []),
+        (api.kernel, "ProcessIdToSessionId", BOOL, [DWORD, ctypes.POINTER(DWORD)]),
         (user, "GetProcessWindowStation", HANDLE, []),
         (user, "GetThreadDesktop", HANDLE, [DWORD]),
+        (user, "GetUserObjectInformationW", BOOL, [HANDLE, ctypes.c_int, HANDLE, DWORD, ctypes.POINTER(DWORD)]),
         (user, "GetUserObjectSecurity", BOOL, [HANDLE, ctypes.POINTER(DWORD), HANDLE, DWORD, ctypes.POINTER(DWORD)]),
     )
     for library, name, result, arguments in signatures:
@@ -638,6 +800,11 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
     try:
         api.check(api.advapi.DuplicateToken(token, 2, ctypes.byref(impersonation)), "diagnostic impersonation token")
         observations = {}
+        observations["session"] = _session_information(api, token)
+        try:
+            observations["child_integrity"] = _token_integrity(api, token)
+        except OSError as exc:
+            observations["child_integrity"] = {"unavailable": True, "error": exc.errno}
         for name, information_class in (("appcontainer", 29), ("lpac", 46)):
             value, length = DWORD(), DWORD()
             try:
@@ -669,13 +836,20 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
         # STARTUPINFO.lpDesktop is null: Windows uses the parent's station and
         # desktop. Borrowed parent handles must not be closed here. Read owner,
         # group and DACL (7); AccessCheck requires owner and group as well.
+        station = user.GetProcessWindowStation()
+        observations["ui_object_source"] = "parent_borrowed_handles"
+        observations["parent_window_station"] = _station_information(api, user, station)
         for name, handle, mapping in (
-            ("default_window_station", user.GetProcessWindowStation(), (0x20303, 0x2001C, 0x20060, 0xF037F)),
+            ("default_window_station", station, (0x20303, 0x2001C, 0x20060, 0xF037F)),
             ("default_desktop", user.GetThreadDesktop(api.kernel.GetCurrentThreadId()), (0x20041, 0x200BE, 0x20100, 0xF01FF)),
         ):
             information = DWORD(7)
             observations[name] = read_access(
                 lambda buffer, size, length: user.GetUserObjectSecurity(handle, ctypes.byref(information), buffer, size, length), mapping)
+            try:
+                observations[name + "_mic"] = _object_integrity(api, user, handle)
+            except OSError as exc:
+                observations[name + "_mic"] = {"unavailable": True, "error": exc.errno}
         for name, path in (("runtime", runtime), ("runtime_executable", runtime / "python.exe"),
                            ("bundle", bundle), ("work", work), ("private_parent", work.parent)):
             observations[name] = read_access(
@@ -713,11 +887,16 @@ def diagnose_profile() -> dict:
     return _diagnose(profile=True)
 
 
-def _diagnose(*, profile: bool) -> dict:
+def diagnose_console() -> dict:
+    """Compare only NO_WINDOW and DETACHED_PROCESS for fixed trusted code."""
+    return _diagnose(profile=False, console=True)
+
+
+def _diagnose(*, profile: bool, console: bool = False) -> dict:
     """Bounded fixed-code startup experiment, explicitly not qualification."""
     available = capability()
     report = {**available, "qualified": False, "assurance": "startup_diagnostic_only",
-              "execution_timeout_seconds_per_case": 10}
+              "execution_timeout_seconds_per_case": 10, **_host_information()}
     if not available["supported"]:
         return report
     command = _PROFILE_COMMAND if profile else _STARTUP_COMMAND
@@ -748,9 +927,13 @@ def _diagnose(*, profile: bool) -> dict:
         # Each experiment has a fresh root and profile; neither ACL changes nor
         # capabilities from one case can contaminate the next. Parent-only is
         # tried first. If it succeeds, no registry-reading case is needed.
-        cases = (("strict_lpac", None), ("new_profile_readonly", "profile_readonly")) if profile else (
-            ("strict_lpac", None), ("parent_only", "parent_only"),
-            ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
+        if profile:
+            cases = (("strict_lpac", None), ("new_profile_readonly", "profile_readonly"))
+        elif console:
+            cases = (("strict_lpac", None), ("detached_console", "detached_console"))
+        else:
+            cases = (("strict_lpac", None), ("parent_only", "parent_only"),
+                     ("registry_only", "registry_only"), ("parent_and_registry", "parent_and_registry"))
         for name, experiment in cases:
             if experiment in {"registry_only", "parent_and_registry"} and report["parent_only"].get("marker"):
                 report[name] = {"not_run": "private_parent_startup_succeeded"}
@@ -778,8 +961,9 @@ def _diagnose(*, profile: bool) -> dict:
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] not in (["--diagnose"], ["--diagnose-profile"]):
-        raise SystemExit("use --diagnose or --diagnose-profile for fixed Windows startup experiments")
-    result = diagnose_profile() if sys.argv[1:] == ["--diagnose-profile"] else diagnose()
+    entrypoints = {"--diagnose": diagnose, "--diagnose-profile": diagnose_profile, "--diagnose-console": diagnose_console}
+    if len(sys.argv) != 2 or sys.argv[1] not in entrypoints:
+        raise SystemExit("use --diagnose, --diagnose-profile or --diagnose-console for fixed Windows startup experiments")
+    result = entrypoints[sys.argv[1]]()
     print(json.dumps(result, sort_keys=True))
     raise SystemExit(0 if result.get("strict_lpac", {}).get("marker") else 1)
