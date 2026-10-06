@@ -36,9 +36,9 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         struct.pack_into("<I", data, optional + 108, 16)
         struct.pack_into("<II", data, optional + 120, 0x1000, 40)
         struct.pack_into("<IIII", data, 400, 1536, 0x1000, 1536, 512)
-        struct.pack_into("<IIIII", data, 512, 0x1050, 0, 0, 0x10C0, 0x1050)
-        data[704:717] = b"KERNEL32.dll\0"
-        cursor = 736
+        struct.pack_into("<IIIII", data, 512, 0x1050, 0, 0, 0x10E0, 0x1050)
+        data[736:749] = b"KERNEL32.dll\0"
+        cursor = 768
         for index, name in enumerate(sorted(probe.IMPORTS)):
             struct.pack_into("<Q", data, 592 + index * 8, cursor - 512 + 0x1000)
             value = b"\0\0" + name.encode("ascii") + b"\0"
@@ -48,9 +48,10 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
 
     @staticmethod
     def output() -> bytes:
-        return ("EA_NATIVE_DLL_PROBE_V2\n" + "".join(
+        return ("EA_NATIVE_DLL_PROBE_V4\n" + "".join(
             f"CHECK {operation} python313.dll\nCHECK_RESULT {operation} python313.dll 0x00000000\n"
-            for operation in ("file_read", "file_read_execute", "sec_image", "sec_image_no_execute")) + "".join(
+            for operation in ("file_read", "file_read_execute", "sec_image", "view_sec_image",
+                              "sec_image_no_execute", "view_sec_image_no_execute", "actctx_core_manifest")) + "".join(
             f"LOAD {name}\nRESULT {name} 0x00000000\n" for name in probe.MODULES) + "DONE\n").encode()
 
     def test_output_reports_only_known_ordered_statuses_and_explicit_completion(self) -> None:
@@ -70,14 +71,15 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
     def test_file_failure_records_unattempted_mapping_without_fabricating_an_error(self) -> None:
         output = self.output().replace(b"file_read python313.dll 0x00000000", b"file_read python313.dll 0x00000005")
         output = output.replace(b"file_read_execute python313.dll 0x00000000", b"file_read_execute python313.dll 0x00000005")
-        for operation in (b"sec_image", b"sec_image_no_execute"):
+        for operation in (b"sec_image", b"view_sec_image", b"sec_image_no_execute", b"view_sec_image_no_execute"):
             output = output.replace(operation + b" python313.dll 0x00000000", operation + b" python313.dll SKIPPED")
         result = probe.parse_output(output)
         self.assertEqual("0x00000005", result["checks"][0]["win32_error"])
         self.assertEqual([{"operation": operation, "module": "python313.dll", "not_attempted": True}
-                          for operation in ("sec_image", "sec_image_no_execute")], result["checks"][2:])
+                          for operation in ("sec_image", "view_sec_image", "sec_image_no_execute",
+                                            "view_sec_image_no_execute")], result["checks"][2:6])
         self.assertTrue(result["complete"])
-        partial = b"EA_NATIVE_DLL_PROBE_V2\nCHECK file_read python313.dll\n"
+        partial = b"EA_NATIVE_DLL_PROBE_V4\nCHECK file_read python313.dll\n"
         self.assertEqual("file_read", probe.parse_output(partial)["pending_check"])
         self.assertFalse(probe.parse_output(partial)["complete"])
 
@@ -86,6 +88,7 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
             with self.subTest(failed=failed):
                 output = self.output().replace(failed + b" python313.dll 0x00000000", failed + b" python313.dll 0x00000005")
                 output = output.replace(skipped + b" python313.dll 0x00000000", skipped + b" python313.dll SKIPPED")
+                output = output.replace(b"view_" + skipped + b" python313.dll 0x00000000", b"view_" + skipped + b" python313.dll SKIPPED")
                 result = probe.parse_output(output)
                 mapping = {item["operation"]: item for item in result["checks"][2:]}
                 self.assertIs(mapping[skipped.decode()]["not_attempted"], True)
@@ -94,13 +97,52 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
                     probe.parse_output(output.replace(skipped + b" python313.dll SKIPPED", skipped + b" python313.dll 0x00000000"))
 
+    def test_view_result_requires_successful_section_and_distinguishes_map_failure(self) -> None:
+        for section in (b"sec_image", b"sec_image_no_execute"):
+            with self.subTest(section=section):
+                prefix = b"CHECK_RESULT " + section + b" python313.dll "
+                view_prefix = b"CHECK_RESULT view_" + section + b" python313.dll "
+                denied = self.output().replace(view_prefix + b"0x00000000", view_prefix + b"0x00000005")
+                result = {item["operation"]: item for item in probe.parse_output(denied)["checks"]}
+                self.assertEqual("0x00000000", result[section.decode()]["win32_error"])
+                self.assertEqual("0x00000005", result["view_" + section.decode()]["win32_error"])
+                failed = self.output().replace(prefix + b"0x00000000", prefix + b"0x00000005")
+                with self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
+                    probe.parse_output(failed)
+                result = probe.parse_output(failed.replace(view_prefix + b"0x00000000", view_prefix + b"SKIPPED"))
+                observed = {item["operation"]: item for item in result["checks"]}
+                self.assertIs(observed["view_" + section.decode()]["not_attempted"], True)
+                with self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
+                    probe.parse_output(self.output().replace(view_prefix + b"0x00000000", view_prefix + b"SKIPPED"))
+
+    def test_view_partial_output_and_old_protocol_cannot_claim_completion(self) -> None:
+        partial = self.output().split(b"CHECK_RESULT view_sec_image python313.dll", 1)[0]
+        self.assertEqual("view_sec_image", probe.parse_output(partial)["pending_check"])
+        self.assertFalse(probe.parse_output(partial)["complete"])
+        for old in (b"EA_NATIVE_DLL_PROBE_V1", b"EA_NATIVE_DLL_PROBE_V2", b"EA_NATIVE_DLL_PROBE_V3"):
+            with self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
+                probe.parse_output(self.output().replace(b"EA_NATIVE_DLL_PROBE_V4", old))
+
+    def test_manifest_context_is_independent_numeric_observation_and_cannot_be_skipped(self) -> None:
+        prefix = b"CHECK_RESULT actctx_core_manifest python313.dll "
+        result = probe.parse_output(self.output().replace(prefix + b"0x00000000", prefix + b"0x00000005"))
+        self.assertEqual({"operation": "actctx_core_manifest", "module": "python313.dll", "win32_error": "0x00000005"},
+                         result["checks"][-1])
+        self.assertTrue(result["complete"])
+        partial = self.output().split(prefix, 1)[0]
+        self.assertEqual("actctx_core_manifest", probe.parse_output(partial)["pending_check"])
+        self.assertFalse(probe.parse_output(partial)["complete"])
+        for changed in (prefix + b"SKIPPED", prefix + b"0x5", b"CHECK_RESULT actctx_core_manifest C:\\secret\\python313.dll 0x00000000"):
+            with self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
+                probe.parse_output(self.output().replace(prefix + b"0x00000000", changed))
+
     def test_check_parser_rejects_missing_results_reordered_checks_and_false_mapping_receipts(self) -> None:
         bad = (self.output().replace(b"CHECK file_read", b"CHECK sec_image", 1),
                self.output().replace(b"CHECK_RESULT file_read python313.dll 0x00000000", b"CHECK_RESULT file_read python313.dll SKIPPED"),
                self.output().replace(b"CHECK_RESULT sec_image python313.dll 0x00000000", b"CHECK_RESULT sec_image python313.dll SKIPPED"),
                self.output().replace(b"file_read python313.dll 0x00000000", b"file_read python313.dll 0x00000005"),
                self.output().replace(b"CHECK_RESULT sec_image python313.dll", b"CHECK_RESULT sec_image C:\\secret\\python313.dll"),
-               self.output().replace(b"EA_NATIVE_DLL_PROBE_V2", b"EA_NATIVE_DLL_PROBE_V1"))
+               self.output().replace(b"EA_NATIVE_DLL_PROBE_V4", b"EA_NATIVE_DLL_PROBE_V1"))
         for value in bad:
             with self.subTest(size=len(value)), self.assertRaisesRegex(ValueError, "unrecognized native probe output"):
                 probe.parse_output(value)
@@ -110,9 +152,11 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
             "stdio", "environment", "string", "heap", "runtime", "locale", "convert", "math", "time",
             "process", "conio", "filesystem"))
         self.assertEqual(expected, probe.CRT_MODULES)
-        self.assertEqual(("file_read", "file_read_execute", "sec_image", "sec_image_no_execute"), probe.FILE_CHECKS)
+        self.assertEqual(("file_read", "file_read_execute", "sec_image", "view_sec_image",
+                          "sec_image_no_execute", "view_sec_image_no_execute", "actctx_core_manifest"), probe.FILE_CHECKS)
         self.assertEqual({"GetStdHandle", "WriteFile", "LoadLibraryExW", "GetLastError", "FreeLibrary",
-                          "ExitProcess", "GetModuleFileNameW", "CreateFileW", "CreateFileMappingW", "CloseHandle"},
+                          "ExitProcess", "GetModuleFileNameW", "CreateFileW", "CreateFileMappingW", "CloseHandle",
+                          "MapViewOfFile", "UnmapViewOfFile", "CreateActCtxW", "ReleaseActCtx"},
                          probe.IMPORTS)
         self.assertEqual(1, probe.MODULES.count("python313.dll"))
         self.assertEqual("python313.dll", probe.MODULES[-1])
@@ -123,8 +167,8 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                self.output().replace(b"LOAD ucrtbase.dll", b"LOAD shell32.dll", 1),
                self.output().replace(b"0x00000000", b"0x0", 1),
                self.output()[:-1], self.output().replace(b"\n", b"\r\n"),
-               b"EA_NATIVE_DLL_PROBE_V2\nRESULT ucrtbase.dll 0x00000000\n",
-               b"EA_NATIVE_DLL_PROBE_V2\n" + b"X" * 4096)
+               b"EA_NATIVE_DLL_PROBE_V4\nRESULT ucrtbase.dll 0x00000000\n",
+               b"EA_NATIVE_DLL_PROBE_V4\n" + b"X" * 4096)
         for value in bad:
             with self.subTest(size=len(value)):
                 with self.assertRaisesRegex(ValueError, "unrecognized native probe output") as caught:
@@ -135,7 +179,7 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
     def test_actual_pe_gate_accepts_only_amd64_executable_and_kernel32_fixed_apis(self) -> None:
         probe.verify_pe(self.image())
         for offset, value in ((132, b"\x64\xaa"), (150, b"\x02\x20"),
-                              (704, b"ADVAPI32.dll\0"), (738, b"CreateProcessW\0")):
+                              (736, b"ADVAPI32.dll\0"), (770, b"CreateProcessW\0")):
             data = bytearray(self.image())
             data[offset:offset + len(value)] = value
             with self.assertRaisesRegex(ValueError, "invalid native probe PE"):
@@ -254,18 +298,29 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
             report = probe.diagnose()
         self.assertIs(report["qualified"], False)
         self.assertIs(report["diagnostic_only"], True)
+        self.assertEqual("FILE_MAP_READ", report["image_view_access_flag"])
+        self.assertEqual("PE_section_permissions", report["sec_image_view_protection"])
+        self.assertIs(report["sec_image_desired_access_ignored"], True)
+        self.assertIs(report["image_view_contents_accessed"], False)
+        self.assertNotIn("image_views_mapped", report)
+        self.assertEqual(2, report["core_manifest_resource_id"])
+        self.assertEqual(8, report["activation_context_flags"])
+        self.assertEqual(56, report["activation_context_struct_size"])
+        self.assertIs(report["activation_context_activated"], False)
 
     def test_mapping_success_is_not_a_qualified_provider_or_an_acceptable_failed_control(self) -> None:
         report = {"diagnostic_only": True, "qualified": False, "baseline": probe._observe(0, self.output()),
                   "strict_lpac": {}, "detached_console": {}}
-        for value, expected in (("0x00000000", 0), ("0x00000005", 1)):
-            with self.subTest(value=value):
-                report["baseline"]["checks"][2]["win32_error"] = value
-                output = io.StringIO()
-                with patch.object(probe.sys, "argv", ["diagnose_windows_native.py"]), \
-                     patch.object(probe, "diagnose", return_value=report), redirect_stdout(output):
-                    self.assertEqual(expected, probe.main())
-                self.assertIs(json.loads(output.getvalue())["qualified"], False)
+        for operation in (2, 3, 6):
+            for value, expected in (("0x00000000", 0), ("0x00000005", 1)):
+                with self.subTest(operation=operation, value=value):
+                    report["baseline"] = probe._observe(0, self.output())
+                    report["baseline"]["checks"][operation]["win32_error"] = value
+                    output = io.StringIO()
+                    with patch.object(probe.sys, "argv", ["diagnose_windows_native.py"]), \
+                         patch.object(probe, "diagnose", return_value=report), redirect_stdout(output):
+                        self.assertEqual(expected, probe.main())
+                    self.assertIs(json.loads(output.getvalue())["qualified"], False)
 
     def test_tool_timeout_report_does_not_include_command_paths_or_captured_output(self) -> None:
         import subprocess

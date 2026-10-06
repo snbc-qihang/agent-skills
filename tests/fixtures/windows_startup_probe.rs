@@ -2,7 +2,30 @@
 #![no_std]
 #![no_main]
 
-use core::{ffi::c_void, mem::MaybeUninit, ptr};
+use core::{ffi::c_void, mem::{MaybeUninit, offset_of, size_of}, ptr};
+
+#[repr(C)]
+struct ActCtxW {
+    cb_size: u32,
+    flags: u32,
+    source: *const u16,
+    architecture: u16,
+    language: u16,
+    assembly_directory: *const u16,
+    resource_name: *const u16,
+    application_name: *const u16,
+    module: *mut c_void,
+}
+
+// Fixed AMD64 Windows ABI, not a guess from host C type sizes.
+const _: () = {
+    assert!(size_of::<ActCtxW>() == 56);
+    assert!(offset_of!(ActCtxW, cb_size) == 0 && offset_of!(ActCtxW, flags) == 4);
+    assert!(offset_of!(ActCtxW, source) == 8 && offset_of!(ActCtxW, architecture) == 16);
+    assert!(offset_of!(ActCtxW, language) == 18 && offset_of!(ActCtxW, assembly_directory) == 24);
+    assert!(offset_of!(ActCtxW, resource_name) == 32 && offset_of!(ActCtxW, application_name) == 40);
+    assert!(offset_of!(ActCtxW, module) == 48);
+};
 
 #[link(name = "kernel32")]
 extern "system" {
@@ -17,6 +40,10 @@ extern "system" {
                    creation: u32, flags: u32, template: *mut c_void) -> *mut c_void;
     fn CreateFileMappingW(file: *mut c_void, attributes: *mut c_void, protection: u32,
                           high: u32, low: u32, name: *const u16) -> *mut c_void;
+    fn MapViewOfFile(image: *mut c_void, access: u32, high: u32, low: u32, length: usize) -> *mut c_void;
+    fn UnmapViewOfFile(view: *const c_void) -> i32;
+    fn CreateActCtxW(context: *const ActCtxW) -> *mut c_void;
+    fn ReleaseActCtx(context: *mut c_void);
     fn CloseHandle(handle: *mut c_void) -> i32;
     fn ExitProcess(code: u32) -> !;
 }
@@ -122,18 +149,35 @@ unsafe fn check_result(handle: *mut c_void, operation: &[u8], error: Option<u32>
     }
 }
 
-unsafe fn image_check(handle: *mut c_void, file: *mut c_void, operation: &[u8], protection: u32) {
+unsafe fn image_check(handle: *mut c_void, file: *mut c_void, operation: &[u8], view_operation: &[u8], protection: u32) {
     check_begin(handle, operation);
+    let mut image = ptr::null_mut();
     if file as isize == -1 {
         check_result(handle, operation, None);
-        return;
+    } else {
+        // Unnamed, whole-file object with PAGE_READONLY. SEC_IMAGE must include a page
+        // protection; SEC_IMAGE_NO_EXECUTE requires PAGE_READONLY.
+        // https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
+        image = CreateFileMappingW(file, ptr::null_mut(), protection, 0, 0, ptr::null());
+        let error = if image.is_null() { GetLastError() } else { 0 };
+        check_result(handle, operation, Some(error));
     }
-    // Read-only, unnamed, whole-file object. No MapViewOfFile or DLL entry.
-    // SEC_IMAGE must include a page protection; SEC_IMAGE_NO_EXECUTE requires PAGE_READONLY.
-    // https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw
-    let image = CreateFileMappingW(file, ptr::null_mut(), protection, 0, 0, ptr::null());
-    let error = if image.is_null() { GetLastError() } else { 0 };
-    check_result(handle, operation, Some(error));
+    check_begin(handle, view_operation);
+    if image.is_null() {
+        check_result(handle, view_operation, None);
+    } else {
+        // SEC_IMAGE ignores dwDesiredAccess: PE section permissions apply and
+        // can include executable pages. SEC_IMAGE_NO_EXECUTE is non-executable.
+        // Fixed FILE_MAP_READ, whole image. Never dereference/write/call a view
+        // or explicitly load dependencies/invoke CRT/TLS/DllMain for this check.
+        // https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile
+        let view = MapViewOfFile(image, 4, 0, 0, 0);
+        let error = if view.is_null() { GetLastError() } else { 0 };
+        check_result(handle, view_operation, Some(error));
+        if !view.is_null() && UnmapViewOfFile(view) == 0 {
+            ExitProcess(75);
+        }
+    }
     if !image.is_null() && CloseHandle(image) == 0 {
         ExitProcess(74);
     }
@@ -151,18 +195,41 @@ unsafe fn private_checks(handle: *mut c_void) {
     let error = if file as isize == -1 { GetLastError() } else { 0 };
     check_result(handle, b"file_read", Some(error));
     // Separate read/execute request makes an executable image access denial
-    // observable before CreateFileMapping; it still never maps or executes code.
+    // observable before CreateFileMapping; the view never executes code.
     check_begin(handle, b"file_read_execute");
     let executable = CreateFileW(name, 0xA0000000, 7, ptr::null_mut(), 3, 0x80, ptr::null_mut());
     let error = if executable as isize == -1 { GetLastError() } else { 0 };
     check_result(handle, b"file_read_execute", Some(error));
-    image_check(handle, executable, b"sec_image", 0x01000002);
-    image_check(handle, file, b"sec_image_no_execute", 0x11000002);
+    image_check(handle, executable, b"sec_image", b"view_sec_image", 0x01000002);
+    image_check(handle, file, b"sec_image_no_execute", b"view_sec_image_no_execute", 0x11000002);
     if executable as isize != -1 && CloseHandle(executable) == 0 {
         ExitProcess(74);
     }
     if file as isize != -1 && CloseHandle(file) == 0 {
         ExitProcess(74);
+    }
+    // Fixed PBS 20260414 core RT_MANIFEST resource: type24/name2/lang1033.
+    // Create only; flags8 selects MAKEINTRESOURCE(2), all other fields zero.
+    // No ActivateActCtx, process-default context, user payload or manifest edit.
+    // https://learn.microsoft.com/windows/win32/api/winbase/ns-winbase-actctxw
+    let context = ActCtxW {
+        cb_size: size_of::<ActCtxW>() as u32,
+        flags: 8,
+        source: name,
+        architecture: 0,
+        language: 0,
+        assembly_directory: ptr::null(),
+        resource_name: 2usize as *const u16,
+        application_name: ptr::null(),
+        module: ptr::null_mut(),
+    };
+    check_begin(handle, b"actctx_core_manifest");
+    let activation = CreateActCtxW(&context);
+    let error = if activation as isize == -1 { GetLastError() } else { 0 };
+    check_result(handle, b"actctx_core_manifest", Some(error));
+    if activation as isize != -1 {
+        // Activation contexts are not kernel handles; CloseHandle is invalid.
+        ReleaseActCtx(activation);
     }
 }
 
@@ -172,7 +239,7 @@ pub unsafe extern "system" fn probe_entry() -> ! {
     if handle.is_null() || handle as isize == -1 {
         ExitProcess(70);
     }
-    write(handle, b"EA_NATIVE_DLL_PROBE_V2\n");
+    write(handle, b"EA_NATIVE_DLL_PROBE_V4\n");
     private_checks(handle);
     // Fixed sequential observations; loaded-module state is not independent.
     load(handle, b"ucrtbase.dll", wide(b"ucrtbase.dll\0").as_ptr(), 0x800);

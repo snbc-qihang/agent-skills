@@ -26,13 +26,15 @@ from engineering_assistant.windows_process import run_bounded_windows  # noqa: E
 CRT_MODULES = tuple("api-ms-win-crt-" + name + "-l1-1-0.dll" for name in (
     "stdio", "environment", "string", "heap", "runtime", "locale", "convert", "math", "time",
     "process", "conio", "filesystem"))
-FILE_CHECKS = ("file_read", "file_read_execute", "sec_image", "sec_image_no_execute")
+FILE_CHECKS = ("file_read", "file_read_execute", "sec_image", "view_sec_image",
+               "sec_image_no_execute", "view_sec_image_no_execute", "actctx_core_manifest")
 MODULES = ("ucrtbase.dll", "advapi32.dll", "shell32.dll", "ole32.dll", "oleaut32.dll",
            "version.dll", "ws2_32.dll", "bcrypt.dll", "api-ms-win-core-path-l1-1-0.dll",
            "vcruntime140.dll", *CRT_MODULES, "python313.dll")
 IMPORTS = {"GetStdHandle", "WriteFile", "LoadLibraryExW", "GetLastError", "FreeLibrary",
-           "ExitProcess", "GetModuleFileNameW", "CreateFileW", "CreateFileMappingW", "CloseHandle"}
-SOURCE_SHA256 = "fad7cb98ff64b6270d78ae61b65b52853624427953df81f5b5b4660dd463001f"
+           "ExitProcess", "GetModuleFileNameW", "CreateFileW", "CreateFileMappingW", "CloseHandle",
+           "MapViewOfFile", "UnmapViewOfFile", "CreateActCtxW", "ReleaseActCtx"}
+SOURCE_SHA256 = "5e0e6c2826c2a8917b9939241e8f708df99ebd8af4751c5df9495f4ebeb2cd9f"
 MAX_IMAGE = 1_048_576
 
 
@@ -68,7 +70,7 @@ def parse_output(data: bytes) -> dict:
         lines = data.decode("ascii", errors="strict").split("\n")[:-1]
     except UnicodeError:
         raise error from None
-    if not lines or lines[0] != "EA_NATIVE_DLL_PROBE_V2":
+    if not lines or lines[0] != "EA_NATIVE_DLL_PROBE_V4":
         raise error
     result["entry"] = True
     index = 1
@@ -83,7 +85,8 @@ def parse_output(data: bytes) -> dict:
             result["pending_check"] = operation
             return result
         status = re.fullmatch(r"CHECK_RESULT " + operation + r" python313\.dll (0x[0-9A-F]{8}|SKIPPED)", lines[index])
-        required = {"sec_image": "file_read_execute", "sec_image_no_execute": "file_read"}.get(operation)
+        required = {"sec_image": "file_read_execute", "sec_image_no_execute": "file_read",
+                    "view_sec_image": "sec_image", "view_sec_image_no_execute": "sec_image_no_execute"}.get(operation)
         if not status or ((status[1] == "SKIPPED") != (required is not None and not opened[required])):
             raise error
         item = {"operation": operation, "module": "python313.dll"}
@@ -92,8 +95,7 @@ def parse_output(data: bytes) -> dict:
         else:
             item["win32_error"] = status[1]
         result["checks"].append(item)
-        if required is None:
-            opened[operation] = status[1] == "0x00000000"
+        opened[operation] = status[1] == "0x00000000"
         index += 1
     for module in MODULES:
         if index == len(lines):
@@ -301,7 +303,11 @@ def diagnose() -> dict:
               "assurance": "native_loader_diagnostic_only", **windows._host_information(),
               "load_order": list(MODULES), "check_order": list(FILE_CHECKS), "same_process_sequence": True,
               "mapping_handle_access": {"sec_image": "GENERIC_READ|GENERIC_EXECUTE", "sec_image_no_execute": "GENERIC_READ"},
-              "image_views_mapped": False, "image_checks_invoke_dll_entry": False,
+              "image_view_access_flag": "FILE_MAP_READ", "sec_image_view_protection": "PE_section_permissions",
+              "sec_image_desired_access_ignored": True, "image_view_contents_accessed": False,
+              "image_checks_invoke_dll_entry": False,
+              "core_manifest_resource_id": 2, "activation_context_flags": 8,
+              "activation_context_struct_size": 56, "activation_context_activated": False,
               "execution_timeout_seconds_per_case": 10, "compile_timeout_seconds": 60}
     if not available["supported"]:
         return report
