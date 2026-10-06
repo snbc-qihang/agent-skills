@@ -24,10 +24,11 @@ from engineering_assistant.windows_process import run_bounded_windows  # noqa: E
 
 
 MODULES = ("ucrtbase.dll", "advapi32.dll", "shell32.dll", "ole32.dll", "oleaut32.dll",
+           "version.dll", "ws2_32.dll", "bcrypt.dll", "api-ms-win-core-path-l1-1-0.dll",
            "vcruntime140.dll", "python313.dll")
 IMPORTS = {"GetStdHandle", "WriteFile", "LoadLibraryExW", "GetLastError", "FreeLibrary",
            "ExitProcess", "GetModuleFileNameW"}
-SOURCE_SHA256 = "e6a506468cba2431035a6e52810eafa33bf0dca6f78164f93a8cde328793db94"
+SOURCE_SHA256 = "2f05d195fa3f7386698f56307b9105be9f7489152a4bb8a58a6a7f7623561325"
 MAX_IMAGE = 1_048_576
 
 

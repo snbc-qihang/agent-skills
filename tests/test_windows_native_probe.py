@@ -296,6 +296,21 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                     self.assertEqual(1, probe.main())
                 self.assertEqual(record, json.loads(output.getvalue())["error"])
 
+    def test_fixed_native_probe_covers_pythoncore_system_dependencies_before_python(self) -> None:
+        expected = ("version.dll", "ws2_32.dll", "bcrypt.dll", "api-ms-win-core-path-l1-1-0.dll")
+        source = (ROOT / "tests/fixtures/windows_startup_probe.rs").read_text(encoding="utf-8")
+        positions = []
+        for name in expected:
+            self.assertIn(name, probe.MODULES)
+            call = f'load(handle, b"{name}", wide(b"{name}\\0").as_ptr(), 0x800);'
+            self.assertIn(call, source)
+            self.assertLess(probe.MODULES.index(name), probe.MODULES.index("python313.dll"))
+            positions.append(source.index(call))
+        self.assertEqual(sorted(positions), positions)
+        self.assertLess(positions[-1], source.index('private_load(handle, b"python313.dll"'))
+        self.assertEqual(probe.SOURCE_SHA256, hashlib.sha256(
+            (ROOT / "tests/fixtures/windows_startup_probe.rs").read_bytes()).hexdigest())
+
 
 if __name__ == "__main__":
     unittest.main()

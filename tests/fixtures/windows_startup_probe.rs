@@ -106,6 +106,12 @@ pub unsafe extern "system" fn probe_entry() -> ! {
     load(handle, b"shell32.dll", wide(b"shell32.dll\0").as_ptr(), 0x800);
     load(handle, b"ole32.dll", wide(b"ole32.dll\0").as_ptr(), 0x800);
     load(handle, b"oleaut32.dll", wide(b"oleaut32.dll\0").as_ptr(), 0x800);
+    // CPython v3.13.13 core imports verified in fixed PBS build 20260414.
+    // pathcch.lib resolves to this API-set name in the actual PE.
+    load(handle, b"version.dll", wide(b"version.dll\0").as_ptr(), 0x800);
+    load(handle, b"ws2_32.dll", wide(b"ws2_32.dll\0").as_ptr(), 0x800);
+    load(handle, b"bcrypt.dll", wide(b"bcrypt.dll\0").as_ptr(), 0x800);
+    load(handle, b"api-ms-win-core-path-l1-1-0.dll", wide(b"api-ms-win-core-path-l1-1-0.dll\0").as_ptr(), 0x800);
     private_load(handle, b"vcruntime140.dll", b"vcruntime140.dll\0");
     private_load(handle, b"python313.dll", b"python313.dll\0");
     write(handle, b"DONE\n");
