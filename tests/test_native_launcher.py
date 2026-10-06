@@ -7,7 +7,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 from unittest.mock import patch
 
 
@@ -85,18 +87,8 @@ class NativeLauncherTests(unittest.TestCase):
         return path
 
     @staticmethod
-    def _private_windows_path(path: Path) -> None:
-        from engineering_assistant.artifact_io import artifact_fs
-
-        flags = os.O_RDONLY | (artifact_fs.O_DIRECTORY if path.is_dir() else 0)
-        descriptor = artifact_fs.open(str(path.absolute()), flags)
-        try:
-            artifact_fs.fchmod(descriptor, 0o700 if path.is_dir() else 0o600)
-        finally:
-            artifact_fs.close(descriptor)
-
-    @staticmethod
-    def _windows_dacl(path: Path, broad: bool) -> None:
+    @contextmanager
+    def _windows_dacl(path: Path, broad: bool) -> Iterator[None]:
         import ctypes
         from engineering_assistant.artifact_io import artifact_fs
 
@@ -107,7 +99,19 @@ class NativeLauncherTests(unittest.TestCase):
             artifact_fs.close(descriptor)
             raise ctypes.WinError(ctypes.get_last_error())
         security = None
+        original_security, original_dacl = ctypes.c_void_p(), ctypes.c_void_p()
         try:
+            error = artifact_fs._advapi.GetSecurityInfo(handle, 1, 4, None, None,
+                ctypes.byref(original_dacl), None, ctypes.byref(original_security))
+            if error:
+                raise ctypes.WinError(error)
+            get_control = artifact_fs._advapi.GetSecurityDescriptorControl
+            get_control.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint16),
+                                   ctypes.POINTER(ctypes.c_uint32)]
+            get_control.restype = ctypes.c_int
+            control, revision = ctypes.c_uint16(), ctypes.c_uint32()
+            if not get_control(original_security, ctypes.byref(control), ctypes.byref(revision)):
+                raise ctypes.WinError(ctypes.get_last_error())
             dacl = ctypes.c_void_p()
             if broad:
                 security = artifact_fs._security_descriptor(
@@ -121,9 +125,21 @@ class NativeLauncherTests(unittest.TestCase):
             error = artifact_fs._advapi.SetSecurityInfo(handle, 1, 0x80000004, None, None, dacl, None)
             if error:
                 raise ctypes.WinError(error)
+            try:
+                yield
+            finally:
+                # Keep the original inheritable ACEs and protection state.
+                # chmod(700) has no OI/CI ACEs and strips inherited child access.
+                information = 4 | (0x80000000 if control.value & 0x1000 else 0x20000000)
+                error = artifact_fs._advapi.SetSecurityInfo(handle, 1, information,
+                    None, None, original_dacl, None)
+                if error:
+                    raise ctypes.WinError(error)
         finally:
             if security is not None:
                 artifact_fs._kernel.LocalFree(security)
+            if original_security.value:
+                artifact_fs._kernel.LocalFree(original_security)
             artifact_fs._kernel.CloseHandle(handle)
             artifact_fs.close(descriptor)
 
@@ -141,28 +157,26 @@ class NativeLauncherTests(unittest.TestCase):
         for path in (self.data_home, binding, binding.parent, environment,
                      environment / "Scripts", environment / "Scripts/python.exe"):
             with self.subTest(path=path):
-                self._windows_dacl(path, broad=True)
-                try:
+                with self._windows_dacl(path, broad=True):
                     result = self.invoke("mcp-serve")
                     self.assertNotEqual(0, result.returncode)
                     self.assertEqual(b"", result.stdout)
                     self.assertIn("private", json.loads(result.stderr)["reason"])
-                finally:
-                    self._private_windows_path(path)
+                restored = self.invoke("mcp-serve")
+                self.assertEqual(0, restored.returncode, restored.stderr)
 
     @unittest.skipUnless(os.name == "nt", "requires real Windows security descriptors and native launcher")
     def test_windows_launcher_rejects_null_control_dacl(self) -> None:
         binding = self.prepare()
         for path in (self.data_home, binding):
             with self.subTest(path=path):
-                self._windows_dacl(path, broad=False)
-                try:
+                with self._windows_dacl(path, broad=False):
                     result = self.invoke("mcp-serve")
                     self.assertNotEqual(0, result.returncode)
                     self.assertEqual(b"", result.stdout)
                     self.assertIn("private", json.loads(result.stderr)["reason"])
-                finally:
-                    self._private_windows_path(path)
+                restored = self.invoke("mcp-serve")
+                self.assertEqual(0, restored.returncode, restored.stderr)
 
     @unittest.skipUnless(os.name == "posix", "POSIX ownership and mode contract")
     def test_public_data_root_is_rejected_before_python(self) -> None:

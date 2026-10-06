@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import io
 import subprocess
 import sys
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,10 +13,29 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.provider_runtime import ProviderExecutor  # noqa: E402
-from engineering_assistant.sandbox_probe import qualify  # noqa: E402
+from engineering_assistant.sandbox_probe import _exec_probe, qualify  # noqa: E402
 
 
 class SandboxProbeTests(unittest.TestCase):
+    def test_windows_exec_probe_preserves_crt_arguments(self) -> None:
+        # API argument contract only, not actual Windows confinement evidence.
+        executable = r"C:\private runtime\python.exe"
+        arguments = [executable, "-I", "-S", "-c", 'print("argument with spaces")']
+        with patch("engineering_assistant.sandbox_probe.os.name", "nt"):
+            source = _exec_probe(executable, arguments, "same_python_exec")
+        with patch("os.execv", side_effect=PermissionError) as execute, redirect_stdout(io.StringIO()):
+            exec(source, {})
+        execute.assert_called_once_with(executable, [subprocess.list2cmdline([value]) for value in arguments])
+
+    def test_command_interpreter_exec_does_not_apply_crt_escaping(self) -> None:
+        executable = r"C:\Windows\System32\cmd.exe"
+        arguments = [executable, "/d", "/c", 'echo {"extra_exec":false}']
+        with patch("engineering_assistant.sandbox_probe.os.name", "nt"):
+            source = _exec_probe(executable, arguments, "extra_exec", crt_arguments=False)
+        with patch("os.execv", side_effect=PermissionError) as execute, redirect_stdout(io.StringIO()):
+            exec(source, {})
+        execute.assert_called_once_with(executable, arguments)
+
     def test_real_sandbox_qualification_requires_every_execution_boundary(self) -> None:
         capability = ProviderExecutor.sandbox_capability()
         if not capability["supported"]:
@@ -56,6 +77,11 @@ class SandboxProbeTests(unittest.TestCase):
         }), patch.object(ProviderExecutor, "_run_ui_ux_pro_max", new=unconfined):
             result = qualify(ROOT)
         self.assertFalse(result["qualified"], result)
+        self.assertEqual({
+            "positive_execution", "snapshot_read", "private_work_write",
+            "network_ipv4", "network_ipv6", "outside_read", "outside_write",
+            "snapshot_write", "child_process", "same_python_exec", "extra_exec",
+        }, set(result["checks"]), result)
         for name in (
             "network_ipv4", "network_ipv6", "outside_read", "outside_write",
             "snapshot_write", "child_process", "same_python_exec", "extra_exec",

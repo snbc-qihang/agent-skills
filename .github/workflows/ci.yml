@@ -101,6 +101,22 @@ jobs:
           PY
       - name: 安装开发包
         run: python -m pip install --disable-pip-version-check -e .
+      - name: Windows Provider 启动检查
+        if: matrix.target == 'windows-x64'
+        run: |
+          python - <<'PYTHON'
+          import subprocess
+          import sys
+          diagnostic = subprocess.run([
+              sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", "--diagnose",
+          ], timeout=120, check=False)
+          print("Windows startup diagnostic exit:", diagnostic.returncode, flush=True)
+          subprocess.run([
+              sys.executable, "-m", "unittest", "discover", "-s", "tests",
+              "-p", "test_provider_runtime.py", "-k",
+              "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work", "-v",
+          ], check=True)
+          PYTHON
       - name: 全量回归与不可跳过的原生安全验证
         run: |
           python - <<'PY'

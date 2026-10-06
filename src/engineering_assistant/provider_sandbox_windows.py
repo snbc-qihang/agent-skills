@@ -13,12 +13,14 @@ and learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-setinformationjobob
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import platform
 import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -77,6 +79,10 @@ class _ExtendedLimits(ctypes.Structure):
         ("basic", _BasicLimits), ("io", _IoCounters), ("process_memory", SIZE_T),
         ("job_memory", SIZE_T), ("peak_process_memory", SIZE_T), ("peak_job_memory", SIZE_T),
     ]
+
+
+class _GenericMapping(ctypes.Structure):
+    _fields_ = [(name, DWORD) for name in ("read", "write", "execute", "all")]
 
 
 def capability() -> dict:
@@ -282,7 +288,7 @@ def _environment_block(environment: dict[str, str], work: Path):
 
 def run(
     command: list[str], bundle: Path, work: Path, environment: dict[str, str],
-    timeout: int, output_limit: int,
+    timeout: int, output_limit: int, *, diagnostics: dict | None = None,
 ) -> tuple[int, bytes, bytes]:
     """Execute with complete LPAC attributes or fail without running Provider."""
     available = capability()
@@ -299,6 +305,9 @@ def run(
     job = None
     job_assigned = False
     try:
+        if diagnostics is not None:
+            diagnostics["stage"] = "private_runtime_and_acl"
+            preparation_started = time.monotonic()
         result = api.userenv.CreateAppContainerProfile(name, name, "Isolated Provider", None, 0, ctypes.byref(sid))
         if result < 0:
             raise OSError(f"Windows LPAC profile creation failed: HRESULT {result & 0xFFFFFFFF:08x}")
@@ -322,6 +331,8 @@ def run(
         _secure_tree(api, runtime, owner, sandbox, False)
         _secure_tree(api, bundle, owner, sandbox, False)
         _secure_tree(api, work, owner, sandbox, True)
+        if diagnostics is not None:
+            diagnostics["preparation_seconds"] = round(time.monotonic() - preparation_started, 3)
         actual_command = [str(executable), *command[1:]]
         security = _SecurityAttributes(ctypes.sizeof(_SecurityAttributes), None, True)
         readers, writers = [], []
@@ -363,8 +374,18 @@ def run(
         environment_block = _environment_block(environment, work)
         command_line = ctypes.create_unicode_buffer(subprocess.list2cmdline(actual_command))
         flags = 0x80000 | 0x400 | 0x4 | 0x08000000
+        if diagnostics is not None:
+            diagnostics["stage"] = "create_lpac_process"
         api.check(api.kernel.CreateProcessW(str(executable), command_line, None, None, True, flags, environment_block, str(work), ctypes.byref(startup), ctypes.byref(process)), "LPAC process creation")
         handles.extend([process.process, process.thread])
+        if diagnostics is not None:
+            diagnostics["stage"] = "suspended_lpac_access"
+            try:
+                diagnostics["access"] = _startup_access(api, process.process, runtime, bundle, work)
+            except OSError as exc:
+                # Diagnostic collection never changes attributes, ACLs or Job
+                # enforcement. An unavailable observation is reported as such.
+                diagnostics["access_error"] = {"type": type(exc).__name__, "code": exc.errno}
 
         job = api.kernel.CreateJobObjectW(None, None)
         api.check(job, "Job Object creation")
@@ -377,6 +398,8 @@ def run(
         api.check(api.kernel.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)), "Job limits")
         api.check(api.kernel.AssignProcessToJobObject(job, process.process), "Job assignment")
         job_assigned = True
+        if diagnostics is not None:
+            diagnostics["stage"] = "resume_lpac_process"
         if api.kernel.ResumeThread(process.thread) == 0xFFFFFFFF:
             raise OSError("Windows LPAC process could not be resumed")
         # Parent writers must close so a terminated child yields pipe EOF.
@@ -414,6 +437,9 @@ def run(
             time.sleep(0.01)
         exit_code = DWORD()
         api.check(api.kernel.GetExitCodeProcess(process.process, ctypes.byref(exit_code)), "exit status")
+        if diagnostics is not None:
+            diagnostics["stage"] = "process_exited"
+            diagnostics["exit_code"] = f"0x{exit_code.value:08X}"
         return exit_code.value, bytes(streams[0]), bytes(streams[1])
     finally:
         cleanup_error = None
@@ -455,3 +481,124 @@ def _pipe_available(api: _Api, reader) -> bool:
         return False
     api.check(False, "pipe drain")
     return False
+
+
+def _access_mask(api: _Api, descriptor, token, mapping: tuple[int, int, int, int]) -> dict:
+    privileges = ctypes.create_string_buffer(4096)
+    length, granted, allowed = DWORD(len(privileges)), DWORD(), BOOL()
+    generic = _GenericMapping(*mapping)
+    api.check(api.advapi.AccessCheck(descriptor, token, 0x02000000, ctypes.byref(generic),
+                                    privileges, ctypes.byref(length), ctypes.byref(granted),
+                                    ctypes.byref(allowed)), "diagnostic access check")
+    return {"allowed": bool(allowed.value), "mask": f"0x{granted.value:08x}"}
+
+
+def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path) -> dict:
+    """Read-only observations of the suspended process; never grants access."""
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    signatures = (
+        (api.advapi, "DuplicateToken", BOOL, [HANDLE, ctypes.c_int, ctypes.POINTER(HANDLE)]),
+        (api.advapi, "AccessCheck", BOOL, [HANDLE, HANDLE, DWORD, ctypes.POINTER(_GenericMapping), HANDLE,
+                                         ctypes.POINTER(DWORD), ctypes.POINTER(DWORD), ctypes.POINTER(BOOL)]),
+        (api.advapi, "GetFileSecurityW", BOOL, [LPWSTR, DWORD, HANDLE, DWORD, ctypes.POINTER(DWORD)]),
+        (api.kernel, "GetCurrentThreadId", DWORD, []),
+        (user, "GetProcessWindowStation", HANDLE, []),
+        (user, "GetThreadDesktop", HANDLE, [DWORD]),
+        (user, "GetUserObjectSecurity", BOOL, [HANDLE, ctypes.POINTER(DWORD), HANDLE, DWORD, ctypes.POINTER(DWORD)]),
+    )
+    for library, name, result, arguments in signatures:
+        function = getattr(library, name)
+        function.restype, function.argtypes = result, arguments
+    token, impersonation = HANDLE(), HANDLE()
+    api.check(api.advapi.OpenProcessToken(process, 0x0A, ctypes.byref(token)), "diagnostic process token")
+    try:
+        api.check(api.advapi.DuplicateToken(token, 2, ctypes.byref(impersonation)), "diagnostic impersonation token")
+        observations = {}
+        for name, information_class in (("appcontainer", 29), ("lpac", 46)):
+            value, length = DWORD(), DWORD()
+            try:
+                api.check(api.advapi.GetTokenInformation(token, information_class, ctypes.byref(value),
+                                                         ctypes.sizeof(value), ctypes.byref(length)), "diagnostic token flag")
+                observations[name] = bool(value.value)
+            except OSError as exc:
+                # Some Windows builds reject information class 46. Preserve
+                # that observation as unavailable and still inspect objects;
+                # absence of a query result cannot assert LPAC false or true.
+                observations[name] = {"error": exc.errno}
+
+        def read_access(reader, mapping):
+            try:
+                length = DWORD()
+                reader(None, 0, ctypes.byref(length))
+                if not length.value or length.value > 65536:
+                    raise OSError("Windows startup diagnostic security descriptor size is invalid")
+                descriptor = ctypes.create_string_buffer(length.value)
+                api.check(reader(descriptor, len(descriptor), ctypes.byref(length)), "diagnostic security descriptor")
+                return _access_mask(api, descriptor, impersonation, mapping)
+            except OSError as exc:
+                return {"error": exc.errno}
+
+        # STARTUPINFO.lpDesktop is null: Windows uses the parent's station and
+        # desktop. Borrowed parent handles must not be closed here. Read owner,
+        # group and DACL (7); AccessCheck requires owner and group as well.
+        for name, handle, mapping in (
+            ("default_window_station", user.GetProcessWindowStation(), (0x20303, 0x2001C, 0x20060, 0xF037F)),
+            ("default_desktop", user.GetThreadDesktop(api.kernel.GetCurrentThreadId()), (0x20041, 0x200BE, 0x20100, 0xF01FF)),
+        ):
+            information = DWORD(7)
+            observations[name] = read_access(
+                lambda buffer, size, length: user.GetUserObjectSecurity(handle, ctypes.byref(information), buffer, size, length), mapping)
+        for name, path in (("runtime", runtime), ("runtime_executable", runtime / "python.exe"),
+                           ("bundle", bundle), ("work", work), ("private_parent", work.parent)):
+            observations[name] = read_access(
+                lambda buffer, size, length: api.advapi.GetFileSecurityW(str(path), 7, buffer, size, length),
+                (0x120089, 0x120116, 0x1200A0, 0x1F01FF))
+        return observations
+    finally:
+        api.close(impersonation)
+        api.close(token)
+
+
+def diagnose() -> dict:
+    """Bounded fixed-code startup experiment, explicitly not qualification."""
+    available = capability()
+    report = {**available, "qualified": False, "assurance": "startup_diagnostic_only"}
+    if not available["supported"]:
+        return report
+    started = time.monotonic()
+    try:
+        with tempfile.TemporaryDirectory(prefix="ea-windows-startup-") as temporary:
+            base = Path(temporary).resolve()
+            api = _Api()
+            api.acl(base, api.owner_sid(), None, False)
+            work, bundle = base / "work", base / "bundle"
+            work.mkdir()
+            bundle.mkdir()
+            environment = {name: value for name, value in os.environ.items()
+                           if name.upper() in {"SYSTEMROOT", "WINDIR"}}
+            block = _environment_block(environment, work)
+            private_environment = dict(entry.split("=", 1) for entry in block[:].rstrip("\0").split("\0"))
+            command = ["python.exe", "-I", "-B", "-S", "-c", "print('EA_LPAC_STARTUP_OK',flush=True)"]
+            copy_started = time.monotonic()
+            executable = _private_runtime(base / "baseline-runtime")
+            report["baseline_copy_seconds"] = round(time.monotonic() - copy_started, 3)
+            baseline = subprocess.run([str(executable), *command[1:]], cwd=work, env=private_environment,
+                                      stdin=subprocess.DEVNULL, capture_output=True, timeout=10, check=False)
+            report["copied_runtime_baseline"] = {"exit_code": f"0x{baseline.returncode & 0xFFFFFFFF:08X}",
+                                                "marker": baseline.stdout.strip() == b"EA_LPAC_STARTUP_OK"}
+            strict = {}
+            report["strict_lpac"] = strict
+            code, output, _ = run(command, bundle, work, environment, 10, 4096, diagnostics=strict)
+            strict["marker"] = code == 0 and output.strip() == b"EA_LPAC_STARTUP_OK"
+    except (OSError, subprocess.SubprocessError) as exc:
+        report["diagnostic_error"] = {"type": type(exc).__name__, "code": getattr(exc, "errno", None)}
+    report["total_seconds"] = round(time.monotonic() - started, 3)
+    return report
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] != ["--diagnose"]:
+        raise SystemExit("use --diagnose for the fixed Windows startup experiment")
+    result = diagnose()
+    print(json.dumps(result, sort_keys=True))
+    raise SystemExit(0 if result.get("strict_lpac", {}).get("marker") else 1)

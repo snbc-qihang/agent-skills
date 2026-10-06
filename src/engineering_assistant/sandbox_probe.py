@@ -6,6 +6,7 @@ positive invocation and denied network/process/read/write probes on this host.
 from __future__ import annotations
 
 import json
+import ntpath
 import os
 import socket
 import subprocess
@@ -57,9 +58,14 @@ def _invoke(catalog, bundle: Path, source: str, name: str, expected: set[str]) -
     return checks
 
 
-def _exec_probe(executable: str, arguments: list[str], name: str) -> str:
+def _exec_probe(executable: str, arguments: list[str], name: str, *, crt_arguments: bool = True) -> str:
     # An allowed exec replaces this probe. Its replacement prints false using
     # the same output contract, so an escape cannot masquerade as denied exec.
+    # Windows _wexecv joins argv with spaces without quoting. Python's CRT
+    # parser therefore needs each argument encoded before replacement launch.
+    # cmd.exe has a different command grammar; its fixed command stays raw.
+    if os.name == "nt" and crt_arguments:
+        arguments = [subprocess.list2cmdline([value]) for value in arguments]
     return f'''import json,os
 try:
     os.execv({executable!r}, {arguments!r})
@@ -129,15 +135,20 @@ print('## Design System: SandboxProbe\\n'+json.dumps(checks))
             checks.update(_invoke(catalog, bundle, _exec_probe(executable, [
                 executable, "-I", "-S", "-c", replacement], "same_python_exec"), "python-exec", {"same_python_exec"}))
             if os.name == "nt":
-                extra = str(Path(os.environ.get("SYSTEMROOT", "C:/Windows")) / "System32/cmd.exe")
-                extra_arguments = [extra, "/d", "/c", 'echo ## Design System: SandboxProbe & echo {"extra_exec":false}']
+                extra = ntpath.join(os.environ.get("SYSTEMROOT", "C:/Windows"), "System32", "cmd.exe")
+                extra_arguments = [subprocess.list2cmdline([extra]), "/d", "/c", 'echo ## Design System: SandboxProbe & echo {"extra_exec":false}']
+                # list2cmdline applies CRT backslash escaping to JSON quotes,
+                # which cmd.exe echoes literally. Pass this fixed cmd grammar
+                # as one command line rather than applying CRT escaping again.
+                extra_baseline = " ".join(extra_arguments)
             else:
                 extra = "/bin/sh"
                 extra_arguments = [extra, "-c", "printf '%s\\n' '## Design System: SandboxProbe' '{\"extra_exec\":false}'"]
-            baseline = subprocess.run(extra_arguments, stdin=subprocess.DEVNULL, capture_output=True, timeout=5, check=True)
+                extra_baseline = extra_arguments
+            baseline = subprocess.run(extra_baseline, stdin=subprocess.DEVNULL, capture_output=True, timeout=5, check=True)
             if json.loads(baseline.stdout.splitlines()[-1]) != {"extra_exec": False}:
                 raise ValidationFailure("extra executable baseline did not complete")
-            checks.update(_invoke(catalog, bundle, _exec_probe(extra, extra_arguments, "extra_exec"), "extra-exec", {"extra_exec"}))
+            checks.update(_invoke(catalog, bundle, _exec_probe(extra, extra_arguments, "extra_exec", crt_arguments=False), "extra-exec", {"extra_exec"}))
             # Detect a connection independently of the Provider's own result.
             for name, listener in (("network_ipv4", ipv4), ("network_ipv6", ipv6)):
                 try:

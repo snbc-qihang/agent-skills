@@ -29,7 +29,126 @@ from engineering_assistant.windows_artifact_fs import (
 )
 
 
+def _file_security_identity(filesystem, handle):
+    security, owner, dacl = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
+    try:
+        error = filesystem._advapi.GetSecurityInfo(handle, 1, 5, ctypes.byref(owner),
+            None, ctypes.byref(dacl), None, ctypes.byref(security))
+        if error:
+            raise ctypes.WinError(error)
+        get_control = filesystem._advapi.GetSecurityDescriptorControl
+        get_control.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint16),
+                               ctypes.POINTER(ctypes.c_uint32)]
+        get_control.restype = ctypes.c_int
+        control, revision = ctypes.c_uint16(), ctypes.c_uint32()
+        if not get_control(security, ctypes.byref(control), ctypes.byref(revision)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not dacl.value or not filesystem._advapi.IsValidAcl(dacl):
+            raise AssertionError("created file has no valid DACL")
+        _, _, _, count, _ = struct.unpack("<BBHHH", ctypes.string_at(dacl, 8))
+        allowed = {}
+        for index in range(count):
+            ace = ctypes.c_void_p()
+            if not filesystem._advapi.GetAce(dacl, index, ctypes.byref(ace)):
+                raise ctypes.WinError(ctypes.get_last_error())
+            kind, _, _, mask = struct.unpack("<BBHI", ctypes.string_at(ace, 8))
+            if kind != 0:
+                raise AssertionError("created file has an unexpected non-allow ACE")
+            # Binary SID conversion always returns S-...; SDDL can use LA/SY.
+            trustee = filesystem._sid_text(ctypes.c_void_p(ace.value + 8))
+            allowed[trustee] = allowed.get(trustee, 0) | mask
+        return filesystem._sid_text(owner), control.value, allowed
+    finally:
+        if security.value:
+            filesystem._kernel.LocalFree(security)
+
+
 class WindowsProtocolTests(unittest.TestCase):
+    def test_launcher_dacl_fixture_restores_inheritance_through_retained_handle(self) -> None:
+        from test_native_launcher import NativeLauncherTests
+
+        for control in (0, 0x1000):
+            with self.subTest(protected=bool(control)):
+                def get_security(_handle, _kind, flags, _owner, _group, dacl, _sacl, security):
+                    self.assertEqual(4, flags)
+                    dacl._obj.value, security._obj.value = 101, 102
+                    return 0
+
+                def get_control(_security, output, revision):
+                    output._obj.value, revision._obj.value = control, 1
+                    return 1
+
+                def constructed_dacl(_security, present, dacl, _defaulted):
+                    present._obj.value, dacl._obj.value = 1, 201
+                    return 1
+
+                filesystem = SimpleNamespace(O_DIRECTORY=0, open=Mock(return_value=8),
+                    close=Mock(), _reopen_handle=Mock(return_value=99), _user_sid="current-user",
+                    _security_descriptor=Mock(return_value=202), fchmod=Mock(),
+                    _advapi=SimpleNamespace(GetSecurityInfo=Mock(side_effect=get_security),
+                        GetSecurityDescriptorControl=Mock(side_effect=get_control),
+                        GetSecurityDescriptorDacl=Mock(side_effect=constructed_dacl),
+                        SetSecurityInfo=Mock(return_value=0)),
+                    _kernel=SimpleNamespace(LocalFree=Mock(), CloseHandle=Mock()))
+                with patch("engineering_assistant.artifact_io.artifact_fs", filesystem):
+                    with self.assertRaisesRegex(RuntimeError, "probe failed"):
+                        with NativeLauncherTests._windows_dacl(Path("."), broad=True):
+                            raise RuntimeError("probe failed")
+                calls = filesystem._advapi.SetSecurityInfo.call_args_list
+                self.assertEqual(2, len(calls))
+                self.assertEqual((99, 1, 0x80000004), calls[0].args[:3])
+                self.assertEqual((99, 1, 4 | (0x80000000 if control else 0x20000000)),
+                                 calls[1].args[:3])
+                self.assertEqual(101, calls[1].args[5].value)
+                filesystem.open.assert_called_once()
+                filesystem._reopen_handle.assert_called_once_with(8, 0x60080)
+                filesystem.fchmod.assert_not_called()
+                filesystem._kernel.CloseHandle.assert_called_once_with(99)
+                filesystem.close.assert_called_once_with(8)
+
+    def test_chmod_acl_fixture_compares_binary_canonical_sid(self) -> None:
+        user_sid = "S-1-5-21-100-200-300-500"  # SDDL can render this administrator as LA.
+        user = bytes((1, 5, 0, 0, 0, 0, 0, 5)) + struct.pack("<5I", 21, 100, 200, 300, 500)
+        system = bytes((1, 1, 0, 0, 0, 0, 0, 5)) + struct.pack("<I", 18)
+        entries = [struct.pack("<BBHI", 0, 0, 8 + len(sid), mask) + sid
+                   for sid, mask in ((user, 0x1E0089), (system, 0x1F01FF))]
+        acl = ctypes.create_string_buffer(struct.pack("<BBHHH", 2, 0, 8 + sum(map(len, entries)), 2, 0)
+                                         + b"".join(entries))
+        owner = ctypes.create_string_buffer(user)
+
+        def get_security(_handle, _kind, flags, owner_out, _group, dacl, _sacl, security):
+            self.assertEqual(5, flags)
+            owner_out._obj.value, dacl._obj.value = ctypes.addressof(owner), ctypes.addressof(acl)
+            security._obj.value = 102
+            return 0
+
+        def get_control(_security, output, revision):
+            output._obj.value, revision._obj.value = 0x1000, 1
+            return 1
+
+        def get_ace(_acl, index, output):
+            output._obj.value = ctypes.addressof(acl) + 8 + sum(map(len, entries[:index]))
+            return 1
+
+        def sid_text(sid):
+            size = 8 + 4 * ctypes.string_at(sid, 8)[1]
+            value = ctypes.string_at(sid, size)
+            return {user: user_sid, system: "S-1-5-18"}[value]
+
+        filesystem = SimpleNamespace(_sid_text=Mock(side_effect=sid_text),
+            _advapi=SimpleNamespace(GetSecurityInfo=Mock(side_effect=get_security),
+                GetSecurityDescriptorControl=Mock(side_effect=get_control),
+                GetAce=Mock(side_effect=get_ace), IsValidAcl=Mock(return_value=1),
+                ConvertSecurityDescriptorToStringSecurityDescriptorW=Mock(
+                    side_effect=AssertionError("SDDL aliases are not identities"))),
+            _kernel=SimpleNamespace(LocalFree=Mock()))
+        identity, control, allowed = _file_security_identity(filesystem, 99)
+        self.assertEqual(user_sid, identity)
+        self.assertTrue(control & 0x1000)
+        self.assertEqual({user_sid: 0x1E0089, "S-1-5-18": 0x1F01FF}, allowed)
+        self.assertEqual(3, filesystem._sid_text.call_count)
+        filesystem._advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW.assert_not_called()
+
     def test_launcher_acl_fixture_uses_bound_reopen_with_security_access(self) -> None:
         tree = ast.parse((ROOT / "tests/test_native_launcher.py").read_text(encoding="utf-8"))
         method = next(node for node in ast.walk(tree)
@@ -417,33 +536,14 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
             try:
                 handle = artifact_fs._reopen_handle(descriptor, 0x20080)
                 self.assertNotIn(handle, (None, ctypes.c_void_p(-1).value))
-                advapi = ctypes.WinDLL("advapi32", use_last_error=True)
-                advapi.GetSecurityInfo.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32,
-                                                   ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                                                   ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
-                advapi.GetSecurityInfo.restype = ctypes.c_uint32
-                advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [
-                    ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32,
-                    ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p,
-                ]
-                advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW.restype = ctypes.c_int
-                security, text = ctypes.c_void_p(), ctypes.c_void_p()
                 try:
-                    self.assertEqual(0, advapi.GetSecurityInfo(handle, 1, 4, None, None,
-                                                              None, None, ctypes.byref(security)))
-                    self.assertTrue(advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW(
-                        security, 1, 4, ctypes.byref(text), None
-                    ))
-                    sddl = ctypes.wstring_at(text)
-                    self.assertTrue(sddl.startswith("D:P"), sddl)
-                    self.assertIn(artifact_fs._user_sid, sddl)
-                    for principal in ("WD", "AU", "BU"):
-                        self.assertNotIn(f";;;{principal})", sddl)
+                    owner, control, allowed = _file_security_identity(artifact_fs, handle)
+                    self.assertEqual(artifact_fs._user_sid, owner)
+                    self.assertTrue(control & 0x1000)  # SE_DACL_PROTECTED
+                    self.assertEqual({artifact_fs._user_sid, "S-1-5-18"}, set(allowed))
+                    self.assertTrue(allowed[artifact_fs._user_sid] & 1)  # FILE_READ_DATA
+                    self.assertFalse(allowed[artifact_fs._user_sid] & 2)  # FILE_WRITE_DATA
                 finally:
-                    if text.value:
-                        artifact_fs._kernel.LocalFree(text)
-                    if security.value:
-                        artifact_fs._kernel.LocalFree(security)
                     artifact_fs._kernel.CloseHandle(handle)
             finally:
                 artifact_fs.close(descriptor)

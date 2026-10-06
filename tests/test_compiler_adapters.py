@@ -25,6 +25,16 @@ from engineering_assistant.version import platform_version  # noqa: E402
 
 
 class CompilerAdapterTests(unittest.TestCase):
+    def test_native_runtime_fixture_keeps_venv_under_private_data(self) -> None:
+        package = self.root / "private-runtime-fixture"
+        build_package(ROOT, "codex", package)
+        _launcher, environment = self.native_runtime_fixture(package)
+        data = Path(environment["ENGINEERING_ASSISTANT_DATA_HOME"])
+        lock = json.loads((package / "engineering-assistant/runtime-lock.json").read_text())
+        binding = json.loads((data / "bindings/codex" / (lock["environment_key"] + ".json")).read_text())
+        self.assertTrue(Path(binding["environment"]).is_relative_to(data))
+        self.assertTrue(Path(binding["python"]).is_relative_to(Path(binding["environment"])))
+
     def test_hermes_native_git_metadata_never_exempts_plugin_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary).resolve() / "hermes"
@@ -48,22 +58,26 @@ class CompilerAdapterTests(unittest.TestCase):
         """Current test Python checks launcher protocols, not the pinned install contract."""
         core = package / "engineering-assistant"
         lock = json.loads((core / "runtime-lock.json").read_text(encoding="utf-8"))
-        environment = self.root / "launcher-unit-python"
-        if not environment.exists():
-            venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(environment)
-        python = environment / ("Scripts/python.exe" if lock["target"] == "windows-x64" else "bin/python")
         data = self.root / "launcher-unit-data"
-        from engineering_assistant.installation import _storage
-        _storage(data).close()
-        bindings = data / "bindings" / lock["agent"]
-        bindings.mkdir(parents=True, exist_ok=True)
-        binding = {
-            "schema_version": "1", "agent": lock["agent"], "target": lock["target"],
-            "environment_key": lock["environment_key"], "canonical_version": lock["canonical_version"],
-            "environment": str(environment), "python": str(python), "uv": str(Path(sys.executable).absolute()),
-            "test_fixture": "current_test_python_not_installation_qualification",
-        }
-        (bindings / (lock["environment_key"] + ".json")).write_text(json.dumps(binding), encoding="utf-8")
+        from engineering_assistant.installation import _normalize_new_windows_environment, _storage
+        storage = _storage(data)
+        try:
+            environment = data / "environments/launcher-unit-python"
+            if not environment.exists():
+                storage.ensure_directory("environments", "launcher-unit-python")
+                venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(environment)
+                if os.name == "nt":
+                    _normalize_new_windows_environment(environment)
+            python = environment / ("Scripts/python.exe" if lock["target"] == "windows-x64" else "bin/python")
+            binding = {
+                "schema_version": "1", "agent": lock["agent"], "target": lock["target"],
+                "environment_key": lock["environment_key"], "canonical_version": lock["canonical_version"],
+                "environment": str(environment), "python": str(python), "uv": str(Path(sys.executable).absolute()),
+                "test_fixture": "current_test_python_not_installation_qualification",
+            }
+            storage.create_immutable_json(binding, "bindings", lock["agent"], lock["environment_key"] + ".json")
+        finally:
+            storage.close()
         launcher = core / "bin" / ("ea.exe" if lock["target"] == "windows-x64" else "ea")
         self.assertTrue(launcher.is_file())
         return launcher, {**os.environ, "ENGINEERING_ASSISTANT_DATA_HOME": str(data)}
@@ -1031,8 +1045,10 @@ print(json.dumps({
             task_id="hermes-efficiency-task",
             cwd=str(project),
         )
-        self.assertEqual("review", json.loads(first)["decision"]["flow_id"])
-        self.assertEqual("review", json.loads(second)["decision"]["flow_id"])
+        for payload in (first, second):
+            response = json.loads(payload)
+            self.assertIn("decision", response, payload)
+            self.assertEqual("review", response["decision"]["flow_id"])
         context.hooks["post_llm_call"](
             "hermes-efficiency-session",
             "使用 engineering-assistant 插件评审当前变更。",
@@ -1134,7 +1150,9 @@ print(json.dumps({
                 }
             }
         )
-        self.assertEqual("review", json.loads(payload)["decision"]["flow_id"])
+        response = json.loads(payload)
+        self.assertIn("decision", response, payload)
+        self.assertEqual("review", response["decision"]["flow_id"])
 
         project = self.root / "hermes-project"
         project.mkdir()
@@ -1193,7 +1211,9 @@ print(json.dumps({
             session_id=hostile_session,
             turn_id="turn-hostile",
         )
-        self.assertEqual("review", json.loads(fail_open_payload)["decision"]["flow_id"])
+        response = json.loads(fail_open_payload)
+        self.assertIn("decision", response, fail_open_payload)
+        self.assertEqual("review", response["decision"]["flow_id"])
         self.assertIsNone(
             context.hooks["post_llm_call"](
                 hostile_session,

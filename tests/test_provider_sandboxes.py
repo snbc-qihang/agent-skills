@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,6 +113,68 @@ class ProviderSandboxContractTests(unittest.TestCase):
         self.assertEqual(sorted(names, key=str.upper), names)
         with self.assertRaisesRegex(OSError, "invalid.*environment"):
             windows._environment_block({"SystemRoot": "C:\\Windows\0HOME=host"}, Path("work"))
+
+    def test_windows_startup_access_check_uses_impersonation_and_bounded_storage(self) -> None:
+        # WinAPI call contract only; native Windows diagnosis must run separately.
+        def access_check(descriptor, token, desired, mapping, privileges, length, granted, status):
+            self.assertEqual(123, token)
+            self.assertEqual(0x02000000, desired)
+            self.assertEqual(4096, length._obj.value)
+            granted._obj.value = 0x22
+            status._obj.value = 1
+            return 1
+
+        api = SimpleNamespace(check=lambda result, operation: self.assertTrue(result),
+                              advapi=SimpleNamespace(AccessCheck=Mock(side_effect=access_check)))
+        self.assertEqual({"allowed": True, "mask": "0x00000022"},
+                         windows._access_mask(api, b"descriptor", 123, (1, 2, 3, 4)))
+
+    def test_windows_diagnostic_is_explicitly_not_qualification(self) -> None:
+        with patch.object(windows, "capability", return_value={
+            "supported": False, "backend": "windows-lpac", "reason": "not Windows",
+        }):
+            result = windows.diagnose()
+        self.assertIs(result["qualified"], False)
+        self.assertEqual("startup_diagnostic_only", result["assurance"])
+
+    def test_unavailable_lpac_token_query_does_not_discard_access_observations(self) -> None:
+        # Optional TokenIsLessPrivilegedAppContainer can fail with WinError 87;
+        # failure is unavailable evidence, not a false flag or a reason to lose
+        # the other read-only observations. This is a WinAPI seam, not native.
+        def checked(value, operation):
+            if not value:
+                raise OSError(87, operation)
+            return value
+
+        def token_information(token, kind, value, size, length):
+            if kind == 46:
+                return 0
+            value._obj.value = 1
+            length._obj.value = 4
+            return 1
+
+        def descriptor(*arguments):
+            arguments[-1]._obj.value = 32
+            return 1
+
+        api = SimpleNamespace(kernel=Mock(), advapi=Mock(), check=checked, close=Mock())
+        api.advapi.OpenProcessToken.side_effect = lambda process, access, token: setattr(token._obj, "value", 123) or 1
+        api.advapi.DuplicateToken.side_effect = lambda token, level, duplicate: setattr(duplicate._obj, "value", 456) or 1
+        api.advapi.GetTokenInformation.side_effect = token_information
+        api.advapi.GetFileSecurityW.side_effect = descriptor
+        user = Mock()
+        user.GetUserObjectSecurity.side_effect = descriptor
+        user.GetProcessWindowStation.return_value = 100
+        user.GetThreadDesktop.return_value = 200
+        with patch("ctypes.WinDLL", create=True, return_value=user), patch.object(
+            windows, "_access_mask", return_value={"allowed": True, "mask": "0x00000022"},
+        ) as access:
+            result = windows._startup_access(api, 12, Path("runtime"), Path("bundle"), Path("work"))
+        self.assertIs(result["appcontainer"], True)
+        self.assertEqual({"error": 87}, result["lpac"])
+        self.assertEqual(7, access.call_count)
+        self.assertEqual({"allowed": True, "mask": "0x00000022"}, result["default_desktop"])
+        self.assertEqual([456, 123], [call.args[0].value for call in api.close.call_args_list])
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -37,6 +39,15 @@ def manifest_command(root: Path) -> str:
 
 
 class WindowsHookManifestTests(unittest.TestCase):
+    def test_new_fixture_directory_keeps_inherited_private_acl(self) -> None:
+        filesystem = SimpleNamespace(open=Mock(return_value=7), O_DIRECTORY=0x4000,
+            set_private_owner=Mock(), assert_private_directory=Mock(), fchmod=Mock(), close=Mock())
+        with patch("engineering_assistant.artifact_io.artifact_fs", filesystem), patch.object(os, "close"):
+            WindowsHookExecutionTests.private(Path("private runtime"), directory=True)
+        filesystem.set_private_owner.assert_called_once_with(7)
+        filesystem.fchmod.assert_not_called()
+        filesystem.assert_private_directory.assert_called_once_with(7)
+
     def test_windows_manifest_uses_constant_encoded_command(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             command = manifest_command(Path(temporary))
@@ -61,7 +72,12 @@ class WindowsHookExecutionTests(unittest.TestCase):
         cls.binary = build_launcher(ROOT, host_target())
         cls.runtime_fixture = tempfile.TemporaryDirectory(prefix="ea hook interpreter ")
         cls.addClassCleanup(cls.runtime_fixture.cleanup)
-        cls.environment = Path(cls.runtime_fixture.name) / "中文 Python environment"
+        from engineering_assistant.installation import _storage
+        storage = _storage(Path(cls.runtime_fixture.name) / "private Runtime")
+        try:
+            cls.environment = storage.ensure_directory("中文 Python environment")
+        finally:
+            storage.close()
         subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(cls.environment)],
                        check=True, capture_output=True, timeout=60)
         cls.python = cls.environment / "Scripts/python.exe"
@@ -76,9 +92,12 @@ class WindowsHookExecutionTests(unittest.TestCase):
         descriptor = artifact_fs.open(str(path), os.O_RDONLY | (artifact_fs.O_DIRECTORY if directory else 0))
         try:
             artifact_fs.set_private_owner(descriptor)  # Only this test's new temporary objects.
-            artifact_fs.fchmod(descriptor, 0o700 if directory or executable else 0o600)
+            if directory:
+                artifact_fs.assert_private_directory(descriptor)
+            else:
+                artifact_fs.fchmod(descriptor, 0o700 if executable else 0o600)
         finally:
-            os.close(descriptor)
+            artifact_fs.close(descriptor)
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="ea Windows hooks ")
@@ -107,10 +126,14 @@ class WindowsHookExecutionTests(unittest.TestCase):
                 "canonical_version": load_catalog(ROOT).version, "environment_key": key}
         (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
         binding = self.data / "bindings/codex" / (key + ".json")
-        binding.parent.mkdir(parents=True)
-        binding.write_text(json.dumps({"schema_version": "1", "agent": "codex", "target": "windows-x64",
-            "environment_key": key, "python": str(self.python), "environment": str(self.environment),
-            "uv": str(Path(sys.executable).absolute())}), encoding="utf-8")
+        from engineering_assistant.installation import _storage
+        storage = _storage(self.data)
+        try:
+            storage.create_immutable_json({"schema_version": "1", "agent": "codex", "target": "windows-x64",
+                "environment_key": key, "python": str(self.python), "environment": str(self.environment),
+                "uv": str(Path(sys.executable).absolute())}, "bindings", "codex", key + ".json")
+        finally:
+            storage.close()
         for directory in (self.data, binding.parent.parent, binding.parent):
             self.private(directory, directory=True)
         self.private(binding, directory=False)
