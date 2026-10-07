@@ -30,9 +30,176 @@ from engineering_assistant.local_publish import (  # noqa: E402
     verify_claude_installation,
 )
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
+import engineering_assistant.local_publish as publish_module  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
+    def test_native_v1_cache_is_verified_snapshotted_and_restored_with_its_full_contract(self):
+        from test_compiler_adapters import native_v1_fixture
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home = root / "codex-home"
+            version = "2.3.0-rc.1+codex.local-native-v1"
+            cache = home / "plugins/cache/personal/engineering-assistant" / version
+            cache.parent.mkdir(parents=True)
+            expected = native_v1_fixture(cache, cachebuster="local-native-v1")
+            self.assertEqual("2.0", expected["build_format_version"])
+            original_lock = (cache / "engineering-assistant/runtime-lock.json").read_bytes()
+            self.assertEqual("1", json.loads(original_lock)["schema_version"])
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+            self.assertEqual([version], _snapshot_codex_caches(home, snapshot))
+            self.assertEqual(expected, verify_package(snapshot / version))
+            shutil.rmtree(cache)
+            self.assertEqual([version], _restore_codex_cache_snapshots(home, snapshot))
+            self.assertEqual(expected, verify_package(cache))
+            self.assertEqual(original_lock, (cache / "engineering-assistant/runtime-lock.json").read_bytes())
+
+    def setUp(self):
+        # Network-free transaction tests; real native protocols have separate qualification.
+        preparation = mock.patch("engineering_assistant.local_publish.prepare_runtime", create=True,
+                                 return_value={"status": "prepared"})
+        diagnosis = mock.patch("engineering_assistant.local_publish.doctor", create=True,
+                               return_value=self.runtime_ready())
+        self.prepare_runtime = preparation.start()
+        self.doctor = diagnosis.start()
+        self.prepared_payload = None
+        def prepared(package, **_kwargs):
+            self.prepared_payload = verify_package(package)["payload_digest"]
+            return {"status": "prepared"}
+        self.prepare_runtime.side_effect = prepared
+        self.doctor.side_effect = self.native_report
+        self.addCleanup(preparation.stop)
+        self.addCleanup(diagnosis.stop)
+
+    @staticmethod
+    def runtime_ready():
+        return {"status": "ready", "ready": True, "checks": {
+            "mcp": "passed", "tools_call": "passed", "hook": "passed",
+            "windows_hook_bridge": "passed",
+            "hermes_bridge": "passed", "provider": {"qualified": True},
+        }}
+
+    def native_report(self, agent, *, home):
+        candidates = []
+        for path in Path(home).rglob("package-manifest.json"):
+            manifest = verify_package(path.parent)
+            if manifest["platform"] == agent and manifest["canonical_version"] == "2.3.0.0-rc.1" and (
+                self.prepared_payload is None or manifest["payload_digest"] == self.prepared_payload
+            ):
+                candidates.append(path.parent)
+        self.assertTrue(candidates, "registration fixture must expose an installed package")
+        return {**self.runtime_ready(), "package": str(candidates[-1])}
+
+    def test_runtime_preparation_failure_prevents_swap_and_registration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            target = home / ".hermes/plugins/engineering-assistant"
+            target.mkdir(parents=True)
+            marker = target / "previous.txt"
+            marker.write_text("previous", encoding="utf-8")
+            self.prepare_runtime.side_effect = ValidationFailure("Runtime protocol failed")
+            register = mock.Mock(return_value={"status": "passed"})
+            with self.assertRaisesRegex(ValidationFailure, "Runtime protocol failed"):
+                _publish_one(ROOT, "hermes", codex_home=home / ".codex", hermes_home=home / ".hermes",
+                             dry_run=False, register=register)
+            self.assertEqual("previous", marker.read_text())
+            register.assert_not_called()
+            self.doctor.assert_not_called()
+
+    def test_runtime_doctor_failure_rolls_back_installed_package(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            target = home / ".hermes/plugins/engineering-assistant"
+            target.mkdir(parents=True)
+            marker = target / "previous.txt"
+            marker.write_text("previous", encoding="utf-8")
+            self.doctor.return_value = {"status": "partial", "ready": False, "checks": {}}
+            self.doctor.side_effect = None
+            register = mock.Mock(return_value={"status": "passed"})
+            with self.assertRaisesRegex(ValidationFailure, "Runtime 校验失败"):
+                _publish_one(ROOT, "hermes", codex_home=home / ".codex", hermes_home=home / ".hermes",
+                             dry_run=False, register=register)
+            self.assertEqual("previous", marker.read_text())
+            register.assert_called_once()
+            self.prepare_runtime.assert_called_once()
+            self.doctor.assert_called_once_with("hermes", home=home / ".hermes")
+
+    def test_preparation_precedes_swap_and_doctor_follows_registration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            target = home / ".hermes/plugins/engineering-assistant"
+            order = []
+            def prepare(package, **kwargs):
+                self.assertFalse(target.exists())
+                self.assertTrue((package / "plugin.yaml").is_file())
+                self.assertEqual({"publish_default": True, "repair": False}, kwargs)
+                order.append("prepare")
+                return {"status": "prepared"}
+            def register(command, environment):
+                self.assertTrue(target.is_dir())
+                order.append("register")
+                return {"status": "passed"}
+            def diagnose(agent, **kwargs):
+                self.assertEqual("hermes", agent)
+                self.assertEqual(home / ".hermes", kwargs["home"])
+                order.append("doctor")
+                return {**self.runtime_ready(), "package": str(target)}
+            self.prepare_runtime.side_effect = prepare
+            self.doctor.side_effect = diagnose
+            report = _publish_one(ROOT, "hermes", codex_home=home / ".codex", hermes_home=home / ".hermes",
+                                  dry_run=False, register=register)
+            self.assertEqual(["prepare", "register", "doctor"], order)
+            self.assertEqual("ready", report["runtime"]["status"])
+
+    def test_doctor_requires_all_protocols_even_when_status_claims_ready(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            build_package(ROOT, "hermes", home / "package")
+            self.doctor.side_effect = None
+            for field in ("mcp", "tools_call", "hook", "hermes_bridge", "provider"):
+                report = self.runtime_ready()
+                report["checks"][field] = {"qualified": False} if field == "provider" else "not_run"
+                self.doctor.return_value = report
+                with self.assertRaises(ValidationFailure):
+                    publish_module._verify_runtime("hermes", home / "package", home)
+            report = self.runtime_ready()
+            report.update(status="needs_trust", ready=False)
+            report["package"] = str(home / "package")
+            self.doctor.return_value = report
+            self.assertEqual("needs_trust", publish_module._verify_runtime("hermes", home / "package", home)["status"])
+            report.update(status="ready", ready=False)
+            with self.assertRaises(ValidationFailure):
+                publish_module._verify_runtime("hermes", home / "package", home)
+
+    def test_post_registration_verification_rejects_a_different_native_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            build_package(ROOT, "codex", root / "expected", codex_cachebuster="expected")
+            build_package(ROOT, "codex", root / "selected", codex_cachebuster="different")
+            self.doctor.side_effect = None
+            self.doctor.return_value = {**self.runtime_ready(), "package": str(root / "selected")}
+            with self.assertRaisesRegex(ValidationFailure, "实际选择"):
+                publish_module._verify_runtime("codex", root / "expected", root / "home")
+
+    def test_cli_all_uses_three_platforms_and_home_flags_override_agent_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            environment = {"CODEX_HOME": str(home / "codex-env"), "HERMES_HOME": str(home / "hermes-env"),
+                           "CLAUDE_CONFIG_DIR": str(home / "claude-env")}
+            with mock.patch.dict(os.environ, environment), mock.patch.object(publish_module, "publish_local", return_value={"status": "passed"}) as publish, \
+                    mock.patch("builtins.print"):
+                self.assertEqual(0, publish_module.main(["--platform", "all", "--dry-run"]))
+                self.assertEqual(["codex", "hermes", "claude-code"], publish.call_args.args[1])
+                self.assertEqual(home / "codex-env", publish.call_args.kwargs["codex_home"])
+                self.assertEqual(home / "hermes-env", publish.call_args.kwargs["hermes_home"])
+                self.assertEqual(home / "claude-env", publish.call_args.kwargs["claude_home"])
+                self.assertEqual(0, publish_module.main(["--platform", "all", "--dry-run", "--codex-home", str(home / "codex-flag"),
+                                                       "--hermes-home", str(home / "hermes-flag"), "--claude-home", str(home / "claude-flag")]))
+                self.assertEqual(home / "codex-flag", publish.call_args.kwargs["codex_home"])
+                self.assertEqual(home / "hermes-flag", publish.call_args.kwargs["hermes_home"])
+                self.assertEqual(home / "claude-flag", publish.call_args.kwargs["claude_home"])
+
     @staticmethod
     def official_validation(_repository: Path, package: Path, **_kwargs) -> dict:
         manifest = json.loads(
@@ -45,7 +212,7 @@ class LocalPublishTests(unittest.TestCase):
 
     def test_repository_preflight_requires_source_and_official_validation(self) -> None:
         evaluation = {
-            "version": "2.2.0.0-rc.1",
+            "version": "2.3.0.0-rc.1",
             "simulation": False,
             "canary": {
                 "status": "not_run",
@@ -119,7 +286,7 @@ class LocalPublishTests(unittest.TestCase):
             build_package(ROOT, "codex", output, codex_cachebuster="local-test-1")
             verify_package(output)
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-            self.assertEqual("2.2.0-rc.1+codex.local-test-1", manifest["version"])
+            self.assertEqual("2.3.0-rc.1+codex.local-test-1", manifest["version"])
 
     def test_codex_registration_uses_the_selected_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -169,6 +336,10 @@ class LocalPublishTests(unittest.TestCase):
             )
 
             self.assertTrue(environments)
+            self.prepare_runtime.assert_called_once()
+            self.doctor.assert_called_once_with(
+                "codex", home=codex_home,
+            )
             self.assertEqual(
                 str(
                     codex_home
@@ -339,7 +510,7 @@ class LocalPublishTests(unittest.TestCase):
             def replace_after_hash(artifacts, **kwargs):
                 nonlocal replaced
                 result = original_hash(artifacts, **kwargs)
-                if registered_cache is not None and not replaced:
+                if registered_cache is not None and artifacts.artifact_root == registered_cache.resolve() and not replaced:
                     moved = registered_cache.with_name(registered_cache.name + ".moved")
                     registered_cache.rename(moved)
                     registered_cache.mkdir()
@@ -371,7 +542,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.2.0-rc.1+codex.local-corrupted-active"
+            old_version = "2.3.0-rc.1+codex.local-corrupted-active"
             build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
             old_cache = (
                 codex_home
@@ -425,7 +596,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.2.0-rc.1+codex.local-active-thread"
+            version = "2.3.0-rc.1+codex.local-active-thread"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
@@ -445,7 +616,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.2.0-rc.1+codex.local-previous-contract"
+            version = "2.3.0-rc.1+codex.local-previous-contract"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(
@@ -458,6 +629,8 @@ class LocalPublishTests(unittest.TestCase):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest.pop("build_format_version")
             manifest.pop("source_count")
+            manifest.pop("target", None)
+            manifest.pop("runtime_environment_key", None)
             manifest_path.write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
@@ -474,7 +647,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.2.0-rc.1+codex.local-unsafe-snapshot"
+            version = "2.3.0-rc.1+codex.local-unsafe-snapshot"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
@@ -492,7 +665,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.2.0-rc.1+codex.local-unsafe-manifest"
+            version = "2.3.0-rc.1+codex.local-unsafe-manifest"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
@@ -514,7 +687,7 @@ class LocalPublishTests(unittest.TestCase):
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
             backup = target.parent / ".engineering-assistant.backup-test"
-            version = "2.2.0-rc.1+codex.local-repair"
+            version = "2.3.0-rc.1+codex.local-repair"
             build_package(ROOT, "codex", backup, codex_cachebuster="local-repair")
             runtime_cache = backup / "engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
@@ -528,14 +701,14 @@ class LocalPublishTests(unittest.TestCase):
             )
             self.assertTrue((repaired / "hooks/feedback_capture.py").is_file())
 
-    def test_successful_publish_keeps_only_the_selected_cache_version(self) -> None:
+    def test_successful_publish_preserves_cache_versions_used_by_active_threads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.2.0-rc.1+codex.local-old-thread"
+            old_version = "2.3.0-rc.1+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -571,10 +744,10 @@ class LocalPublishTests(unittest.TestCase):
                 official_validate=self.official_validation,
             )
 
-            self.assertEqual([report["plugin_version"]], report["active_cache_versions"])
+            self.assertEqual(sorted([report["plugin_version"], old_version]), report["active_cache_versions"])
             self.assertTrue(report["selected_version_verified"])
-            self.assertIn(old_version, report["removed_cache_versions"])
-            self.assertFalse(old_cache.exists())
+            self.assertEqual([], report["removed_cache_versions"])
+            self.assertTrue(old_cache.exists())
             self.assertNotIn("restored_cache_versions", report)
 
     def test_failure_snapshot_preserves_all_valid_active_versions(self) -> None:
@@ -586,7 +759,7 @@ class LocalPublishTests(unittest.TestCase):
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
-                version = f"2.2.0-rc.1+codex.{cachebuster}"
+                version = f"2.3.0-rc.1+codex.{cachebuster}"
                 cache = cache_root / version
                 build_package(ROOT, "codex", cache, codex_cachebuster=cachebuster)
                 os.utime(cache, ns=(index + 1, index + 1))
@@ -611,7 +784,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.2.0-rc.1+codex.local-partial-registration"
+            old_version = "2.3.0-rc.1+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -665,7 +838,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.2.0-rc.1+codex.local-old-registration"
+            old_version = "2.3.0-rc.1+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -729,7 +902,7 @@ class LocalPublishTests(unittest.TestCase):
         policy = ROOT / "config/local-publish-policy.json"
         loaded = _load_policy(policy, ["codex", "hermes", "claude-code"])
         self.assertTrue(loaded["enabled"])
-        self.assertEqual("2.2.0.0-rc.1", loaded["canonical_version"])
+        self.assertEqual("2.3.0.0-rc.1", loaded["canonical_version"])
         self.assertNotIn("reviewer", loaded)
         self.assertNotIn("execution_result", loaded)
 
@@ -770,6 +943,8 @@ class LocalPublishTests(unittest.TestCase):
                     self.assertIsNone(report["official_validation"])
             self.assertFalse((home / "plugins").exists())
             self.assertFalse((home / ".hermes").exists())
+            self.prepare_runtime.assert_not_called()
+            self.doctor.assert_not_called()
 
     def test_claude_code_marketplace_install_verify_and_uninstall(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -804,6 +979,10 @@ class LocalPublishTests(unittest.TestCase):
             target = homes["claude_home"] / "plugins/marketplaces/engineering-assistant-local"
             marketplace = json.loads((target / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
             self.assertEqual("published", report["status"])
+            self.prepare_runtime.assert_called_once()
+            self.doctor.assert_called_once_with(
+                "claude-code", home=homes["claude_home"],
+            )
             self.assertEqual("./plugins/engineering-assistant", marketplace["plugins"][0]["source"])
             self.assertTrue((target / "plugins/engineering-assistant/.mcp.json").is_file())
             self.assertIn(
@@ -858,6 +1037,8 @@ class LocalPublishTests(unittest.TestCase):
             self.assertEqual(["claude", "plugin", "validate"], commands[0][:3])
             self.assertEqual("--strict", commands[0][-1])
             self.assertFalse((home / ".claude").exists())
+            self.prepare_runtime.assert_not_called()
+            self.doctor.assert_not_called()
 
     def test_official_validator_cannot_mutate_final_staging_after_verification(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

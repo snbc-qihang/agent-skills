@@ -14,6 +14,17 @@ from typing import Iterator
 
 from .validation import ValidationFailure
 
+# Keep all mutations and scans relative to retained directory identities. Windows
+# lacks Python's dir_fd APIs; its local facade uses NT directory HANDLEs and
+# exposes CRT descriptors so existing read/write/fstat callers remain compatible.
+if os.name == "nt":  # pragma: no cover - native integration runs on Windows CI
+    from .windows_artifact_fs import WindowsFilesystem
+
+    artifact_fs = WindowsFilesystem()
+    os = artifact_fs
+else:
+    artifact_fs = os
+
 try:  # pragma: no cover - Windows fallback is exercised on Windows CI only
     import fcntl
 except ImportError:  # pragma: no cover
@@ -90,9 +101,17 @@ def _layout_kind_fd(directory_fd: int) -> str | None:
     compiled_package = _is_regular_file_at(
         directory_fd, "package-manifest.json"
     ) and _is_directory_at(directory_fd, "engineering-assistant/runtime/engineering_assistant")
+    wheel_assets = all(
+        _is_directory_at(directory_fd, relative)
+        for relative in ("catalog", "skills", "schemas")
+    ) and _is_regular_file_at(directory_fd, "../__init__.py")
+    wheel_package = all(
+        _is_directory_at(directory_fd, relative)
+        for relative in ("_assets/catalog", "_assets/skills", "_assets/schemas")
+    ) and _is_regular_file_at(directory_fd, "__init__.py")
     if author:
         return "author"
-    if compiled_engine or compiled_package:
+    if compiled_engine or compiled_package or wheel_assets or wheel_package:
         return "installed"
     return None
 
@@ -119,9 +138,11 @@ def _layout_kind_path(root: Path) -> str | None:
         (root / "package-manifest.json").is_file()
         and (root / "engineering-assistant/runtime/engineering_assistant").is_dir()
     )
+    wheel_assets = all((root / name).is_dir() for name in ("catalog", "skills", "schemas")) and (root.parent / "__init__.py").is_file()
+    wheel_package = all((root / "_assets" / name).is_dir() for name in ("catalog", "skills", "schemas")) and (root / "__init__.py").is_file()
     if author:
         return "author"
-    if compiled_engine or compiled_package:
+    if compiled_engine or compiled_package or wheel_assets or wheel_package:
         return "installed"
     return None
 
@@ -165,7 +186,7 @@ def assert_runtime_artifact_target(
             (root / "package-manifest.json").is_file()
             and (root / "engineering-assistant/runtime/engineering_assistant").is_dir()
         )
-        return author or compiled_engine or compiled_package
+        return author or compiled_engine or compiled_package or _layout_kind_path(root) == "installed"
 
     project_layouts = (project, *project.parents)
     engine_root = schemas.parent
@@ -1222,13 +1243,20 @@ class ArtifactIO:
             raise ValidationFailure("artifact path escapes the target project")
         current = self.project_root
         relative = lexical.relative_to(self.project_root)
+        if os.name == "nt":  # pragma: no cover - Windows CI
+            from .windows_artifact_fs import _validate_child_name
+
+            for part in relative.parts:
+                _validate_child_name(part)
         for part in relative.parts:
             current = current / part
             try:
                 metadata = current.lstat()
             except FileNotFoundError:
                 continue
-            if stat.S_ISLNK(metadata.st_mode):
+            if stat.S_ISLNK(metadata.st_mode) or (
+                getattr(metadata, "st_file_attributes", 0) & 0x400
+            ):
                 raise ValidationFailure(f"artifact path contains symlink component: {current}")
 
     @staticmethod

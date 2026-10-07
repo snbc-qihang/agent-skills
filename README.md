@@ -2,10 +2,10 @@
 
 `agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex、Hermes 和 Claude Code 提供可组合、可恢复、可验证的工程协作能力。
 
-- 当前版本：`2.2.0.0-rc.1`
+- 当前版本：`2.3.0.0-rc.1`
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes、Claude Code
-- 开发语言：Python 3.9+
+- 内核语言：Python；安装 Runtime 固定 CPython `3.13.13`、PBS `20260414` 分布构建及归档摘要，启动器使用 Rust
 - 默认语言：简体中文，同时保留中英文任务路由能力
 
 ## 项目定位
@@ -37,7 +37,29 @@ Codex 和 Claude Code 可以根据 skill 的名称和描述自动选择能力，
 hermes --skills engineering-assistant:repo-context
 ```
 
-### 从仓库安装到本机
+### 普通安装与一次准备
+
+安装目标是完整插件：11 个 skills、Runtime MCP、生命周期 Hook 和受隔离的 Provider。Agent 原生市场负责发现、缓存和启用，`ea-setup` 负责固定 Runtime 的准备、诊断与恢复。用户只需预先安装 `uv`，无需安装 Node、克隆作者仓库、运行仓库测试或在日常会话激活虚拟环境。
+
+CI 为每个 OS/架构构建预编译插件和通用 setup wheel。取得经过核验的 wheel 和发行市场后，一条命令安装；占位参数由实际发行资产替换，当前候选尚未发布公网下载地址：
+
+```bash
+uvx --python 3.13.13 --from <setup-wheel路径或发行URL> ea-setup install --agent codex --source <发行市场> --marketplace <市场名称>
+```
+
+已从原生市场安装插件时，通过同一个 setup wheel 执行一次 Runtime 准备：
+
+```bash
+uvx --python 3.13.13 --from <setup-wheel路径或发行URL> ea-setup prepare --agent codex
+```
+
+后续 `doctor`、`repair`、`update` 和 `uninstall` 都通过同一 wheel 启动 `uvx`，不要求把 `ea-setup` 永久安装到 PATH。`doctor` 只读检查，`repair` 修复受损 Runtime；`update` 先准备市场候选再选择版本。Hermes 更新需要明确的预构建候选包。`uninstall` 交给原生 Agent，保留可能仍被会话使用的 Runtime。日常 Agent 会话无需执行这些命令或激活虚拟环境。
+
+Codex 和 Claude Code 安装后，先在真实宿主界面审查并信任 Hook，再通过同一 wheel 运行带 `--hooks-trusted` 参数的诊断，在本次报告中声明已完成审查。该参数不会替宿主授予信任，也不证明真实 Hook 事件已经执行。完整命令、支持边界和恢复规则见 [安装与本机发布](docs/operations/local-publish.md)。
+
+当前目标为 macOS 14+ arm64/x64、Ubuntu 24.04 x64 和 Windows 11 x64。CI 的 Windows Server 验证、包构建和单元测试不能代替 Windows 11 与真实 Agent 会话资格；只有对应平台实际验收通过后才能宣称适配完成。
+
+### 作者从仓库安装到本机
 
 先执行无副作用预演，再显式确认本机发布：
 
@@ -53,7 +75,7 @@ python3 scripts/publish_local.py --platform claude-code --yes
 python3 scripts/publish_local.py --platform claude-code --verify
 ```
 
-同时安装两个平台时，将 `--platform` 改为 `all`。发布脚本会完成测试、评测、构建、摘要校验、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
+同时验证三个平台时，将 `--platform` 改为 `all`。作者发布脚本会完成测试、评测、构建、摘要校验、固定 Runtime 准备、备份、原子替换、平台注册和安装后验证。详细行为见 [本机发布](docs/operations/local-publish.md)；真实产品收益验证见 [真实产品 Canary](docs/operations/canary.md)。
 
 Claude Code 通过受控本机 marketplace 安装；安装或更新后执行 `/reload-plugins`，或启动新会话：
 
@@ -67,7 +89,7 @@ python3 scripts/publish_local.py --platform claude-code --uninstall --yes
 
 ### 当前平台集成边界
 
-当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 和 Claude Code 通过包内 `.mcp.json` 启动 stdio MCP，Hermes 通过插件工具注册复用相同 `RuntimeTools`。Codex 与 Claude Code 注册 `UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop`；轻量 gate 只在明确使用插件或项目存在活动 run 时加载观察逻辑，无有效信号不写反馈 artifact。
+当前发布包会自动注册 11 个公开 skill，并将同一 Runtime 控制面接入平台：Codex 和 Claude Code 通过包内 `.mcp.json` 启动原生 launcher，再进入固定 Runtime 的 stdio MCP；Hermes 通过只使用标准库的宿主桥调用相同 launcher 和 `RuntimeTools`。Codex 与 Claude Code 注册 `UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop`；轻量 gate 只在明确使用插件或项目存在活动 run 时加载观察逻辑，无有效信号不写反馈 artifact。
 
 | 能力 | 当前行为 |
 | --- | --- |
@@ -102,7 +124,7 @@ agent-skills/
 ├── src/engineering_assistant/  # 路由、状态机、证据、编译器和平台 adapter
 ├── evals/                      # Routing、Behavior、State、Replay、Canary
 ├── tests/                      # 单元、行为、构建、发布和仓库治理测试
-├── scripts/                    # 本机 Codex/Hermes 发布入口
+├── scripts/                    # 本机发布、安装资格与发行资产组装入口
 ├── config/                     # 当前本机发布策略
 ├── docs/architecture/          # 当前架构说明
 ├── docs/operations/            # 当前运维说明
@@ -343,7 +365,7 @@ python3 scripts/publish_local.py --platform claude-code --yes
 python3 scripts/publish_local.py --platform all --yes
 ```
 
-脚本自动执行：仓库测试 → 作者源强校验 → 真实 eval → 11 个公开 skill 的官方 `quick_validate.py` → 平台最终 staging 构建 → 最终 Codex staging 包的官方 plugin validator → 官方校验摘要与 staging 摘要绑定 → 包摘要校验 → 旧插件备份 → 原子替换 → 平台注册 → 安装后验证。官方 validator 通过仓库外 `uv` 隔离环境运行并固定 `PyYAML==6.0.2`；缺少 validator、`uv`、输出超限或校验失败都会使 preflight 失败，不会 soft-pass。失败时自动恢复旧插件。
+脚本自动执行：仓库测试 → 作者源强校验 → 真实 eval → 11 个公开 skill 的官方 `quick_validate.py` → 平台最终 staging 构建 → 最终 Codex staging 包的官方 plugin validator → 官方校验摘要与 staging 摘要绑定 → 包摘要校验 → 旧插件备份 → 原子替换 → 平台注册 → 安装后验证。官方 validator 从固定官方 URL 下载并验证 SHA-256，通过仓库外 `uv` 隔离环境运行，固定 Python `3.13.13` 和 `PyYAML==6.0.2`；缺少 validator、`uv`、输出超限或校验失败都会使 preflight 失败，不会 soft-pass。失败时自动恢复旧插件。
 
 GitHub CI 不依赖开发者本机 Codex 环境：workflow 从 OpenAI 官方仓库的固定提交下载 validator、校验固定摘要，并在临时 Runner 中安装固定版本的 `uv`；`main` 与 `teamwork` 的直接推送使用同一门禁。
 

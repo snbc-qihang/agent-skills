@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from .catalog import load_catalog
-from .artifact_io import ArtifactIO
+from .artifact_io import ArtifactIO, artifact_fs
 from .compiler import (
     MAX_BUILD_MANIFEST_BYTES,
     MAX_BUILD_PAYLOAD_FILE_BYTES,
@@ -26,6 +26,7 @@ from .compiler import (
 )
 from .eval_runner import run_evals
 from .official_validation import validate_with_official_tools
+from .installation import agent_home, prepare_runtime, doctor
 from .validation import ValidationFailure
 
 
@@ -258,6 +259,38 @@ def _run_registration(command: list[str], environment: dict[str, str] | None = N
         return {"status": "passed", "output": output}
 
 
+def _claude_registration(register: Callable[..., dict], home: Path) -> Callable[..., dict]:
+    environment = {**os.environ, "CLAUDE_CONFIG_DIR": str(home)}
+    return lambda command: register(command, environment)
+
+
+def _verify_runtime(platform: str, package: Path, home: Path) -> dict:
+    result = doctor(platform, home=home)
+    checks = result.get("checks", {})
+    complete = all(checks.get(name) == "passed" for name in ("mcp", "tools_call", "hook"))
+    complete = complete and checks.get("provider", {}).get("qualified") is True
+    if result.get("status") == "ready":
+        complete = complete and result.get("ready") is True
+    if platform == "hermes":
+        complete = complete and checks.get("hermes_bridge") == "passed"
+    if sys.platform == "win32" and platform == "codex":
+        complete = complete and checks.get("windows_hook_bridge") == "passed"
+    if result.get("status") not in {"ready", "needs_trust"} or not complete:
+        raise ValidationFailure(f"{platform} 安装后的固定 Runtime 校验失败：{result.get('status')}")
+    selected = result.get("package")
+    if not isinstance(selected, str) or verify_package(Path(selected))["payload_digest"] != verify_package(package)["payload_digest"]:
+        raise ValidationFailure(f"{platform} 平台实际选择的插件与本次发布包不一致")
+    return result
+
+
+def _prepare_runtime(package: Path) -> dict:
+    prepared = prepare_runtime(package, publish_default=True, repair=False)
+    if prepared.get("status") != "prepared":
+        raise ValidationFailure("固定 Runtime 准备未完成")
+    verify_package(package)
+    return prepared
+
+
 def _target_for(platform: str, codex_home: Path, hermes_home: Path, claude_home: Path) -> Path:
     if platform == "codex":
         return codex_home.parent / "plugins" / PLUGIN_NAME
@@ -368,12 +401,12 @@ def _snapshot_codex_caches(codex_home: Path, snapshot_root: Path) -> list[str]:
         candidates: list[tuple[int, str]] = []
         with cache_io.open_directory() as cache_fd:
             entry_count = 0
-            with os.scandir(cache_fd) as entries:
+            with artifact_fs.scandir(cache_fd) as entries:
                 for entry in entries:
                     entry_count += 1
                     if entry_count > MAX_CODEX_CACHE_CANDIDATES:
                         raise ValidationFailure("Codex cache 候选数量超出安全上限")
-                    metadata = os.stat(
+                    metadata = artifact_fs.stat(
                         entry.name,
                         dir_fd=cache_fd,
                         follow_symlinks=False,
@@ -435,13 +468,13 @@ def _restore_codex_cache_snapshots(codex_home: Path, snapshot_root: Path) -> lis
                 cache_io = ArtifactIO(cache_root, ".")
                 try:
                     with cache_io.open_directory() as cache_fd:
-                        os.rename(
+                        artifact_fs.rename(
                             source.name,
                             quarantine.name,
                             src_dir_fd=cache_fd,
                             dst_dir_fd=cache_fd,
                         )
-                        os.fsync(cache_fd)
+                        artifact_fs.fsync(cache_fd)
                 finally:
                     cache_io.close()
             else:
@@ -469,19 +502,19 @@ def _verify_codex_cache_version(
             PLUGIN_NAME,
         ) as cache_root_fd:
             cache = _codex_cache_root(codex_home) / version
-            flags = os.O_RDONLY
-            if hasattr(os, "O_DIRECTORY"):
-                flags |= os.O_DIRECTORY
-            if hasattr(os, "O_NOFOLLOW"):
-                flags |= os.O_NOFOLLOW
-            cache_fd = os.open(version, flags, dir_fd=cache_root_fd)
+            flags = artifact_fs.O_RDONLY
+            if hasattr(artifact_fs, "O_DIRECTORY"):
+                flags |= artifact_fs.O_DIRECTORY
+            if hasattr(artifact_fs, "O_NOFOLLOW"):
+                flags |= artifact_fs.O_NOFOLLOW
+            cache_fd = artifact_fs.open(version, flags, dir_fd=cache_root_fd)
             try:
-                opened_cache = os.fstat(cache_fd)
+                opened_cache = artifact_fs.fstat(cache_fd)
                 if not stat.S_ISDIR(opened_cache.st_mode):
                     raise ValidationFailure("Codex 注册 cache 版本不是目录")
                 cache_io = ArtifactIO.from_open_directory_fd(cache, cache_fd)
             finally:
-                os.close(cache_fd)
+                artifact_fs.close(cache_fd)
             registered_manifest, _raw = cache_io.read_json_limited(
                 MAX_BUILD_MANIFEST_BYTES,
                 "package-manifest.json",
@@ -501,7 +534,7 @@ def _verify_codex_cache_version(
             ).hexdigest()
             if f"sha256:{digest}" != expected["payload_digest"]:
                 raise ValidationFailure("Codex 注册 cache 与发布目标摘要不一致")
-            current_cache = os.stat(
+            current_cache = artifact_fs.stat(
                 version,
                 dir_fd=cache_root_fd,
                 follow_symlinks=False,
@@ -732,6 +765,7 @@ def _publish_claude_code(
     register: Callable[..., dict],
 ) -> dict:
     target = _target_for("claude-code", codex_home, hermes_home, claude_home)
+    register = _claude_registration(register, claude_home)
     _ensure_outside_repository(repository_root, target)
     stamp = _stamp()
     if dry_run:
@@ -760,6 +794,7 @@ def _publish_claude_code(
                 "hooks_review_required": True,
             }
 
+        preparation = _prepare_runtime(package_root)
         listed_before = _claude_list(register)
         was_installed = _claude_plugin_entry(listed_before) is not None
         backup = _swap_in(staging, target, stamp)
@@ -778,6 +813,7 @@ def _publish_claude_code(
                 raise ValidationFailure("Claude Code 安装后 plugin list 未返回本次插件")
             installed = _verify_claude_marketplace(target)
             _verify_selected_claude_version(selected, installed["plugin_version"])
+            runtime = _verify_runtime("claude-code", target / CLAUDE_MARKETPLACE_PLUGIN_PATH, claude_home)
         except Exception as original_error:
             _roll_back(target, backup, stamp)
             compensation_errors = []
@@ -813,6 +849,8 @@ def _publish_claude_code(
             "registration": registration,
             "installation": installation,
             "selected_version_verified": True,
+            "runtime_preparation": preparation,
+            "runtime": runtime,
             "restart_required": True,
             "hooks_review_required": True,
         }
@@ -829,6 +867,7 @@ def verify_claude_installation(
     claude_home: Path,
     register: Callable[..., dict] = _run_registration,
 ) -> dict:
+    register = _claude_registration(register, claude_home)
     target = _target_for("claude-code", codex_home, hermes_home, claude_home)
     _ensure_outside_repository(repository_root, target)
     marketplace = _verify_claude_marketplace(target)
@@ -837,6 +876,7 @@ def verify_claude_installation(
     if selected is None:
         raise ValidationFailure("Claude Code 未安装 engineering-assistant 本机插件")
     _verify_selected_claude_version(selected, marketplace["plugin_version"])
+    runtime = _verify_runtime("claude-code", target / CLAUDE_MARKETPLACE_PLUGIN_PATH, claude_home)
     return {
         "status": "verified",
         "platform": "claude-code",
@@ -845,6 +885,7 @@ def verify_claude_installation(
         "payload_digest": marketplace["payload_digest"],
         "marketplace_validation": validation,
         "selected_version_verified": True,
+        "runtime": runtime,
     }
 
 
@@ -856,6 +897,7 @@ def uninstall_claude_installation(
     claude_home: Path,
     register: Callable[..., dict] = _run_registration,
 ) -> dict:
+    register = _claude_registration(register, claude_home)
     target = _target_for("claude-code", codex_home, hermes_home, claude_home)
     _ensure_outside_repository(repository_root, target)
     removal = register(["claude", "plugin", "uninstall", _claude_plugin_id()])
@@ -875,14 +917,16 @@ def _publish_one(
     repository_root: Path,
     platform: str,
     *,
-    codex_home: Path,
-    hermes_home: Path,
+    codex_home: Path | None = None,
+    hermes_home: Path | None = None,
     dry_run: bool,
     claude_home: Path | None = None,
     register: Callable[..., dict] = _run_registration,
     official_validate: Callable[..., dict] = validate_with_official_tools,
 ) -> dict:
-    claude_home = Path.home() / ".claude" if claude_home is None else claude_home
+    codex_home = agent_home("codex", codex_home)
+    hermes_home = agent_home("hermes", hermes_home)
+    claude_home = agent_home("claude-code", claude_home)
     if platform == "claude-code":
         return _publish_claude_code(
             repository_root,
@@ -946,6 +990,7 @@ def _publish_one(
                 "hooks_review_required": platform == "codex",
             }
 
+        preparation = _prepare_runtime(staging)
         marketplace_path = codex_home.parent / ".agents/plugins/marketplace.json"
         marketplace_previous = None
         marketplace_changed = False
@@ -985,13 +1030,10 @@ def _publish_one(
                 )
                 _verify_selected_codex_version(listed_after, plugin_version)
                 selected_version_verified = True
-                removed_cache_versions = _prune_codex_cache_versions(
-                    codex_home, plugin_version
-                )
                 active_cache_versions = _active_codex_cache_versions(codex_home)
-                if active_cache_versions != [plugin_version]:
+                if plugin_version not in active_cache_versions:
                     raise ValidationFailure(
-                        "Codex 活动 cache 必须只保留本次已验证版本"
+                        "Codex cache 必须包含本次已验证版本"
                     )
             else:
                 environment = dict(os.environ)
@@ -1007,6 +1049,8 @@ def _publish_one(
                     environment,
                 )
             installed = verify_package(target)
+            runtime_package = Path(registered_cache["path"]) if registered_cache else target
+            runtime = _verify_runtime(platform, runtime_package, codex_home if platform == "codex" else hermes_home)
         except Exception as original_error:
             if platform == "codex" and marketplace_changed:
                 _restore_file(marketplace_path, marketplace_previous)
@@ -1054,6 +1098,8 @@ def _publish_one(
             "active_cache_versions": active_cache_versions,
             "removed_cache_versions": removed_cache_versions,
             "selected_version_verified": selected_version_verified,
+            "runtime_preparation": preparation,
+            "runtime": runtime,
             "restart_required": platform == "codex",
             "hooks_review_required": hooks_review_required,
         }
@@ -1082,8 +1128,8 @@ def publish_local(
     platforms: list[str],
     *,
     policy_path: Path | None,
-    codex_home: Path,
-    hermes_home: Path,
+    codex_home: Path | None = None,
+    hermes_home: Path | None = None,
     dry_run: bool,
     claude_home: Path | None = None,
 ) -> dict:
@@ -1119,9 +1165,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--platform", choices=["codex", "hermes", "claude-code", "all"], default="codex")
     parser.add_argument("--repository-root", default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument("--policy", default=DEFAULT_POLICY)
-    parser.add_argument("--codex-home", default=str(Path.home() / ".codex"))
-    parser.add_argument("--hermes-home", default=str(Path.home() / ".hermes"))
-    parser.add_argument("--claude-home", default=str(Path.home() / ".claude"))
+    parser.add_argument("--codex-home")
+    parser.add_argument("--hermes-home")
+    parser.add_argument("--claude-home")
     parser.add_argument(
         "--repair-cache-version",
         help="从当前发布包或发布备份恢复仍被活跃 Codex 任务引用的插件 cache 版本。",
@@ -1136,7 +1182,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    platforms = ["codex", "hermes"] if args.platform == "all" else [args.platform]
+    platforms = ["codex", "hermes", "claude-code"] if args.platform == "all" else [args.platform]
     repository_root = Path(args.repository_root).expanduser().resolve()
     policy = Path(args.policy).expanduser()
     if not policy.is_absolute():
@@ -1155,9 +1201,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.repair_cache_version:
             if not args.yes or platforms != ["codex"]:
                 raise ValidationFailure("修复 Codex cache 必须使用 --platform codex --yes")
-            codex_home = Path(args.codex_home).expanduser().resolve()
+            codex_home = agent_home("codex", args.codex_home)
             _load_policy(policy, ["codex"])
-            target = _target_for("codex", codex_home, Path(args.hermes_home).expanduser().resolve(), Path(args.claude_home).expanduser().resolve())
+            target = _target_for("codex", codex_home, agent_home("hermes", args.hermes_home), agent_home("claude-code", args.claude_home))
             repaired = _repair_codex_cache_version(codex_home, target, args.repair_cache_version)
             print(
                 json.dumps(
@@ -1173,9 +1219,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         homes = {
-            "codex_home": Path(args.codex_home).expanduser().resolve(),
-            "hermes_home": Path(args.hermes_home).expanduser().resolve(),
-            "claude_home": Path(args.claude_home).expanduser().resolve(),
+            "codex_home": agent_home("codex", args.codex_home),
+            "hermes_home": agent_home("hermes", args.hermes_home),
+            "claude_home": agent_home("claude-code", args.claude_home),
         }
         if args.verify:
             result = verify_claude_installation(repository_root, **homes)

@@ -11,19 +11,6 @@
       },
       "additionalProperties": false
     },
-    "base": {
-      "type": "object",
-      "required": ["version", "hld", "context_index", "capability_design_root", "change_root", "deployment_catalog", "owners"],
-      "properties": {
-        "version": {"type": "string"},
-        "hld": {"type": "string", "minLength": 1, "maxLength": 512},
-        "context_index": {"type": "string", "minLength": 1, "maxLength": 512},
-        "capability_design_root": {"type": "string", "minLength": 1, "maxLength": 512},
-        "change_root": {"type": "string", "minLength": 1, "maxLength": 512},
-        "deployment_catalog": {"type": "string", "minLength": 1, "maxLength": 512},
-        "owners": {"$ref": "#/$defs/owners"}
-      }
-    },
     "source": {
       "type": "object",
       "required": ["id", "kind", "path", "status", "reason"],
@@ -44,22 +31,25 @@
       "additionalProperties": false
     },
     "v2": {
-      "allOf": [
-        {"$ref": "#/$defs/base"},
-        {
-          "required": ["sources"],
-          "properties": {
-            "version": {"const": "2"},
-            "sources": {
-              "type": "array",
-              "minItems": 6,
-              "maxItems": 6,
-              "items": {"$ref": "#/$defs/source"}
-            }
-          }
+      "type": "object",
+      "required": ["version", "hld", "context_index", "capability_design_root", "change_root", "deployment_catalog", "owners", "sources"],
+      "properties": {
+        "version": {"const": "2"},
+        "hld": {"type": "string", "minLength": 1, "maxLength": 512},
+        "context_index": {"type": "string", "minLength": 1, "maxLength": 512},
+        "capability_design_root": {"type": "string", "minLength": 1, "maxLength": 512},
+        "change_root": {"type": "string", "minLength": 1, "maxLength": 512},
+        "deployment_catalog": {"type": "string", "minLength": 1, "maxLength": 512},
+        "owners": {"$ref": "#/$defs/owners"},
+        "sources": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/source"}
         }
-      ],
-      "unevaluatedProperties": false
+      },
+      "additionalProperties": false
     }
+
   }
 }

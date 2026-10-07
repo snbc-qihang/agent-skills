@@ -41,6 +41,9 @@ flowchart LR
 - `provider_runtime.py` 把固定第三方 bundle 复制为拒绝 pyc、symlink 和特殊文件的私有快照，对快照验摘要后在最小权限沙箱执行 UI/UX 建议；输出只作为不可信建议，任何失败都返回明确的原生 Provider 执行指令。
 - `compiler.py` 从同一作者源构建 Codex/Hermes/Claude Code 包。
 - `local_publish.py` 负责本机预发布、回滚和平台注册。
+- `installation.py` 和 `ea-setup` 按作者源的目标分布元数据固定 CPython 版本、PBS 构建与归档摘要，准备哈希依赖和不可变版本绑定，消费 CI 预构建插件，不要求终端用户执行作者源门禁。
+- Rust launcher 从原生数据目录读取绑定，以绝对路径启动固定 Runtime；Hermes 宿主通过只含标准库的 RPC 桥复用内核，避免导入宿主 Python 依赖。
+- `windows_artifact_fs.py` 提供 NTFS 句柄相对访问；Provider 的 macOS Seatbelt、Linux Landlock/seccomp 与 Windows LPAC/Job 后端共用同一个执行合同，能力检测不能代替实际隔离资格。
 
 ## 依赖方向
 

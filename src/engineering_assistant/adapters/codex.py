@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from pathlib import Path
@@ -10,13 +11,52 @@ from ..catalog import Catalog
 from ..version import platform_version
 
 
+def windows_hook_command() -> str:
+    """Keep plugin paths and protocol bytes out of the outer Shell parser.
+
+    Codex supplies PLUGIN_ROOT in the child environment. The encoded constant
+    works with CMD, PowerShell and Git Bash; Windows PowerShell must be available
+    in the Agent's environment. Process streams bypass PowerShell text encoding.
+    """
+    script = """$ProgressPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = New-Object Text.UTF8Encoding $false
+$start = New-Object System.Diagnostics.ProcessStartInfo
+$start.FileName = [IO.Path]::Combine($env:PLUGIN_ROOT, 'engineering-assistant', 'bin', 'ea.exe')
+$start.Arguments = 'hook'
+$start.UseShellExecute = $false
+$start.CreateNoWindow = $true
+$start.RedirectStandardInput = $true
+$start.RedirectStandardOutput = $true
+$start.RedirectStandardError = $true
+$process = New-Object System.Diagnostics.Process
+$process.StartInfo = $start
+try {
+    $null = $process.Start()
+    $responseTask = $process.StandardOutput.BaseStream.CopyToAsync([Console]::OpenStandardOutput())
+    $diagnosticTask = $process.StandardError.BaseStream.CopyToAsync([Console]::OpenStandardError())
+    $requestTask = [Console]::OpenStandardInput().CopyToAsync($process.StandardInput.BaseStream)
+    try { $null = $requestTask.GetAwaiter().GetResult() }
+    catch { if ($_.Exception.GetBaseException() -isnot [IO.IOException]) { throw } }
+    finally { $process.StandardInput.Close() }
+    $process.WaitForExit()
+    [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($responseTask, $diagnosticTask))
+    exit $process.ExitCode
+}
+finally { $process.Dispose() }
+"""
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    return "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + encoded
+
+
 class CodexAdapter:
     id = "codex"
 
-    def __init__(self, cachebuster: str | None = None) -> None:
+    def __init__(self, cachebuster: str | None = None, target: str | None = None) -> None:
         if cachebuster is not None and not re.fullmatch(r"[0-9A-Za-z-]+", cachebuster):
             raise ValueError("Codex cachebuster 只能包含字母、数字和连字符")
         self.cachebuster = cachebuster
+        self.target = target
 
     DISPLAY_NAMES = {
         "engineering-assistant": "工程助手",
@@ -70,7 +110,7 @@ class CodexAdapter:
                 {
                     "mcpServers": {
                         "engineering-assistant": {
-                            "command": "./engineering-assistant/bin/ea",
+                            "command": "./engineering-assistant/bin/ea.exe" if self.target == "windows-x64" else "./engineering-assistant/bin/ea",
                             "args": ["mcp-serve"],
                             "cwd": ".",
                         }
@@ -83,8 +123,8 @@ class CodexAdapter:
         )
         hooks_dir = package_root / "hooks"
         hooks_dir.mkdir(parents=True, exist_ok=True)
-        hook_command = "python3 ${PLUGIN_ROOT}/hooks/feedback_capture.py"
-        hook_command_windows = 'py -3 "%PLUGIN_ROOT%\\hooks\\feedback_capture.py"'
+        hook_command = '"${PLUGIN_ROOT}/engineering-assistant/bin/ea" hook'
+        hook_command_windows = windows_hook_command()
         hook_handler = {
             "type": "command",
             "command": hook_command,

@@ -25,7 +25,13 @@ from .model import (
 from .validation import ValidationFailure, load_json, validate_many
 
 
-DEFAULT_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+def _default_repository_root(module_path: Path) -> Path:
+    package = module_path.resolve().parent
+    assets = package / "_assets"
+    return assets if (assets / "catalog").is_dir() else package.parents[1]
+
+
+DEFAULT_REPOSITORY_ROOT = _default_repository_root(Path(__file__))
 REQUIRED_OPEN_SOURCE_IDS = frozenset(
     {
         "anthropic-skills",
@@ -480,6 +486,8 @@ def load_catalog(root: Path | str = DEFAULT_REPOSITORY_ROOT, *, require_sources:
                         / "runtime/engineering_assistant"
                         / Path(*relative.parts[2:])
                     )
+                    if root.name == "_assets":
+                        candidates.append(root.parent / Path(*relative.parts[2:]))
                 if (
                     relative.is_absolute()
                     or ".." in relative.parts

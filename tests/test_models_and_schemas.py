@@ -41,13 +41,39 @@ from engineering_assistant.version import (  # noqa: E402
 
 
 class ModelAndSchemaTests(unittest.TestCase):
+    def test_canary_plugin_root_accepts_portable_absolute_paths_with_every_backend(self) -> None:
+        from engineering_assistant import validation
+
+        schema = json.loads((ROOT / "evals/canary/experiment-protocol.schema.json").read_text())
+        root_schema = schema["properties"]["execution_config"]["properties"]["plugin_root"]
+        valid = ("/plugin", "/plugin with spaces", "C:/plugin", r"C:\plugin",
+                 r"C:\Program Files\plugin", "Z:/", "z:\\")
+        invalid = ("plugin", "../plugin", "C:plugin", "C:", r"\plugin", "",
+                   r"\\server\share\plugin", "//server/share/plugin", "/\\server/share/plugin")
+        backends = [None]
+        if validation.Draft202012Validator is not None:
+            backends.append(validation.Draft202012Validator)
+        for backend in backends:
+            with mock.patch.object(validation, "Draft202012Validator", backend):
+                for value in valid:
+                    with self.subTest(backend=backend, value=value):
+                        validate_instance(value, root_schema, "plugin_root")
+                        if backend is not None:
+                            self.assertEqual([], list(backend(root_schema).iter_errors(value)))
+                for value in invalid:
+                    with self.subTest(backend=backend, value=value):
+                        with self.assertRaises(ValidationFailure):
+                            validate_instance(value, root_schema, "plugin_root")
+                        if backend is not None:
+                            self.assertTrue(list(backend(root_schema).iter_errors(value)))
+
     def schema(self, name: str) -> dict:
         return load_json(ROOT / "schemas" / name)
 
     def test_four_part_version_and_platform_mapping(self) -> None:
         parsed = CanonicalVersion.parse(CANONICAL_VERSION)
-        self.assertEqual("2.2.0.0-rc.1", parsed.canonical())
-        self.assertEqual("2.2.0-rc.1+build.0", parsed.semver())
+        self.assertEqual("2.3.0.0-rc.1", parsed.canonical())
+        self.assertEqual("2.3.0-rc.1+build.0", parsed.semver())
         self.assertEqual("1.2.3+build.4", platform_version("1.2.3.4", supports_four_part=False))
         with self.assertRaises(ValueError):
             CanonicalVersion.parse("4.0.0")

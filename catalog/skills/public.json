@@ -1,9 +1,9 @@
 {
-  "version": "2.2.0.0-rc.1",
+  "version": "2.3.0.0-rc.1",
   "skills": [
     {
       "id": "engineering-assistant",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "both",
       "description": "将工程任务路由到最小充分的 skill 或受治理 flow。适用于请求跨越上下文、设计、实现、评审、发布或长期任务协调的场景。",
       "leading_words": ["最小充分", "路由决策"],
@@ -23,7 +23,7 @@
     },
     {
       "id": "research",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于一手资料研究工程问题，并输出有引用、有边界的结论。适用于外部项目、API、标准或不熟悉的技术事实。",
       "leading_words": ["一手资料", "来源追踪"],
@@ -42,7 +42,7 @@
     },
     {
       "id": "decision-interview",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在查明仓库事实后，与用户一起解决相互依赖的产品或设计决策。适用于范围、取舍或验收标准仍不明确的场景。",
       "leading_words": ["决策树", "事实优先"],
@@ -61,7 +61,7 @@
     },
     {
       "id": "domain-modeling",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "在明确的限界上下文中建立统一语言、业务规则、生命周期及战略和战术模型。适用于语义冲突、业务规则复杂、聚合或一致性边界不清，以及代码与业务语言不一致的场景。",
       "leading_words": ["限界上下文", "统一语言", "聚合不变量"],
@@ -90,7 +90,7 @@
     },
     {
       "id": "repo-context",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "基于源码证据梳理仓库模块、接口、数据、依赖、可复用能力和影响范围。适用于设计或大范围变更分析之前。",
       "leading_words": ["影响范围", "源码追踪"],
@@ -109,7 +109,7 @@
     },
     {
       "id": "wayfinder",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "both",
       "description": "把大型或高不确定性工程任务整理为目标、当前前沿和待决策事项。适用于工作超过一次会话或尚不能安全切片的场景。",
       "leading_words": ["目标", "当前前沿", "认知迷雾"],
@@ -128,7 +128,7 @@
     },
     {
       "id": "prototype",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "构建明确可丢弃的逻辑或界面原型，用于回答一个设计问题。适用于具体交互验证比继续抽象讨论成本更低的场景。",
       "leading_words": ["可丢弃", "只回答一个问题"],
@@ -148,7 +148,7 @@
     },
     {
       "id": "codebase-design",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "设计小接口、高杠杆、变更局部化的深模块和清晰 seam。适用于架构边界、可测试性或重构结构设计。",
       "leading_words": ["深模块", "seam", "局部性"],
@@ -167,7 +167,7 @@
     },
     {
       "id": "tdd",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "通过真实红绿反馈实现可测试的行为。适用于明确要求 TDD，或新增规则、缺陷修复适合失败测试驱动的场景；普通修改不自动触发。",
       "leading_words": ["seam", "红绿循环", "tracer bullet"],
@@ -187,7 +187,7 @@
     },
     {
       "id": "diagnosing-bugs",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "通过复现、最小化、可证伪假设、定向观测、修复和回归证据诊断疑难缺陷或性能退化。",
       "leading_words": ["紧反馈环", "可复现失败", "可证伪"],
@@ -208,7 +208,7 @@
     },
     {
       "id": "code-review",
-      "version": "2.2.0.0-rc.1",
+      "version": "2.3.0.0-rc.1",
       "invocation_mode": "model",
       "description": "评审固定 diff、Pull Request 或阶段门禁，按仓库规范与需求识别有证据的问题。",
       "leading_words": ["固定比较点", "阶段审计", "自动门禁", "规范轴", "需求轴"],

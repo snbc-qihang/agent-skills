@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -75,6 +76,12 @@ class ProviderRuntimeTests(unittest.TestCase):
             calls.append((args, kwargs))
             return real_popen(*args, **kwargs)
 
+        def launch_windows(command, _bundle, work, environment, _timeout, _limit):
+            calls.append(((command,), {"cwd": work, "env": environment, "stdin": subprocess.DEVNULL, "start_new_session": True}))
+            # Transport shape only. Windows production tests below exercise the
+            # LPAC launcher and real Python process without this substitute.
+            return 0, b"## Design System: Test", b""
+
         with patch.object(
             ProviderExecutor,
             "_sandbox_command",
@@ -82,6 +89,9 @@ class ProviderRuntimeTests(unittest.TestCase):
         ), patch(
             "engineering_assistant.provider_runtime.subprocess.Popen",
             side_effect=launch,
+        ), patch(
+            "engineering_assistant.provider_sandbox_windows.run",
+            side_effect=launch_windows,
         ):
             result = self.executor.invoke(
                 self.invocation(), provider_root=self.bundle
@@ -91,12 +101,61 @@ class ProviderRuntimeTests(unittest.TestCase):
         command = calls[0][0][0]
         self.assertIn(str(ProviderExecutor._runtime_executable()), command)
         self.assertIn("-I", command)
+        self.assertIn("-S", command)
+        self.assertIn("-B", command)
         self.assertNotIn("--persist", command)
         self.assertNotIn("HOME", calls[0][1]["env"])
         self.assertNotIn("HTTP_PROXY", calls[0][1]["env"])
+        self.assertEqual(calls[0][1]["cwd"], Path(calls[0][1]["env"]["TMP"]))
         self.assertNotIn("preexec_fn", calls[0][1])
         self.assertEqual(subprocess.DEVNULL, calls[0][1]["stdin"])
         self.assertTrue(calls[0][1]["start_new_session"])
+
+    def test_windows_trusted_bootstrap_restores_private_directory_options(self) -> None:
+        # This portable seam executes the bootstrap, not Windows confinement.
+        # Windows native qualification below must still pass real LPAC launch.
+        (self.bundle / "scripts/search.py").write_text(
+            "import os\n"
+            "keys = ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')\n"
+            "assert all(os.environ[key] == os.getcwd() for key in keys)\n"
+            "print('## Design System: private directory options')\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+
+        def launch(command, _bundle, work, environment, timeout, _limit):
+            redirected = dict(environment)
+            redirected.update({key: 'unapproved-profile' for key in (
+                'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR',
+            )})
+            result = subprocess.run(command, cwd=work, env=redirected, capture_output=True, timeout=timeout)
+            return result.returncode, result.stdout, result.stderr
+
+        with patch('engineering_assistant.provider_runtime.platform.system', return_value='Windows'), patch.object(
+            ProviderExecutor, '_sandbox_command', side_effect=lambda command, *_args: command,
+        ), patch('engineering_assistant.provider_sandbox_windows.run', side_effect=launch):
+            result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual('completed', result.status, result.warning)
+        self.assertEqual('## Design System: private directory options', result.output)
+
+    @unittest.skipUnless(sys.platform == "win32", "native Windows LPAC environment redirection")
+    def test_windows_lpac_keeps_temporary_and_profile_options_in_private_work(self) -> None:
+        self._require_production_sandbox()
+        (self.bundle / "scripts/search.py").write_text(
+            "import os, tempfile\n"
+            "from pathlib import Path\n"
+            "keys = ('LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR')\n"
+            "assert all(os.environ[key] == os.getcwd() for key in keys)\n"
+            "assert 'HOME' not in os.environ and 'HTTP_PROXY' not in os.environ\n"
+            "with tempfile.TemporaryFile() as stream:\n"
+            "    stream.write(b'private temporary data')\n"
+            "assert Path(tempfile.gettempdir()).samefile(Path.cwd())\n"
+            "print('## Design System: private temporary directory')\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+        result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("completed", result.status, result.warning)
 
     def test_darwin_venv_uses_the_base_framework_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -216,6 +275,120 @@ class ProviderRuntimeTests(unittest.TestCase):
         )
         self.assertEqual("fallback", result.status)
         self.assertNotIn("TOP-SECRET-CANARY", result.output)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX output-file path replacement; Windows uses pipes")
+    def test_output_path_replacement_does_not_make_parent_read_a_secret(self) -> None:
+        secret = Path(self.temporary.name) / "parent-secret"
+        secret.write_text("## Design System: PARENT-ONLY-SECRET", encoding="utf-8")
+        output_path = Path(self.temporary.name) / "stdout.txt"
+        error_path = Path(self.temporary.name) / "stderr.txt"
+        # Simulate path substitution at the reader seam. Production policies
+        # remain unchanged; Linux does not grant MAKE_SYM in private work.
+        with output_path.open("w+b") as output, error_path.open("w+b") as error:
+            output.write(b"## Design System: safe output")
+            output.flush()
+            output_path.unlink()
+            output_path.symlink_to(secret)
+            content, _ = ProviderExecutor._read_output_handles(output, error)
+        self.assertEqual(b"## Design System: safe output", content)
+        self.assertNotIn(b"PARENT-ONLY-SECRET", content)
+
+    def test_missing_sandbox_capability_falls_back_before_provider_executes(self) -> None:
+        marker = Path(self.temporary.name) / "executed"
+        (self.bundle / "scripts/search.py").write_text(
+            "from pathlib import Path\n"
+            f"Path({str(marker)!r}).write_text('unconfined')\n"
+            "print('## Design System: unconfined')\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+        with patch("engineering_assistant.provider_runtime.platform.system", return_value="Linux"), patch.object(
+            ProviderExecutor, "sandbox_capability", return_value={"supported": False, "reason": "Landlock disabled"}
+        ):
+            result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("fallback", result.status)
+        self.assertIn("Landlock disabled", result.warning)
+        self.assertFalse(marker.exists())
+
+    def _require_production_sandbox(self) -> None:
+        capability = ProviderExecutor.sandbox_capability()
+        if capability["supported"]:
+            return
+        if os.environ.get("ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX") == "1":
+            self.fail(f"Provider qualification is mandatory: {capability['reason']}")
+        self.skipTest(f"Provider cannot be qualified on this host: {capability['reason']}")
+
+    @unittest.skipUnless(sys.platform in {"darwin", "linux", "win32"}, "production OS sandbox")
+    def test_production_sandbox_runs_provider_and_allows_only_private_work_writes(self) -> None:
+        self._require_production_sandbox()
+        (self.bundle / "scripts/search.py").write_text(
+            "import csv, hashlib, json, math\n"
+            "from pathlib import Path\n"
+            "data = Path(__file__).parent.parent / 'data/styles.csv'\n"
+            "rows = list(csv.DictReader(data.open(encoding='utf-8')))\n"
+            "Path('allowed.txt').write_text('private work', encoding='utf-8')\n"
+            "print('## Design System: ' + rows[0]['name'] + str(math.sqrt(4)))\n",
+            encoding="utf-8",
+        )
+        self.refresh_integrity()
+        result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("completed", result.status, result.warning)
+        self.assertEqual("## Design System: minimal2.0", result.output)
+
+    @unittest.skipUnless(sys.platform in {"darwin", "linux", "win32"}, "production OS sandbox")
+    def test_production_sandbox_denies_network_processes_exec_and_outside_writes(self) -> None:
+        self._require_production_sandbox()
+        outside = Path(self.temporary.name) / "outside-write"
+        executable = str(ProviderExecutor._runtime_executable())
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.addCleanup(server.close)
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        ipv6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.addCleanup(ipv6.close)
+        ipv6.bind(("::1", 0))
+        probes = {
+            "network-v4": f"import socket; sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM); sock.connect(('127.0.0.1', {server.getsockname()[1]}))\n",
+            "network-v6": f"import socket; sock=socket.socket(socket.AF_INET6, socket.SOCK_DGRAM); sock.sendto(b'escaped', ('::1', {ipv6.getsockname()[1]}))\n",
+            "child-process": f"import subprocess; subprocess.run([{executable!r}, '-I', '-S', '-c', 'pass'], check=True)\n",
+            "additional-exec": f"import os; os.execv({executable!r}, [{executable!r}, '-I', '-S', '-c', 'pass'])\n",
+            "outside-write": f"from pathlib import Path; Path({str(outside)!r}).write_text('escaped')\n",
+            "snapshot-write": "from pathlib import Path; Path(__file__).write_text('overwritten')\n",
+        }
+        if sys.platform == "linux":
+            probes["symlink-create"] = "from pathlib import Path; Path('link').symlink_to('/etc/passwd')\n"
+        for name, source in probes.items():
+            with self.subTest(probe=name):
+                (self.bundle / "scripts/search.py").write_text(source + "print('## Design System: escaped')\n", encoding="utf-8")
+                self.refresh_integrity()
+                result = self.executor.invoke(
+                    replace(self.invocation(), invocation_id="qualification-" + name), provider_root=self.bundle
+                )
+                self.assertEqual("fallback", result.status)
+                self.assertIn("provider exited with status", result.warning, "sandbox setup failure cannot count as a denied probe")
+                self.assertNotIn("escaped", result.output)
+                self.assertFalse(outside.exists())
+
+    @unittest.skipUnless(sys.platform in {"darwin", "linux", "win32"}, "production OS sandbox")
+    def test_production_sandbox_enforces_timeout_and_output_limit(self) -> None:
+        self._require_production_sandbox()
+        provider = self.catalog.providers["ui-ux-pro-max"]
+        self.catalog.providers[provider.id] = replace(provider, timeout_seconds=1)
+        probes = {
+            "timeout": "import time; time.sleep(10)\nprint('## Design System: escaped')\n",
+            "output-limit": "print('## Design System: ' + 'X' * 1000000)\n",
+        }
+        for name, source in probes.items():
+            with self.subTest(probe=name):
+                (self.bundle / "scripts/search.py").write_text(source, encoding="utf-8")
+                self.refresh_integrity()
+                result = self.executor.invoke(
+                    replace(self.invocation(), invocation_id="qualification-" + name), provider_root=self.bundle
+                )
+                self.assertEqual("fallback", result.status)
+                if name == "timeout":
+                    self.assertIn("timed out", result.warning)
+                self.assertLessEqual(len(result.output.encode("utf-8")), 128 * 1024)
 
     @unittest.skipUnless(sys.platform == "darwin", "Darwin sandbox contract")
     def test_production_sandbox_denies_shared_temp_and_child_processes(self) -> None:

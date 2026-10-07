@@ -124,9 +124,36 @@ class ProviderExecutor:
         script = bundle / "scripts/search.py"
         if not script.is_file() or script.is_symlink():
             raise ValidationFailure("provider search entrypoint is missing or unsafe")
-        bootstrap = (
-            "import resource,runpy,sys;"
-            f"resource.setrlimit(resource.RLIMIT_FSIZE,({MAX_OUTPUT_BYTES + 1},{MAX_OUTPUT_BYTES + 1}));"
+        bootstrap = "import runpy,sys;"
+        if platform.system() != "Windows":
+            bootstrap += (
+                "import resource;"
+                f"resource.setrlimit(resource.RLIMIT_FSIZE,({MAX_OUTPUT_BYTES + 1},{MAX_OUTPUT_BYTES + 1}));"
+                f"resource.setrlimit(resource.RLIMIT_CPU,({provider.timeout_seconds + 1},{provider.timeout_seconds + 1}));"
+                "resource.setrlimit(resource.RLIMIT_NOFILE,(64,64));"
+            )
+        if platform.system() == "Linux":
+            sandbox_module = Path(__file__).with_name("provider_sandbox_linux.py")
+            bootstrap += (
+                f"boundary=runpy.run_path({str(sandbox_module)!r});"
+                f"boundary['restrict']({str(bundle)!r},{str(work)!r});"
+            )
+        elif platform.system() == "Darwin":
+            sandbox_module = Path(__file__).with_name("provider_sandbox_macos.py")
+            bootstrap += (
+                f"boundary=runpy.run_path({str(sandbox_module)!r});"
+                f"boundary['restrict']({str(self._runtime_root())!r},{str(bundle)!r},{str(work)!r});"
+            )
+        elif platform.system() == "Windows":
+            # CreateProcessW may redirect AppContainer directory options into
+            # its profile. Restore only the private cwd after LPAC/Job setup
+            # and before loading any Provider code; the profile stays closed.
+            bootstrap += (
+                "import os;"
+                "os.environ.update(dict.fromkeys("
+                "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'),os.getcwd()));"
+            )
+        bootstrap += (
             "entry=sys.argv[2];"
             "sys.path.insert(0,sys.argv[1]);"
             "sys.argv=[entry,*sys.argv[3:]];"
@@ -136,6 +163,8 @@ class ProviderExecutor:
         command = [
             str(runtime_executable),
             "-I",
+            "-B",
+            "-S",
             "-c",
             bootstrap,
             str(script.parent),
@@ -164,18 +193,29 @@ class ProviderExecutor:
         environment = {
             key: value
             for key, value in os.environ.items()
-            if key in {"SYSTEMROOT", "WINDIR", "TEMP", "TMP"}
+            if key.upper() in {"SYSTEMROOT", "WINDIR"}
         }
         environment.update(
             {
                 "PYTHONIOENCODING": "utf-8",
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "LANG": "C.UTF-8",
+                "TEMP": str(work),
+                "TMP": str(work),
+                "TMPDIR": str(work),
             }
         )
         sandboxed_command = self._sandbox_command(
             command, bundle, work, denied_roots
         )
+        if platform.system() == "Windows":
+            from .provider_sandbox_windows import run
+
+            returncode, output, error = run(
+                sandboxed_command, bundle, work, environment,
+                provider.timeout_seconds, MAX_OUTPUT_BYTES,
+            )
+            return self._execution_output(invocation, returncode, output, error)
         stdout_path = work / "stdout.txt"
         stderr_path = work / "stderr.txt"
         with stdout_path.open("w+b") as stdout, stderr_path.open("w+b") as stderr:
@@ -193,22 +233,57 @@ class ProviderExecutor:
             except subprocess.TimeoutExpired as exc:
                 if hasattr(os, "killpg"):
                     os.killpg(process.pid, signal.SIGKILL)
-                else:  # pragma: no cover - Windows does not execute providers
+                else:  # pragma: no cover - non-POSIX platform fallback
                     process.kill()
                 process.wait()
                 raise ValidationFailure("provider execution timed out") from exc
-        if stdout_path.stat().st_size > MAX_OUTPUT_BYTES:
+            output, error = self._read_output_handles(stdout, stderr)
+        return self._execution_output(invocation, returncode, output, error)
+
+    @staticmethod
+    def _read_output_handles(stdout, stderr) -> tuple[bytes, bytes]:
+        # Read the opened files, never provider-controlled pathnames after
+        # execution. An output path may have been replaced by a symlink.
+        if os.fstat(stdout.fileno()).st_size > MAX_OUTPUT_BYTES:
+            raise ValidationFailure("provider output exceeds the configured limit")
+        stdout.seek(0)
+        stderr.seek(0)
+        return stdout.read(MAX_OUTPUT_BYTES + 1), stderr.read(4096)
+
+    @classmethod
+    def _execution_output(
+        cls, invocation: ProviderInvocation, returncode: int, output: bytes, error: bytes
+    ) -> str:
+        if len(output) > MAX_OUTPUT_BYTES:
             raise ValidationFailure("provider output exceeds the configured limit")
         if returncode != 0:
-            error = stderr_path.read_bytes()[:4096].decode(
+            description = error[:4096].decode(
                 "utf-8", errors="replace"
             ).strip()
             raise ValidationFailure(
-                f"provider exited with status {returncode}: {error}"
+                f"provider exited with status {returncode}: {description}"
             )
-        output = stdout_path.read_bytes().decode("utf-8", errors="replace").strip()
-        self._validate_provider_output(invocation, output)
-        return output
+        decoded = output.decode("utf-8", errors="replace").strip()
+        cls._validate_provider_output(invocation, decoded)
+        return decoded
+
+    @staticmethod
+    def sandbox_capability() -> dict:
+        """Read-only preflight; supported does not mean execution qualified."""
+        system = platform.system()
+        if system == "Linux":
+            from .provider_sandbox_linux import capability
+
+            return capability()
+        if system == "Windows":
+            from .provider_sandbox_windows import capability
+
+            return capability()
+        if system == "Darwin":
+            from .provider_sandbox_macos import capability
+
+            return capability()
+        return {"supported": False, "backend": None, "reason": "unsupported operating system"}
 
     @staticmethod
     def _sandbox_command(
@@ -218,24 +293,15 @@ class ProviderExecutor:
         denied_roots: list[Path | str] | None = None,
     ) -> list[str]:
         system = platform.system()
-        if system == "Darwin" and Path("/usr/bin/sandbox-exec").is_file():
-            def escaped(path: Path | str) -> str:
-                return str(path).replace("\\", "\\\\").replace('"', '\\"')
-
-            del denied_roots  # a denylist cannot strengthen the allowlist below
-            runtime_executable = ProviderExecutor._runtime_executable()
-            runtime_root = ProviderExecutor._runtime_root()
-            profile = (
-                '(version 1)(deny default)(import "system.sb")'
-                '(deny network*)(deny file-write*)(deny process-fork)'
-                '(deny process-exec)'
-                f'(allow process-exec (literal "{escaped(runtime_executable)}"))'
-                f'(allow file-read* (subpath "{escaped(runtime_root)}"))'
-                f'(allow file-read* (subpath "{escaped(bundle)}"))'
-                f'(allow file-read* (subpath "{escaped(writable_root)}"))'
-                f'(allow file-write* (subpath "{escaped(writable_root)}"))'
-            )
-            return ["/usr/bin/sandbox-exec", "-p", profile, *command]
+        if system in {"Darwin", "Linux", "Windows"}:
+            capability = ProviderExecutor.sandbox_capability()
+            if not capability["supported"]:
+                raise ValidationFailure(
+                    "provider least-privilege sandbox is unavailable: " + capability["reason"]
+                )
+            # POSIX restricts the already-started trusted interpreter before
+            # Provider loading. Windows launches this command through LPAC.
+            return command
         raise ValidationFailure(
             "provider least-privilege sandbox is unavailable on this platform"
         )
@@ -277,7 +343,10 @@ class ProviderExecutor:
 
     @staticmethod
     def _bundle_root(root: Path) -> Path:
-        root = root.expanduser().resolve()
+        root = root.expanduser()
+        if ProviderExecutor._unsafe_link(root):
+            raise ValidationFailure("provider root is a symlink or reparse point")
+        root = root.resolve()
         nested = root / "src/ui-ux-pro-max"
         return nested if nested.is_dir() else root
 
@@ -287,11 +356,11 @@ class ProviderExecutor:
         data = root / "data"
         if (
             not root.is_dir()
-            or root.is_symlink()
+            or ProviderExecutor._unsafe_link(root)
             or not script.is_file()
-            or script.is_symlink()
+            or ProviderExecutor._unsafe_link(script)
             or not data.is_dir()
-            or data.is_symlink()
+            or ProviderExecutor._unsafe_link(data)
         ):
             raise ValidationFailure("provider bundle layout is missing or unsafe")
 
@@ -305,7 +374,7 @@ class ProviderExecutor:
 
     @staticmethod
     def _scan_bundle(root: Path, destination: Path | None) -> str:
-        if not root.is_dir() or root.is_symlink():
+        if not root.is_dir() or ProviderExecutor._unsafe_link(root):
             raise ValidationFailure("provider root is not a safe directory")
         digest = hashlib.sha256()
         count = 0
@@ -324,7 +393,7 @@ class ProviderExecutor:
                 entries += 1
                 if name == "__pycache__":
                     raise ValidationFailure("provider bundle contains Python bytecode cache")
-                if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                if ProviderExecutor._unsafe_link(path) or not stat.S_ISDIR(metadata.st_mode):
                     raise ValidationFailure("provider bundle contains an unsafe directory entry")
                 if entries > MAX_PROVIDER_ENTRIES:
                     raise ValidationFailure("provider bundle exceeds the entry limit")
@@ -336,7 +405,7 @@ class ProviderExecutor:
                 entries += 1
                 if path.suffix == ".pyc":
                     raise ValidationFailure("provider bundle contains Python bytecode")
-                if stat.S_ISLNK(metadata.st_mode):
+                if ProviderExecutor._unsafe_link(path):
                     raise ValidationFailure("provider bundle contains a symlink")
                 if not stat.S_ISREG(metadata.st_mode):
                     raise ValidationFailure("provider bundle contains a special file")
@@ -352,18 +421,28 @@ class ProviderExecutor:
                 flags = os.O_RDONLY
                 if hasattr(os, "O_NOFOLLOW"):
                     flags |= os.O_NOFOLLOW
+                if hasattr(os, "O_NONBLOCK"):
+                    flags |= os.O_NONBLOCK
                 descriptor = os.open(path, flags)
                 try:
                     opened = os.fstat(descriptor)
-                    if not stat.S_ISREG(opened.st_mode):
+                    if (
+                        not stat.S_ISREG(opened.st_mode)
+                        or (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino)
+                    ):
                         raise ValidationFailure("provider bundle file changed while reading")
                     chunks = []
+                    read_bytes = 0
                     while True:
-                        chunk = os.read(descriptor, 1024 * 1024)
+                        chunk = os.read(descriptor, min(1024 * 1024, MAX_PROVIDER_BYTES - total + metadata.st_size - read_bytes + 1))
                         if not chunk:
                             break
                         chunks.append(chunk)
+                        read_bytes += len(chunk)
+                        if total - metadata.st_size + read_bytes > MAX_PROVIDER_BYTES:
+                            raise ValidationFailure("provider bundle exceeds verification limits while reading")
                     content = b"".join(chunks)
+                    total += read_bytes - metadata.st_size
                 finally:
                     os.close(descriptor)
                 digest.update(len(relative).to_bytes(4, "big"))
@@ -377,6 +456,13 @@ class ProviderExecutor:
         if count == 0:
             raise ValidationFailure("provider bundle is empty")
         return "sha256:" + digest.hexdigest()
+
+    @staticmethod
+    def _unsafe_link(path: Path) -> bool:
+        metadata = path.lstat()
+        return stat.S_ISLNK(metadata.st_mode) or bool(
+            getattr(metadata, "st_file_attributes", 0) & 0x400
+        )
 
     @staticmethod
     def invocation_digest(invocation: ProviderInvocation) -> str:

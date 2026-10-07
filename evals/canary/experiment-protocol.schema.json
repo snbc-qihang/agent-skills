@@ -31,7 +31,7 @@
         "network_policy": {"type": "string", "minLength": 1},
         "plugin_payload_digest": {"$ref": "#/$defs/digest"},
         "package_manifest_artifact": {"$ref": "#/$defs/artifact_ref"},
-        "plugin_root": {"type": "string", "pattern": "^/", "minLength": 2},
+        "plugin_root": {"type": "string", "pattern": "^(?:/(?![/\\\\])|[A-Za-z]:[/\\\\])", "minLength": 2},
         "plugin_skill_digests": {
           "type": "object", "minProperties": 1, "maxProperties": 64,
           "propertyNames": {"pattern": "^[a-z0-9][a-z0-9-]*$"},
