@@ -22,6 +22,7 @@ import tempfile
 import time
 import tomllib
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Mapping
 
@@ -40,6 +41,17 @@ PYTHON_PLATFORMS = {
 }
 PYTHON_VERSION = "3.13.13"
 MAX_CONTROL_BYTES = 65536
+_NATIVE_CONTROL = ContextVar("engineering_assistant_native_control", default=None)
+
+
+@contextmanager
+def native_control(data: Path | str | None = None, *, allow_download: bool = False):
+    """Share one resolved control CLI inside an installation command."""
+    token = _NATIVE_CONTROL.set({"data": data_home(data), "allow_download": allow_download, "executables": {}})
+    try:
+        yield
+    finally:
+        _NATIVE_CONTROL.reset(token)
 
 
 def host_target() -> str:
@@ -361,10 +373,22 @@ def _publish_default_binding(data: Path, binding: dict) -> None:
         return
     storage = _storage(default)
     try:
-        storage.create_immutable_json(binding, "bindings", binding["agent"], binding["environment_key"] + ".json")
+        _publish_versioned_binding(storage, binding)
         _replace_binding(storage, binding, binding["agent"])
     finally:
         storage.close()
+
+
+def _publish_versioned_binding(storage: ArtifactIO, binding: dict) -> None:
+    parts = ("bindings", binding["agent"], binding["environment_key"] + ".json")
+    try:
+        storage.create_immutable_json(binding, *parts, existing_max_bytes=MAX_CONTROL_BYTES)
+    except ArtifactConflict:
+        existing = storage.read_json_limited(MAX_CONTROL_BYTES, *parts)[0]
+        if {k: v for k, v in existing.items() if k != "uv"} != {k: v for k, v in binding.items() if k != "uv"}:
+            raise ValidationFailure("versioned binding differs from its fixed environment")
+        # Keep the first preparation's provenance immutable. The active alias
+        # records today's preparation tool; neither value is used to run Python.
 
 
 def _replace_binding(storage: ArtifactIO, binding: dict, agent: str) -> None:
@@ -487,15 +511,7 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                        "python_artifact_digest": lock["python_artifact_digest"],
                        "python_build": lock["python_artifact"]["build"], "python_base": str(base),
                        "python": str(python), "uv": str(uv), "environment": str(environment)}
-            try:
-                existing = storage.read_json_limited(MAX_CONTROL_BYTES, "bindings", lock["agent"], key + ".json")[0]
-            except FileNotFoundError:
-                existing = None
-            if existing is not None:
-                if {k: v for k, v in existing.items() if k != "uv"} != {k: v for k, v in binding.items() if k != "uv"}:
-                    raise ValidationFailure("versioned binding differs from its fixed environment")
-                binding = existing
-            storage.create_immutable_json(binding, "bindings", lock["agent"], key + ".json")
+            _publish_versioned_binding(storage, binding)
             # The immutable locator is the native launcher's actual path. Check
             # it before selecting this version as the user's current alias.
             checks = _protocol_checks(package, data=data)
@@ -524,16 +540,28 @@ def _native_call(agent: str, arguments: list[str], home: Path) -> str:
         anchor.close()
     environment = dict(os.environ)
     environment[{"codex": "CODEX_HOME", "hermes": "HERMES_HOME", "claude-code": "CLAUDE_CONFIG_DIR"}[agent]] = str(home)
+    if agent == "codex":
+        from .codex_control import resolve_codex_control
+        control = _NATIVE_CONTROL.get()
+        cached = control["executables"] if control else {}
+        if str(home) not in cached:
+            cached[str(home)] = str(resolve_codex_control(
+                control["data"] if control else data_home(), home,
+                explicit=Path(environment["CODEX_CLI"]) if environment.get("CODEX_CLI") else None,
+                allow_download=control["allow_download"] if control else False))
+        executable = cached[str(home)]
     try:
-        executable = _resolve_platform_cli("claude" if agent == "claude-code" else agent, environment)
+        if agent != "codex":
+            executable = _resolve_platform_cli("claude" if agent == "claude-code" else agent, environment)
         return _command([executable, *arguments], cwd=home if home.is_dir() else Path.home(), environment=environment)
     except Exception:
-        raise ValidationFailure("native plugin command failed; retained Runtime environments were not removed") from None
+        raise ValidationFailure("原生插件命令执行失败；已保留 Runtime，请检查宿主状态后重试") from None
 
 
 def _native_query(agent: str, arguments: list[str], home: Path) -> object:
+    raw = _native_call(agent, arguments, home)
     try:
-        return json.loads(_native_call(agent, arguments, home))
+        return json.loads(raw)
     except (TypeError, ValueError):
         raise ValidationFailure("native plugin query did not return its JSON contract") from None
 
@@ -828,7 +856,12 @@ def _protocol_checks(package: Path, *, python: Path | None = None,
             windows_hook = "requires_prepared_binding" if python else _windows_hook_probe(package, Path(temporary),
                 json.dumps({"cwd": temporary, "hook_event_name": "Stop", "prompt": "中文安装验证"}, ensure_ascii=False).encode("utf-8"),
                 environment)
-        sandbox = json.loads(_protocol_run([*command, "sandbox-probe"], cwd=Path(temporary), environment=environment, timeout=60))
+        try:
+            sandbox = json.loads(_protocol_run([*command, "sandbox-probe"], cwd=Path(temporary), environment=environment, timeout=60))
+            if not isinstance(sandbox, dict) or type(sandbox.get("qualified")) is not bool:
+                raise ValueError("invalid Provider diagnostic")
+        except (OSError, ValueError, subprocess.SubprocessError, ValidationFailure):
+            sandbox = {"qualified": False, "reason": "provider_diagnostic_failed"}
         bridge = "not_applicable"
         if _package_lock(package)["agent"] == "hermes":
             rpc = _protocol_run([*command, "hermes-rpc"], cwd=Path(temporary), environment=environment,
@@ -868,15 +901,23 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
         checks = _protocol_checks(package, data=data)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, ValidationFailure) as exc:
         return {"status": "failed", "ready": False, "reason": str(exc)}
-    qualified = checks["provider"].get("qualified") is True
-    status, reason = ("ready", None) if qualified else ("partial", checks["provider"].get("reason"))
+    runtime_ready = all(checks.get(name) == "passed" for name in ("mcp", "tools_call"))
+    provider_ready = checks.get("provider", {}).get("qualified") is True
+    qualified = runtime_ready and checks.get("hook") == "passed" and provider_ready
+    if not runtime_ready:
+        status, reason = "failed", "runtime_protocol_check_failed"
+    elif checks.get("hook") != "passed":
+        status, reason = "failed", "hook_protocol_check_failed"
+    else:
+        status, reason = ("ready", None) if provider_ready else ("partial", checks["provider"].get("reason"))
     trust = "not_applicable" if agent == "hermes" else "user_confirmed" if hooks_trusted else "requires_native_host_review"
     activation = "enabled" if native_activation_verified or selected and selected["enabled"] else "disabled" if selected else "not_verified"
     if qualified and activation != "enabled":
         status, reason = "needs_preparation", "requires_native_activation"
     elif qualified and agent != "hermes" and not hooks_trusted:
         status, reason = "needs_trust", "requires_native_hook_review"
-    return {"status": status, "ready": status == "ready", "runtime_ready": qualified,
+    return {"status": status, "ready": status == "ready", "runtime_ready": runtime_ready,
+            "provider_ready": provider_ready,
             "agent": agent, "target": actual, "version": manifest["canonical_version"],
             "package": str(package), "checks": checks,
             "hook_trust": trust, "native_activation": activation,

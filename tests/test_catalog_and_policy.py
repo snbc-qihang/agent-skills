@@ -4,6 +4,7 @@ import sys
 import json
 import shutil
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from engineering_assistant.catalog import load_catalog  # noqa: E402
 from engineering_assistant.policy import PolicyOverride, resolve_policies  # noqa: E402
 from engineering_assistant.router import ROUTES  # noqa: E402
 from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.version import CANONICAL_VERSION, STABLE_VERSION  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
@@ -28,7 +30,34 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(10, len(self.catalog.packs))
         self.assertEqual(2, len(self.catalog.providers))
         self.assertEqual(6, len(self.catalog.sources))
-        self.assertEqual("2.3.0.0-rc.1", self.catalog.version)
+        self.assertEqual("1.0.0.1", self.catalog.version)
+
+    def test_current_version_is_consistent_across_runtime_catalog_wheel_and_local_policy(self):
+        version = self.catalog.version
+        self.assertEqual(version, CANONICAL_VERSION)
+        self.assertEqual(version, STABLE_VERSION)
+        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+        self.assertEqual(version, project["version"])
+        policy = json.loads((ROOT / "config/local-publish-policy.json").read_text(encoding="utf-8"))
+        self.assertEqual(version, policy["canonical_version"])
+        self.assertFalse(policy["stable_release_allowed"])
+
+        def versions(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key == "version":
+                        yield item
+                    else:
+                        yield from versions(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from versions(item)
+
+        for path in (ROOT / "catalog").rglob("*.json"):
+            with self.subTest(source=path.relative_to(ROOT).as_posix()):
+                declared = list(versions(json.loads(path.read_text(encoding="utf-8"))))
+                self.assertTrue(declared)
+                self.assertEqual({version}, set(declared))
 
     def test_open_source_decisions_are_pinned_and_mapped_to_current_assets(self) -> None:
         decisions = {source.id: source for source in self.catalog.sources.values()}

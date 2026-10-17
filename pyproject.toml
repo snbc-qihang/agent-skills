@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
 build-backend = "ea_build_backend"
 backend-path = ["."]
 
 [project]
 name = "engineering-assistant-kernel"
-version = "2.3.0rc1"
+version = "1.0.0.1"
 description = "engineering-assistant skill 套件的平台无关运行内核。"
 authors = [
   {name = "sunliming625@gmail.com", email = "sunliming625@gmail.com"}

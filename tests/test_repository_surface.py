@@ -82,15 +82,14 @@ class RepositorySurfaceTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         for runner, target in {
             "macos-14": "macos-arm64", "macos-15-intel": "macos-x64",
-            "ubuntu-24.04": "linux-x64", "windows-2025": "windows-x64",
+            "windows-2025": "windows-x64",
         }.items():
             self.assertRegex(workflow, rf"- runner: {re.escape(runner)}\n\s+target: {target}\n")
         for contract in (
             'python-version: "3.13.13"', 'RUSTUP_TOOLCHAIN: "1.90.0"',
-            'node-version: "22.20.0"', '@anthropic-ai/claude-code@2.1.241',
             'ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX: "1"',
             'fail-fast: false', 'scripts/qualify_installation.py',
-            'scripts/publish_local.py --platform all --dry-run',
+            'scripts/publish_local.py --platform codex --dry-run',
             'Windows Server', 'agent_host_qualification', 'not_run',
         ):
             self.assertIn(contract, workflow)

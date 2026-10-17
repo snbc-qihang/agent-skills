@@ -34,12 +34,41 @@ import engineering_assistant.local_publish as publish_module  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
+    def test_formal_internal_number_cannot_be_published_by_local_yes_entry(self):
+        with mock.patch.object(publish_module, "_load_policy", return_value={"canonical_version": "1.0.0.1"}), \
+                mock.patch.object(publish_module, "_run_repository_preflight", return_value={"version": "1.0.0.1"}) as preflight, \
+                mock.patch.object(publish_module, "_publish_one") as publish:
+            with self.assertRaisesRegex(ValidationFailure, "正式|稳定"):
+                publish_module.publish_local(ROOT, ["codex"], policy_path=ROOT / "config/local-publish-policy.json", dry_run=False)
+        publish.assert_not_called()
+        preflight.assert_not_called()
+
+    def test_prerelease_policy_cannot_publish_a_formal_source_version(self):
+        with mock.patch.object(publish_module, "_load_policy", return_value={"canonical_version": "1.0.0.1-rc.1"}), \
+                mock.patch.object(publish_module, "_run_repository_preflight", return_value={"version": "1.0.0.1"}), \
+                mock.patch.object(publish_module, "_publish_one") as publish:
+            with self.assertRaisesRegex(ValidationFailure, "版本.*不一致"):
+                publish_module.publish_local(ROOT, ["codex"], policy_path=ROOT / "config/local-publish-policy.json", dry_run=False)
+        publish.assert_not_called()
+
+    def test_formal_internal_number_dry_run_still_runs_repository_and_package_validation(self):
+        with mock.patch.object(publish_module, "_load_policy") as policy, \
+                mock.patch.object(publish_module, "_run_repository_preflight", return_value={"version": "1.0.0.1"}) as preflight, \
+                mock.patch.object(publish_module, "_publish_one", return_value={"status": "dry_run_passed"}) as publish:
+            result = publish_module.publish_local(ROOT, ["codex", "hermes", "claude-code"],
+                policy_path=ROOT / "config/local-publish-policy.json", dry_run=True)
+        self.assertEqual("passed", result["status"])
+        policy.assert_not_called()
+        preflight.assert_called_once_with(ROOT)
+        self.assertEqual(3, publish.call_count)
+        self.assertTrue(all(call.kwargs["dry_run"] for call in publish.call_args_list))
+
     def test_native_v1_cache_is_verified_snapshotted_and_restored_with_its_full_contract(self):
         from test_compiler_adapters import native_v1_fixture
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             home = root / "codex-home"
-            version = "2.3.0-rc.1+codex.local-native-v1"
+            version = "1.0.0+codex.local-native-v1"
             cache = home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             expected = native_v1_fixture(cache, cachebuster="local-native-v1")
@@ -84,7 +113,7 @@ class LocalPublishTests(unittest.TestCase):
         candidates = []
         for path in Path(home).rglob("package-manifest.json"):
             manifest = verify_package(path.parent)
-            if manifest["platform"] == agent and manifest["canonical_version"] == "2.3.0.0-rc.1" and (
+            if manifest["platform"] == agent and manifest["canonical_version"] == "1.0.0.1" and (
                 self.prepared_payload is None or manifest["payload_digest"] == self.prepared_payload
             ):
                 candidates.append(path.parent)
@@ -212,7 +241,7 @@ class LocalPublishTests(unittest.TestCase):
 
     def test_repository_preflight_requires_source_and_official_validation(self) -> None:
         evaluation = {
-            "version": "2.3.0.0-rc.1",
+            "version": "1.0.0.1",
             "simulation": False,
             "canary": {
                 "status": "not_run",
@@ -252,9 +281,9 @@ class LocalPublishTests(unittest.TestCase):
         self.assertEqual(evaluation["canary"], report["canary"])
         self.assertEqual(
             {
-                "scope": "local_prerelease",
+                "scope": "repository_validation",
                 "required": False,
-                "status": "not_required_for_local_prerelease",
+                "status": "not_required_for_repository_validation",
             },
             report["canary_gate"],
         )
@@ -286,7 +315,7 @@ class LocalPublishTests(unittest.TestCase):
             build_package(ROOT, "codex", output, codex_cachebuster="local-test-1")
             verify_package(output)
             manifest = json.loads((output / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-            self.assertEqual("2.3.0-rc.1+codex.local-test-1", manifest["version"])
+            self.assertEqual("1.0.0+codex.local-test-1", manifest["version"])
 
     def test_codex_registration_uses_the_selected_codex_home(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -542,7 +571,7 @@ class LocalPublishTests(unittest.TestCase):
             codex_home = root / ".codex"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.3.0-rc.1+codex.local-corrupted-active"
+            old_version = "1.0.0+codex.local-corrupted-active"
             build_package(ROOT, "codex", target, codex_cachebuster="local-corrupted-active")
             old_cache = (
                 codex_home
@@ -596,7 +625,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.3.0-rc.1+codex.local-active-thread"
+            version = "1.0.0+codex.local-active-thread"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-active-thread")
@@ -616,7 +645,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.3.0-rc.1+codex.local-previous-contract"
+            version = "1.0.0+codex.local-previous-contract"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(
@@ -647,7 +676,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.3.0-rc.1+codex.local-unsafe-snapshot"
+            version = "1.0.0+codex.local-unsafe-snapshot"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-snapshot")
@@ -665,7 +694,7 @@ class LocalPublishTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             codex_home = root / ".codex"
-            version = "2.3.0-rc.1+codex.local-unsafe-manifest"
+            version = "1.0.0+codex.local-unsafe-manifest"
             cache = codex_home / "plugins/cache/personal/engineering-assistant" / version
             cache.parent.mkdir(parents=True)
             build_package(ROOT, "codex", cache, codex_cachebuster="local-unsafe-manifest")
@@ -687,7 +716,7 @@ class LocalPublishTests(unittest.TestCase):
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
             backup = target.parent / ".engineering-assistant.backup-test"
-            version = "2.3.0-rc.1+codex.local-repair"
+            version = "1.0.0+codex.local-repair"
             build_package(ROOT, "codex", backup, codex_cachebuster="local-repair")
             runtime_cache = backup / "engineering-assistant/runtime/engineering_assistant/__pycache__"
             runtime_cache.mkdir()
@@ -708,7 +737,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.3.0-rc.1+codex.local-old-thread"
+            old_version = "1.0.0+codex.local-old-thread"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-thread")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -759,7 +788,7 @@ class LocalPublishTests(unittest.TestCase):
             versions = []
             for index in range(9):
                 cachebuster = f"local-retention-{index}"
-                version = f"2.3.0-rc.1+codex.{cachebuster}"
+                version = f"1.0.0+codex.{cachebuster}"
                 cache = cache_root / version
                 build_package(ROOT, "codex", cache, codex_cachebuster=cachebuster)
                 os.utime(cache, ns=(index + 1, index + 1))
@@ -784,7 +813,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.3.0-rc.1+codex.local-partial-registration"
+            old_version = "1.0.0+codex.local-partial-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-partial-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -838,7 +867,7 @@ class LocalPublishTests(unittest.TestCase):
             hermes_home = root / ".hermes"
             target = root / "plugins/engineering-assistant"
             target.parent.mkdir(parents=True)
-            old_version = "2.3.0-rc.1+codex.local-old-registration"
+            old_version = "1.0.0+codex.local-old-registration"
             build_package(ROOT, "codex", target, codex_cachebuster="local-old-registration")
             old_cache = codex_home / "plugins/cache/personal/engineering-assistant" / old_version
             shutil.copytree(target, old_cache)
@@ -902,7 +931,7 @@ class LocalPublishTests(unittest.TestCase):
         policy = ROOT / "config/local-publish-policy.json"
         loaded = _load_policy(policy, ["codex", "hermes", "claude-code"])
         self.assertTrue(loaded["enabled"])
-        self.assertEqual("2.3.0.0-rc.1", loaded["canonical_version"])
+        self.assertEqual("1.0.0.1", loaded["canonical_version"])
         self.assertNotIn("reviewer", loaded)
         self.assertNotIn("execution_result", loaded)
 

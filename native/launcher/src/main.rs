@@ -254,10 +254,6 @@ fn runtime_command(arguments: &[OsString]) -> Result<Command> {
     }
     #[cfg(windows)]
     private_path(&python, 0o022)?;
-    let uv = absolute_path(&binding, "uv")?;
-    if !uv.is_file() {
-        return Err("prepared uv executable is missing");
-    }
     let boot = root.join("runtime_boot.py");
     let metadata = fs::symlink_metadata(&boot).map_err(|_| "runtime bootstrap is missing")?;
     if unsafe_metadata(&metadata) || !metadata.is_file() {

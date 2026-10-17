@@ -83,6 +83,70 @@ class InstallationTests(unittest.TestCase):
                     prepare_runtime(root / "package", data_home=data, uv_executable=sys.executable)
             self.assertEqual(previous, binding.read_bytes())
 
+    def test_same_version_preparation_refreshes_active_uv_provenance_only(self):
+        from engineering_assistant import installation as inst
+
+        for repair in (False, True):
+            with self.subTest(repair=repair), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                package = root / "package"
+                runtime = package / "engineering-assistant"
+                runtime.mkdir(parents=True)
+                lock, requirements = inst.runtime_lock(ROOT, "codex", "macos-arm64", "2.3.0.0-rc.1")
+                (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
+                (runtime / "runtime-requirements.txt").write_bytes(requirements)
+                (runtime / "runtime-python-downloads.json").write_bytes(inst.python_download_metadata(lock))
+                data, default = root / "data", root / "default-data"
+                original_uv, current_uv = root / "original-uv", root / "current-uv"
+                original_uv.write_bytes(b"original preparation tool")
+                current_uv.write_bytes(b"current preparation tool")
+                with mock.patch.object(inst, "verify_package", return_value={
+                    "platform": "codex", "canonical_version": lock["canonical_version"], "target": "macos-arm64",
+                }), mock.patch.object(inst, "host_target", return_value="macos-arm64"), mock.patch.object(
+                    inst, "_uv", side_effect=[original_uv, current_uv]
+                ), mock.patch.object(inst, "data_home", side_effect=lambda explicit=None, **_kwargs: Path(explicit) if explicit else default), mock.patch.object(
+                    inst, "_create_environment"
+                ) as create, mock.patch.object(inst, "_verify_interpreter"), mock.patch.object(
+                    inst, "_protocol_checks", return_value={"provider": {"qualified": True}}
+                ):
+                    first = inst.prepare_runtime(package, data_home=data)
+                    versioned = data / "bindings/codex" / (lock["environment_key"] + ".json")
+                    default_versioned = default / "bindings/codex" / versioned.name
+                    original_bytes, default_bytes = versioned.read_bytes(), default_versioned.read_bytes()
+                    original_uv.unlink()
+                    result = inst.prepare_runtime(package, data_home=data, repair=repair)
+                self.assertEqual(1, create.call_count)
+                self.assertEqual("prepared", result["status"])
+                self.assertEqual(str(current_uv), result["binding"]["uv"])
+                self.assertEqual({k: v for k, v in first["binding"].items() if k != "uv"},
+                                 {k: v for k, v in result["binding"].items() if k != "uv"})
+                self.assertEqual(original_bytes, versioned.read_bytes())
+                self.assertEqual(default_bytes, default_versioned.read_bytes())
+                for home in (data, default):
+                    self.assertEqual(str(current_uv), json.loads((home / "bindings/codex.json").read_text(encoding="utf-8"))["uv"])
+
+    def test_uv_provenance_difference_does_not_hide_runtime_binding_changes(self):
+        from engineering_assistant import installation as inst
+        from engineering_assistant.validation import ValidationFailure
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            storage = inst._storage(root / "data")
+            binding = {"schema_version": "2", "agent": "codex", "environment_key": "a" * 64,
+                       "python": str(root / "prepared-python"), "uv": str(root / "original-uv")}
+            try:
+                inst._publish_versioned_binding(storage, binding)
+                versioned = storage.path("bindings", "codex", binding["environment_key"] + ".json")
+                original = versioned.read_bytes()
+                for changed in ({"python": str(root / "outside-python")}, {"schema_version": "1"},
+                                {"python_artifact_digest": "b" * 64}):
+                    with self.subTest(changed=next(iter(changed))):
+                        with self.assertRaisesRegex(ValidationFailure, "fixed environment"):
+                            inst._publish_versioned_binding(storage, {**binding, "uv": str(root / "current-uv"), **changed})
+                        self.assertEqual(original, versioned.read_bytes())
+            finally:
+                storage.close()
+
     def test_doctor_does_not_count_an_unprepared_package_as_ready(self):
         from engineering_assistant.installation import doctor
         with tempfile.TemporaryDirectory() as temporary:
@@ -736,7 +800,7 @@ class NativeInstallationTests(unittest.TestCase):
     def test_native_transport_failure_does_not_disclose_credentials(self):
         from engineering_assistant.installation import _native_call
         from engineering_assistant.validation import ValidationFailure
-        with mock.patch("engineering_assistant.local_publish._resolve_platform_cli", return_value="fixture"), mock.patch(
+        with mock.patch("engineering_assistant.codex_control.resolve_codex_control", return_value=Path("fixture")), mock.patch(
             "engineering_assistant.installation._command", side_effect=RuntimeError("https://user:secret@example.com")
         ):
             with self.assertRaises(ValidationFailure) as error:
@@ -777,14 +841,15 @@ class NativeInstallationTests(unittest.TestCase):
         with mock.patch("engineering_assistant.installation._native_query", return_value=entries), mock.patch(
             "engineering_assistant.installation.host_target", return_value="macos-arm64"
         ), mock.patch("engineering_assistant.setup_cli.prepare_runtime"), mock.patch(
-            "engineering_assistant.installation._protocol_checks", return_value={"provider": {"qualified": True}}
+            "engineering_assistant.installation._protocol_checks", return_value={
+                "mcp": "passed", "tools_call": "passed", "hook": "passed", "provider": {"qualified": True}}
         ), mock.patch("engineering_assistant.installation._package_lock", return_value=lock), mock.patch(
             "engineering_assistant.installation._read_control",
             side_effect=lambda path: binding if "bindings" in path.parts else _read_control(path)
         ), mock.patch("engineering_assistant.installation._verify_interpreter"
         ), redirect_stdout(io.StringIO()) as output:
             self.assertEqual(0, main(["prepare", "--agent", "codex", "--agent-home", str(self.home),
-                "--data-home", str(data), "--marketplace", "selected", "--hooks-trusted"]))
+                "--data-home", str(data), "--marketplace", "selected", "--hooks-trusted", "--json"]))
         self.assertEqual("ready", json.loads(output.getvalue())["status"])
 
     def test_native_uninstall_verifies_removal_and_keeps_runtime_environments(self):
@@ -830,6 +895,13 @@ class NativeInstallationTests(unittest.TestCase):
             active = doctor("codex", package=codex, data_home=data, hooks_trusted=True, native_activation_verified=True)
             active_untrusted = doctor("codex", package=codex, data_home=data, native_activation_verified=True)
             inactive = doctor("hermes", package=hermes, data_home=data)
+            checks["provider"] = {"qualified": False, "reason": "provider_isolation_failed"}
+            provider_failed = doctor("codex", package=codex, data_home=data,
+                                     hooks_trusted=True, native_activation_verified=True)
+            checks["provider"] = {"qualified": True}
+            checks["tools_call"] = "failed"
+            runtime_failed = doctor("codex", package=codex, data_home=data,
+                                    hooks_trusted=True, native_activation_verified=True)
         native.assert_not_called()
         self.assertEqual("needs_preparation", untrusted["status"])
         self.assertEqual("not_verified", untrusted["native_activation"])
@@ -843,6 +915,54 @@ class NativeInstallationTests(unittest.TestCase):
         self.assertEqual("not_executed", active["native_marketplace_session"])
         self.assertEqual("requires_native_activation", inactive["reason"])
         self.assertTrue(inactive["runtime_ready"])
+        self.assertTrue(provider_failed["runtime_ready"])
+        self.assertFalse(provider_failed["provider_ready"])
+        self.assertFalse(provider_failed["ready"])
+        self.assertEqual("partial", provider_failed["status"])
+        self.assertEqual("provider_isolation_failed", provider_failed["reason"])
+        self.assertFalse(runtime_failed["runtime_ready"])
+        self.assertTrue(runtime_failed["provider_ready"])
+        self.assertFalse(runtime_failed["ready"])
+        self.assertEqual("failed", runtime_failed["status"])
+        self.assertEqual("runtime_protocol_check_failed", runtime_failed["reason"])
+
+    def test_provider_probe_failure_preserves_successful_core_diagnostics(self):
+        from engineering_assistant.installation import _protocol_checks
+
+        def probe(command, **kwargs):
+            if command[-1] == "mcp-serve":
+                return b'\n'.join(json.dumps(item).encode() for item in [
+                    {"id": 1, "result": {"protocolVersion": "2025-06-18"}},
+                    {"id": 2, "result": {"tools": [{"name": "engineering_assistant_route"}]}},
+                    {"id": 3, "result": {"isError": False}},
+                ])
+            if command[-1] == "hook":
+                return b"{}"
+            if outcome is None:
+                raise subprocess.TimeoutExpired(command, 60)
+            return json.dumps(outcome).encode()
+
+        for outcome in (None, [], {}, {"qualified": "true"}):
+            with self.subTest(outcome=outcome), mock.patch(
+                "engineering_assistant.installation._protocol_run", side_effect=probe
+            ), mock.patch("engineering_assistant.installation._package_lock", return_value={"agent": "codex"}):
+                checks = _protocol_checks(self.root / "package", python=Path(sys.executable))
+                self.assertEqual("passed", checks["mcp"])
+                self.assertEqual("passed", checks["tools_call"])
+                self.assertFalse(checks["provider"]["qualified"])
+                self.assertEqual("provider_diagnostic_failed", checks["provider"]["reason"])
+
+    def test_setup_output_distinguishes_provider_failure_from_native_activation(self):
+        from engineering_assistant.setup_cli import _show_result
+        with redirect_stdout(io.StringIO()) as output:
+            _show_result({"status": "partial", "runtime_ready": True,
+                          "provider_ready": False, "reason": "provider_isolation_failed"}, False)
+        self.assertIn("Runtime 与 MCP 可运行", output.getvalue())
+        self.assertIn("完整功能", output.getvalue())
+        with redirect_stdout(io.StringIO()) as output:
+            _show_result({"status": "needs_preparation", "reason": "requires_native_activation"}, False)
+        self.assertIn("启用插件", output.getvalue())
+        self.assertNotIn("install 或 repair", output.getvalue())
 
 
 if __name__ == "__main__":

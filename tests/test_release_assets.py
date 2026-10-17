@@ -22,6 +22,11 @@ from engineering_assistant.release_assets import REQUIRED_PROVIDER_CHECKS, assem
 from engineering_assistant.validation import ValidationFailure
 
 VERSION = "2.3.0.0-rc.1"
+SOURCE_COMMIT = "a" * 40
+CI_IDENTITY = {"repository": "snbc-qihang/agent-skills", "run_id": "123", "run_attempt": 1}
+LOCAL_ORIGIN = {"kind": "local", "repository": "snbc-qihang/agent-skills",
+                "validation_id": "e05ad626-4354-477a-9222-a02562f0ead2", "assurance": "local_unattested"}
+INTERNAL_TARGETS = ("macos-arm64", "macos-x64", "windows-x64")
 
 
 def sha(payload):
@@ -86,6 +91,13 @@ class ReleaseAssetTests(unittest.TestCase):
             write(root / "runtime-qualification.json", {"schema_version": "1", "status": "runtime_qualified",
                 "target": target, "results": results,
                 "windows_11_qualification": "not_executed" if target == "windows-x64" else "not_applicable"})
+            for name in ("host.json", "native-tests.json", "runtime-qualification.json"):
+                value = json.loads((root / name).read_text())
+                value.update(source_commit=SOURCE_COMMIT, ci_identity=CI_IDENTITY)
+                write(root / name, value)
+            write(root / "official-validation.json", {"status": "passed", "quick_validate": "passed",
+                "codex_plugin_validate": "passed", "skill_count": 11, "source_commit": SOURCE_COMMIT,
+                "ci_identity": CI_IDENTITY, "codex_payload_digest": results[0]["payload_digest"]})
         self.wheel = self.artifacts["linux-x64"] / "setup/engineering_assistant_kernel-2.3.0rc1-py3-none-any.whl"
         self.make_wheel()
         patch = mock.patch("engineering_assistant.release_assets.verify_package", side_effect=fake_verify)
@@ -130,11 +142,13 @@ class ReleaseAssetTests(unittest.TestCase):
         write(self.wheel.parent / "wheel-verification.json", {"schema_version": "1", "status": "passed",
             "python_version": PYTHON_VERSION, "canonical_version": version,
             "wheel_filename": self.wheel.name, "wheel_digest": sha(self.wheel.read_bytes()), "wheel_version": metadata_version,
-            "checks": {name: "passed" for name in ("help", "doctor", "source_validation", "eval")}})
+            "checks": {name: "passed" for name in ("help", "doctor", "source_validation", "eval")},
+            "source_commit": SOURCE_COMMIT, "ci_identity": CI_IDENTITY})
 
-    def assemble(self, *, output=None, artifacts=None, wheel=None):
+    def assemble(self, *, output=None, artifacts=None, wheel=None, agents=AGENTS, targets=TARGETS):
         return assemble_release(self.artifacts if artifacts is None else artifacts, self.wheel if wheel is None else wheel,
-                                self.root / "candidate" if output is None else output, repository_root=ROOT)
+                                self.root / "candidate" if output is None else output, repository_root=ROOT,
+                                agents=agents, targets=targets, source_commit=SOURCE_COMMIT, ci_identity=CI_IDENTITY)
 
     def mutate(self, target, name, change):
         path = self.artifacts[target] / name
@@ -180,6 +194,146 @@ class ReleaseAssetTests(unittest.TestCase):
             if os.name != "nt":
                 self.assertTrue((package_tree / executable).stat().st_mode & 0o100)
 
+    def test_codex_three_target_release_does_not_require_linux_or_other_agents(self):
+        for target in INTERNAL_TARGETS:
+            self.mutate(target, "runtime-qualification.json", lambda report: report.update(
+                results=[item for item in report["results"] if item["agent"] == "codex"]))
+        independent = self.root / "setup"
+        independent.mkdir()
+        wheel = independent / self.wheel.name
+        wheel.write_bytes(self.wheel.read_bytes())
+        (independent / "wheel-verification.json").write_bytes((self.wheel.parent / "wheel-verification.json").read_bytes())
+        index = self.assemble(artifacts={target: self.artifacts[target] for target in INTERNAL_TARGETS},
+                              wheel=wheel, agents=("codex",), targets=INTERNAL_TARGETS)
+        self.assertEqual("2", index["schema_version"])
+        self.assertEqual(["codex"], index["agents"])
+        self.assertEqual(list(INTERNAL_TARGETS), index["targets"])
+        self.assertEqual(3, len(index["packages"]))
+        self.assertEqual(SOURCE_COMMIT, index["source_commit"])
+        self.assertEqual(CI_IDENTITY, index["ci_identity"])
+        self.assertEqual("internal/codex/" + VERSION, index["release_tag"])
+
+    def formal_codex_inputs(self):
+        version = "1.0.0.1"
+        for target in INTERNAL_TARGETS:
+            package = self.artifacts[target] / "codex"
+            lock, _ = runtime_lock(ROOT, "codex", target, version)
+            write(package / "engineering-assistant/runtime-lock.json", lock)
+            (package / "engineering-assistant/runtime-python-downloads.json").write_bytes(python_download_metadata(lock))
+            files = {path.relative_to(package).as_posix(): sha(path.read_bytes())
+                     for path in package.rglob("*") if path.is_file() and path.name != "package-manifest.json"}
+            digest = sha("\n".join(f"{name}:{value}" for name, value in sorted(files.items())).encode())
+            write(package / "package-manifest.json", {"canonical_version": version, "target": target,
+                "platform": "codex", "payload_digest": digest, "payload_files": files})
+            def qualification(report):
+                report["results"] = [item for item in report["results"] if item["agent"] == "codex"]
+                report["results"][0].update(canonical_version=version, payload_digest=digest)
+            self.mutate(target, "runtime-qualification.json", qualification)
+            self.mutate(target, "official-validation.json", lambda report: report.update(codex_payload_digest=digest))
+        self.make_wheel(version=version, metadata_version=version)
+        return {target: self.artifacts[target] for target in INTERNAL_TARGETS}
+
+    def test_formal_internal_codex_version_assembles_unattested_three_target_candidate(self):
+        artifacts = self.formal_codex_inputs()
+        index = self.assemble(artifacts=artifacts, agents=("codex",), targets=INTERNAL_TARGETS)
+        self.assertEqual("1.0.0.1", index["canonical_version"])
+        self.assertEqual("1.0.0.1", index["setup"]["version"])
+        self.assertEqual("candidate", index["status"])
+        self.assertEqual("ci_artifacts_unattested", index["assurance"])
+        self.assertEqual("not_satisfied", index["support_qualification"]["status"])
+
+    def local_inputs(self):
+        artifacts = self.formal_codex_inputs()
+        paths = [root / name for root in artifacts.values() for name in (
+            "host.json", "native-tests.json", "runtime-qualification.json", "official-validation.json")]
+        paths.append(self.wheel.parent / "wheel-verification.json")
+        for path in paths:
+            value = json.loads(path.read_text())
+            value.pop("ci_identity")
+            value["validation_origin"] = dict(LOCAL_ORIGIN)
+            write(path, value)
+        return artifacts
+
+    def test_local_validation_assembles_without_a_ci_run_but_keeps_host_acceptance_pending(self):
+        from engineering_assistant.artifact_io import ArtifactIO
+        from engineering_assistant.internal_promotion import _verify_candidate
+        from engineering_assistant.release_assets import validate_acceptance
+        artifacts = self.local_inputs()
+        output = self.root / "local-candidate"
+        index = assemble_release(artifacts, self.wheel, output, agents=("codex",), targets=INTERNAL_TARGETS,
+                                 source_commit=SOURCE_COMMIT, validation_origin=LOCAL_ORIGIN)
+        self.assertEqual(LOCAL_ORIGIN, index["validation_origin"])
+        self.assertNotIn("ci_identity", index)
+        self.assertEqual("local_artifacts_unattested", index["assurance"])
+        self.assertEqual("not_satisfied", index["support_qualification"]["status"])
+        storage = ArtifactIO(output, ".")
+        try:
+            verified, raw = _verify_candidate(storage)
+            self.assertEqual(index, verified)
+            with self.assertRaises(ValidationFailure):
+                validate_acceptance(index, raw, {})
+            index["assurance"] = "ci_artifacts_unattested"
+            with self.assertRaises(ValidationFailure):
+                validate_acceptance(index, json.dumps(index).encode(), {})
+        finally:
+            storage.close()
+
+    def test_local_validation_rejects_mixed_batches_and_ci_fields_before_output(self):
+        artifacts = self.local_inputs()
+        path = artifacts["macos-arm64"] / "native-tests.json"
+        original = json.loads(path.read_text())
+        for change in ({"ci_identity": CI_IDENTITY}, {"validation_origin": {
+                **LOCAL_ORIGIN, "validation_id": "d1b8c2ef-c242-4a90-b903-a27acc66f0be"}}):
+            write(path, {**original, **change})
+            with self.assertRaisesRegex(ValidationFailure, "来源"):
+                assemble_release(artifacts, self.wheel, self.root / "candidate", agents=("codex",),
+                                 targets=INTERNAL_TARGETS, source_commit=SOURCE_COMMIT, validation_origin=LOCAL_ORIGIN)
+            self.assertFalse((self.root / "candidate").exists())
+
+    def test_validation_origin_requires_one_explicit_unattested_source(self):
+        from engineering_assistant.release_assets import release_provenance
+        for change in ({"validation_id": "123"}, {"repository": "other/repo"},
+                       {"assurance": "verified"}, {"kind": "github"}):
+            with self.assertRaises(ValidationFailure):
+                release_provenance(SOURCE_COMMIT, validation_origin={**LOCAL_ORIGIN, **change})
+        with self.assertRaises(ValidationFailure):
+            release_provenance(SOURCE_COMMIT, CI_IDENTITY, validation_origin=LOCAL_ORIGIN)
+
+    def test_formal_internal_candidate_cannot_silently_drop_a_supported_target(self):
+        artifacts = self.formal_codex_inputs()
+        targets = INTERNAL_TARGETS[:-1]
+        with self.assertRaises(ValidationFailure):
+            self.assemble(artifacts={target: artifacts[target] for target in targets}, agents=("codex",), targets=targets)
+
+    def test_formal_four_part_wheel_version_is_verified_without_a_prerelease(self):
+        from engineering_assistant.release_assets import _wheel_version
+        self.make_wheel(version="1.0.0.1", metadata_version="1.0.0.1")
+        self.assertEqual("1.0.0.1", _wheel_version(self.wheel.read_bytes(), "1.0.0.1"))
+
+    def test_mixed_source_or_ci_identity_is_rejected_before_output(self):
+        for field, value in (("source_commit", "b" * 40),
+                             ("ci_identity", {**CI_IDENTITY, "run_id": "124"})):
+            original = (self.artifacts["macos-arm64"] / "runtime-qualification.json").read_bytes()
+            self.mutate("macos-arm64", "runtime-qualification.json", lambda report: report.update({field: value}))
+            with self.assertRaisesRegex(ValidationFailure, "来源"):
+                self.assemble()
+            (self.artifacts["macos-arm64"] / "runtime-qualification.json").write_bytes(original)
+        self.assertFalse((self.root / "candidate").exists())
+
+    def test_agent_scope_must_match_records_exactly(self):
+        with self.assertRaisesRegex(ValidationFailure, "Agent"):
+            self.assemble(agents=("codex",))
+        with self.assertRaises(ValidationFailure):
+            self.assemble(agents=())
+        with self.assertRaises(ValidationFailure):
+            self.assemble(agents=("codex", "codex"))
+
+    def test_official_validation_receipt_is_required_and_bound_to_codex(self):
+        self.mutate("macos-arm64", "official-validation.json", lambda report: report.update(
+            codex_payload_digest="sha256:" + "0" * 64))
+        with self.assertRaisesRegex(ValidationFailure, "官方"):
+            self.assemble()
+
     def test_same_inputs_generate_identical_archives_and_index(self):
         first = self.assemble(output=self.root / "first")
         second = self.assemble(output=self.root / "second")
@@ -188,7 +342,7 @@ class ReleaseAssetTests(unittest.TestCase):
     def test_missing_target_is_rejected_before_output(self):
         inputs = dict(self.artifacts)
         inputs.pop("windows-x64")
-        with self.assertRaisesRegex(ValidationFailure, "四目标"):
+        with self.assertRaisesRegex(ValidationFailure, "目标"):
             self.assemble(artifacts=inputs)
         self.assertFalse((self.root / "candidate").exists())
 
@@ -349,8 +503,9 @@ class ReleaseAssetTests(unittest.TestCase):
         external = self.root / "explicit" / self.wheel.name
         external.parent.mkdir()
         external.write_bytes(self.wheel.read_bytes())
-        # The receipt binds the explicit wheel, but the CI wheel is different.
-        self.wheel.write_bytes(original)
+        (external.parent / "wheel-verification.json").write_bytes((self.wheel.parent / "wheel-verification.json").read_bytes())
+        # Replace the actual wheel after its colocated receipt was written.
+        external.write_bytes(original)
         with self.assertRaisesRegex(ValidationFailure, "wheel.*验证"):
             self.assemble(wheel=external)
         self.assertFalse((self.root / "candidate").exists())
