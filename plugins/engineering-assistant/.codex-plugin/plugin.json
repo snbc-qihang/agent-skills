@@ -1,0 +1,27 @@
+{
+  "name": "engineering-assistant",
+  "version": "1.0.0+build.1",
+  "description": "基于证据的工程原语、受治理流程、状态恢复和人工审批门禁。",
+  "author": {
+    "name": "sunliming625@gmail.com",
+    "email": "sunliming625@gmail.com"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "工程助手",
+    "shortDescription": "基于证据、状态和审批门禁执行工程任务。",
+    "longDescription": "以可复用工程原语、受治理 flow、可恢复运行状态和人工审批门禁，协助完成研究、设计、实现、诊断、评审与发布准备。",
+    "developerName": "sunliming625@gmail.com",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "梳理当前仓库上下文并给出最小充分的工程路径。",
+      "基于证据诊断这个问题，并明确风险和验证结果。",
+      "评审当前变更是否符合仓库规范和原始需求。"
+    ]
+  }
+}

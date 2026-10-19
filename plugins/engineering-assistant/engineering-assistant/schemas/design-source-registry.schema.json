@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/v2",
+  "$defs": {
+    "owners": {
+      "type": "object",
+      "required": ["business", "architecture"],
+      "properties": {
+        "business": {"type": "string", "minLength": 1, "maxLength": 128},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 128}
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "kind", "path", "status", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "kind": {"enum": ["requirements", "repository", "existing-design", "interfaces", "data", "deployment"]},
+        "path": {"type": ["string", "null"], "maxLength": 512},
+        "status": {"enum": ["available", "unknown", "not_applicable"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 512}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "available"}}},
+          "then": {"properties": {"path": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"reason": {"minLength": 1}}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "v2": {
+      "type": "object",
+      "required": ["version", "hld", "context_index", "capability_design_root", "change_root", "deployment_catalog", "owners", "sources"],
+      "properties": {
+        "version": {"const": "2"},
+        "hld": {"type": "string", "minLength": 1, "maxLength": 512},
+        "context_index": {"type": "string", "minLength": 1, "maxLength": 512},
+        "capability_design_root": {"type": "string", "minLength": 1, "maxLength": 512},
+        "change_root": {"type": "string", "minLength": 1, "maxLength": 512},
+        "deployment_catalog": {"type": "string", "minLength": 1, "maxLength": 512},
+        "owners": {"$ref": "#/$defs/owners"},
+        "sources": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/source"}
+        }
+      },
+      "additionalProperties": false
+    }
+
+  }
+}

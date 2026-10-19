@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/usage-observation-ledger.schema.json",
+  "type": "object",
+  "required": ["plan", "tool_calls", "shell_calls", "index_queries", "output_bytes", "tool_use_signatures", "completed_tool_use_ids", "signals", "signal_counts", "revision"],
+  "properties": {
+    "plan": {
+      "type": "object",
+      "required": ["observation_id", "session_ref", "turn_ref", "task_digest", "activation_source", "reference_tool_calls", "reference_shell_calls", "reference_index_queries", "reference_output_bytes", "coverage"],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^observation-[a-f0-9]{24}$"},
+        "session_ref": {"type": "string", "pattern": "^session-[a-f0-9]{16}$"},
+        "turn_ref": {"type": "string", "pattern": "^turn-[a-f0-9]{16}$"},
+        "task_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "activation_source": {"enum": ["explicit_prompt", "plugin_tool"]},
+        "reference_tool_calls": {"type": "integer", "minimum": 1},
+        "reference_shell_calls": {"type": "integer", "minimum": 0},
+        "reference_index_queries": {"type": "integer", "minimum": 0},
+        "reference_output_bytes": {"type": "integer", "minimum": 1},
+        "coverage": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["bash", "apply_patch", "mcp", "hermes_plugin_tool"]}}
+      },
+      "additionalProperties": false
+    },
+    "tool_calls": {"type": "integer", "minimum": 0},
+    "shell_calls": {"type": "integer", "minimum": 0},
+    "index_queries": {"type": "integer", "minimum": 0},
+    "output_bytes": {"type": "integer", "minimum": 0},
+    "tool_use_signatures": {"type": "object", "maxProperties": 256, "propertyNames": {"pattern": "^tool-[a-f0-9]{16}$"}, "additionalProperties": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}},
+    "completed_tool_use_ids": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^tool-[a-f0-9]{16}$"}},
+    "signals": {"type": "array", "maxItems": 11, "uniqueItems": true, "items": {"enum": ["duplicate_call", "index_query_reference_exceeded", "large_single_output", "output_reference_exceeded", "plugin_skill_self_read", "post_without_pre", "replayed_tool_event", "retention_truncated", "shell_call_reference_exceeded", "tool_call_reference_exceeded", "tool_use_id_reused"]}},
+    "signal_counts": {"type": "object", "maxProperties": 11, "propertyNames": {"enum": ["duplicate_call", "index_query_reference_exceeded", "large_single_output", "output_reference_exceeded", "plugin_skill_self_read", "post_without_pre", "replayed_tool_event", "retention_truncated", "shell_call_reference_exceeded", "tool_call_reference_exceeded", "tool_use_id_reused"]}, "additionalProperties": {"type": "integer", "minimum": 1}},
+    "revision": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}
