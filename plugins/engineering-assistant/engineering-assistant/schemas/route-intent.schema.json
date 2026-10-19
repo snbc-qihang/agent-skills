@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["task_kind", "requested_outcome", "scope", "risk_signals", "requested_external_actions", "confirmed_actions", "confidence", "evidence"],
+  "properties": {
+    "task_kind": {"enum": ["explain", "context", "research", "decide", "model", "domain-design", "shape", "prototype", "design", "implement", "diagnose", "review", "release", "evolve", "wayfind"]},
+    "requested_outcome": {"type": "string", "minLength": 1},
+    "scope": {"type": "array", "items": {"type": "string"}},
+    "risk_signals": {"type": "array", "items": {"type": "string"}},
+    "requested_external_actions": {"type": "array", "items": {"type": "string"}},
+    "confirmed_actions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "implementation_mode": {"enum": ["flow", "inline"], "default": "flow", "description": "仅 implement 可请求 inline：边界明确、无风险信号或外部动作且无需正式交付的局部实现；不是免测或免审批。缺省保留 flow。"},
+    "read_only": {"type": "boolean", "default": false, "description": "用户明确要求仅分析、不持久化、不执行外部动作时为 true；不得用它掩盖实现或外部写入请求。"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

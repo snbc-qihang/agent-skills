@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/investigation-request.schema.json",
+  "type": "object",
+  "required": ["id", "run_id", "question", "reason", "source_scope", "reported_blocking", "mode", "estimated_cost", "stop_conditions", "evidence_requirements", "status"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "question": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "source_scope": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["official_docs", "source_repository", "standards", "issues", "internal_repository", "runtime_evidence"]}},
+    "reported_blocking": {"type": "boolean", "description": "Observation metadata only; it never pauses or blocks the governed run."},
+    "mode": {"enum": ["auto_readonly", "suggest_then_run", "guided", "disabled"]},
+    "estimated_cost": {"enum": ["low", "medium", "high"]},
+    "stop_conditions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "evidence_requirements": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "status": {"enum": ["proposed", "approved", "running", "completed", "declined", "blocked"]}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/feedback-disposition.schema.json",
+  "type": "object",
+  "required": [
+    "schema_version", "disposition_id", "event_id", "decision", "reason",
+    "actor_ref", "evidence_refs", "reusable_candidate", "decided_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "disposition_id": {"type": "string", "pattern": "^feedback-disposition-[0-9a-f]{24}$"},
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "decision": {"enum": ["accepted_for_evolution", "resolved", "rejected", "deferred"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "actor_ref": {"type": "string", "minLength": 1, "maxLength": 128},
+    "evidence_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "reusable_candidate": {"type": "boolean"},
+    "decided_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"enum": ["resolved", "rejected", "deferred"]}}},
+      "then": {"properties": {"reusable_candidate": {"const": false}}}
+    }
+  ],
+  "additionalProperties": false
+}
