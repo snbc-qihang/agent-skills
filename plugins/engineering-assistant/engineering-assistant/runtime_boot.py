@@ -1,0 +1,52 @@
+"""Trusted entrypoint copied beside a platform's native launcher."""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    root = Path(__file__).resolve().parent
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(root / "runtime"))
+    arguments = sys.argv[1:]
+    mode = arguments[0] if arguments else "--help"
+    try:
+        from engineering_assistant.runtime.environment import _read_control, _validate_runtime_lock, verify_running_python
+        lock = _read_control(root / "runtime-lock.json")
+        if lock.get("schema_version") == "2":
+            _validate_runtime_lock(lock)
+            verify_running_python(lock)
+        elif lock.get("schema_version") != "1":
+            raise ValueError("unsupported Runtime contract")
+    except Exception:
+        if mode == "hook":
+            print("{}")
+            return 0
+        print('{"status":"needs_preparation","reason":"python_artifact_verification_failed"}', file=sys.stderr)
+        return 2
+    if mode == "hook":
+        try:
+            agent = lock["agent"]
+            if agent == "claude-code":
+                from engineering_assistant.platforms.claude_hook import run_claude_hook
+                return run_claude_hook(schema_root=root / "schemas")
+            from engineering_assistant.runtime.feedback import run_codex_hook
+            return run_codex_hook(schema_root=root / "schemas")
+        except Exception:
+            print("{}")
+            return 0
+    if mode == "hermes-rpc":
+        from engineering_assistant.platforms.hermes_bridge import main as bridge
+        return bridge(root)
+    if mode == "sandbox-probe":
+        from engineering_assistant.runtime.sandbox_probe import qualify
+        print(json.dumps(qualify(root), ensure_ascii=False))
+        return 0
+    from engineering_assistant.runtime.cli import main as cli
+    return cli(["--repository-root", str(root), *arguments])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

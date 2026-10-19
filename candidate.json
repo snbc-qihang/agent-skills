@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "kind": "codex_installation_candidate",
+  "canonical_version": "1.0.0.1",
+  "target": "macos-arm64",
+  "source_commit": "b5681d7d4fbaa1c71edee0abbbd7af320a164fe4",
+  "tag": "candidate/codex/1.0.0.1/macos-arm64/20261019.1",
+  "marketplace": "engineering-assistant-candidate",
+  "package_payload_digest": "sha256:86bb7db06b44d78e41ad26c2f8288ccacfa9b43189b340f9ff045d2164d82968",
+  "package_manifest_sha256": "sha256:6eb433e8e7ed977593233e853883214228106cf97f82857f5fb6dfe2a956e4db",
+  "qualification": "maintainer_native_runtime_only",
+  "authenticated_app_cli_acceptance": "pending",
+  "windows11_acceptance": "pending",
+  "formal_release_eligible": false,
+  "product_canary": "not_verified",
+  "technical_verification": {
+    "tests.log": "sha256:ffde4ca4e65b9e0c19ab9547fadc73b154d1b5eba1720c01f433e649326be178",
+    "source-validation.json": "sha256:c2796d9fa432e0092c3d2b88adca2cfb6b49113c73b3bbb37f13902e1d9cffeb",
+    "eval.json": "sha256:14b024e4ee472a18b6d5cc66bd174b09fad762295aac34cb6b3ae478bbc4ea94",
+    "official-validation.json": "sha256:22a980d1064417dda9be745ef1138928f84022dbb0e936761041dd25e83fee7e",
+    "runtime-qualification.json": "sha256:c3cbf93fc329e79c97a20fed8906ae6ad77a5f634e586c10a7df203a663d373d",
+    "wheel-verification.json": "sha256:ca734465ad9806c63b3b18510c538515b516479f354ce853e92ae6fb76c3f998"
+  }
+}

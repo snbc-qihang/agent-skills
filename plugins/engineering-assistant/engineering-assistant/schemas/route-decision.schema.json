@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["decision", "flow_id", "skill_ids", "policy_refs", "evidence_level", "persistence_mode", "approval_required", "reason"],
+  "properties": {
+    "decision": {"enum": ["proceed", "ask", "confirm", "block"]},
+    "flow_id": {"type": ["string", "null"]},
+    "skill_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "policy_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evidence_level": {"enum": ["inline", "lite", "standard", "formal"]},
+    "persistence_mode": {"enum": ["inline", "ephemeral", "target_repo", "blocked"]},
+    "approval_required": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

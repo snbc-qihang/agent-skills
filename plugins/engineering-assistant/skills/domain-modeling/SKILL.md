@@ -1,0 +1,30 @@
+---
+name: domain-modeling
+description: 在明确的限界上下文中建立统一语言、业务规则、生命周期及战略和战术模型。适用于语义冲突、业务规则复杂、聚合或一致性边界不清，以及代码与业务语言不一致的场景。
+---
+
+本 skill 仅使用当前 `engineering-assistant` 的能力与 Runtime。平台已选本 skill 时直接执行，不重复路由或跨插件推进同一运行。
+
+# 领域建模
+
+使用具体业务场景建立上下文内一致、能够解释业务行为的模型。模型应小于实现；DDD 模式必须由真实语义和变化压力证明。
+
+## 操作流程
+
+1. 明确建模目的、范围、业务负责人和候选限界上下文。
+2. 从业务语言、成功、失败和非法场景、源码、接口、数据及现有文档中收集术语与事实；区分可调查事实和必须人工决定的业务选择。
+3. 用场景检验术语、关系、命令、事件、生命周期和不变量，术语只要求在所属上下文内含义唯一。
+4. 先完成战略边界，再在单个上下文内应用必要的战术模式；不得为了模式清单制造领域对象。
+5. 将模型与代码、API 和数据对照；无法确认的差异保留为未知或交给 `decision-interview`，不得静默选择。
+6. 只更新一个规范模型，其他文档通过引用使用；只为真实、反直觉且难以逆转的选择创建 ADR。
+
+存在多个子域、团队边界、同名异义或跨系统协作时读取 [references/strategic-modeling.md](references/strategic-modeling.md)。
+任务涉及聚合、不变量、生命周期或实现映射时读取 [references/tactical-modeling.md](references/tactical-modeling.md)。
+创建或更新正式领域模型文档时读取 [references/model-artifact.md](references/model-artifact.md)。
+请求覆盖战略设计、多个限界上下文、部署拓扑或能力级详细设计时读取 [references/design-governance.md](references/design-governance.md)。
+请求正式领域设计、上下文切片或能力级详细设计时读取 [references/scenario-traceability.md](references/scenario-traceability.md)。
+存在跨限界上下文或外部模型协作时读取 [references/integration-consistency.md](references/integration-consistency.md)。
+只有决策确实需要 ADR 时才读取 [references/adr-format.md](references/adr-format.md)。
+
+历史名称只能作为明确别名保留，不能与当前规范术语并列成为第二事实源。
+不得创建全局唯一业务模型，不得把组织图、微服务或数据库表直接当作领域边界，也不得在领域模型中复制完整实现设计。

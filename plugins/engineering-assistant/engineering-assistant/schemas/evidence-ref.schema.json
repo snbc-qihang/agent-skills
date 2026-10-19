@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["id", "kind", "uri", "producer", "observed_at", "provenance", "scope"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "kind": {"enum": ["source", "test", "build", "browser", "ci", "review", "approval", "external_state"]},
+    "uri": {"type": "string", "minLength": 1},
+    "producer": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "provenance": {"enum": ["runtime_observed", "agent_reported", "user_confirmed"]},
+    "scope": {"type": "string", "minLength": 1},
+    "scope_tags": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "contract_refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^(requirement|stop-condition):sha256:[0-9a-f]{64}$"}},
+    "subject_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "additionalProperties": false
+}
