@@ -7,6 +7,8 @@ backend-path = ["."]
 name = "engineering-assistant-kernel"
 version = "1.0.0.1"
 description = "engineering-assistant skill 套件的平台无关运行内核。"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [
   {name = "sunliming625@gmail.com", email = "sunliming625@gmail.com"}
 ]

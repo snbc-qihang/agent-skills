@@ -2,9 +2,9 @@
 
 ## 用户安装目标
 
-首轮内部交付安装完整的 11 个 skills、Runtime MCP、Hook 和 Provider 隔离能力，面向 macOS 14+ arm64/x64、Windows 11 x64 上的 Codex App 与原生 CLI。用户预先安装 Codex（App 或原生 CLI）、`uv` 和 Git，在选用的 Codex 宿主完成登录，并使用系统 Git 凭证管理授权访问团队 HTTPS 仓库。`uv` 的首轮验证基线为 0.11.7，须能在安装器启动前自动获取 Python 3.13.13；Runtime 准备函数的最低版本不能代替这项入口验证。无需 Node、手动 Python 环境、作者源 checkout、Rust 编译器或日常激活命令。
+首轮内部交付安装完整的 11 个 skills、Runtime MCP、Hook 和 Provider 隔离能力，面向 macOS 14+ arm64/x64、Windows 11 x64 上的 Codex App 与原生 CLI。用户预先安装 Codex（App 或原生 CLI）、`uv` 和 Git，在选用的 Codex 宿主完成登录。仓库采用 MIT 许可证并公开，下载不需要 GitHub 登录、token 或私有仓库授权。`uv` 的首轮验证基线为 0.11.7，须能在安装器启动前自动获取 Python 3.13.13；Runtime 准备函数的最低版本不能代替这项入口验证。无需 Node、手动 Python 环境、作者源 checkout、Rust 编译器或日常激活命令。
 
-**当前 `1.0.0.1` 候选尚未通过三目标真实宿主验收并推广；本节命令待发布，当前不能宣称已可安装。** 固定源码 tag `internal/installer/1.0.0.1` 对应发行 tag `internal/codex/1.0.0.1`，移动入口 `internal/installer` 指向团队最新已验收源码。安装器核对实际 Git 来源 commit，从同版本不可变发行 tag 读取预编译包与验收证据，自动选择 OS/架构，再准备并核对受控本地 marketplace 来源，调用原生 `plugin add` 完成选择。
+**当前 `1.0.0.1` 候选尚未通过三目标真实宿主验收并推广；本节命令待发布，当前不能宣称已可安装。** 固定源码 tag `internal/installer/1.0.0.1` 对应发行 tag `internal/codex/1.0.0.1`，移动入口 `internal/installer` 指向团队最新已验收源码。安装器核对实际 Git 来源 commit，从同版本不可变发行 tag 读取预编译包与公开验收摘要，自动选择 OS/架构，再准备并核对受控本地 marketplace 来源，调用原生 `plugin add` 完成选择。
 
 macOS Terminal 与 Windows PowerShell 使用同一固定版本命令：
 
@@ -53,7 +53,7 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 `publish_local.py --uninstall` 是 Claude Code 入口，不能用来清理 Codex。首次 `install` 会在发行下载与 Runtime 准备前复查；若唯一缺项是控制 CLI，则先自动准备既定工具再完整复查，用户无需另装 CLI。`doctor` 缺少 CLI 时仍保持只读并明确报告检查未完成。
 
-安装命令需要访问团队 Git、固定官方 Codex 归档、Python 归档和已锁定依赖来源；首次准备不是离线安装。私有仓库登录通过系统 Git 凭证管理完成，命令不携带密码或 token。`uvx` 会构建小型 Python 安装器 wheel，消费已经构建的原生插件，不在用户机器上编译 Rust。高级 wheel/source 兼容入口见后文。
+安装命令需要访问公开 Git、固定官方 Codex 归档、Python 归档和已锁定依赖来源；首次准备不是离线安装。命令不携带密码或 token。`uvx` 会构建小型 Python 安装器 wheel，消费已经构建的原生插件，不在用户机器上编译 Rust。高级 wheel/source 兼容入口见后文。
 
 ## 支持与资格
 
@@ -129,7 +129,9 @@ uvx --python 3.13.13 --from <setup-wheel> ea-setup update --agent hermes --packa
 
 Provider 记录另行核对完整的 11 项隔离检查与 IPv4/IPv6 对照，不能通过关闭能力或放宽权限填写成功。人工记录提供本地可追溯性，维护者须审查其对应的真实操作证据；JSON 的声明本身不构成身份验签或外部可信证明。
 
-仓库保持私有，无需开源、PyPI、npm 或公开插件市场。GitHub Release 用于版本说明和教程，消费者下载仍使用 Git 发行 tag；维护者的 GitHub 发布权限和控制工具不转嫁给新人。
+源码采用 [MIT](../../LICENSE) 许可证，插件包和安装器 wheel 同时携带许可证与[第三方声明](../../THIRD_PARTY_NOTICES.md)。公开源码仍按团队试用范围发行，不增加 PyPI、npm、公开插件市场或部署服务器。GitHub Release 用于版本说明、教程与公开验收摘要，消费者下载仍使用 Git 发行 tag；维护者的 GitHub 发布权限和控制工具不转嫁给新人。推广时核对固定仓库公开且未归档，不接受其他仓库或自动切换发行来源。
+
+完整 `acceptance.json`、App/CLI/Provider 证据、`activation.json`、命令收据、原生插件列表与包快照只保存在仓库外受控目录，维护者负责保留以便复核。`prepare` 在私有快照中逐项校验后，发行 tag 仅保存 `acceptance-summary.json`：包含候选和源码身份、三目标包摘要、App/CLI/Provider 通过状态及原始证据摘要，不复制 reviewer、路径、命令、会话内容或原始记录。消费者验证公开摘要与完整包；无法据此独立重放原始验收，也不获得密码学身份保证。`activate` 同样校验完整原始记录及 BUILD 更新后，Release 只上传 `activation-summary.json` 和已审查的安装教程。
 
 推广分为两个阶段，各自先预演，再按远程推广授权显式执行。实际远程操作要求维护者的 Git HTTPS 写权限和已认证 `gh`；安装消费者无需 `gh`。第一阶段 `prepare` 只写入并核对不可变的发行 tag 和源码 tag，不更新移动入口：
 
@@ -138,7 +140,7 @@ python3 scripts/promote_internal_release.py --phase prepare --candidate <仓库�
 python3 scripts/promote_internal_release.py --phase prepare --candidate <仓库外候选目录> --acceptance <仓库外acceptance.json> --yes
 ```
 
-两个 tag 已核验后，在三个目标上使用本节实际私有 HTTPS 固定命令进行新人安装，并从 App 与 CLI 完成完整运行验收。另在隔离试验来源验证 `1.0.0.1 → 1.0.0.2` 的 BUILD 更新，记录更新前后的真实原生选择；不能用 SemVer 排序、构建成功或 `doctor` 替代。试验下一版不推进团队 alias。
+两个 tag 已核验后，在三个目标上使用本节实际公开 HTTPS 固定命令进行新人安装，并从 App 与 CLI 完成完整运行验收。另在隔离试验来源验证 `1.0.0.1 → 1.0.0.2` 的 BUILD 更新，记录更新前后的真实原生选择；不能用 SemVer 排序、构建成功或 `doctor` 替代。试验下一版不推进团队 alias。
 
 第二阶段 `activate` 需要仓库外 `activation.json` 和已核对的 Release 教程正文：
 
@@ -147,11 +149,11 @@ python3 scripts/promote_internal_release.py --phase activate --candidate <仓库
 python3 scripts/promote_internal_release.py --phase activate --candidate <仓库外候选目录> --acceptance <仓库外acceptance.json> --activation <仓库外activation.json> --release-notes <仓库外教程.md> --expected-alias <旧源码commit或absent> --yes
 ```
 
-`activation.json` 固定 `schema_version=1`、`repository_url=https://github.com/snbc-qihang/agent-skills.git`、`installer_ref=internal/installer/1.0.0.1` 和 `transport=private_https_git`，包含一份完整三目标 `acceptance` 及三个目标的 `build_updates`。每项引用 `install`、`before_update`、`update` 三份实际命令 receipt；引用均为 `{path, sha256}`，相对路径位于验收输入目录内。
+`activation.json` 固定 `schema_version=1`、`repository_url=https://github.com/snbc-qihang/agent-skills.git`、`installer_ref=internal/installer/1.0.0.1` 和 `transport=https_git`，包含一份完整三目标 `acceptance` 及三个目标的 `build_updates`。每项引用 `install`、`before_update`、`update` 三份实际命令 receipt；引用均为 `{path, sha256}`，相对路径位于验收输入目录内。
 
 每份 receipt 记录 `schema_version=1`、`evidence_kind=ea_setup_command`、完整参数数组 `command`、实际 PEP 610 `installer_origin`、`exit_code`、实际 JSON `result`、`package` 包快照引用和 `native_selection` 原生清单引用。固定安装须执行该版本的精确 HTTPS 命令并输出 `--json`；包快照放在 `evidence/packages/` 内，包含完整已安装包和 `manifest_sha256`；原生清单保存 `codex plugin list --json` 的实际输出。固定安装的 canonical、源码及摘要须匹配候选；更新前另行采集 `doctor` 或重复 `install` 收据，核对 canonical 与包摘要；更新后须执行真实 `update`，选中同前三段、BUILD 加一且摘要不同的完整包。App、CLI、Provider 验收证据仍逐项审查，不以这些 receipt 代替受信任 Hook、登录态或隔离资格。
 
-Release 教程正文至少包含固定版本安装命令、支持目标、前置条件、旧版清理、信任与重开会话、检查、更新、修复和卸载，并明确验收版本与源码来源。脚本核对两个已有 tag 后，发布或核对私有 Release 及其验收证据，再以 CAS 更新 `internal/installer`。Release 失败或验收缺失时不推进 alias；Release 已发布但 CAS 失败时明确报告部分完成，不自动删除 Release 或 tag。已有不同内容的 tag 不覆盖，alias 并发变化不强行推广。生成物不提交到 `main`、`teamwork` 或作者 checkout。
+Release 教程正文至少包含固定版本安装命令、支持目标、前置条件、旧版清理、信任与重开会话、检查、更新、修复和卸载，并明确验收版本与源码来源。教程是人工审查后提供的公开正文，不得包含凭证、个人路径或业务内容。脚本核对两个已有 tag 后，发布或核对团队试用 Release 及其公开摘要，再以 CAS 更新 `internal/installer`。摘要的 `acceptance_sha256` 绑定规范化原始验收 JSON，角色摘要绑定原始证据字节，`activation_sha256` 绑定原始激活记录字节；原始内容不随摘要上传。Release 失败或验收缺失时不推进 alias；Release 已发布但 CAS 失败时明确报告部分完成，不自动删除 Release 或 tag。已有不同内容的 tag 不覆盖，alias 并发变化不强行推广。生成物不提交到 `main`、`teamwork` 或作者 checkout。
 
 正式内部交付资格仅证明仓库门禁和完整安装运行验收，不表示产品 Canary 或公开稳定版资格。没有三目标真实验收和实际固定命令证据时，文档与 Release 不得宣称入口已经可用。
 

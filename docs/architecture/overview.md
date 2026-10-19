@@ -45,7 +45,7 @@ flowchart LR
 - `scripts/validate_local.py` 在干净的固定源码上生成同一批次的本地原生验证输入。`release_assets.py` 接受互斥的 CI 身份或 `local_unattested` 本地来源，核对源码、批次与包摘要；两者都不能代替真实 App/CLI/Provider 人工验收。
 - `internal_distribution.py` 从安装器的真实 Git 来源 commit 选择同版本不可变内部发行 tag，核对三目标验收与逐文件摘要；`internal_installation.py` 维护受控本地 Codex marketplace、安装事务和旧版重装补偿，原生 Codex 继续拥有缓存与启用状态。
 - `codex_control.py` 探测固定版本原生 CLI 的架构、命令与 JSON 合同；缺失时将固定官方完整归档校验并原子准备到外部 tools 目录，以绝对路径和同一 `CODEX_HOME` 执行，不修改 App 或 PATH。只读诊断不下载控制工具。
-- `release_assets.py` 组装仓库外 Codex 三目标候选；`internal_promotion.py` 的 `prepare` 核对候选真实验收后创建不可变发行与源码 tag，`activate` 另核对私有 HTTPS 固定命令及 BUILD 更新验收后发布私有 Release 并 CAS 推广安装器 alias。生成发行树不进入 `main`、`teamwork` 或作者 checkout。
+- `release_assets.py` 组装仓库外 Codex 三目标候选；`internal_promotion.py` 的 `prepare` 核对完整真实验收后创建不可变发行与源码 tag，发行树仅携带白名单验收摘要；`activate` 另核对 HTTPS 固定命令及 BUILD 更新验收后发布团队试用 Release 和公开摘要，并 CAS 推广安装器 alias。原始验收与命令记录保存在仓库外受控目录，不进入公开 tag 或 Release；生成发行树不进入 `main`、`teamwork` 或作者 checkout。
 - Rust launcher 从原生数据目录读取绑定，以绝对路径启动固定 Runtime；Hermes 宿主通过只含标准库的 RPC 桥复用内核，避免导入宿主 Python 依赖。
 - `windows_artifact_fs.py` 提供 NTFS 句柄相对访问；Provider 的 macOS Seatbelt、Linux Landlock/seccomp 与 Windows LPAC/Job 后端共用同一个执行合同，能力检测不能代替实际隔离资格。
 

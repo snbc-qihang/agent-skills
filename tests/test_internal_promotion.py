@@ -92,7 +92,7 @@ class InternalPromotionTests(unittest.TestCase):
         self.activation_root = self.root / "activation-input"
         shutil.copytree(self.evidence_root / "evidence", self.activation_root / "evidence")
         wrapper = {"schema_version": "1", "repository_url": REMOTE, "installer_ref": SOURCE_TAG_PREFIX + VERSION,
-                   "transport": "private_https_git", "acceptance": copy.deepcopy(self.record), "build_updates": []}
+                   "transport": "https_git", "acceptance": copy.deepcopy(self.record), "build_updates": []}
         for entry in self.index["packages"]:
             target = entry["target"]
             packages = {}
@@ -184,7 +184,7 @@ class InternalPromotionTests(unittest.TestCase):
 
     def execute_activation(self, git):
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
                 "engineering_assistant.internal_promotion._ensure_release", return_value={"status": "published", "release_published": True,
                     "remote_modified": False}) as release:
             result = self.promote(execute=True, phase="activate")
@@ -196,6 +196,56 @@ class InternalPromotionTests(unittest.TestCase):
         self.assertEqual("ready_for_prepare", result["status"])
         self.assertFalse(result["remote_modified"])
         git.assert_not_called()
+
+    def test_prepare_does_not_publish_private_host_evidence(self):
+        marker = "private-reviewer@example.invalid /Users/private-reviewer"
+        self.record["reviewer_ref"] = marker
+        reference = self.record["targets"][0]["app"]
+        path = self.evidence_root / reference["path"]
+        evidence = json.loads(path.read_bytes())
+        evidence["private_notes"] = marker
+        write(path, evidence)
+        reference["sha256"] = sha(path.read_bytes())
+        write(self.evidence_root / "acceptance.json", self.record)
+        captured = []
+        def commit(index, record, root):
+            self.assertFalse((root / "acceptance.json").exists())
+            self.assertFalse((root / "evidence").exists())
+            summary = json.loads((root / "acceptance-summary.json").read_bytes())
+            self.assertEqual(self.index["source_commit"], summary["source_commit"])
+            self.assertEqual(3, len(summary["targets"]))
+            for file in root.rglob("*"):
+                if file.is_file():
+                    self.assertNotIn(marker.encode(), file.read_bytes())
+            captured.append(summary)
+            return "c" * 40, "d" * 40
+        git, _, _ = self.remote()
+        with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._local_commit", side_effect=commit):
+            self.assertEqual("prepared", self.promote(execute=True)["status"])
+        self.assertEqual(1, len(captured))
+
+    def test_activation_publishes_a_summary_instead_of_raw_command_and_host_files(self):
+        self.activation_fixture()
+        git, _, _ = self.remote()
+        captured = []
+        def release(index, root, body, bundle, notes):
+            self.assertEqual("activation-summary.json", bundle.name)
+            raw = bundle.read_bytes()
+            self.assertNotIn(b"/synthetic-home", raw)
+            self.assertNotIn(b"synthetic-test-reviewer", raw)
+            self.assertNotIn(b"evidence/", raw)
+            summary = json.loads(raw)
+            self.assertEqual(index["source_commit"], summary["source_commit"])
+            self.assertEqual(3, len(summary["build_updates"]))
+            captured.append(summary)
+            return {"status": "published", "release_published": True, "remote_modified": False}
+        with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._ensure_release", side_effect=release):
+            self.assertEqual("promoted", self.promote(execute=True, phase="activate")["status"])
+        self.assertEqual(1, len(captured))
 
     def test_prepare_phase_is_the_default_and_never_promotes_the_alias(self):
         calls, refs = [], {}
@@ -212,7 +262,7 @@ class InternalPromotionTests(unittest.TestCase):
                 refs[reference] = value
             return ""
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository", create=True):
+                "engineering_assistant.internal_promotion._public_repository", create=True):
             result = self.promote(execute=True)
         self.assertEqual("prepared", result["status"])
         self.assertEqual({"refs/tags/" + self.index["release_tag"], "refs/tags/internal/installer/" + VERSION}, set(refs))
@@ -242,7 +292,7 @@ class InternalPromotionTests(unittest.TestCase):
                 pushed = True
             return ""
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"):
+                "engineering_assistant.internal_promotion._public_repository"):
             result = self.promote(execute=True)
         self.assertEqual("failed", result["status"])
         self.assertTrue(result["remote_modified"])
@@ -253,7 +303,7 @@ class InternalPromotionTests(unittest.TestCase):
         git, refs, calls = self.remote()
         refs["refs/tags/internal/installer/" + VERSION] = "b" * 40
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"):
+                "engineering_assistant.internal_promotion._public_repository"):
             with self.assertRaisesRegex(ValidationFailure, "内容不同"):
                 self.promote(execute=True)
         self.assertFalse(any(call[0] == "push" for call in calls))
@@ -325,7 +375,7 @@ class InternalPromotionTests(unittest.TestCase):
         for same in (True, False):
             git, refs, calls = self.remote(tag_tree=("d" if same else "f") * 40)
             with self.subTest(same=same), mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                    "engineering_assistant.internal_promotion._private_repository"):
+                    "engineering_assistant.internal_promotion._public_repository"):
                 if same:
                     self.assertEqual("prepared", self.promote(execute=True)["status"])
                 else:
@@ -337,7 +387,7 @@ class InternalPromotionTests(unittest.TestCase):
         git, refs, calls = self.remote()
         refs.pop("refs/tags/internal/installer/" + VERSION)
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
                 "engineering_assistant.internal_promotion._ensure_release") as release:
             with self.assertRaisesRegex(ValidationFailure, "两个不可变 tag"):
                 self.promote(execute=True, phase="activate")
@@ -355,7 +405,7 @@ class InternalPromotionTests(unittest.TestCase):
     def test_stale_alias_rejects_before_release_or_ref_push(self):
         git, refs, calls = self.remote(alias="b" * 40)
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
                 "engineering_assistant.internal_promotion._ensure_release") as release:
             with self.assertRaisesRegex(ValidationFailure, "alias 已变化"):
                 self.promote(execute=True, phase="activate")
@@ -397,7 +447,7 @@ class InternalPromotionTests(unittest.TestCase):
     def test_release_failure_never_attempts_alias_cas(self):
         git, refs, calls = self.remote()
         with mock.patch("engineering_assistant.internal_promotion._git", side_effect=git), mock.patch(
-                "engineering_assistant.internal_promotion._private_repository"), mock.patch(
+                "engineering_assistant.internal_promotion._public_repository"), mock.patch(
                 "engineering_assistant.internal_promotion._ensure_release", return_value={"status": "failed",
                     "release_published": False, "remote_modified": True, "reason": "synthetic draft upload failure"}):
             result = self.promote(execute=True, phase="activate")
@@ -587,7 +637,7 @@ class ReleaseBoundaryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve() / "release"
         self.root.mkdir()
-        self.bundle = self.root.parent / "activation-evidence.zip"
+        self.bundle = self.root.parent / "activation-summary.json"
         self.bundle.write_bytes(b"synthetic evidence bundle")
         self.notes = self.root.parent / "installation.md"
         self.notes.write_bytes(b"synthetic reviewed tutorial")
@@ -636,7 +686,7 @@ class ReleaseBoundaryTests(unittest.TestCase):
                 "engineering_assistant.internal_promotion._gh", side_effect=self.gh):
             return _ensure_release(self.index, self.root, self.body, self.bundle, self.notes)
 
-    def test_formal_internal_release_stays_private_channel_without_prerelease_label(self):
+    def test_formal_team_release_preserves_nonlatest_semantics_without_prerelease_label(self):
         result = self.ensure()
         self.assertEqual("published", result["status"])
         self.assertFalse(self.release["prerelease"])
@@ -708,13 +758,21 @@ class ReleaseBoundaryTests(unittest.TestCase):
             with self.subTest(environment_keys=sorted(environment)), mock.patch.dict("os.environ", environment):
                 self.assertEqual(REMOTE, _git(["remote", "get-url", "origin"], self.root))
 
-    def test_public_or_different_repository_is_rejected(self):
-        from engineering_assistant.internal_promotion import _private_repository
-        for identity in ({"full_name": "snbc-qihang/agent-skills", "private": False},
-                         {"full_name": "another/repository", "private": True}):
+    def test_fixed_public_repository_is_accepted(self):
+        from engineering_assistant.internal_promotion import _public_repository
+        identity = {"full_name": "snbc-qihang/agent-skills", "private": False, "visibility": "public", "archived": False}
+        with mock.patch("engineering_assistant.internal_promotion._api", return_value=identity):
+            _public_repository(self.root)
+
+    def test_private_different_or_incomplete_repository_is_rejected(self):
+        from engineering_assistant.internal_promotion import _public_repository
+        expected = {"full_name": "snbc-qihang/agent-skills", "private": False, "visibility": "public", "archived": False}
+        for identity in ({**expected, "private": True, "visibility": "private"},
+                         {**expected, "full_name": "another/repository"},
+                         {**expected, "archived": True}, {"full_name": expected["full_name"]}):
             with self.subTest(identity=identity), mock.patch("engineering_assistant.internal_promotion._api", return_value=identity):
                 with self.assertRaises(ValidationFailure):
-                    _private_repository(self.root)
+                    _public_repository(self.root)
 
 
 if __name__ == "__main__":

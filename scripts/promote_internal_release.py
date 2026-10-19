@@ -13,7 +13,7 @@ from engineering_assistant.validation import ValidationFailure
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="先 prepare 两个不可变 tag，再凭固定命令及 BUILD 验收 activate 私有 Release 与 installer alias。")
+    parser = argparse.ArgumentParser(description="先 prepare 两个不可变 tag，再凭固定命令及 BUILD 验收发布团队试用 Release 和公开验收摘要，并激活 installer alias。")
     parser.add_argument("--phase", choices=("prepare", "activate"), default="prepare")
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--acceptance", type=Path, required=True)

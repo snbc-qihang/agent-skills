@@ -39,6 +39,8 @@ jobs:
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: 配置固定 Python
         uses: actions/setup-python@v5
         with:
@@ -287,6 +289,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13.13"
@@ -296,7 +300,7 @@ jobs:
         with:
           pattern: engineering-assistant-*
           path: ${{ runner.temp }}/ea-matrix
-      - name: 校验并组装候选（不发布公网）
+      - name: 校验并组装候选（不创建发行 tag 或 Release）
         env:
           EA_MATRIX_ROOT: ${{ runner.temp }}/ea-matrix
           EA_CANDIDATE_ROOT: ${{ runner.temp }}/ea-candidate

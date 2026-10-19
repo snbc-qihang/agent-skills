@@ -10,6 +10,7 @@
 - `catalog/`、`skills/`、`packs/`、`schemas/` 与 `src/` 是作者源；仓库内不得保存发布包、生成镜像或历史过程数据。
 - 产品和公开 skill 使用四段式版本，当前版本为 `1.0.0.1`。
 - 开发者信息统一为 `sunliming625@gmail.com`。
+- 仓库以 MIT 许可证公开，分发包携带许可证和第三方声明；公开源码不自动取得公开稳定版资格。
 
 ## 指令与授权
 
@@ -53,4 +54,4 @@ python3 scripts/publish_local.py --platform all --dry-run
 - 本机发布必须使用 `scripts/publish_local.py`、当前发布策略和显式 `--yes`；不得手工覆盖插件目录或跳过备份、注册与安装后验证。
 - 当前本机发布策略不得允许稳定版发布或产品仓库修改。
 - 失败门禁必须修复，或明确标记为 `blocked` / `waiting_for_input`。
-- 内部推广只能使用 `scripts/promote_internal_release.py`：先预演，`prepare` 阶段核对候选真实验收后以显式 `--yes` 推送两个不可变 tag；`activate` 阶段另核对三目标私有 HTTPS 固定命令验收后发布私有 Release 并 CAS 更新 installer alias。本机发布授权不能自动替代远程推广授权；此路径只允许已验收的内部交付，不授权公开或产品稳定版发布。
+- 内部推广只能使用 `scripts/promote_internal_release.py`：先预演，`prepare` 阶段核对候选完整真实验收后以显式 `--yes` 推送两个不可变 tag；`activate` 阶段另核对三目标 HTTPS 固定命令验收后发布团队试用 Release 并 CAS 更新 installer alias。固定仓库必须公开且未归档；公开 tag 和 Release 只携带白名单验收摘要，原始验收、命令和宿主记录保存在仓库外受控目录。本机发布授权不能自动替代远程推广授权；此路径只允许已验收的内部交付，不授权公开或产品稳定版发布。

@@ -1,11 +1,10 @@
-"""Prepare immutable internal tags, then activate a reviewed private release."""
+"""Prepare immutable team tags, then activate a reviewed release in a public repository."""
 from __future__ import annotations
 
 import json
 import os
 import re
 import tempfile
-import zipfile
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 
@@ -65,7 +64,7 @@ def _verify_candidate(storage: ArtifactIO, *, allow_acceptance: bool = False) ->
     files = assets._file_hashes(storage)
     allowed = {"release-index.json", "archives", "marketplaces", "setup", ".artifact.lock"}
     if allow_acceptance:
-        allowed.update({"acceptance.json", "evidence"})
+        allowed.add("acceptance-summary.json")
     if any(name.split("/")[0] not in allowed for name in files):
         raise ValidationFailure("候选发行含未知顶层文件")
     packages = index.get("packages")
@@ -184,7 +183,7 @@ def _command_receipt(origin: ArtifactIO, snapshot: ArtifactIO, reference: dict,
                 or direct.get("url") != REMOTE or vcs.get("vcs") != "git"
                 or vcs.get("requested_revision") != SOURCE_TAG_PREFIX + version
                 or vcs.get("commit_id") != source_commit or result.get("source_commit") != source_commit):
-            raise ValidationFailure("固定命令必须来自已准备版本的私有 HTTPS Git tag 与真实 PEP 610")
+            raise ValidationFailure("固定命令必须来自已准备版本的 HTTPS Git tag 与真实 PEP 610")
     elif ("--json" not in command or not any(command[position:position + 2] == ["--agent", "codex"]
              for position in range(len(command) - 1)) or not any(
                 command[position].replace("\\", "/").rsplit("/", 1)[-1] in {"ea-setup", "ea-setup.exe"}
@@ -260,8 +259,8 @@ def _activation_snapshot(index: dict, index_raw: bytes, path: Path, destination:
         version = index["canonical_version"]
         if (not isinstance(wrapper, dict) or set(wrapper) != fields or wrapper.get("schema_version") != "1"
                 or wrapper.get("repository_url") != REMOTE or wrapper.get("installer_ref") != SOURCE_TAG_PREFIX + version
-                or wrapper.get("transport") != "private_https_git"):
-            raise ValidationFailure("激活验收必须绑定精确版本的私有 HTTPS 固定安装命令")
+                or wrapper.get("transport") != "https_git"):
+            raise ValidationFailure("激活验收必须绑定精确版本的 HTTPS 固定安装命令")
         record = wrapper["acceptance"]
         assets.validate_acceptance(index, index_raw, record)
         snapshot.write_bytes_exclusive(raw, "activation.json")
@@ -329,10 +328,11 @@ def _api(endpoint: str, root: Path, *, method: str = "GET", payload: dict | None
         raise ValidationFailure("GitHub 返回无法核验的 JSON") from None
 
 
-def _private_repository(root: Path) -> None:
+def _public_repository(root: Path) -> None:
     repo = _api("repos/" + assets.INTERNAL_REPOSITORY, root)
-    if not isinstance(repo, dict) or repo.get("full_name") != assets.INTERNAL_REPOSITORY or repo.get("private") is not True:
-        raise ValidationFailure("内部推广只允许固定的私有 GitHub 仓库")
+    if (not isinstance(repo, dict) or repo.get("full_name") != assets.INTERNAL_REPOSITORY
+            or repo.get("private") is not False or repo.get("visibility") != "public" or repo.get("archived") is not False):
+        raise ValidationFailure("团队推广只允许固定且未归档的公开 GitHub 仓库")
 
 
 def _release_by_tag(tag: str, root: Path) -> dict | None:
@@ -365,17 +365,23 @@ def _release_body(index: dict, notes: bytes, bundle: Path) -> str:
         "- release_tag: " + index["release_tag"],
         "- installer_ref: " + SOURCE_TAG_PREFIX + index["canonical_version"],
         "- notes_sha256: " + assets._digest(notes),
-        "- activation_bundle_sha256: " + assets._digest(bundle.read_bytes()))) + "\n"
+        "- activation_summary_sha256: " + assets._digest(bundle.read_bytes()))) + "\n"
 
 
-def _evidence_bundle(snapshot: ArtifactIO, path: Path) -> None:
-    files = assets._file_hashes(snapshot)
-    with zipfile.ZipFile(path, "x", compression=zipfile.ZIP_STORED) as archive:
-        for name in sorted(files):
-            raw = snapshot.read_bytes_limited(assets.MAX_FILE_BYTES, *PurePosixPath(name).parts)
-            entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-            entry.external_attr = 0o100600 << 16
-            archive.writestr(entry, raw)
+def _activation_summary(index: dict, index_raw: bytes, snapshot: ArtifactIO) -> dict:
+    raw = snapshot.read_bytes_limited(assets.MAX_CONTROL_BYTES, "activation.json")
+    wrapper = json.loads(raw)
+    current = CanonicalVersion.parse(index["canonical_version"])
+    following = CanonicalVersion(current.major, current.minor, current.patch, current.build + 1, current.prerelease).canonical()
+    return {"schema_version": "1", "evidence_kind": "release_activation_summary", "status": "accepted",
+            "assurance": "local_unattested", "canonical_version": index["canonical_version"],
+            "source_commit": index["source_commit"], "candidate_index_digest": assets._digest(index_raw),
+            "activation_sha256": assets._digest(raw),
+            "acceptance": assets.acceptance_summary(index, index_raw, wrapper["acceptance"], storage=snapshot),
+            "build_updates": [{"target": update["target"], "from_version": current.canonical(), "to_version": following,
+                               **{operation + "_sha256": update[operation]["sha256"]
+                                  for operation in ("install", "before_update", "update")}}
+                              for update in sorted(wrapper["build_updates"], key=lambda update: update["target"])]}
 
 
 def _check_release(release: dict, index: dict, body: str) -> int:
@@ -521,19 +527,24 @@ def promote(candidate: Path | str, acceptance: Path | str, *, phase: str = "prep
         except (ValueError, UnicodeDecodeError):
             raise ValidationFailure("人工验收记录无效") from None
         assets.validate_acceptance(index, index_raw, record)
-        storage.write_bytes_exclusive(acceptance_raw, "acceptance.json")
+        private_root = root.parent / "acceptance"
+        private_root.mkdir()
+        private = ArtifactIO(private_root, ".")
+        stack.callback(private.close)
         for item in record["targets"]:
             for role in ("app", "cli", "provider"):
-                _reference(evidence, storage, item[role])
-        assets.validate_acceptance(index, index_raw, record, storage=storage)
+                _reference(evidence, private, item[role])
+        summary = assets.acceptance_summary(index, index_raw, record, storage=private)
+        assets.validate_acceptance_summary(index, index_raw, summary)
+        storage.create_immutable_json(summary, "acceptance-summary.json")
         source_tag = SOURCE_TAG_PREFIX + index["canonical_version"]
         common = {"phase": phase, "release_tag": index["release_tag"], "installer_tag": source_tag,
                   "alias": ALIAS, "alias_promoted": False}
         if phase == "activate":
             snapshot = _activation_snapshot(index, index_raw, Path(activation), root.parent / "activation")
             stack.callback(snapshot.close)
-            bundle = root.parent / "activation-evidence.zip"
-            _evidence_bundle(snapshot, bundle)
+            bundle = root.parent / "activation-summary.json"
+            bundle.write_text(json.dumps(_activation_summary(index, index_raw, snapshot), sort_keys=True) + "\n", encoding="utf-8")
             notes_reader = assets._safe_root(Path(release_notes).absolute().parent)
             stack.callback(notes_reader.close)
             notes = root.parent / "installation.md"
@@ -543,7 +554,7 @@ def promote(candidate: Path | str, acceptance: Path | str, *, phase: str = "prep
         if not execute:
             return {**common, "status": "ready_for_" + phase, "remote_modified": False,
                     "remote_checked": False, "requires_explicit_yes": True}
-        _private_repository(root)
+        _public_repository(root)
         storage.delete_regular_file(".artifact.lock")
         generated, tree = _local_commit(index, record, root)
         payload_ref, source_ref = "refs/tags/" + index["release_tag"], "refs/tags/" + source_tag
@@ -585,7 +596,7 @@ def promote(candidate: Path | str, acceptance: Path | str, *, phase: str = "prep
             return {**common, **release, "status": "failed"}
         alias_attempted = False
         try:
-            _private_repository(root)
+            _public_repository(root)
             if _remote_ref(payload_ref, root) != payload or _remote_ref(source_ref, root) != installer:
                 raise ValidationFailure("不可变 tag 在激活期间改变，alias 未推进")
             if observed != index["source_commit"]:

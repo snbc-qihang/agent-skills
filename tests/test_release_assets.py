@@ -122,7 +122,8 @@ class ReleaseAssetTests(unittest.TestCase):
                 for path in (ROOT / directory).rglob("*"):
                     if path.is_file() and not any(part.startswith(".") for part in path.relative_to(ROOT).parts):
                         files["engineering_assistant/_assets/" + path.relative_to(ROOT).as_posix()] = path.read_bytes()
-            files["engineering_assistant/_assets/VERSIONING.md"] = (ROOT / "VERSIONING.md").read_bytes()
+            for name in ("VERSIONING.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+                files["engineering_assistant/_assets/" + name] = (ROOT / name).read_bytes()
         files["engineering_assistant/_assets/catalog/skills/public.json"] = json.dumps({"version": version}).encode()
         files.update(extra_members or {})
         files = {name: payload for name, payload in files.items() if name not in omit}

@@ -265,7 +265,8 @@ def _required_wheel_files(repository_root: Path) -> set[str]:
                 for name in _file_hashes(resources) if not any(part.startswith(".") for part in PurePosixPath(name).parts))
         finally:
             resources.close()
-    required.add("engineering_assistant/_assets/VERSIONING.md")
+    for name in ("VERSIONING.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+        required.add("engineering_assistant/_assets/" + name)
     return required
 
 
@@ -637,3 +638,51 @@ def validate_acceptance(index: dict, index_raw: bytes, record: dict, storage: Ar
                     or not isinstance(checks, dict) or set(checks) != NATIVE_SESSION_CHECKS
                     or any(value != "passed" for value in checks.values())):
                 raise ValidationFailure("人工验收必须包含真实已认证 App 与 CLI 会话，doctor 或 simulation 不能替代")
+
+
+def acceptance_summary(index: dict, index_raw: bytes, record: dict, *, storage: ArtifactIO) -> dict:
+    """Project validated private evidence into a public, non-attested receipt."""
+    validate_acceptance(index, index_raw, record, storage=storage)
+    return {
+        "schema_version": "1", "evidence_kind": "release_acceptance_summary",
+        "status": "accepted", "assurance": "local_unattested",
+        "canonical_version": index["canonical_version"], "source_commit": index["source_commit"],
+        "candidate_index_digest": _digest(index_raw),
+        "acceptance_sha256": _digest(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()),
+        "targets": [{"target": item["target"], "package_payload_digest": item["package_payload_digest"],
+                     **{role: {"status": "passed", "sha256": item[role]["sha256"]}
+                        for role in ("app", "cli", "provider")}}
+                    for item in sorted(record["targets"], key=lambda item: item["target"])],
+    }
+
+
+def validate_acceptance_summary(index: dict, index_raw: bytes, summary: dict) -> None:
+    """Consumers verify a maintainer summary; raw host evidence stays private."""
+    fields = {"schema_version", "evidence_kind", "status", "assurance", "canonical_version",
+              "source_commit", "candidate_index_digest", "acceptance_sha256", "targets"}
+    digest = re.compile(r"sha256:[0-9a-f]{64}")
+    if (not isinstance(summary, dict) or set(summary) != fields
+            or summary.get("schema_version") != "1" or summary.get("evidence_kind") != "release_acceptance_summary"
+            or summary.get("status") != "accepted" or summary.get("assurance") != "local_unattested"
+            or summary.get("canonical_version") != index["canonical_version"]
+            or summary.get("source_commit") != index["source_commit"]
+            or summary.get("candidate_index_digest") != _digest(index_raw)
+            or not isinstance(summary.get("acceptance_sha256"), str)
+            or digest.fullmatch(summary["acceptance_sha256"]) is None):
+        raise ValidationFailure("公开验收摘要缺失、来源不符或包含非公开字段")
+    targets = summary["targets"]
+    if not isinstance(targets, list) or len(targets) != len(INTERNAL_TARGETS):
+        raise ValidationFailure("公开验收摘要必须覆盖三个原生目标")
+    by_target = {package["target"]: package["package_payload_digest"] for package in index["packages"]}
+    seen = set()
+    for item in targets:
+        if (not isinstance(item, dict) or set(item) != {"target", "package_payload_digest", "app", "cli", "provider"}
+                or not isinstance(item.get("target"), str) or item["target"] not in by_target or item["target"] in seen
+                or item["package_payload_digest"] != by_target[item["target"]]):
+            raise ValidationFailure("公开验收目标重复、遗漏或包摘要不符")
+        seen.add(item["target"])
+        for role in ("app", "cli", "provider"):
+            check = item[role]
+            if (not isinstance(check, dict) or set(check) != {"status", "sha256"} or check.get("status") != "passed"
+                    or not isinstance(check.get("sha256"), str) or digest.fullmatch(check["sha256"]) is None):
+                raise ValidationFailure("公开验收摘要缺少 App、CLI 或完整 Provider 的通过记录")

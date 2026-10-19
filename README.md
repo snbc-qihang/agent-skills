@@ -3,6 +3,7 @@
 `agent-skills` 是 `engineering-assistant` 插件的统一作者源，为 Codex、Hermes 和 Claude Code 提供可组合、可恢复、可验证的工程协作能力。
 
 - 当前版本：`1.0.0.1`（正式内部交付候选，尚未推广）
+- 许可证：[MIT](LICENSE)；第三方组件保留[各自许可](THIRD_PARTY_NOTICES.md)
 - 开发者：`sunliming625@gmail.com`
 - 运行平台：Codex、Hermes、Claude Code
 - 内核语言：Python；安装 Runtime 固定 CPython `3.13.13`、PBS `20260414` 分布构建及归档摘要，启动器使用 Rust
@@ -28,10 +29,12 @@
 | 你现在要做什么 | 准备工作 | 从哪里执行 |
 | --- | --- | --- |
 | 验证当前仓库和本机 Runtime | 作者源 checkout、Git、uv、Rust 和系统编译工具 | [维护者本地验证](#维护者本地验证)，现在即可执行 |
-| 模拟新人安装到 Codex | Codex 登录、uv、Git 和私有仓库访问权限；先有经过核验的发行 tag | [新人安装验收](#新人安装验收)，当前入口待发布 |
+| 模拟新人安装到 Codex | Codex 登录、uv、Git；先有经过核验的发行 tag | [新人安装验收](#新人安装验收)，当前入口待发布 |
 | 验收正式内部交付 | 同一候选在 macOS arm64、macOS Intel、Windows 11 x64 上的真实 App、CLI、Provider 证据 | [三目标发行验收](#三目标发行验收) |
 
 现在可以完成本地验证并生成三目标候选输入，无需购买 GitHub CI；具体命令见 [无付费 CI 的候选准备](#无付费-ci-的候选准备)。本地检查通过仍须补齐真实宿主验收和发行推广，不能写成已完成交付。
+
+公开仓库也可使用现有标准 GitHub 托管 runner 免费运行 CI；不使用收费 larger runner。CI 保持只读权限，生成候选后仍须人工验收和显式推广。[GitHub 计费规则](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
 
 ### 普通用户
 
@@ -49,7 +52,7 @@ Codex 和 Claude Code 可以根据 skill 的名称和描述自动选择能力，
 hermes --skills engineering-assistant:repo-context
 ```
 
-### 内部 Codex 安装与更新
+### Codex 安装与更新
 
 首次准备完成后，日常安装收敛为：**运行一条命令 → 在 Codex 审查并信任 Hook → 新建会话**。macOS 与 Windows 使用相同的插件命令，安装器自动选择系统、架构、Runtime 和受控本地市场。无需手动安装 Python、Rust、Node，也无需克隆本仓库。
 
@@ -57,7 +60,7 @@ hermes --skills engineering-assistant:repo-context
 
 #### 1. 首次准备，只做一次
 
-先安装并登录 Codex App 或原生 CLI，取得团队私有仓库的读取权限。首轮支持目标为 macOS 14+（Apple Silicon / Intel）和原生 Windows 11 x64；完整功能包含 11 个 skills、Runtime MCP、Hook 和 Provider 隔离。已经具备 Git、uv 和 Git HTTPS 授权时，直接跳到第 2 步。
+先安装并登录 Codex App 或原生 CLI。首轮支持目标为 macOS 14+（Apple Silicon / Intel）和原生 Windows 11 x64；完整功能包含 11 个 skills、Runtime MCP、Hook 和 Provider 隔离。仓库公开，下载安装无需 GitHub 账号、token 或 Git 凭证配置。已经具备 Git、uv 时，直接跳到第 2 步。
 
 **macOS：打开终端，只安装缺少的工具。** 没有 Git 时执行以下命令并完成系统安装窗口；已有 Git 则跳过，不要求为了插件额外安装 Homebrew：
 
@@ -85,13 +88,13 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.11.7/install.p
 
 两种系统安装工具后都关闭并重新打开终端，使 PATH 生效。Git 的获取方式也可参考 [macOS 官方说明](https://git-scm.com/install/mac)。
 
-**私有仓库首次授权：** Git HTTPS 必须可用，浏览器登录 GitHub 不等于 Git 已授权。已有系统凭证时无需重复登录；首次访问可通过以下只读命令触发已配置凭证管理器的浏览器登录，成功应返回 HEAD 引用：
+**可选的网络排查：** 正常安装无需单独检查 Git。遇到下载失败时，可用以下只读命令检查公开仓库连通性，成功应返回 HEAD 引用：
 
 ```bash
 git ls-remote https://github.com/snbc-qihang/agent-skills.git HEAD
 ```
 
-Git for Windows 默认包含 Git Credential Manager；macOS 尚未配置凭证助手时，按 [GitHub 的 HTTPS 凭证说明](https://docs.github.com/en/get-started/git-basics/caching-your-github-credentials-in-git) 完成一次授权。凭证助手未安装或未配置时，上述命令不保证弹出浏览器。授权不能由插件代替，命令中无需填写 token；也无需配置提交用的 `user.name` / `user.email`。
+若访问公开仓库时仍提示鉴权，检查本机已有的 Git URL 重写、代理或凭证配置；不用为了安装插件设置提交用的 `user.name` / `user.email`。Codex 自身登录仍由用户完成。
 
 #### 2. 发布后安装，两种系统同一条命令
 
@@ -125,7 +128,7 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 已有历史 2.x 时，先按检查输出自行卸载旧来源，并清理可确认的历史版本和备份。`doctor --json` 提供 `legacy_installation_detected`、检查范围、确切位置和人工步骤；安装器不自动迁移或删除。共享 personal 市场、共享 Python、其他插件、作者源码和项目运行证据保留。受控 1.x 的正常跨版本更新继续使用 `update`。
 
-仓库保持私有，不需要开源或上架公开插件市场。私有 GitHub Release 提供版本说明和安装教程，安装仍从不可变 Git tag 获取预编译插件。本阶段的正式内部交付资格只证明完整安装与运行验收；产品稳定版和真实收益仍遵守 [Canary 门槛](docs/operations/canary.md)。
+仓库以 MIT 许可证公开，首轮仍按团队试用范围验收。公开 GitHub Release 提供版本说明、教程与脱敏验收摘要，安装仍从不可变 Git tag 获取预编译插件，无需上架公开插件市场或增加 PyPI、npm、部署服务器。`internal/` 是保留兼容性的发行命名空间，不表示仓库私有。本阶段的正式内部交付资格只证明完整安装与运行验收；产品稳定版和真实收益仍遵守 [Canary 门槛](docs/operations/canary.md)。
 
 安装器发现兼容 Codex 控制 CLI；缺失时按固定官方来源准备完整 `0.159.2` 归档到私有 tools 目录，使用同一个 `CODEX_HOME`，不修改用户 PATH 或 App。Runtime 准备好后以绝对路径启动固定 Python，日常会话不依赖 `uv`、终端 PATH 或环境激活。首次或 Hook 定义变化后仍需在 Codex 中审查并信任 Hook，并重新打开会话；`--hooks-trusted` 只记录本次用户声明，不能替宿主授予信任或证明事件执行。
 
@@ -412,7 +415,7 @@ rustup run 1.90.0 cargo --version
 uv run --isolated --no-project --python 3.13.13 python --version
 ```
 
-私有仓库的 HTTPS 凭证由系统 Git 凭证管理提供，不在命令中填写 token。最后一条应输出 `Python 3.13.13`。
+公开仓库只读访问无需 GitHub 凭证。最后一条应输出 `Python 3.13.13`。
 
 macOS Terminal 为本次验证设置工具链和仓库外输出目录：
 
@@ -484,7 +487,7 @@ uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts
 
 **本节是发行 tag 已准备并核验后的操作步骤，当前固定入口仍待发布；现在不要把以下命令当成已可用入口。** 发布前由维护者在验收机执行，正式推广后再交给新人。
 
-准备 Codex、uv、Git 与私有仓库 HTTPS 权限，先完成 Codex 登录。验收机应同时有 App 和原生 CLI；普通使用者只需选用的宿主，不需要 Rust、作者 checkout 或手工 Python 环境。使用同一 `CODEX_HOME`，在作者仓库及插件目录之外建立可丢弃的临时项目。
+准备 Codex、uv、Git，先完成 Codex 登录。验收机应同时有 App 和原生 CLI；普通使用者只需选用的宿主，不需要 GitHub 登录、Rust、作者 checkout 或手工 Python 环境。使用同一 `CODEX_HOME`，在作者仓库及插件目录之外建立可丢弃的临时项目。
 
 先检查历史安装，再安装；两端命令相同：
 

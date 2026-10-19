@@ -16,7 +16,8 @@ class BuildRuntime(build_py):
         assets.mkdir(parents=True, exist_ok=True)
         for name in ("catalog", "skills", "packs", "schemas", "evals", "config"):
             shutil.copytree(root / name, assets / name, dirs_exist_ok=True)
-        shutil.copyfile(root / "VERSIONING.md", assets / "VERSIONING.md")
+        for name in ("VERSIONING.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+            shutil.copyfile(root / name, assets / name)
 
 
 setup(cmdclass={"build_py": BuildRuntime})

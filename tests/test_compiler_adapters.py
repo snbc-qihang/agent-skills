@@ -308,6 +308,9 @@ class CompilerAdapterTests(unittest.TestCase):
         build_package(ROOT, "claude-code", claude)
         codex_report = build_package(ROOT, "codex", codex)
         build_package(ROOT, "hermes", hermes)
+        for package in (claude, codex, hermes):
+            for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+                self.assertEqual((ROOT / name).read_bytes(), (package / name).read_bytes())
         self.assertEqual(11, codex_report["skill_count"])
         self.assertTrue((claude / ".claude-plugin/plugin.json").is_file())
         self.assertTrue((codex / ".codex-plugin/plugin.json").is_file())

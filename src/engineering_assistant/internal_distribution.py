@@ -1,4 +1,4 @@
-"""Fetch one verified private Git release, without building consumer packages."""
+"""Fetch one verified team Git release, without building consumer packages."""
 from __future__ import annotations
 
 import hashlib
@@ -130,7 +130,7 @@ def _fetch_ref(repository_url: str, tag: str, staging: Path, storage: ArtifactIO
     from .installation import _command
     git = shutil.which("git")
     if not git:
-        raise ValidationFailure("请先安装 Git 并授权访问团队仓库")
+        raise ValidationFailure("请先安装 Git；公开发行下载无需 GitHub 登录")
     environment = {key: value for key, value in os.environ.items()
         if key not in {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CONFIG_PARAMETERS",
                        "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR",
@@ -161,13 +161,13 @@ def _fetch_ref(repository_url: str, tag: str, staging: Path, storage: ArtifactIO
             transport.close()
         return revision
     except Exception:
-        raise ValidationFailure("无法获取团队发行版本；请检查网络和 Git 仓库访问权限，现有插件未切换") from None
+        raise ValidationFailure("无法获取团队发行版本；请检查网络及该版本是否已发布，现有插件未切换") from None
 
 
 def verify_release(storage: ArtifactIO, *, version: str, source_commit: str,
                    target: str, tag: str) -> tuple[dict, dict]:
     from .internal_promotion import _verify_candidate
-    from .release_assets import validate_acceptance
+    from .release_assets import validate_acceptance_summary
     if target not in INTERNAL_TARGETS:
         raise ValidationFailure("内部首轮发行目标无效")
     _assert_location(storage)
@@ -181,8 +181,8 @@ def verify_release(storage: ArtifactIO, *, version: str, source_commit: str,
         index, raw = _verify_candidate(storage, allow_acceptance=True)
         if index != expected:
             raise ValidationFailure("内部发行索引在验证期间发生变化")
-        record = storage.read_json_limited(MAX_INDEX_BYTES, "acceptance.json")[0]
-        validate_acceptance(index, raw, record, storage=storage)
+        summary = storage.read_json_limited(MAX_INDEX_BYTES, "acceptance-summary.json")[0]
+        validate_acceptance_summary(index, raw, summary)
         entry = next(item for item in index["packages"] if item["target"] == target)
     except ValidationFailure:
         raise

@@ -1,4 +1,4 @@
-"""Private Git transport and local integrity tests; no native host qualification."""
+"""Public Git transport and local integrity tests; no native host qualification."""
 from __future__ import annotations
 
 import copy
@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from engineering_assistant import internal_distribution as distribution
 from engineering_assistant.artifact_io import ArtifactIO
 from engineering_assistant.installation import runtime_lock, python_download_metadata
-from engineering_assistant.release_assets import NATIVE_SESSION_CHECKS, REQUIRED_PROVIDER_CHECKS
+from engineering_assistant.release_assets import NATIVE_SESSION_CHECKS, REQUIRED_PROVIDER_CHECKS, acceptance_summary
 from engineering_assistant.validation import ValidationFailure
 import test_release_assets as release_fixtures
 
@@ -51,6 +51,7 @@ class InternalDistributionTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve()
         self.release = self.root / "release"
         self.release.mkdir()
+        self.private = self.root / "acceptance-input"
         packages = []
         self.index = {"schema_version": "2", "status": "candidate", "canonical_version": VERSION,
             "source_commit": SOURCE, "release_tag": TAG, "agents": ["codex"],
@@ -134,10 +135,12 @@ class InternalDistributionTests(unittest.TestCase):
                     evidence.update(evidence_kind="authenticated_codex_session", entrypoint=role,
                         authenticated=True, execution="native", checks={name: "passed" for name in NATIVE_SESSION_CHECKS})
                 name = "evidence/" + target + "-" + role + ".json"
-                write(self.release / name, evidence)
-                item[role] = {"path": name, "sha256": digest((self.release / name).read_bytes())}
+                write(self.private / name, evidence)
+                item[role] = {"path": name, "sha256": digest((self.private / name).read_bytes())}
             self.record["targets"].append(item)
-        write(self.release / "acceptance.json", self.record)
+        with closing(ArtifactIO(self.private, ".")) as storage:
+            self.summary = acceptance_summary(self.index, (self.release / "release-index.json").read_bytes(), self.record, storage=storage)
+        write(self.release / "acceptance-summary.json", self.summary)
 
     def verify(self, *, target="macos-arm64", source_commit=SOURCE, version=VERSION, tag=TAG):
         with closing(ArtifactIO(self.release, ".")) as storage:
@@ -194,13 +197,38 @@ class InternalDistributionTests(unittest.TestCase):
             with self.assertRaises(ValidationFailure):
                 distribution.installer_source_commit(URL, version="1.0.0.2")
 
-    def test_valid_release_uses_real_manifest_and_shared_acceptance_checks(self):
+    def test_valid_release_uses_real_manifest_and_public_acceptance_summary(self):
         index, entry = self.verify()
         self.assertEqual(self.index, index)
         self.assertEqual("macos-arm64", entry["target"])
-        evidence = self.release / "evidence/windows-x64-provider.json"
-        evidence.write_bytes(b"{}")
-        with self.assertRaisesRegex(ValidationFailure, "证据摘要"):
+        self.assertFalse((self.release / "evidence").exists())
+        self.summary["targets"][2]["provider"]["status"] = "not_run"
+        write(self.release / "acceptance-summary.json", self.summary)
+        with self.assertRaisesRegex(ValidationFailure, "Provider"):
+            self.verify()
+
+    def test_public_summary_rejects_private_fields_missing_roles_and_wrong_bindings(self):
+        mutations = (
+            lambda summary: summary.update(reviewer_ref="private@example.invalid"),
+            lambda summary: summary.update(source_commit="b" * 40),
+            lambda summary: summary.update(candidate_index_digest="sha256:" + "b" * 64),
+            lambda summary: summary.update(targets=summary["targets"][:-1]),
+            lambda summary: summary["targets"][0].pop("app"),
+            lambda summary: summary["targets"][0]["cli"].update(path="/Users/private/session.json"),
+            lambda summary: summary["targets"][0].update(package_payload_digest="sha256:" + "b" * 64),
+            lambda summary: summary["targets"][0].update(target=[]),
+            lambda summary: summary.update(assurance="cryptographically_verified"),
+        )
+        for position, change in enumerate(mutations):
+            summary = copy.deepcopy(self.summary)
+            change(summary)
+            write(self.release / "acceptance-summary.json", summary)
+            with self.subTest(case=position), self.assertRaises(ValidationFailure):
+                self.verify()
+
+    def test_raw_host_files_are_rejected_in_public_distribution(self):
+        write(self.release / "acceptance.json", self.record)
+        with self.assertRaisesRegex(ValidationFailure, "未知顶层"):
             self.verify()
 
     def test_local_origin_remains_bound_through_consumer_verification(self):
@@ -215,8 +243,8 @@ class InternalDistributionTests(unittest.TestCase):
         self.write_index()
         index, _ = self.verify()
         self.assertEqual("local_artifacts_unattested", index["assurance"])
-        self.record["targets"][0].pop("app")
-        write(self.release / "acceptance.json", self.record)
+        self.summary["targets"][0].pop("app")
+        write(self.release / "acceptance-summary.json", self.summary)
         with self.assertRaises(ValidationFailure):
             self.verify()
 

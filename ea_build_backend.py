@@ -9,7 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SOURCE_DIRECTORIES = ("src", "catalog", "skills", "packs", "schemas", "evals", "config", "native")
-SOURCE_FILES = ("pyproject.toml", "setup.py", "ea_build_backend.py", "MANIFEST.in", "VERSIONING.md")
+SOURCE_FILES = ("pyproject.toml", "setup.py", "ea_build_backend.py", "MANIFEST.in", "VERSIONING.md",
+                "LICENSE", "THIRD_PARTY_NOTICES.md")
 
 
 def _copy_tree(source: Path, destination: Path) -> None:

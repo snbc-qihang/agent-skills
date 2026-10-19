@@ -23,6 +23,8 @@ class WheelDistributionTests(unittest.TestCase):
             self.assertNotIn(ROOT, stage.parents)
             self.assertTrue((stage / "catalog/skills/public.json").is_file())
             self.assertTrue((stage / "config/runtime.json").is_file())
+            for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+                self.assertEqual((ROOT / name).read_bytes(), (stage / name).read_bytes())
             self.assertFalse(list(stage.rglob(".DS_Store")))
             self.assertFalse(list(stage.rglob("*.egg-info")))
             self.assertFalse(list(stage.rglob("__pycache__")))

@@ -24,6 +24,12 @@ HAN = re.compile(r"[\u4e00-\u9fff]")
 
 
 class RepositorySurfaceTests(unittest.TestCase):
+    def test_public_ci_keeps_readonly_permissions_and_does_not_persist_credentials(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("pull_request_target:", workflow)
+        self.assertNotRegex(workflow, r"(?:contents|permissions):\s*(?:write|write-all)")
+        self.assertEqual(workflow.count("uses: actions/checkout@"), workflow.count("persist-credentials: false"))
+
     def test_ci_job_environment_uses_only_available_github_contexts(self) -> None:
         # GitHub's Context availability contract excludes runner at job env:
         # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
