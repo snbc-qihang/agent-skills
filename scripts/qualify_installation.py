@@ -26,20 +26,23 @@ from engineering_assistant.validation import ValidationFailure
 from engineering_assistant.windows_process import run_bounded_windows
 
 
-def qualify(base: Path) -> dict:
+def qualify(base: Path, agents=("codex",)) -> dict:
+    from engineering_assistant.release_assets import release_scope
     target = host_target()
     if target == "unsupported":
         raise RuntimeError("this host is outside the supported native targets")
+    agents, _ = release_scope(agents, (target,))
     packages, data = base / "packages", base / "Runtime 数据"
     packages.mkdir()
     results = []
-    for agent in ("codex", "hermes", "claude-code"):
+    for agent in agents:
         package = packages / agent
         build_package(ROOT, agent, package, target=target)
         manifest = verify_package(package)
         prepared = prepare_runtime(package, data_home=data, publish_default=False)
         result = doctor(agent, package=package, data_home=data)
-        if not result.get("runtime_ready", result.get("ready")):
+        if (result.get("runtime_ready") is not True or result.get("provider_ready") is not True
+                or result.get("checks", {}).get("hook") != "passed"):
             raise RuntimeError(f"{agent} Runtime qualification failed: {result}")
         command = [str(package / "engineering-assistant/bin" / ("ea.exe" if os.name == "nt" else "ea"))]
         environment = {**os.environ, "ENGINEERING_ASSISTANT_DATA_HOME": str(data)}
@@ -154,13 +157,15 @@ def _windows_native_failure_diagnostic(base: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--agent", action="append", choices=("codex", "hermes", "claude-code"),
+                        help="精确指定本次发行 Agent；默认只验证 Codex。")
     parser.add_argument("--diagnose-windows-native-on-failure", action="store_true",
                         help="CI only: observe the fixed uv Windows base after qualification fails")
     arguments = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="ea-install-qualification-") as temporary:
         base = Path(temporary).resolve()
         try:
-            result = qualify(base)
+            result = qualify(base, tuple(arguments.agent or ("codex",)))
         except Exception:
             if arguments.diagnose_windows_native_on_failure and sys.platform == "win32":
                 try:

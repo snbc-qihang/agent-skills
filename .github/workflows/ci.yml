@@ -21,8 +21,6 @@ jobs:
             target: macos-arm64
           - runner: macos-15-intel
             target: macos-x64
-          - runner: ubuntu-24.04
-            target: linux-x64
           - runner: windows-2025
             target: windows-x64
     defaults:
@@ -33,10 +31,16 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
       PYTHONUTF8: "1"
       ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX: "1"
+      EA_SOURCE_COMMIT: ${{ github.sha }}
+      EA_CI_REPOSITORY: ${{ github.repository }}
+      EA_CI_RUN_ID: ${{ github.run_id }}
+      EA_CI_RUN_ATTEMPT: ${{ github.run_attempt }}
       EA_CI_TARGET: ${{ matrix.target }}
     steps:
       - name: 检出源码
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: 配置固定 Python
         uses: actions/setup-python@v5
         with:
@@ -59,43 +63,30 @@ jobs:
                   directory.mkdir(parents=True, exist_ok=True)
                   stream.write(name + "=" + str(directory) + "\n")
           PY
-      - name: 配置 Claude 校验所需固定 Node（仅 CI）
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.20.0"
       - name: 准备固定开发工具
         run: |
           python -m pip install --disable-pip-version-check "uv==0.11.7"
           rustup toolchain install 1.90.0 --profile minimal
           cargo --version
           uv --version
-          npm install --global @anthropic-ai/claude-code@2.1.241
-      - name: 确认原生宿主与固定 Claude CLI
+      - name: 确认原生宿主
         run: |
-          EA_CI_NPM_ROOT="$(npm root -g)" python - <<'PY'
+          python - <<'PY'
           import json
           import os
           import platform
-          import subprocess
           import sys
           from pathlib import Path
           sys.path.insert(0, str(Path.cwd() / "src"))
           from engineering_assistant.native_launcher import host_target
           assert sys.version_info[:3] == (3, 13, 13), sys.version
           assert host_target() == os.environ["EA_CI_TARGET"]
-          cli = Path(os.environ["EA_CI_NPM_ROOT"]) / "@anthropic-ai/claude-code/bin/claude.exe"
-          assert cli.is_file(), "fixed Claude native binary is missing"
-          version = subprocess.run([str(cli), "--version"], check=True, capture_output=True, text=True, timeout=30).stdout.strip()
-          assert version.split()[0] == "2.1.241", version
-          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as stream:
-              stream.write("CLAUDE_CLI=" + str(cli.resolve()) + "\n")
           root = Path(os.environ["EA_CI_ROOT"])
-          root.mkdir(parents=True, exist_ok=True)
           report = {
               "target": host_target(), "os": platform.platform(), "python": platform.python_version(),
-              "claude_validator": version, "agent_host_qualification": "not_run",
+              "agent_host_qualification": "not_run",
               "windows11_qualification": "not_run" if sys.platform == "win32" else "not_applicable",
-              "note": "Windows Server CI validates Server kernel behavior; it does not qualify Windows 11 or an authenticated Agent session.",
+              "note": "Windows Server CI does not qualify Windows 11 or an authenticated Agent session.",
           }
           (root / "host.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
           PY
@@ -163,7 +154,7 @@ jobs:
                   str(Path(sys.executable).resolve()),
                   str(Path("scripts/qualify_installation.py").resolve()),
                   "--output", str(report_path),
-                  "--diagnose-windows-native-on-failure",
+                  "--diagnose-windows-native-on-failure", "--agent", "codex",
               ], cwd=Path.cwd(), environment=dict(os.environ),
                   timeout_seconds=720, output_limit_bytes=1048576)
               (root / "attempt.log").write_bytes(output)
@@ -174,7 +165,7 @@ jobs:
                   if (report.get("status") != "runtime_qualified"
                           or report.get("target") != "windows-x64"
                           or {item.get("agent") for item in report.get("results", [])}
-                          != {"codex", "hermes", "claude-code"}):
+                          != {"codex"}):
                       raise ValueError("unexpected Runtime qualification result")
                   attempt["production_runtime"] = "qualified"
               else:
@@ -232,11 +223,11 @@ jobs:
       - name: 执行真实核心评测
         run: ea eval
       - name: 构建通用安装工具 wheel
-        if: matrix.target == 'linux-x64'
+        if: matrix.target == 'macos-arm64'
         run: |
           uv build --wheel --out-dir "$EA_CI_ROOT/setup"
           python scripts/verify_setup_wheel.py --wheel "$EA_CI_ROOT"/setup/*.whl --output "$EA_CI_ROOT/setup/wheel-verification.json"
-      - name: 构建原生三平台包并执行固定官方校验
+      - name: 构建原生 Codex 包并执行固定官方校验
         run: |
           python - <<'PY'
           import json
@@ -246,7 +237,7 @@ jobs:
           from engineering_assistant.official_validation import validate_with_official_tools
           repository = Path.cwd()
           root = Path(os.environ["EA_CI_ROOT"])
-          for platform in ("codex", "hermes", "claude-code"):
+          for platform in ("codex",):
               package = root / platform
               build_package(repository, platform, package, target=os.environ["EA_CI_TARGET"])
               verify_package(package)
@@ -254,10 +245,32 @@ jobs:
           assert report["codex_payload_digest"] == verify_package(root / "codex")["payload_digest"]
           (root / "official-validation.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
           PY
-      - name: 固定 Runtime 与 MCP、Hook、Provider、Hermes 真实集成资格
-        run: python scripts/qualify_installation.py --output "$EA_CI_ROOT/runtime-qualification.json"
-      - name: 三平台无副作用发布预演（Claude 使用真实严格校验）
-        run: python scripts/publish_local.py --platform all --dry-run
+      - name: 固定 Codex Runtime 与 MCP、Hook、Provider 实际集成资格
+        run: python scripts/qualify_installation.py --agent codex --output "$EA_CI_ROOT/runtime-qualification.json"
+      - name: Codex 无副作用发布预演
+        run: python scripts/publish_local.py --platform codex --dry-run
+      - name: 绑定本次源码与 CI 验证身份
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+          source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert source == os.environ["EA_SOURCE_COMMIT"]
+          subprocess.run(["git", "diff", "--exit-code", "HEAD"], check=True)
+          identity = {"repository": os.environ["EA_CI_REPOSITORY"], "run_id": os.environ["EA_CI_RUN_ID"],
+                      "run_attempt": int(os.environ["EA_CI_RUN_ATTEMPT"])}
+          root = Path(os.environ["EA_CI_ROOT"])
+          names = ["host.json", "native-tests.json", "runtime-qualification.json", "official-validation.json"]
+          if os.environ["EA_CI_TARGET"] == "macos-arm64":
+              names.append("setup/wheel-verification.json")
+          for name in names:
+              path = root / name
+              report = json.loads(path.read_text(encoding="utf-8"))
+              report.update(source_commit=source, ci_identity=identity)
+              path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          PY
       - name: 保存本次原生验证产物
         if: always()
         uses: actions/upload-artifact@v4
@@ -276,6 +289,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13.13"
@@ -285,7 +300,7 @@ jobs:
         with:
           pattern: engineering-assistant-*
           path: ${{ runner.temp }}/ea-matrix
-      - name: 校验并组装候选（不发布公网）
+      - name: 校验并组装候选（不创建发行 tag 或 Release）
         env:
           EA_MATRIX_ROOT: ${{ runner.temp }}/ea-matrix
           EA_CANDIDATE_ROOT: ${{ runner.temp }}/ea-candidate
@@ -294,17 +309,23 @@ jobs:
           import os
           import tarfile
           from pathlib import Path
-          from engineering_assistant.installation import TARGETS
-          from engineering_assistant.release_assets import assemble_release
+          from engineering_assistant.release_assets import INTERNAL_TARGETS, assemble_release
+          from engineering_assistant.version import CANONICAL_VERSION
           matrix = Path(os.environ["EA_MATRIX_ROOT"])
-          artifacts = {target: matrix / ("engineering-assistant-" + target) for target in TARGETS}
-          wheels = list((artifacts["linux-x64"] / "setup").glob("*.whl"))
+          artifacts = {target: matrix / ("engineering-assistant-" + target) for target in INTERNAL_TARGETS}
+          wheels = list((artifacts["macos-arm64"] / "setup").glob("*.whl"))
           if len(wheels) != 1:
               raise SystemExit("exactly one verified setup wheel is required")
           output = Path(os.environ["EA_CANDIDATE_ROOT"])
-          index = assemble_release(artifacts, wheels[0], output)
+          index = assemble_release(artifacts, wheels[0], output, source_commit=os.environ["GITHUB_SHA"],
+              ci_identity={"repository": os.environ["GITHUB_REPOSITORY"], "run_id": os.environ["GITHUB_RUN_ID"],
+                           "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"])})
           assert index["status"] == "candidate"
+          assert index["canonical_version"] == CANONICAL_VERSION
           assert index["support_qualification"]["status"] == "not_satisfied"
+          # A formal internal version is still only a candidate here. Real
+          # App/CLI/Provider and frozen HTTPS installation acceptance precede
+          # prepare/activate; CI does not create tags, Releases, or the alias.
           # Artifact transport drops executable modes; TAR retains the native
           # launcher's mode and the ZIP entries also carry explicit permissions.
           with tarfile.open(output.parent / "engineering-assistant-candidate.tar.gz", "w:gz") as archive:

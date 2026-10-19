@@ -248,6 +248,25 @@ class NativeLauncherTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["mcp-serve", "中文 value with spaces"], json.loads(result.stdout))
 
+    def test_prepared_v2_runs_after_preparation_uv_is_moved_or_deleted(self) -> None:
+        path, _base = self.prepare_v2()
+        binding = json.loads(path.read_text(encoding="utf-8"))
+        uv = Path(self.temporary.name) / "preparation-uv"
+        binding["uv"] = str(uv)
+        path.write_text(json.dumps(binding), encoding="utf-8")
+        for operation in ("move", "delete"):
+            with self.subTest(operation=operation):
+                uv.write_bytes(b"preparation provenance; never executed by the launcher\n")
+                prepared = self.invoke("mcp-serve")
+                self.assertEqual(0, prepared.returncode, prepared.stderr)
+                if operation == "move":
+                    uv.rename(uv.with_name("moved-uv"))
+                else:
+                    uv.unlink()
+                result = self.invoke("mcp-serve", "中文 value with spaces")
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(["mcp-serve", "中文 value with spaces"], json.loads(result.stdout))
+
     def test_v2_binding_rejects_artifact_digest_and_build_mismatch_before_python(self) -> None:
         path, _base = self.prepare_v2()
         binding = json.loads(path.read_text(encoding="utf-8"))

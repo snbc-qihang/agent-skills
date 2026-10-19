@@ -199,6 +199,8 @@ def _compile_package(
     _copy_tree(repository_root / "src/engineering_assistant", runtime_root / "runtime/engineering_assistant")
     repository_io = ArtifactIO(repository_root, ".")
     try:
+        for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+            (output / name).write_bytes(repository_io.read_bytes_limited(MAX_BUILD_PAYLOAD_FILE_BYTES, name))
         (runtime_root / "VERSIONING.md").write_bytes(
             repository_io.read_bytes_limited(
                 MAX_BUILD_PAYLOAD_FILE_BYTES,

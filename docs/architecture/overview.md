@@ -41,7 +41,11 @@ flowchart LR
 - `provider_runtime.py` 把固定第三方 bundle 复制为拒绝 pyc、symlink 和特殊文件的私有快照，对快照验摘要后在最小权限沙箱执行 UI/UX 建议；输出只作为不可信建议，任何失败都返回明确的原生 Provider 执行指令。
 - `compiler.py` 从同一作者源构建 Codex/Hermes/Claude Code 包。
 - `local_publish.py` 负责本机预发布、回滚和平台注册。
-- `installation.py` 和 `ea-setup` 按作者源的目标分布元数据固定 CPython 版本、PBS 构建与归档摘要，准备哈希依赖和不可变版本绑定，消费 CI 预构建插件，不要求终端用户执行作者源门禁。
+- `installation.py` 和 `ea-setup` 按作者源的目标分布元数据固定 CPython 版本、PBS 构建与归档摘要，准备哈希依赖和不可变版本绑定，消费已验证预构建插件，不要求终端用户执行作者源门禁。诊断分别报告 Runtime/MCP 与 Provider 就绪状态，完整功能仍要求全部通过。
+- `scripts/validate_local.py` 在干净的固定源码上生成同一批次的本地原生验证输入。`release_assets.py` 接受互斥的 CI 身份或 `local_unattested` 本地来源，核对源码、批次与包摘要；两者都不能代替真实 App/CLI/Provider 人工验收。
+- `internal_distribution.py` 从安装器的真实 Git 来源 commit 选择同版本不可变内部发行 tag，核对三目标验收与逐文件摘要；`internal_installation.py` 维护受控本地 Codex marketplace、安装事务和旧版重装补偿，原生 Codex 继续拥有缓存与启用状态。
+- `codex_control.py` 探测固定版本原生 CLI 的架构、命令与 JSON 合同；缺失时将固定官方完整归档校验并原子准备到外部 tools 目录，以绝对路径和同一 `CODEX_HOME` 执行，不修改 App 或 PATH。只读诊断不下载控制工具。
+- `release_assets.py` 组装仓库外 Codex 三目标候选；`internal_promotion.py` 的 `prepare` 核对完整真实验收后创建不可变发行与源码 tag，发行树仅携带白名单验收摘要；`activate` 另核对 HTTPS 固定命令及 BUILD 更新验收后发布团队试用 Release 和公开摘要，并 CAS 推广安装器 alias。原始验收与命令记录保存在仓库外受控目录，不进入公开 tag 或 Release；生成发行树不进入 `main`、`teamwork` 或作者 checkout。
 - Rust launcher 从原生数据目录读取绑定，以绝对路径启动固定 Runtime；Hermes 宿主通过只含标准库的 RPC 桥复用内核，避免导入宿主 Python 依赖。
 - `windows_artifact_fs.py` 提供 NTFS 句柄相对访问；Provider 的 macOS Seatbelt、Linux Landlock/seccomp 与 Windows LPAC/Job 后端共用同一个执行合同，能力检测不能代替实际隔离资格。
 
@@ -68,6 +72,12 @@ flowchart LR
 Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`、skills 和 `engineering-assistant/` 运行目录，`.mcp.json` 启动包内 `ea mcp-serve`；Hook manifest 注册 `UserPromptSubmit`、本插件 MCP 的 `PreToolUse`/`PostToolUse` 和 `Stop`。轻量 gate 仅在明确插件请求或活动 run 时加载 Runtime，失败始终 fail-open。Hermes 包通过 `post_llm_call` 和插件工具包装复用同一反馈采集语义，并明确平台覆盖差异。
 
 各平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
+
+首轮内部交付仅包含 Codex 的 macOS 14+ arm64/x64 与 Windows 11 x64，App 与原生 CLI 维持同一完整功能和安全合同。Hermes、Claude Code、Linux 的共享源码与高级工具保留回归，不作为首轮发行前置矩阵。当前 `1.0.0.1` 的正式内部交付资格限定于仓库门禁和完整安装运行验收，不代表产品稳定版或收益资格。候选组装不表示发行可用：Windows Server Runner 不能替代 Windows 11，Runtime 资格、`doctor` 与用户信任声明不能替代真实已认证 App/CLI 会话。固定源码 tag 与发行 tag 绑定同一版本和源码提交；移动入口只在三目标真实固定命令验收后启用。
+
+`legacy_installation.py` 对选定 Codex home、已知 Runtime 目录和明确旧来源进行有界只读盘点；历史 2.x 及其备份由用户人工卸载清理。首次安装在发行下载和 Runtime 准备前完成盘点；无控制 CLI 时只允许先准备既定工具并重查，`doctor` 始终不下载。未知或检查不完整不能报告已清理；正常 1.x 更新保留旧 Runtime 和补偿能力。
+
+`uv` 是安装与修复工具，launcher 不再依赖其旧路径仍存在；已准备 Runtime 只绑定固定 Python 分布、依赖与插件身份。内部更新保留旧 Runtime 与市场备份，补偿通过原生市场重新安装并核对旧包，真实宿主是否选回旧版仍须验收，不能以事务夹具代替。
 
 Claude Code 包由独立 adapter 生成 plugin manifest、MCP 与 hook 配置，核心语义复用同一 Runtime。Hermes 按安装根目录隔离 Python 模块，个人工具名保持 engineering_assistant_*。
 

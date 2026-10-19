@@ -28,6 +28,7 @@ from .eval_runner import run_evals
 from .official_validation import validate_with_official_tools
 from .installation import agent_home, prepare_runtime, doctor
 from .validation import ValidationFailure
+from .version import CanonicalVersion
 
 
 PLUGIN_NAME = "engineering-assistant"
@@ -101,9 +102,9 @@ def _run_repository_preflight(repository_root: Path) -> dict:
         "simulation": evaluation["simulation"],
         "canary": evaluation["canary"],
         "canary_gate": {
-            "scope": "local_prerelease",
+            "scope": "repository_validation",
             "required": False,
-            "status": "not_required_for_local_prerelease",
+            "status": "not_required_for_repository_validation",
         },
     }
 
@@ -1137,6 +1138,8 @@ def publish_local(
         if policy_path is None:
             raise ValidationFailure("实际发布必须提供本机发布策略")
         policy = _load_policy(policy_path, platforms)
+        if CanonicalVersion.parse(policy.get("canonical_version", "")).prerelease is None:
+            raise ValidationFailure("本机发布仅允许预发布版本；正式内部版本请使用受控内部发行安装入口")
     else:
         policy = None
     preflight = _run_repository_preflight(repository_root)

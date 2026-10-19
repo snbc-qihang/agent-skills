@@ -1,4 +1,4 @@
-include ea_build_backend.py VERSIONING.md
+include ea_build_backend.py VERSIONING.md LICENSE THIRD_PARTY_NOTICES.md
 recursive-include catalog *.json
 recursive-include skills *.md
 recursive-include packs *.md

@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "version": "0.159.2",
+  "targets": {
+    "macos-arm64": {
+      "target_triple": "aarch64-apple-darwin",
+      "url": "https://releases.openai.com/codex/releases/0.159.2/codex-package-aarch64-apple-darwin.tar.gz",
+      "size_bytes": 129522674,
+      "sha256": "38aaf6dce63099fd10988948d03bbc6c0474253aef6961fcbe60f8d154b39101"
+    },
+    "macos-x64": {
+      "target_triple": "x86_64-apple-darwin",
+      "url": "https://releases.openai.com/codex/releases/0.159.2/codex-package-x86_64-apple-darwin.tar.gz",
+      "size_bytes": 140813958,
+      "sha256": "6b9b38bfad6ac8019aa6a243ee3ab11d3e22889eafd5458b0344cf20e797e680"
+    },
+    "windows-x64": {
+      "target_triple": "x86_64-pc-windows-msvc",
+      "url": "https://releases.openai.com/codex/releases/0.159.2/codex-package-x86_64-pc-windows-msvc.tar.gz",
+      "size_bytes": 156614559,
+      "sha256": "a7ab591043d99e8a88d0c2bebf15f810b15599a71148c4af944a755af3c71eef"
+    }
+  }
+}
