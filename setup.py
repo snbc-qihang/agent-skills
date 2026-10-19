@@ -14,7 +14,7 @@ class BuildRuntime(build_py):
         root = Path(__file__).resolve().parent
         assets = Path(self.build_lib) / "engineering_assistant/_assets"
         assets.mkdir(parents=True, exist_ok=True)
-        for name in ("catalog", "skills", "packs", "schemas", "evals", "config"):
+        for name in ("catalog", "skills", "packs", "schemas", "config"):
             shutil.copytree(root / name, assets / name, dirs_exist_ok=True)
         for name in ("VERSIONING.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
             shutil.copyfile(root / name, assets / name)

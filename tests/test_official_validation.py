@@ -18,31 +18,31 @@ from urllib.error import HTTPError, URLError
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.official_validation import (  # noqa: E402
+from engineering_assistant.tools.official_validation import (  # noqa: E402
     MAX_VALIDATOR_OUTPUT_BYTES,
     PY_YAML_REQUIREMENT,
     _run_streaming,
     validate_with_official_tools,
 )
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class OfficialValidationTests(unittest.TestCase):
     def test_default_uv_uses_path_without_a_codex_account_directory(self) -> None:
-        from engineering_assistant.official_validation import _default_uv
+        from engineering_assistant.tools.official_validation import _default_uv
 
         with tempfile.TemporaryDirectory() as temporary:
             uv = Path(temporary).resolve() / ("uv.exe" if os.name == "nt" else "uv")
             uv.write_text("fixture\n", encoding="utf-8")
             uv.chmod(0o755)
             with mock.patch.dict(os.environ, {"PATH": str(uv.parent)}, clear=True), mock.patch(
-                "engineering_assistant.official_validation._account_home",
+                "engineering_assistant.tools.official_validation._account_home",
                 return_value=Path(temporary) / "account-without-uv",
             ), mock.patch.object(
                 Path, "is_file", autospec=True,
                 side_effect=lambda candidate: candidate == uv,
             ), mock.patch(
-                "engineering_assistant.official_validation.os.access",
+                "engineering_assistant.tools.official_validation.os.access",
                 side_effect=lambda candidate, _mode: Path(candidate) == uv,
             ):
                 self.assertEqual(uv.resolve(), _default_uv())
@@ -56,14 +56,14 @@ class OfficialValidationTests(unittest.TestCase):
         }
 
     def test_verified_cache_bootstraps_without_codex_and_reuses_offline(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         with tempfile.TemporaryDirectory() as temporary:
             cache = _open_cache(Path(temporary) / "cache", ROOT)
             try:
                 with mock.patch(
-                    "engineering_assistant.official_validation._download_validator", return_value=payload
+                    "engineering_assistant.tools.official_validation._download_validator", return_value=payload
                 ) as download:
                     self.assertEqual(payload, _validator_bytes(self.source(payload), cache))
                     self.assertEqual(payload, _validator_bytes(self.source(payload), cache))
@@ -72,7 +72,7 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_invalid_download_preserves_corrupt_old_cache(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         source = self.source(payload)
@@ -81,7 +81,7 @@ class OfficialValidationTests(unittest.TestCase):
             try:
                 cache.write_bytes_exclusive(b"old-corrupt", source["sha256"], source["filename"])
                 with mock.patch(
-                    "engineering_assistant.official_validation._download_validator", return_value=b"wrong"
+                    "engineering_assistant.tools.official_validation._download_validator", return_value=b"wrong"
                 ) as download:
                     with self.assertRaisesRegex(ValidationFailure, "digest"):
                         _validator_bytes(source, cache)
@@ -91,7 +91,7 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_symlink_cache_and_repository_cache_are_rejected(self) -> None:
-        from engineering_assistant.official_validation import _open_cache
+        from engineering_assistant.tools.official_validation import _open_cache
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -106,26 +106,26 @@ class OfficialValidationTests(unittest.TestCase):
             self.assertEqual([], list(outside.iterdir()))
 
     def test_download_is_bounded_and_redirects_never_run(self) -> None:
-        from engineering_assistant.official_validation import _download_validator, MAX_VALIDATOR_SCRIPT_BYTES
+        from engineering_assistant.tools.official_validation import _download_validator, MAX_VALIDATOR_SCRIPT_BYTES
 
         url = self.source(b"x")["url"]
         response = mock.MagicMock()
         response.__enter__.return_value = response
         response.geturl.return_value = url
         response.read.return_value = b"x" * (MAX_VALIDATOR_SCRIPT_BYTES + 1)
-        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response) as download:
+        with mock.patch("engineering_assistant.tools.official_validation.urlopen", return_value=response) as download:
             with self.assertRaisesRegex(ValidationFailure, "bounded|size"):
                 _download_validator(url)
         download.assert_called_once()
         response.read.assert_called_once_with(MAX_VALIDATOR_SCRIPT_BYTES + 1)
         response.geturl.return_value = "https://example.com/replacement.py"
-        with mock.patch("engineering_assistant.official_validation.urlopen", return_value=response) as download:
+        with mock.patch("engineering_assistant.tools.official_validation.urlopen", return_value=response) as download:
             with self.assertRaisesRegex(ValidationFailure, "redirect"):
                 _download_validator(url)
         download.assert_called_once()
 
     def test_transient_download_failures_retry_then_verify_and_reuse_cache(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         source = self.source(payload)
@@ -142,8 +142,8 @@ class OfficialValidationTests(unittest.TestCase):
             with self.subTest(error=type(failure.reason).__name__), tempfile.TemporaryDirectory() as temporary:
                 cache = _open_cache(Path(temporary) / "cache", ROOT)
                 try:
-                    with mock.patch("engineering_assistant.official_validation.urlopen", side_effect=[failure, response]) as download, mock.patch(
-                        "engineering_assistant.official_validation.time.sleep"
+                    with mock.patch("engineering_assistant.tools.official_validation.urlopen", side_effect=[failure, response]) as download, mock.patch(
+                        "engineering_assistant.tools.official_validation.time.sleep"
                     ) as sleep:
                         self.assertEqual(payload, _validator_bytes(source, cache))
                         self.assertEqual(payload, _validator_bytes(source, cache))
@@ -156,15 +156,15 @@ class OfficialValidationTests(unittest.TestCase):
                     cache.close()
 
     def test_download_retry_budget_exhaustion_keeps_cache_unpublished(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         source = self.source(b"official")
         failure = URLError(socket.gaierror(8, "temporary DNS resolution failure"))
         with tempfile.TemporaryDirectory() as temporary:
             cache = _open_cache(Path(temporary) / "cache", ROOT)
             try:
-                with mock.patch("engineering_assistant.official_validation.urlopen", side_effect=failure) as download, mock.patch(
-                    "engineering_assistant.official_validation.time.sleep"
+                with mock.patch("engineering_assistant.tools.official_validation.urlopen", side_effect=failure) as download, mock.patch(
+                    "engineering_assistant.tools.official_validation.time.sleep"
                 ) as sleep:
                     with self.assertRaisesRegex(ValidationFailure, "failed after 3 attempt") as raised:
                         _validator_bytes(source, cache)
@@ -176,7 +176,7 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_download_trust_failures_never_retry(self) -> None:
-        from engineering_assistant.official_validation import _download_validator
+        from engineering_assistant.tools.official_validation import _download_validator
 
         url = self.source(b"official")["url"]
         failures = (
@@ -186,15 +186,15 @@ class OfficialValidationTests(unittest.TestCase):
         )
         for failure in failures:
             with self.subTest(error=type(failure).__name__), mock.patch(
-                "engineering_assistant.official_validation.urlopen", side_effect=failure
-            ) as download, mock.patch("engineering_assistant.official_validation.time.sleep") as sleep:
+                "engineering_assistant.tools.official_validation.urlopen", side_effect=failure
+            ) as download, mock.patch("engineering_assistant.tools.official_validation.time.sleep") as sleep:
                 with self.assertRaisesRegex(ValidationFailure, "download failed"):
                     _download_validator(url)
                 download.assert_called_once()
                 sleep.assert_not_called()
 
     def test_cache_leaf_symlink_is_rejected_without_download(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         source = self.source(payload)
@@ -206,7 +206,7 @@ class OfficialValidationTests(unittest.TestCase):
                 outside = root / "outside.py"
                 outside.write_bytes(payload)
                 cache.path(source["sha256"]).joinpath(source["filename"]).symlink_to(outside)
-                with mock.patch("engineering_assistant.official_validation._download_validator") as download:
+                with mock.patch("engineering_assistant.tools.official_validation._download_validator") as download:
                     with self.assertRaises(ValidationFailure):
                         _validator_bytes(source, cache)
                 download.assert_not_called()
@@ -215,8 +215,8 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_failed_cache_write_removes_partial_staging(self) -> None:
-        from engineering_assistant.artifact_io import ArtifactIO
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.runtime.artifact_io import ArtifactIO
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         source = self.source(payload)
@@ -229,7 +229,7 @@ class OfficialValidationTests(unittest.TestCase):
                 raise OSError("simulated interrupted staging write")
 
             try:
-                with mock.patch("engineering_assistant.official_validation._download_validator", return_value=payload), mock.patch.object(
+                with mock.patch("engineering_assistant.tools.official_validation._download_validator", return_value=payload), mock.patch.object(
                     ArtifactIO, "write_bytes_exclusive", interrupted
                 ):
                     with self.assertRaisesRegex(OSError, "interrupted"):
@@ -240,14 +240,14 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_concurrent_downloads_publish_one_intact_validator(self) -> None:
-        from engineering_assistant.official_validation import _open_cache, _validator_bytes
+        from engineering_assistant.tools.official_validation import _open_cache, _validator_bytes
 
         payload = b"print('official')\n"
         source = self.source(payload)
         with tempfile.TemporaryDirectory() as temporary:
             cache = _open_cache(Path(temporary) / "cache", ROOT)
             try:
-                with mock.patch("engineering_assistant.official_validation._download_validator", return_value=payload):
+                with mock.patch("engineering_assistant.tools.official_validation._download_validator", return_value=payload):
                     with ThreadPoolExecutor(max_workers=4) as pool:
                         outputs = list(pool.map(lambda _index: _validator_bytes(source, cache), range(8)))
                 self.assertEqual([payload] * 8, outputs)
@@ -258,7 +258,7 @@ class OfficialValidationTests(unittest.TestCase):
                 cache.close()
 
     def test_uv_configuration_precedes_path(self) -> None:
-        from engineering_assistant.official_validation import _default_uv
+        from engineering_assistant.tools.official_validation import _default_uv
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -267,7 +267,7 @@ class OfficialValidationTests(unittest.TestCase):
                 path.write_text("fixture\n", encoding="utf-8")
                 path.chmod(0o755)
             with mock.patch.dict(os.environ, {"ENGINEERING_ASSISTANT_UV": str(configured)}), mock.patch(
-                "engineering_assistant.official_validation.shutil.which", return_value=str(discovered)
+                "engineering_assistant.tools.official_validation.shutil.which", return_value=str(discovered)
             ) as which:
                 self.assertEqual(configured, _default_uv())
                 which.assert_not_called()
@@ -485,7 +485,7 @@ class OfficialValidationTests(unittest.TestCase):
                 )
 
     def test_caller_home_and_cache_swap_cannot_replace_execution_snapshot(self) -> None:
-        from engineering_assistant.official_validation import OFFICIAL_VALIDATORS
+        from engineering_assistant.tools.official_validation import OFFICIAL_VALIDATORS
 
         payload = b"print('official')\n"
         with tempfile.TemporaryDirectory() as temporary:
@@ -512,9 +512,9 @@ class OfficialValidationTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="passed\n")
 
             with mock.patch.dict(os.environ, {"HOME": str(home)}), mock.patch(
-                "engineering_assistant.official_validation.OFFICIAL_VALIDATORS", pins
+                "engineering_assistant.tools.official_validation.OFFICIAL_VALIDATORS", pins
             ), mock.patch(
-                "engineering_assistant.official_validation._download_validator", return_value=payload
+                "engineering_assistant.tools.official_validation._download_validator", return_value=payload
             ):
                 report = validate_with_official_tools(
                     root / "repository", package, runner=runner,
@@ -528,8 +528,8 @@ class OfficialValidationTests(unittest.TestCase):
 
     def test_windows_output_uses_native_job_runner(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            with mock.patch("engineering_assistant.official_validation.sys.platform", "win32"), mock.patch(
-                "engineering_assistant.windows_process.run_bounded_windows", return_value=(0, b"passed\n")
+            with mock.patch("engineering_assistant.tools.official_validation.sys.platform", "win32"), mock.patch(
+                "engineering_assistant.platforms.windows_process.run_bounded_windows", return_value=(0, b"passed\n")
             ) as run:
                 result = _run_streaming(
                     [sys.executable, "-c", "print('passed')"], label="native fixture",
@@ -542,7 +542,7 @@ class OfficialValidationTests(unittest.TestCase):
         if os.name != "posix":
             self.skipTest("POSIX stdout descriptor fixture")
         with tempfile.TemporaryDirectory() as temporary:
-            with mock.patch("engineering_assistant.official_validation.VALIDATOR_TIMEOUT_SECONDS", 0.2):
+            with mock.patch("engineering_assistant.tools.official_validation.VALIDATOR_TIMEOUT_SECONDS", 0.2):
                 with self.assertRaisesRegex(ValidationFailure, "timed out"):
                     _run_streaming(
                         [sys.executable, "-c", "import os,time; os.close(1); os.close(2); time.sleep(30)"],
@@ -559,7 +559,7 @@ class OfficialValidationTests(unittest.TestCase):
                 "pathlib.Path('child.pid').write_text(str(child.pid))"
             )
             with mock.patch(
-                "engineering_assistant.official_validation.VALIDATOR_TIMEOUT_SECONDS",
+                "engineering_assistant.tools.official_validation.VALIDATOR_TIMEOUT_SECONDS",
                 0.2,
             ):
                 with self.assertRaisesRegex(ValidationFailure, "timed out"):

@@ -16,8 +16,8 @@ SPEC = importlib.util.spec_from_file_location("qualification_diagnostic", ROOT /
 qualification = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(qualification)
 
-from engineering_assistant import installation as inst
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer import installation as inst
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 class WindowsQualificationDiagnosticTests(unittest.TestCase):

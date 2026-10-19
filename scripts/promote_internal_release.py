@@ -8,8 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from engineering_assistant.internal_promotion import promote
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.tools.internal_promotion import promote
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 def main(argv=None) -> int:

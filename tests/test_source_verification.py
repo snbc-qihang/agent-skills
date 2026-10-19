@@ -11,11 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.source_verification import (  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.tools.source_verification import (  # noqa: E402
     verify_source_checkout,
 )
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class SourceVerificationTests(unittest.TestCase):

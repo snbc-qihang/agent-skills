@@ -14,10 +14,10 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.adapters.hermes import HermesAdapter
-from engineering_assistant.catalog import load_catalog
-from engineering_assistant.mcp_server import RuntimeTools
-from engineering_assistant.hermes_bridge import HermesBridge, TOOL_FAILURE
+from engineering_assistant.platforms.adapters.hermes import HermesAdapter
+from engineering_assistant.runtime.catalog import load_catalog
+from engineering_assistant.runtime.mcp_server import RuntimeTools
+from engineering_assistant.platforms.hermes_bridge import HermesBridge, TOOL_FAILURE
 
 ROUTE_ARGS = {
     "intent": {
@@ -228,7 +228,7 @@ class HermesWorkerTests(unittest.TestCase):
             self.assertEqual([], list((artifact_root / "usage-observations").rglob("*.json")))
 
     def test_protocol_rejects_oversized_and_invalid_requests_without_echo(self):
-        script = "from engineering_assistant.hermes_bridge import main; from pathlib import Path; raise SystemExit(main(Path.cwd()))"
+        script = "from engineering_assistant.platforms.hermes_bridge import main; from pathlib import Path; raise SystemExit(main(Path.cwd()))"
         environment = {**os.environ, "PYTHONPATH": str(ROOT / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
         for raw in (b"secret-invalid-json", b"x" * 1_048_577, b"[]"):
             result = subprocess.run([sys.executable, "-c", script], input=raw, capture_output=True,
@@ -238,7 +238,7 @@ class HermesWorkerTests(unittest.TestCase):
             self.assertEqual(b"", result.stderr)
 
     def test_protocol_subprocess_executes_real_runtime_and_returns_only_json(self):
-        script = "from engineering_assistant.hermes_bridge import main; from pathlib import Path; raise SystemExit(main(Path.cwd()))"
+        script = "from engineering_assistant.platforms.hermes_bridge import main; from pathlib import Path; raise SystemExit(main(Path.cwd()))"
         request = {"operation": "call", "name": "engineering_assistant_route", "args": ROUTE_ARGS, "kwargs": self.kwargs}
         result = subprocess.run(
             [sys.executable, "-c", script], input=json.dumps(request).encode(), capture_output=True, cwd=ROOT,

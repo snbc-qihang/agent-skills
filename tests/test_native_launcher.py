@@ -16,8 +16,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.native_launcher import build_launcher, host_target, launcher_info  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.platforms.native_launcher import build_launcher, host_target, launcher_info  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class NativeLauncherTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class NativeLauncherTests(unittest.TestCase):
 
     def prepare(self) -> Path:
         if os.name == "nt":
-            from engineering_assistant.artifact_io import ArtifactIO
+            from engineering_assistant.runtime.artifact_io import ArtifactIO
 
             storage = ArtifactIO(Path(self.temporary.name), self.data_home.name)
             try:
@@ -73,7 +73,7 @@ class NativeLauncherTests(unittest.TestCase):
             self.data_home.chmod(0o700)
         path.write_text(json.dumps(binding), encoding="utf-8")
         if os.name == "nt":
-            from engineering_assistant.artifact_io import artifact_fs
+            from engineering_assistant.runtime.artifact_io import artifact_fs
 
             # Mirror setup's ownership normalization of only new staging/control
             # objects, preserving inherited user/SYSTEM ACLs without chmod.
@@ -88,7 +88,7 @@ class NativeLauncherTests(unittest.TestCase):
 
     def prepare_v2(self) -> tuple[Path, Path]:
         """Fake base and boot stub exercise native checks, never artifact qualification."""
-        from engineering_assistant.artifact_io import ArtifactIO, artifact_fs
+        from engineering_assistant.runtime.artifact_io import ArtifactIO, artifact_fs
 
         path = self.prepare()
         digest = "b" * 64
@@ -114,7 +114,7 @@ class NativeLauncherTests(unittest.TestCase):
     @contextmanager
     def _windows_dacl(path: Path, broad: bool) -> Iterator[None]:
         import ctypes
-        from engineering_assistant.artifact_io import artifact_fs
+        from engineering_assistant.runtime.artifact_io import artifact_fs
 
         flags = os.O_RDONLY | (artifact_fs.O_DIRECTORY if path.is_dir() else 0)
         descriptor = artifact_fs.open(str(path.absolute()), flags)
@@ -279,7 +279,7 @@ class NativeLauncherTests(unittest.TestCase):
                 self.assertIn("artifact", json.loads(result.stderr)["reason"])
 
     def test_v2_binding_rejects_wrong_artifact_parent_or_base_name_before_python(self) -> None:
-        from engineering_assistant.artifact_io import ArtifactIO, artifact_fs
+        from engineering_assistant.runtime.artifact_io import ArtifactIO, artifact_fs
 
         path, base = self.prepare_v2()
         binding = json.loads(path.read_text(encoding="utf-8"))
@@ -500,8 +500,8 @@ class NativeLauncherTests(unittest.TestCase):
             build_launcher(ROOT, different, executable_override=self.binary)
 
     def test_unknown_host_architecture_is_explicitly_unsupported(self) -> None:
-        with patch("engineering_assistant.native_launcher.platform.system", return_value="Linux"), patch(
-            "engineering_assistant.native_launcher.platform.machine", return_value="riscv64"
+        with patch("engineering_assistant.platforms.native_launcher.platform.system", return_value="Linux"), patch(
+            "engineering_assistant.platforms.native_launcher.platform.machine", return_value="riscv64"
         ), self.assertRaisesRegex(ValidationFailure, "unsupported"):
             host_target()
 

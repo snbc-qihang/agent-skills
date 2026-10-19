@@ -14,6 +14,9 @@ class RepositoryGovernanceTests(unittest.TestCase):
         authorization = (
             ROOT / "skills/engineering-assistant/references/authorization.md"
         ).read_text(encoding="utf-8")
+        self.assertIn("references/review-gates.md", skill)
+        self.assertIn("同时满足高风险 diff", skill)
+        skill += (ROOT / "skills/engineering-assistant/references/review-gates.md").read_text(encoding="utf-8")
         self.assertIn("风险触发子 Agent 自动评审", skill)
         self.assertIn("同时满足", skill)
         self.assertIn("尚未闭合的可证伪风险假设", skill)
@@ -147,16 +150,8 @@ class RepositoryGovernanceTests(unittest.TestCase):
     def test_readme_is_a_complete_current_repository_guide(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         required_sections = [
-            "## 项目定位",
-            "## 核心设计",
-            "## 仓库结构",
-            "## 公开 Skills",
-            "## 内部 Flows",
-            "## 能力与策略 Packs",
-            "## 运行机制",
-            "## 开发与验证",
-            "## 本机发布",
-            "## 安全边界",
+            "## 普通用户：安装与更新", "## 使用方式", "## 公开 Skills", "## 源码职责",
+            "## 开发者：当前可执行的入口", "## 验收与发布边界", "## 文档",
         ]
         for section in required_sections:
             self.assertIn(section, readme, section)

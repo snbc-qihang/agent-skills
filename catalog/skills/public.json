@@ -15,7 +15,8 @@
       ],
       "context_pointers": [
         {"when": "任务跨越多个 flow 或无法在单次会话内完成", "path": "references/wayfinding.md", "purpose": "在不预先规划未知工作的前提下选择长期任务路径。"},
-        {"when": "路由包含写入、发布或外部动作", "path": "references/authorization.md", "purpose": "加载授权和审批规则。"}
+        {"when": "路由包含写入、发布或外部动作", "path": "references/authorization.md", "purpose": "加载授权和审批规则。"},
+        {"when": "阶段评审同时涉及高风险 diff 和未闭合风险假设", "path": "references/review-gates.md", "purpose": "按需加载有界独立评审、反例覆盖与原有人工门禁合同。"}
       ],
       "policy_refs": ["safety-core", "risk-approval", "evidence-quality"],
       "risk_class": "read_only",

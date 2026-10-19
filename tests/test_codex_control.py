@@ -16,8 +16,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import codex_control as control
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.platforms import codex_control as control
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 class Response(io.BytesIO):
@@ -65,10 +65,10 @@ class CodexControlTests(unittest.TestCase):
                 _probe_cli=probe, urlopen=download):
             yield {"urlopen": download, "_probe_cli": probe}
 
-    def test_pins_cover_only_the_three_supported_native_targets(self):
+    def test_pins_cover_only_the_two_supported_native_targets(self):
         pins = json.loads((ROOT / "config/codex-control.json").read_text(encoding="utf-8"))
         self.assertEqual("0.159.2", pins["version"])
-        self.assertEqual({"macos-arm64", "macos-x64", "windows-x64"}, set(pins["targets"]))
+        self.assertEqual({"macos-arm64", "windows-x64"}, set(pins["targets"]))
         for target in pins["targets"]:
             self.assertEqual(pins["targets"][target], control._pin(target))
 
@@ -106,7 +106,7 @@ class CodexControlTests(unittest.TestCase):
         download.assert_not_called()
 
     def test_probe_verifies_version_commands_json_and_the_same_home(self):
-        from engineering_assistant import installation
+        from engineering_assistant.installer import installation
         executable = self.root / "codex"
         executable.write_bytes(b"fixture")
         calls = []
@@ -125,7 +125,7 @@ class CodexControlTests(unittest.TestCase):
         self.assertTrue(all(kwargs["timeout"] <= 15 for _, kwargs in calls))
 
     def test_probe_rejects_newer_unqualified_version_and_unsafe_json(self):
-        from engineering_assistant import installation
+        from engineering_assistant.installer import installation
         executable = self.root / "codex"
         executable.write_bytes(b"fixture")
         for result in (b"codex-cli 0.160.0", b"codex-cli 0.159.2"):
@@ -137,7 +137,7 @@ class CodexControlTests(unittest.TestCase):
                     control._probe_cli(executable, self.home, "macos-arm64")
 
     def test_probe_requires_marketplace_upgrade_and_remove(self):
-        from engineering_assistant import installation
+        from engineering_assistant.installer import installation
         executable = self.root / "codex"
         executable.write_bytes(b"fixture")
         for missing in ("upgrade", "remove"):
@@ -239,7 +239,7 @@ class CodexControlTests(unittest.TestCase):
         self.assertFalse((self.data / "tools/codex/0.159.2/macos-arm64").exists())
 
     def test_json_query_contract_and_native_failure_do_not_expose_output(self):
-        from engineering_assistant import installation
+        from engineering_assistant.installer import installation
         executable = self.root / "codex"
         executable.write_bytes(b"fixture")
         def protocol(command, **kwargs):

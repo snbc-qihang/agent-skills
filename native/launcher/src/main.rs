@@ -16,7 +16,6 @@ mod windows_private;
 fn compiled_target() -> &'static str {
     match (env::consts::OS, env::consts::ARCH) {
         ("macos", "aarch64") => "macos-arm64",
-        ("macos", "x86_64") => "macos-x64",
         ("linux", "x86_64") => "linux-x64",
         ("windows", "x86_64") => "windows-x64",
         _ => "unsupported",

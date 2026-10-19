@@ -13,8 +13,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import legacy_installation as legacy
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer import legacy_installation as legacy
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 class LegacyInspectionTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class LegacyInspectionTests(unittest.TestCase):
 
     def test_clean_inspection_is_readonly_and_never_prepares_control_tools(self):
         with mock.patch.object(legacy.runtime, "_storage", side_effect=AssertionError("write")), \
-                mock.patch("engineering_assistant.codex_control.urlopen", side_effect=AssertionError("download")):
+                mock.patch("engineering_assistant.platforms.codex_control.urlopen", side_effect=AssertionError("download")):
             result = self.inspect()
         self.assertFalse(result["legacy_installation_detected"])
         self.assertTrue(result["legacy_check_complete"])
@@ -113,7 +113,7 @@ class LegacyInspectionTests(unittest.TestCase):
         self.assertNotIn(str(external), json.dumps(result))
 
     def test_first_install_blocks_before_storage_fetch_and_preparation(self):
-        from engineering_assistant import internal_installation as managed
+        from engineering_assistant.installer import internal_installation as managed
         self.package(self.home.parent / "plugins/.engineering-assistant.backup-old")
         with mock.patch.object(managed.runtime, "_storage", side_effect=AssertionError("write")), \
                 mock.patch.object(managed, "acquire_internal_release", side_effect=AssertionError("network")), \
@@ -125,9 +125,9 @@ class LegacyInspectionTests(unittest.TestCase):
         self.assertFalse(self.data.exists())
 
     def test_doctor_json_reports_legacy_without_executing_old_runtime(self):
-        from engineering_assistant.setup_cli import main
+        from engineering_assistant.installer.setup_cli import main
         self.package(self.home.parent / "plugins/.engineering-assistant.backup-old")
-        with mock.patch("engineering_assistant.setup_cli.doctor", side_effect=AssertionError("old runtime")), \
+        with mock.patch("engineering_assistant.installer.setup_cli.doctor", side_effect=AssertionError("old runtime")), \
                 redirect_stdout(io.StringIO()) as output:
             code = main(["doctor", "--agent", "codex", "--agent-home", str(self.home), "--data-home", str(self.data), "--json"])
         result = json.loads(output.getvalue())
@@ -267,7 +267,7 @@ class LegacyInspectionTests(unittest.TestCase):
                 link.symlink_to(external, target_is_directory=True)
                 setattr(self, attribute, link)
                 self.query.side_effect = AssertionError("native must not follow an unsafe root")
-                with mock.patch("engineering_assistant.codex_control.resolve_codex_control", side_effect=AssertionError("prepare")):
+                with mock.patch("engineering_assistant.platforms.codex_control.resolve_codex_control", side_effect=AssertionError("prepare")):
                     result = legacy.preflight_legacy_codex(self.home, self.data)
                 self.assertFalse(result["legacy_check_complete"])
                 self.assertEqual([], list(external.iterdir()))
@@ -314,7 +314,7 @@ class LegacyInspectionTests(unittest.TestCase):
         self.assertIn("unattributed_environment", {item["kind"] for item in result["legacy_unknown"]})
 
     def test_every_setup_operation_rejects_unsafe_home_or_data_before_native_dispatch(self):
-        from engineering_assistant.setup_cli import main
+        from engineering_assistant.installer.setup_cli import main
         external = self.root / "other-user-data"
         external.mkdir()
         link = self.root / "unsafe-root"
@@ -322,10 +322,10 @@ class LegacyInspectionTests(unittest.TestCase):
         for command in ("prepare", "doctor", "repair", "install", "update", "uninstall"):
             for flag in ("--agent-home", "--data-home"):
                 with self.subTest(command=command, flag=flag), \
-                        mock.patch("engineering_assistant.setup_cli.repair_internal_codex", side_effect=AssertionError("repair")), \
-                        mock.patch("engineering_assistant.setup_cli.uninstall_internal_codex", side_effect=AssertionError("uninstall")), \
-                        mock.patch("engineering_assistant.setup_cli.install_internal_codex", side_effect=AssertionError("install")), \
-                        mock.patch("engineering_assistant.setup_cli.find_package", side_effect=AssertionError("discover")), \
+                        mock.patch("engineering_assistant.installer.setup_cli.repair_internal_codex", side_effect=AssertionError("repair")), \
+                        mock.patch("engineering_assistant.installer.setup_cli.uninstall_internal_codex", side_effect=AssertionError("uninstall")), \
+                        mock.patch("engineering_assistant.installer.setup_cli.install_internal_codex", side_effect=AssertionError("install")), \
+                        mock.patch("engineering_assistant.installer.setup_cli.find_package", side_effect=AssertionError("discover")), \
                         redirect_stdout(io.StringIO()) as output:
                     home, data = (link, self.data) if flag == "--agent-home" else (self.home, link)
                     code = main([command, "--agent", "codex", "--agent-home", str(home), "--data-home", str(data), "--json"])

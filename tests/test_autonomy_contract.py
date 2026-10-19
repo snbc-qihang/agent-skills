@@ -5,8 +5,8 @@ import tempfile
 import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from engineering_assistant.mcp_server import RuntimeTools
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.runtime.mcp_server import RuntimeTools
+from engineering_assistant.runtime.validation import ValidationFailure
 
 class AutonomyContractTests(unittest.TestCase):
     def setUp(self):
@@ -52,7 +52,7 @@ class AutonomyContractTests(unittest.TestCase):
         self.assertEqual("confirm",self.tools.call("engineering_assistant_route",{"intent":data})["decision"]["decision"])
 
     def test_explicit_readonly_normalization_retains_risk_and_rejects_write_conflicts(self):
-        from engineering_assistant.natural_intent import normalize_request
+        from engineering_assistant.runtime.natural_intent import normalize_request
         for text in ["只读评审生产代码", "read-only review production code"]:
             data = normalize_request(text).to_dict()
             self.assertTrue(data["read_only"])

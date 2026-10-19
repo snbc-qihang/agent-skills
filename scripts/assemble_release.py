@@ -9,10 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.installation import TARGETS
-from engineering_assistant.release_assets import INTERNAL_AGENTS, INTERNAL_TARGETS, INTERNAL_REPOSITORY, assemble_release
-from engineering_assistant.artifact_io import ArtifactIO
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer.installation import TARGETS
+from engineering_assistant.tools.release_assets import INTERNAL_AGENTS, INTERNAL_TARGETS, INTERNAL_REPOSITORY, assemble_release
+from engineering_assistant.runtime.artifact_io import ArtifactIO
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 def main(argv: list[str] | None = None) -> int:

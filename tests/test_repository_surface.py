@@ -16,8 +16,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.compiler import build_package  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.tools.compiler import build_package  # noqa: E402
 
 
 HAN = re.compile(r"[\u4e00-\u9fff]")
@@ -52,7 +52,7 @@ class RepositorySurfaceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             command_file = root / "github-env"
-            for target in ("macos-arm64", "macos-x64", "linux-x64", "windows-x64"):
+            for target in ("macos-arm64", "linux-x64", "windows-x64"):
                 with mock.patch.dict(os.environ, {"RUNNER_TEMP": str(root), "GITHUB_ENV": str(command_file),
                                                    "EA_CI_TARGET": target}, clear=True):
                     exec(compile(textwrap.dedent(source.group(1)), "<CI directory initialization>", "exec"), {})
@@ -67,7 +67,7 @@ class RepositorySurfaceTests(unittest.TestCase):
                 command_file.unlink()
 
     def test_ci_bootstraps_pinned_official_validators_for_clean_runner(self) -> None:
-        from engineering_assistant.official_validation import OFFICIAL_VALIDATORS
+        from engineering_assistant.tools.official_validation import OFFICIAL_VALIDATORS
 
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("branches: [main, teamwork]", workflow)
@@ -87,7 +87,7 @@ class RepositorySurfaceTests(unittest.TestCase):
     def test_ci_runs_each_native_target_with_fixed_tools_and_runtime_qualification(self) -> None:
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         for runner, target in {
-            "macos-14": "macos-arm64", "macos-15-intel": "macos-x64",
+            "macos-14": "macos-arm64",
             "windows-2025": "windows-x64",
         }.items():
             self.assertRegex(workflow, rf"- runner: {re.escape(runner)}\n\s+target: {target}\n")
@@ -95,7 +95,6 @@ class RepositorySurfaceTests(unittest.TestCase):
             'python-version: "3.13.13"', 'RUSTUP_TOOLCHAIN: "1.90.0"',
             'ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX: "1"',
             'fail-fast: false', 'scripts/qualify_installation.py',
-            'scripts/publish_local.py --platform codex --dry-run',
             'Windows Server', 'agent_host_qualification', 'not_run',
         ):
             self.assertIn(contract, workflow)

@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.canary import _observation_claims  # noqa: E402
-from engineering_assistant.canary_protocol import canonical_digest  # noqa: E402
+from engineering_assistant.tools.canary import _observation_claims  # noqa: E402
+from engineering_assistant.tools.canary_protocol import canonical_digest  # noqa: E402
 
 
 class LocalCanaryTests(unittest.TestCase):

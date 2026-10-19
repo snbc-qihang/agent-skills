@@ -3,7 +3,7 @@ name: prototype
 description: 构建明确可丢弃的逻辑或界面原型，用于回答一个设计问题。适用于具体交互验证比继续抽象讨论成本更低的场景。
 ---
 
-本 skill 属于 `engineering-assistant`；同名能力只使用当前插件版本。直接选中本 skill 时不为确认选择重新路由；需要 Runtime 时只使用本产品的 MCP 服务，同一目标不同时推进两个插件的运行。
+本 skill 仅使用当前 `engineering-assistant` 的能力与 Runtime。平台已选本 skill 时直接执行，不重复路由或跨插件推进同一运行。
 
 # 原型验证
 

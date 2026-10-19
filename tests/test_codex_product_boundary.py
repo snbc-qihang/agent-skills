@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from engineering_assistant.compiler import build_package
+from engineering_assistant.tools.compiler import build_package
 
 
 class CodexProductBoundaryTests(unittest.TestCase):

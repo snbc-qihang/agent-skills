@@ -14,17 +14,17 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.feedback import FeedbackCollector, run_codex_hook  # noqa: E402
-from engineering_assistant.hook_gate import (  # noqa: E402
+from engineering_assistant.runtime.feedback import FeedbackCollector, run_codex_hook  # noqa: E402
+from engineering_assistant.runtime.hook_gate import (  # noqa: E402
     is_explicit_plugin_request,
     should_load_runtime,
 )
-from engineering_assistant.usage_observation import (  # noqa: E402
+from engineering_assistant.runtime.usage_observation import (  # noqa: E402
     MAX_OBSERVATION_LEDGER_BYTES,
     MAX_RETAINED_TOOL_EVENTS,
     STALE_LEDGER_TTL_SECONDS,
 )
-from engineering_assistant.validation import (  # noqa: E402
+from engineering_assistant.runtime.validation import (  # noqa: E402
     ValidationFailure,
     load_json,
     validate_instance,
@@ -176,7 +176,7 @@ class UsageObservationHookTests(unittest.TestCase):
             validate_instance(payload, schema, "usage-observation-ledger")
 
     def test_builtin_schema_validator_enforces_collection_bounds(self) -> None:
-        from engineering_assistant import validation
+        from engineering_assistant.runtime import validation
 
         with patch.object(validation, "Draft202012Validator", None):
             with self.assertRaises(ValidationFailure):
@@ -1652,7 +1652,7 @@ class UsageObservationHookTests(unittest.TestCase):
         }
 
         with patch(
-            "engineering_assistant.feedback.FeedbackStore.save_efficiency_candidate",
+            "engineering_assistant.runtime.feedback.FeedbackStore.save_efficiency_candidate",
             side_effect=OSError("injected write failure"),
         ):
             self.assertEqual({}, self.run_hook(stop))
@@ -1720,7 +1720,7 @@ class UsageObservationHookTests(unittest.TestCase):
         }
 
         with patch(
-            "engineering_assistant.feedback.FeedbackStore.commit_efficiency_observation",
+            "engineering_assistant.runtime.feedback.FeedbackStore.commit_efficiency_observation",
             side_effect=OSError("injected commit failure"),
         ):
             self.assertEqual({}, self.run_hook(stop))
@@ -1755,7 +1755,7 @@ class UsageObservationHookTests(unittest.TestCase):
         }
 
         with patch(
-            "engineering_assistant.feedback.FeedbackStore.cleanup_efficiency_staging",
+            "engineering_assistant.runtime.feedback.FeedbackStore.cleanup_efficiency_staging",
             side_effect=OSError("injected cleanup failure"),
         ):
             self.assertEqual({}, self.run_hook(stop))
@@ -1821,7 +1821,7 @@ class UsageObservationHookTests(unittest.TestCase):
             "stop_hook_active": False,
         }
         with patch(
-            "engineering_assistant.feedback.FeedbackCollector.collect_codex",
+            "engineering_assistant.runtime.feedback.FeedbackCollector.collect_codex",
             side_effect=OSError("feedback unavailable"),
         ):
             self.assertEqual({}, self.run_hook(stop))

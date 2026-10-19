@@ -14,9 +14,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.model import ProviderInvocation  # noqa: E402
-from engineering_assistant.provider_runtime import ProviderExecutor  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.runtime.model import ProviderInvocation  # noqa: E402
+from engineering_assistant.runtime.provider_runtime import ProviderExecutor  # noqa: E402
 
 
 class ProviderRuntimeTests(unittest.TestCase):
@@ -87,10 +87,10 @@ class ProviderRuntimeTests(unittest.TestCase):
             "_sandbox_command",
             side_effect=lambda command, _bundle, _work, _denied: command,
         ), patch(
-            "engineering_assistant.provider_runtime.subprocess.Popen",
+            "engineering_assistant.runtime.provider_runtime.subprocess.Popen",
             side_effect=launch,
         ), patch(
-            "engineering_assistant.provider_sandbox_windows.run",
+            "engineering_assistant.platforms.provider_sandbox_windows.run",
             side_effect=launch_windows,
         ):
             result = self.executor.invoke(
@@ -131,9 +131,9 @@ class ProviderRuntimeTests(unittest.TestCase):
             result = subprocess.run(command, cwd=work, env=redirected, capture_output=True, timeout=timeout)
             return result.returncode, result.stdout, result.stderr
 
-        with patch('engineering_assistant.provider_runtime.platform.system', return_value='Windows'), patch.object(
+        with patch('engineering_assistant.runtime.provider_runtime.platform.system', return_value='Windows'), patch.object(
             ProviderExecutor, '_sandbox_command', side_effect=lambda command, *_args: command,
-        ), patch('engineering_assistant.provider_sandbox_windows.run', side_effect=launch):
+        ), patch('engineering_assistant.platforms.provider_sandbox_windows.run', side_effect=launch):
             result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
         self.assertEqual('completed', result.status, result.warning)
         self.assertEqual('## Design System: private directory options', result.output)
@@ -166,12 +166,12 @@ class ProviderRuntimeTests(unittest.TestCase):
             executable.parent.mkdir(parents=True)
             executable.touch()
             with patch(
-                "engineering_assistant.provider_runtime.platform.system",
+                "engineering_assistant.runtime.provider_runtime.platform.system",
                 return_value="Darwin",
             ), patch(
-                "engineering_assistant.provider_runtime.sys.prefix", str(venv_root)
+                "engineering_assistant.runtime.provider_runtime.sys.prefix", str(venv_root)
             ), patch(
-                "engineering_assistant.provider_runtime.sys.base_prefix", str(base_root)
+                "engineering_assistant.runtime.provider_runtime.sys.base_prefix", str(base_root)
             ):
                 self.assertEqual(base_root.resolve(), ProviderExecutor._runtime_root())
                 self.assertEqual(executable.resolve(), ProviderExecutor._runtime_executable())
@@ -188,14 +188,14 @@ class ProviderRuntimeTests(unittest.TestCase):
             venv_executable.parent.mkdir(parents=True)
             venv_executable.symlink_to(executable)
             with patch(
-                "engineering_assistant.provider_runtime.platform.system",
+                "engineering_assistant.runtime.provider_runtime.platform.system",
                 return_value="Darwin",
             ), patch(
-                "engineering_assistant.provider_runtime.sys.prefix", str(venv_root)
+                "engineering_assistant.runtime.provider_runtime.sys.prefix", str(venv_root)
             ), patch(
-                "engineering_assistant.provider_runtime.sys.base_prefix", str(base_root)
+                "engineering_assistant.runtime.provider_runtime.sys.base_prefix", str(base_root)
             ), patch(
-                "engineering_assistant.provider_runtime.sys.executable", str(venv_executable)
+                "engineering_assistant.runtime.provider_runtime.sys.executable", str(venv_executable)
             ):
                 self.assertEqual(executable.resolve(), ProviderExecutor._runtime_executable())
 
@@ -203,12 +203,12 @@ class ProviderRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             with patch(
-                "engineering_assistant.provider_runtime.platform.system",
+                "engineering_assistant.runtime.provider_runtime.platform.system",
                 return_value="Linux",
             ), patch(
-                "engineering_assistant.provider_runtime.sys.prefix", str(root / "venv")
+                "engineering_assistant.runtime.provider_runtime.sys.prefix", str(root / "venv")
             ), patch(
-                "engineering_assistant.provider_runtime.sys.base_prefix", str(root / "base")
+                "engineering_assistant.runtime.provider_runtime.sys.base_prefix", str(root / "base")
             ):
                 self.assertEqual((root / "venv").resolve(), ProviderExecutor._runtime_root())
 
@@ -302,7 +302,7 @@ class ProviderRuntimeTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.refresh_integrity()
-        with patch("engineering_assistant.provider_runtime.platform.system", return_value="Linux"), patch.object(
+        with patch("engineering_assistant.runtime.provider_runtime.platform.system", return_value="Linux"), patch.object(
             ProviderExecutor, "sandbox_capability", return_value={"supported": False, "reason": "Landlock disabled"}
         ):
             result = self.executor.invoke(self.invocation(), provider_root=self.bundle)

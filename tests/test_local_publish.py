@@ -13,9 +13,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
-from engineering_assistant.compiler import build_package, verify_package  # noqa: E402
-from engineering_assistant.local_publish import (  # noqa: E402
+from engineering_assistant.runtime.artifact_io import ArtifactIO  # noqa: E402
+from engineering_assistant.tools.compiler import build_package, verify_package  # noqa: E402
+from engineering_assistant.tools.local_publish import (  # noqa: E402
     _load_policy,
     _publish_one,
     _repair_codex_cache_version,
@@ -29,8 +29,8 @@ from engineering_assistant.local_publish import (  # noqa: E402
     uninstall_claude_installation,
     verify_claude_installation,
 )
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
-import engineering_assistant.local_publish as publish_module  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
+import engineering_assistant.tools.local_publish as publish_module  # noqa: E402
 
 
 class LocalPublishTests(unittest.TestCase):
@@ -86,9 +86,9 @@ class LocalPublishTests(unittest.TestCase):
 
     def setUp(self):
         # Network-free transaction tests; real native protocols have separate qualification.
-        preparation = mock.patch("engineering_assistant.local_publish.prepare_runtime", create=True,
+        preparation = mock.patch("engineering_assistant.tools.local_publish.prepare_runtime", create=True,
                                  return_value={"status": "prepared"})
-        diagnosis = mock.patch("engineering_assistant.local_publish.doctor", create=True,
+        diagnosis = mock.patch("engineering_assistant.tools.local_publish.doctor", create=True,
                                return_value=self.runtime_ready())
         self.prepare_runtime = preparation.start()
         self.doctor = diagnosis.start()
@@ -264,13 +264,13 @@ class LocalPublishTests(unittest.TestCase):
         }
         completed = mock.Mock(returncode=0, stdout="", stderr="")
         with mock.patch(
-            "engineering_assistant.local_publish.subprocess.run",
+            "engineering_assistant.tools.local_publish.subprocess.run",
             return_value=completed,
         ), mock.patch(
-            "engineering_assistant.local_publish.run_evals",
+            "engineering_assistant.tools.local_publish.run_evals",
             return_value=evaluation,
         ), mock.patch(
-            "engineering_assistant.local_publish.validate_with_official_tools",
+            "engineering_assistant.tools.local_publish.validate_with_official_tools",
             return_value=official,
         ) as validate_official:
             report = _run_repository_preflight(ROOT)
@@ -303,7 +303,7 @@ class LocalPublishTests(unittest.TestCase):
             executable.write_text("#!/bin/sh\n", encoding="utf-8")
             executable.chmod(0o755)
             with mock.patch(
-                "engineering_assistant.local_publish._bundled_cli_candidates",
+                "engineering_assistant.platforms.codex_control._bundled_cli_candidates",
                 return_value=[executable],
             ):
                 resolved = _resolve_platform_cli("codex", {"PATH": ""})
@@ -909,7 +909,7 @@ class LocalPublishTests(unittest.TestCase):
                 return _restore_codex_cache_snapshots(*args, **kwargs)
 
             with mock.patch(
-                "engineering_assistant.local_publish._restore_codex_cache_snapshots",
+                "engineering_assistant.tools.local_publish._restore_codex_cache_snapshots",
                 side_effect=restore_with_first_failure,
             ):
                 with self.assertRaisesRegex(ValidationFailure, "cache_restore=restore failed"):

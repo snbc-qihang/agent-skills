@@ -19,8 +19,6 @@ jobs:
         include:
           - runner: macos-14
             target: macos-arm64
-          - runner: macos-15-intel
-            target: macos-x64
           - runner: windows-2025
             target: windows-x64
     defaults:
@@ -78,7 +76,7 @@ jobs:
           import sys
           from pathlib import Path
           sys.path.insert(0, str(Path.cwd() / "src"))
-          from engineering_assistant.native_launcher import host_target
+          from engineering_assistant.platforms.native_launcher import host_target
           assert sys.version_info[:3] == (3, 13, 13), sys.version
           assert host_target() == os.environ["EA_CI_TARGET"]
           root = Path(os.environ["EA_CI_ROOT"])
@@ -101,7 +99,7 @@ jobs:
           import sys
           for mode in ("--diagnose-console", "--diagnose-loader"):
               diagnostic = subprocess.run([
-                  sys.executable, "-m", "engineering_assistant.provider_sandbox_windows", mode,
+                  sys.executable, "-m", "engineering_assistant.platforms.provider_sandbox_windows", mode,
               ], timeout=120, check=False)
               print("Windows startup diagnostic exit:", mode, diagnostic.returncode, flush=True)
           native_diagnostic = subprocess.run([
@@ -139,7 +137,7 @@ jobs:
           import subprocess
           import sys
           from pathlib import Path
-          from engineering_assistant.windows_process import run_bounded_windows
+          from engineering_assistant.platforms.windows_process import run_bounded_windows
           root = Path(os.environ["EA_CI_ROOT"]) / "windows-uv-attempt"
           root.mkdir()
           report_path = root / "uv-runtime-qualification.json"
@@ -188,8 +186,8 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, str(Path.cwd() / "tests"))
           sys.path.insert(0, str(Path.cwd() / "src"))
-          from engineering_assistant.provider_runtime import ProviderExecutor
-          from engineering_assistant.release_assets import required_native_tests
+          from engineering_assistant.runtime.provider_runtime import ProviderExecutor
+          from engineering_assistant.tools.release_assets import required_native_tests
 
           def require_native_test_results(result, required, discovered):
               skipped = {test.id() for test, _reason in result.skipped} & required
@@ -233,8 +231,8 @@ jobs:
           import json
           import os
           from pathlib import Path
-          from engineering_assistant.compiler import build_package, verify_package
-          from engineering_assistant.official_validation import validate_with_official_tools
+          from engineering_assistant.tools.compiler import build_package, verify_package
+          from engineering_assistant.tools.official_validation import validate_with_official_tools
           repository = Path.cwd()
           root = Path(os.environ["EA_CI_ROOT"])
           for platform in ("codex",):
@@ -246,9 +244,18 @@ jobs:
           (root / "official-validation.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
           PY
       - name: 固定 Codex Runtime 与 MCP、Hook、Provider 实际集成资格
-        run: python scripts/qualify_installation.py --agent codex --output "$EA_CI_ROOT/runtime-qualification.json"
-      - name: Codex 无副作用发布预演
-        run: python scripts/publish_local.py --platform codex --dry-run
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from scripts.qualify_installation import qualify
+          root = Path(os.environ["EA_CI_ROOT"])
+          base = root / "runtime-check"
+          base.mkdir()
+          report = qualify(base, ("codex",), packages={"codex": root / "codex"})
+          (root / "runtime-qualification.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          PY
       - name: 绑定本次源码与 CI 验证身份
         run: |
           python - <<'PY'
@@ -309,8 +316,8 @@ jobs:
           import os
           import tarfile
           from pathlib import Path
-          from engineering_assistant.release_assets import INTERNAL_TARGETS, assemble_release
-          from engineering_assistant.version import CANONICAL_VERSION
+          from engineering_assistant.tools.release_assets import INTERNAL_TARGETS, assemble_release
+          from engineering_assistant.runtime.version import CANONICAL_VERSION
           matrix = Path(os.environ["EA_MATRIX_ROOT"])
           artifacts = {target: matrix / ("engineering-assistant-" + target) for target in INTERNAL_TARGETS}
           wheels = list((artifacts["macos-arm64"] / "setup").glob("*.whl"))

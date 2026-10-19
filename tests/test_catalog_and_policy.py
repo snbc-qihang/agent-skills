@@ -12,11 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.policy import PolicyOverride, resolve_policies  # noqa: E402
-from engineering_assistant.router import ROUTES  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
-from engineering_assistant.version import CANONICAL_VERSION, STABLE_VERSION  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.runtime.policy import PolicyOverride, resolve_policies  # noqa: E402
+from engineering_assistant.runtime.router import ROUTES  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.version import CANONICAL_VERSION, STABLE_VERSION  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):

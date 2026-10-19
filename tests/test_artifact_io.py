@@ -14,12 +14,12 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs  # noqa: E402
-from engineering_assistant.feedback import FeedbackStore  # noqa: E402
-from engineering_assistant.model import FeedbackCapture  # noqa: E402
-from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.usage_observation import UsageObservationStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs  # noqa: E402
+from engineering_assistant.runtime.feedback import FeedbackStore  # noqa: E402
+from engineering_assistant.runtime.model import FeedbackCapture  # noqa: E402
+from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
+from engineering_assistant.runtime.usage_observation import UsageObservationStore  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class ArtifactIOTests(unittest.TestCase):
@@ -38,8 +38,8 @@ class ArtifactIOTests(unittest.TestCase):
         )
 
         with patch(
-            ("engineering_assistant.artifact_io.msvcrt.locking" if os.name == "nt"
-             else "engineering_assistant.artifact_io.fcntl.flock"),
+            ("engineering_assistant.runtime.artifact_io.msvcrt.locking" if os.name == "nt"
+             else "engineering_assistant.runtime.artifact_io.fcntl.flock"),
             side_effect=BlockingIOError,
         ):
             with self.assertRaisesRegex(ValidationFailure, "lock is busy"):
@@ -119,7 +119,7 @@ class ArtifactIOTests(unittest.TestCase):
 
         try:
             with patch(
-                "engineering_assistant.artifact_io.os.open",
+                "engineering_assistant.runtime.artifact_io.os.open",
                 side_effect=replace_before_open,
             ):
                 with self.assertRaisesRegex(ValidationFailure, "unsafe"):
@@ -361,7 +361,7 @@ class ArtifactIOTests(unittest.TestCase):
             return real_stat(path, *args, **kwargs)
 
         with patch(
-            "engineering_assistant.artifact_io.os.stat",
+            "engineering_assistant.runtime.artifact_io.os.stat",
             side_effect=replace_parent_before_stat,
         ):
             self.assertTrue(

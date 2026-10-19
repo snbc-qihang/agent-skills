@@ -13,9 +13,9 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import provider_sandbox_linux as linux  # noqa: E402
-from engineering_assistant import provider_sandbox_macos as macos  # noqa: E402
-from engineering_assistant import provider_sandbox_windows as windows  # noqa: E402
+from engineering_assistant.platforms import provider_sandbox_linux as linux
+from engineering_assistant.platforms import provider_sandbox_macos as macos
+from engineering_assistant.platforms import provider_sandbox_windows as windows
 
 
 class ProviderSandboxContractTests(unittest.TestCase):

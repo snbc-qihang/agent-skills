@@ -2,9 +2,9 @@
 
 ## 用户安装目标
 
-首轮内部交付安装完整的 11 个 skills、Runtime MCP、Hook 和 Provider 隔离能力，面向 macOS 14+ arm64/x64、Windows 11 x64 上的 Codex App 与原生 CLI。用户预先安装 Codex（App 或原生 CLI）、`uv` 和 Git，在选用的 Codex 宿主完成登录。仓库采用 MIT 许可证并公开，下载不需要 GitHub 登录、token 或私有仓库授权。`uv` 的首轮验证基线为 0.11.7，须能在安装器启动前自动获取 Python 3.13.13；Runtime 准备函数的最低版本不能代替这项入口验证。无需 Node、手动 Python 环境、作者源 checkout、Rust 编译器或日常激活命令。
+首轮内部交付安装完整的 11 个 skills、Runtime MCP、Hook 和 Provider 隔离能力，面向 macOS 14+ arm64、Windows 11 x64 上的 Codex App 与原生 CLI。用户预先安装 Codex（App 或原生 CLI）、`uv` 和 Git，在选用的 Codex 宿主完成登录。仓库采用 MIT 许可证并公开，下载不需要 GitHub 登录、token 或私有仓库授权。`uv` 的首轮验证基线为 0.11.7，须能在安装器启动前自动获取 Python 3.13.13；Runtime 准备函数的最低版本不能代替这项入口验证。无需 Node、手动 Python 环境、作者源 checkout、Rust 编译器或日常激活命令。
 
-**当前 `1.0.0.1` 候选尚未通过三目标真实宿主验收并推广；本节命令待发布，当前不能宣称已可安装。** 固定源码 tag `internal/installer/1.0.0.1` 对应发行 tag `internal/codex/1.0.0.1`，移动入口 `internal/installer` 指向团队最新已验收源码。安装器核对实际 Git 来源 commit，从同版本不可变发行 tag 读取预编译包与公开验收摘要，自动选择 OS/架构，再准备并核对受控本地 marketplace 来源，调用原生 `plugin add` 完成选择。
+**当前 `1.0.0.1` 候选尚未通过两目标真实宿主验收并推广；本节命令待发布，当前不能宣称已可安装。** 固定源码 tag `internal/installer/1.0.0.1` 对应发行 tag `internal/codex/1.0.0.1`，移动入口 `internal/installer` 指向团队最新已验收源码。安装器核对实际 Git 来源 commit，从同版本不可变发行 tag 读取预编译包与公开验收摘要，自动选择 OS/架构，再准备并核对受控本地 marketplace 来源，调用原生 `plugin add` 完成选择。
 
 macOS Terminal 与 Windows PowerShell 使用同一固定版本命令：
 
@@ -59,7 +59,7 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 | 目标 | 安装 Runtime | 安全边界与资格 |
 | --- | --- | --- |
-| macOS 14+ arm64/x64 | 固定 Python 3.13.13 与哈希依赖 | Seatbelt；每个架构在对应 Runner 实际调用 |
+| macOS 14+ arm64 | 固定 Python 3.13.13 与哈希依赖 | Seatbelt；在原生 ARM64 宿主实际调用 |
 | Windows 11 x64 | 同一 Python 和依赖合同 | NTFS、句柄相对 ArtifactIO、LPAC 与 Job Object；仍需 Windows 11 实验 |
 
 表格是内部支持目标，不表示已取得资格。Hermes、Claude Code 和 Linux 共享源码继续回归，保留高级入口，不阻塞首轮 Codex 发行，也不获得首轮内部交付承诺。Windows Server CI 可以验证其本机行为，但不代替 Windows 11 或已认证的 Agent 会话；缺少 Windows 11 证据时发行推广保持 blocked。CI 必须实际完成正向 Provider 调用、IPv4/IPv6 网络基线与禁止探针、子进程/额外 exec、路径读写、输出与超时门禁；缺失或跳过必需原生测试时失败。`scripts/qualify_installation.py` 执行 native launcher、MCP initialize/list/call、Hook、持久化 run 与 Provider 隔离，记录运行资格；它不会自动证明 Agent 的启用状态或 Hook 信任。
@@ -104,6 +104,8 @@ Runtime 位于插件缓存和作者源之外：macOS `~/Library/Application Supp
 
 ## 高级 wheel/source 兼容入口
 
+消费者 wheel 只包含安装器、Runtime 及运行资料，不包含作者工具或 `evals`。`ea validate/eval/build/verify-package/canary-*` 仅在作者源码开发环境执行；安装器 wheel 的隔离验证覆盖真实 Runtime 路由、授权边界和来源资料校验。完整仓库 eval 仍由维护者验证单独执行。
+
 已取得经过核验的 setup wheel、市场与候选包时，可继续使用显式入口；这些参数是高级输入，不能作为当前可用公网地址：
 
 ```bash
@@ -117,7 +119,7 @@ uvx --python 3.13.13 --from <setup-wheel> ea-setup update --agent hermes --packa
 
 ## 内部发行与推广
 
-候选可以使用 CI 或维护者本地三目标验证输入组装，生成物保存在仓库外；本地命令与工具准备见 [README 的候选准备](../../README.md#无付费-ci-的候选准备)。本地验证只接受干净的已提交源码，批次文件同时绑定源码 commit 与随机 `validation_id`，三目标共用同一文件。组装拒绝不同源码、不同批次、混用 CI 字段和缺失必需检查；本地 index 标为 `local_artifacts_unattested`，既有 CI index 标为 `ci_artifacts_unattested`。两者均不提供外部验签，也不要求购买托管 CI。
+候选可以使用 CI 或维护者本地两目标验证输入组装，生成物保存在仓库外；本地命令与工具准备见 [维护者候选准备](#无付费-ci-的候选准备)。本地验证只接受干净的已提交源码，批次文件同时绑定源码 commit 与随机 `validation_id`，两目标共用同一文件。组装拒绝不同源码、不同批次、混用 CI 字段和缺失必需检查；本地 index 标为 `local_artifacts_unattested`，既有 CI index 标为 `ci_artifacts_unattested`。两者均不提供外部验签，也不要求购买托管 CI。
 
 正式编号也仅生成候选，index 固定标记资格尚未满足；CI 临时 artifact 不是长期安装地址。维护者须在 macOS 两个架构与真实 Windows 11 上，对同一候选完成已认证 App、原生 CLI 会话与 Provider 隔离验收，覆盖首次安装、更新、重复执行、失败补偿、重开会话后的 skill/MCP/受信任 Hook。验收 JSON 及证据在仓库外保存，并绑定源码 commit、候选 index 与包摘要；具体字段由 `release_assets.validate_acceptance` 校验。
 
@@ -131,7 +133,7 @@ Provider 记录另行核对完整的 11 项隔离检查与 IPv4/IPv6 对照，�
 
 源码采用 [MIT](../../LICENSE) 许可证，插件包和安装器 wheel 同时携带许可证与[第三方声明](../../THIRD_PARTY_NOTICES.md)。公开源码仍按团队试用范围发行，不增加 PyPI、npm、公开插件市场或部署服务器。GitHub Release 用于版本说明、教程与公开验收摘要，消费者下载仍使用 Git 发行 tag；维护者的 GitHub 发布权限和控制工具不转嫁给新人。推广时核对固定仓库公开且未归档，不接受其他仓库或自动切换发行来源。
 
-完整 `acceptance.json`、App/CLI/Provider 证据、`activation.json`、命令收据、原生插件列表与包快照只保存在仓库外受控目录，维护者负责保留以便复核。`prepare` 在私有快照中逐项校验后，发行 tag 仅保存 `acceptance-summary.json`：包含候选和源码身份、三目标包摘要、App/CLI/Provider 通过状态及原始证据摘要，不复制 reviewer、路径、命令、会话内容或原始记录。消费者验证公开摘要与完整包；无法据此独立重放原始验收，也不获得密码学身份保证。`activate` 同样校验完整原始记录及 BUILD 更新后，Release 只上传 `activation-summary.json` 和已审查的安装教程。
+完整 `acceptance.json`、App/CLI/Provider 证据、`activation.json`、命令收据、原生插件列表与包快照只保存在仓库外受控目录，维护者负责保留以便复核。`prepare` 在私有快照中逐项校验后，发行 tag 仅保存 `acceptance-summary.json`：包含候选和源码身份、两目标包摘要、App/CLI/Provider 通过状态及原始证据摘要，不复制 reviewer、路径、命令、会话内容或原始记录。消费者验证公开摘要与完整包；无法据此独立重放原始验收，也不获得密码学身份保证。`activate` 同样校验完整原始记录及 BUILD 更新后，Release 只上传 `activation-summary.json` 和已审查的安装教程。
 
 推广分为两个阶段，各自先预演，再按远程推广授权显式执行。实际远程操作要求维护者的 Git HTTPS 写权限和已认证 `gh`；安装消费者无需 `gh`。第一阶段 `prepare` 只写入并核对不可变的发行 tag 和源码 tag，不更新移动入口：
 
@@ -140,7 +142,7 @@ python3 scripts/promote_internal_release.py --phase prepare --candidate <仓库�
 python3 scripts/promote_internal_release.py --phase prepare --candidate <仓库外候选目录> --acceptance <仓库外acceptance.json> --yes
 ```
 
-两个 tag 已核验后，在三个目标上使用本节实际公开 HTTPS 固定命令进行新人安装，并从 App 与 CLI 完成完整运行验收。另在隔离试验来源验证 `1.0.0.1 → 1.0.0.2` 的 BUILD 更新，记录更新前后的真实原生选择；不能用 SemVer 排序、构建成功或 `doctor` 替代。试验下一版不推进团队 alias。
+两个 tag 已核验后，在两个目标上使用本节实际公开 HTTPS 固定命令进行新人安装，并从 App 与 CLI 完成完整运行验收。另在隔离试验来源验证 `1.0.0.1 → 1.0.0.2` 的 BUILD 更新，记录更新前后的真实原生选择；不能用 SemVer 排序、构建成功或 `doctor` 替代。试验下一版不推进团队 alias。
 
 第二阶段 `activate` 需要仓库外 `activation.json` 和已核对的 Release 教程正文：
 
@@ -149,13 +151,178 @@ python3 scripts/promote_internal_release.py --phase activate --candidate <仓库
 python3 scripts/promote_internal_release.py --phase activate --candidate <仓库外候选目录> --acceptance <仓库外acceptance.json> --activation <仓库外activation.json> --release-notes <仓库外教程.md> --expected-alias <旧源码commit或absent> --yes
 ```
 
-`activation.json` 固定 `schema_version=1`、`repository_url=https://github.com/snbc-qihang/agent-skills.git`、`installer_ref=internal/installer/1.0.0.1` 和 `transport=https_git`，包含一份完整三目标 `acceptance` 及三个目标的 `build_updates`。每项引用 `install`、`before_update`、`update` 三份实际命令 receipt；引用均为 `{path, sha256}`，相对路径位于验收输入目录内。
+`activation.json` 固定 `schema_version=1`、`repository_url=https://github.com/snbc-qihang/agent-skills.git`、`installer_ref=internal/installer/1.0.0.1` 和 `transport=https_git`，包含一份完整两目标 `acceptance` 及两个目标的 `build_updates`。每项引用 `install`、`before_update`、`update` 三份实际命令 receipt；引用均为 `{path, sha256}`，相对路径位于验收输入目录内。
 
 每份 receipt 记录 `schema_version=1`、`evidence_kind=ea_setup_command`、完整参数数组 `command`、实际 PEP 610 `installer_origin`、`exit_code`、实际 JSON `result`、`package` 包快照引用和 `native_selection` 原生清单引用。固定安装须执行该版本的精确 HTTPS 命令并输出 `--json`；包快照放在 `evidence/packages/` 内，包含完整已安装包和 `manifest_sha256`；原生清单保存 `codex plugin list --json` 的实际输出。固定安装的 canonical、源码及摘要须匹配候选；更新前另行采集 `doctor` 或重复 `install` 收据，核对 canonical 与包摘要；更新后须执行真实 `update`，选中同前三段、BUILD 加一且摘要不同的完整包。App、CLI、Provider 验收证据仍逐项审查，不以这些 receipt 代替受信任 Hook、登录态或隔离资格。
 
 Release 教程正文至少包含固定版本安装命令、支持目标、前置条件、旧版清理、信任与重开会话、检查、更新、修复和卸载，并明确验收版本与源码来源。教程是人工审查后提供的公开正文，不得包含凭证、个人路径或业务内容。脚本核对两个已有 tag 后，发布或核对团队试用 Release 及其公开摘要，再以 CAS 更新 `internal/installer`。摘要的 `acceptance_sha256` 绑定规范化原始验收 JSON，角色摘要绑定原始证据字节，`activation_sha256` 绑定原始激活记录字节；原始内容不随摘要上传。Release 失败或验收缺失时不推进 alias；Release 已发布但 CAS 失败时明确报告部分完成，不自动删除 Release 或 tag。已有不同内容的 tag 不覆盖，alias 并发变化不强行推广。生成物不提交到 `main`、`teamwork` 或作者 checkout。
 
-正式内部交付资格仅证明仓库门禁和完整安装运行验收，不表示产品 Canary 或公开稳定版资格。没有三目标真实验收和实际固定命令证据时，文档与 Release 不得宣称入口已经可用。
+正式内部交付资格仅证明仓库门禁和完整安装运行验收，不表示产品 Canary 或公开稳定版资格。没有两目标真实验收和实际固定命令证据时，文档与 Release 不得宣称入口已经可用。
+
+## 维护者验证与两目标验收
+
+### 维护者本地验证
+
+以下步骤由维护者在作者仓库根目录执行，不是新人安装插件的步骤。它们可以在本地运行，不需要付费 CI，也不会把插件注册到你正在使用的 Codex。
+
+#### 1. 准备工具和工作目录
+
+- 安装 Git、[uv](https://docs.astral.sh/uv/getting-started/installation/) 和 [Rust/rustup](https://rust-lang.org/tools/install/)。对照当前 CI 的工具基线为 uv `0.11.7`、Rust `1.90.0`、Python `3.13.13`；Python 由 uv 自动获取。
+- macOS 安装 Xcode Command Line Tools；缺失时执行 `xcode-select --install`。Windows 使用原生 Windows 11 x64、NTFS，在普通用户终端运行验证，准备 Git Bash、系统 Windows PowerShell，以及 Rust MSVC 所需的 [Visual Studio C++ Build Tools 和 Windows SDK](https://rust-lang.github.io/rustup/installation/windows.html)。
+- 网络应能访问 Python 下载源、PyPI、crates.io 和固定官方 validator；Provider 检查还需要本机 IPv4/IPv6 回环对照可运行。
+- 完整三平台 `--platform all --dry-run` 还需要 Claude Code CLI，因为脚本实际调用 `claude plugin validate --strict`。仅做 Codex 预演时不要求另装 Hermes 或 Claude Code。
+
+首次获取作者源时执行；已有 checkout 则直接进入其真实目录：
+
+```bash
+git clone https://github.com/snbc-qihang/agent-skills.git
+cd agent-skills
+git --version
+uv --version
+rustup toolchain install 1.90.0 --profile minimal
+rustup run 1.90.0 cargo --version
+uv run --isolated --no-project --python 3.13.13 python --version
+```
+
+公开仓库只读访问无需 GitHub 凭证。最后一条应输出 `Python 3.13.13`。
+
+macOS Terminal 为本次验证设置工具链和仓库外输出目录：
+
+```bash
+export RUSTUP_TOOLCHAIN=1.90.0
+export ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX=1
+EA_CHECK_DIR="$(mktemp -d /private/tmp/ea-validation.XXXXXX)"
+```
+
+Windows PowerShell 使用对应设置；后面的验证命令两端相同：
+
+```powershell
+$env:RUSTUP_TOOLCHAIN = "1.90.0"
+$env:ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX = "1"
+$EA_CHECK_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ("ea-validation-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $EA_CHECK_DIR | Out-Null
+```
+
+下面的 `uv run --isolated --no-project --with-editable .` 在隔离环境安装当前作者包及依赖，直接使用源码，不需要激活环境，也不更新已有 `.venv` 或项目 lockfile。首次执行需要下载依赖；相关参数见 [uv 命令文档](https://docs.astral.sh/uv/reference/cli/)。
+
+#### 2. 执行仓库门禁
+
+逐条执行；任何一条失败，先处理该失败，不继续宣称验证通过：
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . python -m unittest discover -s tests -v
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea validate --require-sources
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea eval --output "$EA_CHECK_DIR/eval.json"
+uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts/publish_local.py --platform all --dry-run
+```
+
+最后一条会再次执行完整 preflight，并校验 11 个公开 skills、最终 Codex staging 和 Claude Code marketplace。只有 Codex 环境时可先将 `all` 改为 `codex`；这只完成 Codex 预演，完整共享验证仍须补齐 `all`。
+
+通过标准：测试没有 failure/error，`validate` 返回 `status=passed`，eval 达到下述路由门槛，预演返回顶层 `status=passed` 且各平台为 `dry_run_passed`。异平台测试可能显示 skipped，例如 macOS 上的 Windows 原生测试；这不代表被跳过的平台已经通过。当前正式编号不能执行 `publish_local.py --yes`。
+
+#### 3. 保留可检查的构建包
+
+`--dry-run` 会清理自身 staging；需要人工检查的包另行构建到本次仓库外目录。默认构建当前宿主目标，不用跨平台编译代替对应机器验收：
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea build --platform codex --output "$EA_CHECK_DIR/codex"
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea verify-package --package "$EA_CHECK_DIR/codex"
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea build --platform hermes --output "$EA_CHECK_DIR/hermes"
+uv run --isolated --no-project --python 3.13.13 --with-editable . ea verify-package --package "$EA_CHECK_DIR/hermes"
+```
+
+两个 `verify-package` 都须返回 `status=passed`。构建可能复用系统临时目录中的原生 launcher 缓存；缓存命中不证明在没有编译工具的新机器上可以从零构建，首次编译仍需前述 Rust 和系统工具。Hermes 构建用于共享源码回归，不扩大首轮 Codex 发行范围。重复验证使用新的输出目录，不覆盖旧包。
+
+#### 4. 执行本机真实 Runtime 资格检查
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts/qualify_installation.py --agent codex --output "$EA_CHECK_DIR/runtime-qualification.json"
+```
+
+该脚本在临时目录实际构建并准备 Runtime，执行 native launcher、MCP 调用、Hook、持久化任务和受控 Provider 隔离探针；不安装到用户的 Codex 市场。成功时输出 `status=runtime_qualified`，报告中的 `persistent_run`、`feedback_hook` 和协议检查须通过，Provider `qualified=true`、11 项检查及 IPv4/IPv6 对照均须成功。Provider 使用受控诊断 bundle，无需预先下载可选的 UI/UX Pro Max 知识包。
+
+报告中的 `native_marketplace_session=not_executed` 和 `hook_trust=requires_native_host_review` 是明确未执行项，须继续完成下一节的宿主操作。Windows Provider 仍未闭合时，这条命令应保留真实失败，不通过关闭隔离或删除检查换取成功。
+
+质量门槛：
+
+- Routing eval 至少 100 条真实中英文任务。
+- Top-1 准确率不低于 90%。
+- 无结果率不高于 5%。
+- 未确认高风险写入为 0。
+- Simulation 不得作为真实产品收益证据。
+- Codex 和 Hermes 必须从同一作者源构建并通过摘要校验。
+
+### 新人安装验收
+
+**本节是发行 tag 已准备并核验后的操作步骤，当前固定入口仍待发布；现在不要把以下命令当成已可用入口。** 发布前由维护者在验收机执行，正式推广后再交给新人。
+
+准备 Codex、uv、Git，先完成 Codex 登录。验收机应同时有 App 和原生 CLI；普通使用者只需选用的宿主，不需要 GitHub 登录、Rust、作者 checkout 或手工 Python 环境。使用同一 `CODEX_HOME`，在作者仓库及插件目录之外建立可丢弃的临时项目。
+
+先检查历史安装，再安装；两端命令相同：
+
+```bash
+uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@internal/installer/1.0.0.1" ea-setup doctor --agent codex --json
+uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@internal/installer/1.0.0.1" ea-setup install --agent codex --json
+```
+
+`doctor` 未安装时不要求 `ready`；明确的历史安装或来源冲突须先按 [历史 2.x 清理步骤](#历史-2x-卸载与清理) 人工处理。缺少控制 CLI 时，`doctor` 不下载工具，检查可能未完成；若唯一缺项是兼容 CLI，`install` 会准备固定官方工具并重新检查。未知项不能当作已清理。
+
+安装返回 `needs_trust`、退出码 2 时，先在真实 Codex 宿主审查并信任 Hook，重开会话，再执行：
+
+```bash
+uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@internal/installer/1.0.0.1" ea-setup doctor --agent codex --hooks-trusted --json
+```
+
+只有实际完成宿主信任后才提供 `--hooks-trusted`；它不能替你点击信任。预期 `status=ready`、`runtime_ready=true`、`native_activation=enabled`、版本 `1.0.0.1`，并查看 Provider 隔离结果。原生 CLI 验收机还执行：
+
+```bash
+codex plugin list --json
+codex plugin marketplace list --json
+```
+
+确认 `engineering-assistant` 已从受控市场启用，平台版本为 `1.0.0+build.1`。App 和 CLI 必须分别在临时项目中完成以下实际操作：
+
+1. 请求“使用 engineering-assistant:repo-context 梳理当前临时项目”，确认加载的是已安装 skill。
+2. 请求“通过插件 Runtime 的 start 创建 task_id=installation-smoke 的实现任务；先只创建运行，返回 run_id、当前节点和状态文件位置”，确认实际调用 MCP，且临时项目中出现 `.run-artifacts/engineering-assistant/`。
+3. 关闭会话，重新打开 App 或 CLI，请求“通过 runs-list 找回 installation-smoke，再用 run-status 读取当前节点”，确认从持久化状态恢复。
+4. 实际触发并检查宿主生命周期 Hook，记录对应任务的反馈或使用观测；确认有效信号写入，正常无信号轮次不强行要求产生反馈文件。直接运行脚本或 `doctor --hooks-trusted` 不代替宿主事件。
+
+这些步骤是安装与恢复冒烟检查。更新、重复安装、修复、失败补偿、卸载及完整隔离场景仍按下一节验收，不能仅凭 `ready` 宣布两目标交付通过。更新、修复和卸载的完整命令见[用户安装目标](#用户安装目标)。
+
+### 两目标发行验收
+
+#### 无付费 CI 的候选准备
+
+维护者可在本地两种原生环境生成发行输入，不需要 GitHub Actions 的运行编号。先完成源码评审与提交，两台机器 checkout 同一 commit；未提交或未跟踪的源码不能生成发行记录。准备工具沿用上面的维护者要求，消费者无需这些编译工具。
+
+在一台机器生成一次批次文件，将这个文件原样复制到另一台机器；不要分别创建两个批次：
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts/validate_local.py init --output "$EA_CHECK_DIR/batch.json"
+```
+
+每台机器执行同一命令，输出目录必须不存在。脚本自动识别本机目标，执行完整单元与原生必需测试、作者源校验、eval、Codex/Hermes 构建、官方校验、Runtime/Hook/Provider 实际检查和隔离 wheel 验证，并复用已构建包；独立本机发布预演仍按前述命令执行。失败时不产生可用于发行的整组通过记录：
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts/validate_local.py run --origin "$EA_CHECK_DIR/batch.json" --output "$EA_CHECK_DIR/native"
+```
+
+将两个 `native` 目录分别收集到同一仓库外目录，命名为 `macos-arm64`、`windows-x64`。选择 macOS arm64 目录中实际生成的唯一 `.whl` 文件，在下面 `--wheel` 参数填写其完整路径：
+
+```bash
+uv run --isolated --no-project --python 3.13.13 --with-editable . python scripts/assemble_release.py --validation-origin "$EA_CHECK_DIR/batch.json" --macos-arm64 "$EA_CHECK_DIR/macos-arm64" --windows-x64 "$EA_CHECK_DIR/windows-x64" --wheel <实际生成的wheel完整路径> --output "$EA_CHECK_DIR/candidate"
+```
+
+这条组装命令是填写实际文件路径的维护者模板。两目标必须来自同一源码和同一批次，既有 CI 输入仍可使用原参数。候选固定标记 `local_artifacts_unattested` 和 `support_qualification.status=not_satisfied`：本地验证提供可追溯记录，不证明真实 App/CLI 已验收，也不会推送 tag、注册插件或发布 Release。
+
+#### 真实宿主验收
+
+维护者须准备 macOS 14+ arm64、真实 Windows 11 x64 两种环境，使用同一候选、源码 commit 和对应包；每个目标都完成已认证 App、原生 CLI 与 Provider 验收。Windows Server、模拟测试或在另一架构上构建包不能替代。
+
+App 与 CLI 各记录 21 项场景：首次安装、skill、MCP、Hook、持久化、重开恢复、更新、补偿、卸载、重复安装、修复、uv 升级、uv 移除、缓存清理、installer alias 推进、网络失败、鉴权失败、摘要错误、更新中断、准备失败保留旧版、中文及空格路径；Provider 另记录 11 项隔离与两个网络对照。还须实际验证 `1.0.0.1 → 1.0.0.2` BUILD 更新。
+
+当前没有一条命令能自动替代这些已认证宿主交互，`qualify_installation.py` 与本地验证脚本只证明它们实际执行的检查。验收证据和候选保存在仓库外，按 [内部发行与推广](#内部发行与推广) 的合同与 `prepare/activate` 命令处理；远程推广仍须独立明确授权。
+
 
 ## 作者本机发布入口
 

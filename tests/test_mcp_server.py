@@ -11,7 +11,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.mcp_server import (  # noqa: E402
+from engineering_assistant.runtime.mcp_server import (  # noqa: E402
     MAX_MCP_REQUEST_CHARS,
     MCPServer,
     RuntimeTools,
@@ -99,7 +99,7 @@ class MCPServerTests(unittest.TestCase):
         ping_message = {"jsonrpc": "2.0", "id": 2, "method": "ping", "params": {}}
 
         with patch(
-            "engineering_assistant.mcp_server.json.loads",
+            "engineering_assistant.runtime.mcp_server.json.loads",
             side_effect=[RecursionError("deep JSON"), ping_message],
         ):
             code = serve_stdio(
