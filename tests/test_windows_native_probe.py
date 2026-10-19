@@ -381,7 +381,7 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         self.assertFalse(probe._python_startup_control_ready(report))
 
     def test_pinned_python_source_recomputes_author_contract_build_receipt_and_download_metadata(self) -> None:
-        from engineering_assistant import installation as inst
+        from engineering_assistant.installer import installation as inst
         lock = inst.runtime_lock(ROOT, "codex", "windows-x64", "2.3.0.0-rc.1")[0]
         with tempfile.TemporaryDirectory() as temporary:
             artifact = Path(temporary).resolve() / lock["python_artifact_digest"]

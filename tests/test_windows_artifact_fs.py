@@ -18,9 +18,9 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs
-from engineering_assistant.validation import ValidationFailure
-from engineering_assistant.windows_artifact_fs import (
+from engineering_assistant.runtime.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs
+from engineering_assistant.runtime.validation import ValidationFailure
+from engineering_assistant.platforms.windows_artifact_fs import (
     _NameInformation,
     _decode_directory_names,
     _name_information,
@@ -90,7 +90,7 @@ class WindowsProtocolTests(unittest.TestCase):
                         GetSecurityDescriptorDacl=Mock(side_effect=constructed_dacl),
                         SetSecurityInfo=Mock(return_value=0)),
                     _kernel=SimpleNamespace(LocalFree=Mock(), CloseHandle=Mock()))
-                with patch("engineering_assistant.artifact_io.artifact_fs", filesystem):
+                with patch("engineering_assistant.runtime.artifact_io.artifact_fs", filesystem):
                     with self.assertRaisesRegex(RuntimeError, "probe failed"):
                         with NativeLauncherTests._windows_dacl(Path("."), broad=True):
                             raise RuntimeError("probe failed")
@@ -214,7 +214,7 @@ class WindowsProtocolTests(unittest.TestCase):
                                           open_osfhandle=Mock(return_value=7))
         windows_os = SimpleNamespace(**{name: getattr(os, name) for name in dir(os)})
         windows_os.O_BINARY = windows_os.O_NOINHERIT = 0
-        with patch("engineering_assistant.windows_artifact_fs.os", windows_os):
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os", windows_os):
             self.assertEqual(7, filesystem._reopen_directory(8))
         self.assertEqual(42, observed["volume"])
         self.assertEqual(789, observed["identity"])
@@ -285,9 +285,9 @@ class WindowsProtocolTests(unittest.TestCase):
             return 0
 
         filesystem._nt = SimpleNamespace(NtQueryInformationFile=query)
-        with patch("engineering_assistant.windows_artifact_fs.os.fstat",
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os.fstat",
                    return_value=SimpleNamespace(st_mode=0o100600)), patch(
-            "engineering_assistant.windows_artifact_fs.os.fsync",
+            "engineering_assistant.platforms.windows_artifact_fs.os.fsync",
             side_effect=PermissionError("Windows FlushFileBuffers requires data write access"),
         ) as sync:
             filesystem.fsync(8)
@@ -302,9 +302,9 @@ class WindowsProtocolTests(unittest.TestCase):
             return 0
 
         filesystem._nt = SimpleNamespace(NtQueryInformationFile=query)
-        with patch("engineering_assistant.windows_artifact_fs.os.fstat",
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os.fstat",
                    return_value=SimpleNamespace(st_mode=0o100600)), patch(
-            "engineering_assistant.windows_artifact_fs.os.fsync", side_effect=OSError("disk failed")
+            "engineering_assistant.platforms.windows_artifact_fs.os.fsync", side_effect=OSError("disk failed")
         ):
             with self.assertRaisesRegex(OSError, "disk failed"):
                 filesystem.fsync(8)
@@ -315,13 +315,13 @@ class WindowsProtocolTests(unittest.TestCase):
         filesystem._attributes = Mock(return_value=0)
         filesystem._handle = Mock(return_value=123)
         filesystem._set_information = Mock()
-        with patch("engineering_assistant.windows_artifact_fs.os.close"):
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os.close"):
             filesystem.link("staging.json", "value.json", src_dir_fd=3, dst_dir_fd=4)
         options = filesystem._native_open.call_args.kwargs
         self.assertTrue(options.get("metadata_only"))
         self.assertEqual(0x100, options.get("extra_access"))
-        with patch("engineering_assistant.windows_artifact_fs.os.close"), patch(
-            "engineering_assistant.windows_artifact_fs.os.fstat", return_value=SimpleNamespace(st_mode=0o100600)
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os.close"), patch(
+            "engineering_assistant.platforms.windows_artifact_fs.os.fstat", return_value=SimpleNamespace(st_mode=0o100600)
         ):
             filesystem.stat("value.json", dir_fd=4, follow_symlinks=False)
         self.assertTrue(filesystem._native_open.call_args.kwargs.get("metadata_only"))
@@ -352,7 +352,7 @@ class WindowsProtocolTests(unittest.TestCase):
         windows_os = SimpleNamespace(**{name: getattr(os, name) for name in dir(os)})
         windows_os.O_BINARY = 0
         windows_os.O_NOINHERIT = 0
-        with patch("engineering_assistant.windows_artifact_fs.os", windows_os):
+        with patch("engineering_assistant.platforms.windows_artifact_fs.os", windows_os):
             self.assertEqual(7, filesystem.open("payload.json", os.O_RDONLY, dir_fd=3))
             self.assertEqual(42, observed["root"])
             self.assertEqual("payload.json", observed["name"])

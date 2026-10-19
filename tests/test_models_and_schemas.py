@@ -13,8 +13,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.codec import feedback_event_from_dict  # noqa: E402
-from engineering_assistant.model import (  # noqa: E402
+from engineering_assistant.runtime.codec import feedback_event_from_dict  # noqa: E402
+from engineering_assistant.runtime.model import (  # noqa: E402
     CapabilityProviderSpec,
     CompletionCriterion,
     ContextPointer,
@@ -28,12 +28,12 @@ from engineering_assistant.model import (  # noqa: E402
     RouteIntent,
     SkillSpec,
 )
-from engineering_assistant.validation import (  # noqa: E402
+from engineering_assistant.runtime.validation import (  # noqa: E402
     ValidationFailure,
     load_json,
     validate_instance,
 )
-from engineering_assistant.version import (  # noqa: E402
+from engineering_assistant.runtime.version import (  # noqa: E402
     CANONICAL_VERSION,
     CanonicalVersion,
     platform_version,
@@ -42,7 +42,7 @@ from engineering_assistant.version import (  # noqa: E402
 
 class ModelAndSchemaTests(unittest.TestCase):
     def test_canary_plugin_root_accepts_portable_absolute_paths_with_every_backend(self) -> None:
-        from engineering_assistant import validation
+        from engineering_assistant.runtime import validation
 
         schema = json.loads((ROOT / "evals/canary/experiment-protocol.schema.json").read_text())
         root_schema = schema["properties"]["execution_config"]["properties"]["plugin_root"]
@@ -174,10 +174,10 @@ class ModelAndSchemaTests(unittest.TestCase):
             ),
         )
         with mock.patch(
-            "engineering_assistant.validation.Draft202012Validator",
+            "engineering_assistant.runtime.validation.Draft202012Validator",
             AcceptingValidator,
         ), mock.patch(
-            "engineering_assistant.validation.FormatChecker",
+            "engineering_assistant.runtime.validation.FormatChecker",
             lambda: None,
         ):
             for instance, schema, expected in cases:
@@ -200,7 +200,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             ("invalid-email", {"type": "string", "format": "email"}),
         )
         with mock.patch(
-            "engineering_assistant.validation.Draft202012Validator",
+            "engineering_assistant.runtime.validation.Draft202012Validator",
             None,
         ):
             for instance, schema in cases:
@@ -442,7 +442,7 @@ class ModelAndSchemaTests(unittest.TestCase):
             "minLength": 3,
         }
         with mock.patch(
-            "engineering_assistant.validation.Draft202012Validator", None
+            "engineering_assistant.runtime.validation.Draft202012Validator", None
         ):
             with self.assertRaises(ValidationFailure):
                 validate_instance("x", schema, "ref-sibling")

@@ -6,10 +6,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from engineering_assistant.mcp_server import RuntimeTools
-from engineering_assistant.engine import RuntimeEngine
-from engineering_assistant.codec import route_intent_from_dict
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.runtime.mcp_server import RuntimeTools
+from engineering_assistant.runtime.engine import RuntimeEngine
+from engineering_assistant.runtime.codec import route_intent_from_dict
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 def intent(**changes):

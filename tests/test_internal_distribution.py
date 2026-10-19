@@ -22,11 +22,11 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import internal_distribution as distribution
-from engineering_assistant.artifact_io import ArtifactIO
-from engineering_assistant.installation import runtime_lock, python_download_metadata
-from engineering_assistant.release_assets import NATIVE_SESSION_CHECKS, REQUIRED_PROVIDER_CHECKS, acceptance_summary
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer import internal_distribution as distribution
+from engineering_assistant.runtime.artifact_io import ArtifactIO
+from engineering_assistant.installer.installation import runtime_lock, python_download_metadata
+from engineering_assistant.tools.release_assets import NATIVE_SESSION_CHECKS, REQUIRED_PROVIDER_CHECKS, acceptance_summary
+from engineering_assistant.runtime.validation import ValidationFailure
 import test_release_assets as release_fixtures
 
 VERSION = "2.3.0.0-rc.1"
@@ -156,11 +156,11 @@ class InternalDistributionTests(unittest.TestCase):
         return repo
 
     def acquire(self, data, repository):
-        from engineering_assistant.installation import _read_control
+        from engineering_assistant.installer.installation import _read_control
         spec = {"repository_url": str(repository), "release_tag_prefix": "internal/codex/", "marketplace": "engineering-assistant"}
         with mock.patch.object(distribution, "internal_spec", return_value=spec), mock.patch.object(
             distribution, "installer_source_commit", return_value=SOURCE), mock.patch(
-            "engineering_assistant.installation._read_control", side_effect=lambda path:
+            "engineering_assistant.installer.installation._read_control", side_effect=lambda path:
                 {"version": VERSION} if Path(path).name == "public.json" else _read_control(path)):
             return distribution.acquire_internal_release(data, "macos-arm64")
 
@@ -202,7 +202,7 @@ class InternalDistributionTests(unittest.TestCase):
         self.assertEqual(self.index, index)
         self.assertEqual("macos-arm64", entry["target"])
         self.assertFalse((self.release / "evidence").exists())
-        self.summary["targets"][2]["provider"]["status"] = "not_run"
+        self.summary["targets"][-1]["provider"]["status"] = "not_run"
         write(self.release / "acceptance-summary.json", self.summary)
         with self.assertRaisesRegex(ValidationFailure, "Provider"):
             self.verify()
@@ -349,13 +349,13 @@ class InternalDistributionTests(unittest.TestCase):
             self.acquire(data, repository)
 
     def test_concurrent_fetch_publishes_one_complete_tree(self):
-        from engineering_assistant.installation import _read_control
+        from engineering_assistant.installer.installation import _read_control
         repository = self.git_release()
         spec = {"repository_url": str(repository), "release_tag_prefix": "internal/codex/", "marketplace": "engineering-assistant"}
         data = self.root / "并发 data"
         with mock.patch.object(distribution, "internal_spec", return_value=spec), mock.patch.object(
             distribution, "installer_source_commit", return_value=SOURCE), mock.patch(
-            "engineering_assistant.installation._read_control", side_effect=lambda path:
+            "engineering_assistant.installer.installation._read_control", side_effect=lambda path:
                 {"version": VERSION} if Path(path).name == "public.json" else _read_control(path)):
             with ThreadPoolExecutor(max_workers=2) as pool:
                 results = list(pool.map(lambda _: distribution.acquire_internal_release(data, "macos-arm64"), range(2)))
@@ -408,7 +408,7 @@ class InternalDistributionTests(unittest.TestCase):
             (storage_root / "foreign-marker").write_bytes(b"must survive")
             return ""
         with closing(ArtifactIO(storage_root, ".")) as storage, mock.patch(
-            "engineering_assistant.installation._command", side_effect=replace), self.assertRaises(ValidationFailure):
+            "engineering_assistant.installer.installation._command", side_effect=replace), self.assertRaises(ValidationFailure):
             distribution._fetch_ref(URL, TAG, storage_root, storage)
         self.assertEqual(1, len(calls))
         self.assertEqual(b"must survive", (storage_root / "foreign-marker").read_bytes())
@@ -433,7 +433,7 @@ class InternalDistributionTests(unittest.TestCase):
         storage_root = self.root / "transport"
         storage_root.mkdir()
         with closing(ArtifactIO(storage_root, ".")) as storage, mock.patch(
-            "engineering_assistant.installation._command", side_effect=RuntimeError("token=private credential")):
+            "engineering_assistant.installer.installation._command", side_effect=RuntimeError("token=private credential")):
             with self.assertRaises(ValidationFailure) as raised:
                 distribution._fetch_ref(URL, TAG, storage_root, storage)
         self.assertNotIn("private credential", str(raised.exception))

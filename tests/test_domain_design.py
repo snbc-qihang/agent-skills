@@ -12,12 +12,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_validation import validate_artifact_payload  # noqa: E402
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.design_sources import validate_design_source_registry  # noqa: E402
-from engineering_assistant.engine import RuntimeEngine  # noqa: E402
-from engineering_assistant.evidence import EvidenceStore  # noqa: E402
-from engineering_assistant.model import (  # noqa: E402
+from engineering_assistant.runtime.artifact_validation import validate_artifact_payload  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.runtime.design_sources import validate_design_source_registry  # noqa: E402
+from engineering_assistant.runtime.engine import RuntimeEngine  # noqa: E402
+from engineering_assistant.runtime.evidence import EvidenceStore  # noqa: E402
+from engineering_assistant.runtime.model import (  # noqa: E402
     CriterionResult,
     ApprovalRecord,
     EvidenceRef,
@@ -25,9 +25,9 @@ from engineering_assistant.model import (  # noqa: E402
     RouteIntent,
     StepResult,
 )
-from engineering_assistant.router import route_intent  # noqa: E402
-from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure, validate_instance  # noqa: E402
+from engineering_assistant.runtime.router import route_intent  # noqa: E402
+from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure, validate_instance  # noqa: E402
 
 
 class DomainDesignTests(unittest.TestCase):
@@ -113,7 +113,7 @@ class DomainDesignTests(unittest.TestCase):
 
     def test_registry_schema_accepts_only_declared_v2_fields(self) -> None:
         schema = json.loads((ROOT / "schemas" / "design-source-registry.schema.json").read_text())
-        from engineering_assistant import validation
+        from engineering_assistant.runtime import validation
 
         for backend in (validation.Draft202012Validator, None):
             with self.subTest(backend=backend), mock.patch.object(

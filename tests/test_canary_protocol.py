@@ -17,10 +17,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import canary_protocol  # noqa: E402
-from engineering_assistant.canary_protocol import audit_canary_protocol  # noqa: E402
-from engineering_assistant.cli import build_parser, command_canary_audit  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.tools import canary_protocol
+from engineering_assistant.tools.canary_protocol import audit_canary_protocol  # noqa: E402
+from engineering_assistant.cli import build_parser
+from engineering_assistant.tools.cli import command_canary_audit
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 def digest(payload: object) -> str:
@@ -2921,7 +2922,7 @@ class CanaryProtocolAuditTests(unittest.TestCase):
                 "local_structural",
                 json.loads(output.getvalue())["status"],
             )
-            with patch("engineering_assistant.cli.MAX_AUDIT_INPUT_FILE_BYTES", 1):
+            with patch("engineering_assistant.tools.cli.MAX_AUDIT_INPUT_FILE_BYTES", 1):
                 with self.assertRaisesRegex(ValidationFailure, "exceeds.*limit|size limit"):
                     command_canary_audit(args)
 

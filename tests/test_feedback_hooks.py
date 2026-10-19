@@ -14,7 +14,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.feedback import (  # noqa: E402
+from engineering_assistant.runtime.feedback import (  # noqa: E402
     FeedbackCollector,
     FeedbackStore,
     export_feedback_evolution,
@@ -22,18 +22,18 @@ from engineering_assistant.feedback import (  # noqa: E402
     summarize_feedback_events,
     summarize_usage_efficiency,
 )
-from engineering_assistant.claude_hook import run_claude_hook  # noqa: E402
-from engineering_assistant.model import (  # noqa: E402
+from engineering_assistant.platforms.claude_hook import run_claude_hook  # noqa: E402
+from engineering_assistant.runtime.model import (  # noqa: E402
     FeedbackDisposition,
     FeedbackEvent,
     UsageEfficiencyFeedback,
 )
-from engineering_assistant.validation import (  # noqa: E402
+from engineering_assistant.runtime.validation import (  # noqa: E402
     ValidationFailure,
     load_json,
     validate_instance,
 )
-from engineering_assistant.artifact_io import ArtifactConflict  # noqa: E402
+from engineering_assistant.runtime.artifact_io import ArtifactConflict  # noqa: E402
 
 
 class FeedbackHookTests(unittest.TestCase):
@@ -276,7 +276,7 @@ class FeedbackHookTests(unittest.TestCase):
     def test_feedback_summaries_stream_directories_without_listdir(self) -> None:
         self.collector.collect_codex(self.stop_payload("当前阻断。"))
         with patch(
-            "engineering_assistant.feedback.os.listdir",
+            "engineering_assistant.runtime.feedback.os.listdir",
             side_effect=AssertionError("summary must stream directory entries"),
         ):
             efficiency = summarize_usage_efficiency(self.project, ROOT / "schemas")
@@ -286,7 +286,7 @@ class FeedbackHookTests(unittest.TestCase):
         self.assertEqual(0, efficiency["candidate_count"])
 
     def test_feedback_summary_bounds_distinct_recurrence_keys(self) -> None:
-        from engineering_assistant.feedback import MAX_SUMMARY_RECURRENCE_KEYS
+        from engineering_assistant.runtime.feedback import MAX_SUMMARY_RECURRENCE_KEYS
 
         events = []
         for index in range(MAX_SUMMARY_RECURRENCE_KEYS + 3):
@@ -301,10 +301,10 @@ class FeedbackHookTests(unittest.TestCase):
                 }
             )
         with patch(
-            "engineering_assistant.feedback.FeedbackStore.iter_feedback_events",
+            "engineering_assistant.runtime.feedback.FeedbackStore.iter_feedback_events",
             return_value=iter(events),
         ), patch(
-            "engineering_assistant.feedback.ArtifactIO.read_json_limited",
+            "engineering_assistant.runtime.feedback.ArtifactIO.read_json_limited",
             side_effect=FileNotFoundError,
         ):
             summary = summarize_feedback_events(

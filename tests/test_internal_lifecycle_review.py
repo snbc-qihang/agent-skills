@@ -12,9 +12,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 import test_internal_installation as fixtures
-from engineering_assistant import internal_installation as managed
-from engineering_assistant.setup_cli import main
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer import internal_installation as managed
+from engineering_assistant.installer.setup_cli import main
+from engineering_assistant.runtime.validation import ValidationFailure
 
 SELECT_MARKET = managed._select_market
 

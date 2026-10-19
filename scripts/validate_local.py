@@ -14,19 +14,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactIO, artifact_fs
-from engineering_assistant.catalog import load_catalog
-from engineering_assistant.compiler import build_package, verify_package
-from engineering_assistant.eval_runner import run_evals
-from engineering_assistant.installation import PYTHON_VERSION, _protocol_run, _uv
-from engineering_assistant.native_launcher import host_target
-from engineering_assistant.official_validation import validate_with_official_tools
-from engineering_assistant.provider_runtime import ProviderExecutor
-from engineering_assistant.release_assets import (
+from engineering_assistant.runtime.artifact_io import ArtifactIO, artifact_fs
+from engineering_assistant.runtime.catalog import load_catalog
+from engineering_assistant.tools.compiler import build_package, verify_package
+from engineering_assistant.tools.eval_runner import run_evals
+from engineering_assistant.installer.installation import PYTHON_VERSION, _protocol_run, _uv
+from engineering_assistant.platforms.native_launcher import host_target
+from engineering_assistant.tools.official_validation import validate_with_official_tools
+from engineering_assistant.runtime.provider_runtime import ProviderExecutor
+from engineering_assistant.tools.release_assets import (
     INTERNAL_REPOSITORY, INTERNAL_TARGETS, _record, _safe_root,
     release_provenance, required_native_tests,
 )
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.runtime.validation import ValidationFailure
 from qualify_installation import qualify
 from verify_setup_wheel import _output_directory, _verify_wheel
 
@@ -106,7 +106,7 @@ def run(origin_path: Path, output: Path) -> dict:
         raise ValidationFailure("本地批次与当前源码 commit 不一致")
     target = host_target()
     if target not in INTERNAL_TARGETS or platform.python_version() != PYTHON_VERSION:
-        raise ValidationFailure("请在三个原生目标之一使用固定 Python " + PYTHON_VERSION)
+        raise ValidationFailure("请在两个原生目标之一使用固定 Python " + PYTHON_VERSION)
     parent = _output_directory(output)
     try:
         path, descriptor, identity = parent.create_directory_exclusive_open(output.name)
@@ -130,7 +130,7 @@ def run(origin_path: Path, output: Path) -> dict:
                 reports["official-validation.json"] = validate_with_official_tools(ROOT, output / "codex")
                 print("验证真实 Runtime、MCP、Hook、持久化与 Provider 隔离。", file=sys.stderr, flush=True)
                 with tempfile.TemporaryDirectory(prefix="ea-local-runtime-") as temporary:
-                    reports["runtime-qualification.json"] = qualify(Path(temporary).resolve(), ("codex",))
+                    reports["runtime-qualification.json"] = qualify(Path(temporary).resolve(), ("codex",), packages={"codex": output / "codex"})
                 storage.ensure_directory("setup")
                 print("构建并隔离安装 setup wheel。", file=sys.stderr, flush=True)
                 _protocol_run([str(_uv(None)), "build", "--wheel", "--out-dir", str(output / "setup"), str(ROOT)],
@@ -139,9 +139,6 @@ def run(origin_path: Path, output: Path) -> dict:
                 if len(wheels) != 1:
                     raise ValidationFailure("必须构建唯一 setup wheel")
                 reports["setup/wheel-verification.json"] = _verify_wheel(wheels[0])
-                print("执行 Codex 无副作用发布预演。", file=sys.stderr, flush=True)
-                _protocol_run([sys.executable, "scripts/publish_local.py", "--platform", "codex", "--dry-run"],
-                              cwd=ROOT, environment=dict(os.environ), timeout=600)
             finally:
                 if previous is None:
                     os.environ.pop("ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX", None)

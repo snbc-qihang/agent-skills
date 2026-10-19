@@ -12,20 +12,20 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.cli import build_parser  # noqa: E402
-from engineering_assistant.evidence import EvidenceStore  # noqa: E402
-from engineering_assistant.governance import (  # noqa: E402
+from engineering_assistant.runtime.evidence import EvidenceStore  # noqa: E402
+from engineering_assistant.runtime.governance import (  # noqa: E402
     InvestigationStore,
     QualityGate,
 )
-from engineering_assistant.model import (  # noqa: E402
+from engineering_assistant.runtime.model import (  # noqa: E402
     Finding,
     InvestigationDecisionRecord,
     InvestigationRequest,
     QualityDimension,
     QualitySnapshot,
 )
-from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class QualityAndInvestigationTests(unittest.TestCase):

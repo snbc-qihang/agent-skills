@@ -12,18 +12,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.engine import RuntimeEngine  # noqa: E402
-from engineering_assistant.evidence import EvidenceStore  # noqa: E402
-from engineering_assistant.model import (  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.runtime.engine import RuntimeEngine  # noqa: E402
+from engineering_assistant.runtime.evidence import EvidenceStore  # noqa: E402
+from engineering_assistant.runtime.model import (  # noqa: E402
     CriterionResult,
     EvidenceRef,
     RouteIntent,
     StepResult,
 )
-from engineering_assistant.router import ROUTES, route_intent  # noqa: E402
-from engineering_assistant.state_store import RevisionConflict, StateStore  # noqa: E402
-from engineering_assistant.validation import (  # noqa: E402
+from engineering_assistant.runtime.router import ROUTES, route_intent  # noqa: E402
+from engineering_assistant.runtime.state_store import RevisionConflict, StateStore  # noqa: E402
+from engineering_assistant.runtime.validation import (  # noqa: E402
     ValidationFailure,
     load_json,
     validate_instance,

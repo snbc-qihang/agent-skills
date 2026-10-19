@@ -14,9 +14,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.evidence import EvidenceStore  # noqa: E402
-from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.evidence import EvidenceStore  # noqa: E402
+from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class _WindowsLexicalPath(PureWindowsPath):
@@ -73,7 +73,7 @@ class EvidencePathTests(unittest.TestCase):
     def test_windows_drive_is_local_before_url_scheme_parsing(self) -> None:
         project = _WindowsLexicalPath(r"C:\project")
         store = EvidenceStore(SimpleNamespace(project_root=project))
-        with patch("engineering_assistant.evidence.Path", _WindowsLexicalPath):
+        with patch("engineering_assistant.runtime.evidence.Path", _WindowsLexicalPath):
             for uri in (r"C:\project\facts.txt", "C:/project/facts.txt"):
                 with self.subTest(uri=uri):
                     self.assertEqual(project / "facts.txt", store._local_path(uri))
@@ -84,7 +84,7 @@ class EvidencePathTests(unittest.TestCase):
     def test_windows_file_uri_removes_only_the_drive_prefix_slash(self) -> None:
         project = _WindowsLexicalPath(r"C:\project")
         store = EvidenceStore(SimpleNamespace(project_root=project))
-        with patch("engineering_assistant.evidence.Path", _WindowsLexicalPath):
+        with patch("engineering_assistant.runtime.evidence.Path", _WindowsLexicalPath):
             for uri in ("file:///C:/project/facts%20with%20space.txt", "file://localhost/C:/project/facts%20with%20space.txt"):
                 with self.subTest(uri=uri):
                     self.assertEqual(project / "facts with space.txt", store._local_path(uri))

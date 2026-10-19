@@ -12,8 +12,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.provider_runtime import ProviderExecutor  # noqa: E402
-from engineering_assistant.sandbox_probe import _exec_probe, qualify  # noqa: E402
+from engineering_assistant.runtime.provider_runtime import ProviderExecutor  # noqa: E402
+from engineering_assistant.runtime.sandbox_probe import _exec_probe, qualify  # noqa: E402
 
 
 class SandboxProbeTests(unittest.TestCase):
@@ -21,7 +21,7 @@ class SandboxProbeTests(unittest.TestCase):
         # API argument contract only, not actual Windows confinement evidence.
         executable = r"C:\private runtime\python.exe"
         arguments = [executable, "-I", "-S", "-c", 'print("argument with spaces")']
-        with patch("engineering_assistant.sandbox_probe.os.name", "nt"):
+        with patch("engineering_assistant.runtime.sandbox_probe.os.name", "nt"):
             source = _exec_probe(executable, arguments, "same_python_exec")
         with patch("os.execv", side_effect=PermissionError) as execute, redirect_stdout(io.StringIO()):
             exec(source, {})
@@ -30,7 +30,7 @@ class SandboxProbeTests(unittest.TestCase):
     def test_command_interpreter_exec_does_not_apply_crt_escaping(self) -> None:
         executable = r"C:\Windows\System32\cmd.exe"
         arguments = [executable, "/d", "/c", 'echo {"extra_exec":false}']
-        with patch("engineering_assistant.sandbox_probe.os.name", "nt"):
+        with patch("engineering_assistant.runtime.sandbox_probe.os.name", "nt"):
             source = _exec_probe(executable, arguments, "extra_exec", crt_arguments=False)
         with patch("os.execv", side_effect=PermissionError) as execute, redirect_stdout(io.StringIO()):
             exec(source, {})

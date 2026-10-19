@@ -17,8 +17,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
-from engineering_assistant.validation import ValidationFailure
-from engineering_assistant.artifact_io import ArtifactConflict
+from engineering_assistant.runtime.validation import ValidationFailure
+from engineering_assistant.runtime.artifact_io import ArtifactConflict
 
 
 def script(name):
@@ -47,7 +47,7 @@ class LocalValidationTests(unittest.TestCase):
 
     def test_source_identity_refuses_dirty_or_untracked_source(self):
         validation = script("validate_local")
-        for status in (" M src/engineering_assistant/version.py", "?? untracked.py"):
+        for status in (" M src/engineering_assistant/runtime/version.py", "?? untracked.py"):
             with mock.patch.object(validation, "_git", side_effect=["a" * 40, status]):
                 with self.assertRaisesRegex(ValidationFailure, "未提交"):
                     validation._source_identity()
@@ -145,7 +145,7 @@ class LocalValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary, \
                 mock.patch.object(qualification, "host_target", return_value="macos-arm64"), \
                 mock.patch.object(qualification, "build_package"), \
-                mock.patch.object(qualification, "verify_package", return_value={}), \
+                mock.patch.object(qualification, "verify_package", return_value={"platform": "codex", "target": "macos-arm64"}), \
                 mock.patch.object(qualification, "prepare_runtime"), \
                 mock.patch.object(qualification, "doctor", return_value={
                     "runtime_ready": True, "provider_ready": False, "checks": {"hook": "passed"}}):

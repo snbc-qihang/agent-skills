@@ -15,7 +15,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.eval_runner import (  # noqa: E402
+from engineering_assistant.tools.eval_runner import (  # noqa: E402
     _canary_metrics,
     _cell_signature,
     _load_canary_observations,
@@ -26,12 +26,10 @@ from engineering_assistant.eval_runner import (  # noqa: E402
     run_canary_result,
     run_evals,
 )
-from engineering_assistant.cli import (  # noqa: E402
-    build_parser,
-    command_canary_assemble,
-    command_canary_validate,
-)
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.cli import build_parser
+from engineering_assistant.tools.cli import command_canary_assemble
+from engineering_assistant.tools.cli import command_canary_validate
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 class EvalTests(unittest.TestCase):
@@ -279,20 +277,20 @@ class EvalTests(unittest.TestCase):
         artifacts = FakeArtifacts()
         bindings = self._delegation_bindings("workload-1", 1)
         metadata = self._closure_metadata(list(observations.values()))
-        with patch("engineering_assistant.eval_runner.validate_instance"), patch(
-            "engineering_assistant.eval_runner.validate_canary_measurements"
+        with patch("engineering_assistant.tools.eval_runner.validate_instance"), patch(
+            "engineering_assistant.tools.eval_runner.validate_canary_measurements"
         ) as measurement_validator, patch(
-            "engineering_assistant.eval_runner.validate_measurement_evidence_coverage"
+            "engineering_assistant.tools.eval_runner.validate_measurement_evidence_coverage"
         ), patch(
-            "engineering_assistant.eval_runner.validate_ablation_artifact_bindings",
+            "engineering_assistant.tools.eval_runner.validate_ablation_artifact_bindings",
             side_effect=lambda observation, _artifacts: self._promotion_projection(
                 observation
             ),
         ) as formal_validator, patch(
-            "engineering_assistant.eval_runner._derive_formal_closure_metadata",
+            "engineering_assistant.tools.eval_runner._derive_formal_closure_metadata",
             return_value=metadata,
         ), patch(
-            "engineering_assistant.eval_runner._validate_reused_ablation_observation_claims"
+            "engineering_assistant.tools.eval_runner._validate_reused_ablation_observation_claims"
         ) as reused_claim_validator:
             loaded = _load_canary_observations(
                 artifacts,
@@ -335,20 +333,20 @@ class EvalTests(unittest.TestCase):
             def read_bytes_limited(self, _limit, *parts):
                 return payloads[Path(*parts).as_posix()]
 
-        with patch("engineering_assistant.eval_runner.validate_instance"), patch(
-            "engineering_assistant.eval_runner.validate_canary_measurements"
+        with patch("engineering_assistant.tools.eval_runner.validate_instance"), patch(
+            "engineering_assistant.tools.eval_runner.validate_canary_measurements"
         ), patch(
-            "engineering_assistant.eval_runner.validate_measurement_evidence_coverage"
+            "engineering_assistant.tools.eval_runner.validate_measurement_evidence_coverage"
         ), patch(
-            "engineering_assistant.eval_runner.validate_ablation_artifact_bindings",
+            "engineering_assistant.tools.eval_runner.validate_ablation_artifact_bindings",
             side_effect=lambda observation, _artifacts: self._promotion_projection(
                 observation
             ),
         ) as formal_validator, patch(
-            "engineering_assistant.eval_runner._derive_formal_closure_metadata",
+            "engineering_assistant.tools.eval_runner._derive_formal_closure_metadata",
             return_value=metadata,
         ), patch(
-            "engineering_assistant.eval_runner._validate_delegation_observation_coverage"
+            "engineering_assistant.tools.eval_runner._validate_delegation_observation_coverage"
         ):
             _load_canary_observations(
                 FakeArtifacts(),
@@ -469,16 +467,16 @@ class EvalTests(unittest.TestCase):
                     "candidate.json": probe,
                 }
                 with patch(
-                    "engineering_assistant.eval_runner.validate_instance"
+                    "engineering_assistant.tools.eval_runner.validate_instance"
                 ), patch(
-                    "engineering_assistant.eval_runner.validate_canary_measurements"
+                    "engineering_assistant.tools.eval_runner.validate_canary_measurements"
                 ), patch(
-                    "engineering_assistant.eval_runner.validate_measurement_evidence_coverage"
+                    "engineering_assistant.tools.eval_runner.validate_measurement_evidence_coverage"
                 ), patch(
-                    "engineering_assistant.eval_runner.validate_ablation_artifact_bindings",
+                    "engineering_assistant.tools.eval_runner.validate_ablation_artifact_bindings",
                     return_value=self._promotion_projection(baseline),
                 ), patch(
-                    "engineering_assistant.eval_runner._derive_formal_closure_metadata",
+                    "engineering_assistant.tools.eval_runner._derive_formal_closure_metadata",
                     return_value=metadata,
                 ):
                     with self.assertRaisesRegex(
@@ -571,7 +569,7 @@ class EvalTests(unittest.TestCase):
                 output="canary-result.json",
             )
             with patch(
-                "engineering_assistant.cli.assemble_canary_result",
+                "engineering_assistant.tools.cli.assemble_canary_result",
                 side_effect=competing_writer,
             ):
                 with self.assertRaisesRegex(ValidationFailure, "already exists"):
@@ -587,18 +585,18 @@ class EvalTests(unittest.TestCase):
         )
         with redirect_stdout(io.StringIO()):
             with patch(
-                "engineering_assistant.cli.run_canary_result",
+                "engineering_assistant.tools.cli.run_canary_result",
                 return_value={"status": "failed", "quality_delta_points": -3},
             ):
                 self.assertEqual(2, command_canary_validate(args))
             with patch(
-                "engineering_assistant.cli.run_canary_result",
+                "engineering_assistant.tools.cli.run_canary_result",
                 return_value={"status": "passed"},
             ):
                 self.assertEqual(0, command_canary_validate(args))
 
     def test_canary_efficiency_and_quality_thresholds_cannot_be_soft_passed(self) -> None:
-        from engineering_assistant.eval_runner import canary_threshold_failures
+        from engineering_assistant.tools.eval_runner import canary_threshold_failures
 
         passing = {
             "quality_delta_points": -2,
@@ -838,7 +836,7 @@ class EvalTests(unittest.TestCase):
             self.assertAlmostEqual(0, assembled["wall_time_reduction_ratio"])
             self.assertAlmostEqual(0.27, assembled["cost_reduction_ratio"])
             with patch(
-                "engineering_assistant.canary_limits.MAX_TOTAL_ARTIFACTS",
+                "engineering_assistant.tools.canary_limits.MAX_TOTAL_ARTIFACTS",
                 9,
             ), self.assertRaisesRegex(ValidationFailure, "too many artifacts"):
                 assemble_canary_result(

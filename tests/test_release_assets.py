@@ -17,16 +17,16 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.installation import AGENTS, PYTHON_VERSION, TARGETS, python_download_metadata, runtime_lock
-from engineering_assistant.release_assets import REQUIRED_PROVIDER_CHECKS, assemble_release, required_native_tests
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer.installation import AGENTS, PYTHON_VERSION, TARGETS, python_download_metadata, runtime_lock
+from engineering_assistant.tools.release_assets import REQUIRED_PROVIDER_CHECKS, assemble_release, required_native_tests
+from engineering_assistant.runtime.validation import ValidationFailure
 
 VERSION = "2.3.0.0-rc.1"
 SOURCE_COMMIT = "a" * 40
 CI_IDENTITY = {"repository": "snbc-qihang/agent-skills", "run_id": "123", "run_attempt": 1}
 LOCAL_ORIGIN = {"kind": "local", "repository": "snbc-qihang/agent-skills",
                 "validation_id": "e05ad626-4354-477a-9222-a02562f0ead2", "assurance": "local_unattested"}
-INTERNAL_TARGETS = ("macos-arm64", "macos-x64", "windows-x64")
+INTERNAL_TARGETS = ("macos-arm64", "windows-x64")
 
 
 def sha(payload):
@@ -100,12 +100,22 @@ class ReleaseAssetTests(unittest.TestCase):
                 "ci_identity": CI_IDENTITY, "codex_payload_digest": results[0]["payload_digest"]})
         self.wheel = self.artifacts["linux-x64"] / "setup/engineering_assistant_kernel-2.3.0rc1-py3-none-any.whl"
         self.make_wheel()
-        patch = mock.patch("engineering_assistant.release_assets.verify_package", side_effect=fake_verify)
+        patch = mock.patch("engineering_assistant.tools.release_assets.verify_package", side_effect=fake_verify)
         self.verify = patch.start()
         self.addCleanup(patch.stop)
+        contract_patch = mock.patch("engineering_assistant.installer.release_contract.verify_package", side_effect=fake_verify)
+        contract_patch.start()
+        self.addCleanup(contract_patch.stop)
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_consumer_wheel_rejects_author_tools_and_evals(self):
+        for number, name in enumerate(("engineering_assistant/tools/unneeded.py", "engineering_assistant/_assets/evals/unneeded.json")):
+            with self.subTest(name=name):
+                self.make_wheel(extra_members={name: b"unneeded author payload"})
+                with self.assertRaisesRegex(ValidationFailure, "作者工具|评测"):
+                    self.assemble(output=self.root / ("extra-" + str(number)))
 
     def make_wheel(self, *, version=VERSION, metadata_version="2.3.0rc1", universal=True,
                    include_payload=True, omit=frozenset(), record_change=None, extra_members=None):
@@ -113,12 +123,14 @@ class ReleaseAssetTests(unittest.TestCase):
         files = {
             prefix + "METADATA": ("Metadata-Version: 2.1\nName: engineering-assistant-kernel\nVersion: " + metadata_version + "\n").encode(),
             prefix + "WHEEL": ("Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: " + ("py3-none-any" if universal else "cp313-cp313-win_amd64") + "\n").encode(),
-            prefix + "entry_points.txt": b"[console_scripts]\nea-setup = engineering_assistant.setup_cli:main\n",
+            prefix + "entry_points.txt": b"[console_scripts]\nea-setup = engineering_assistant.installer.setup_cli:main\n",
         }
         if include_payload:
             for path in (ROOT / "src/engineering_assistant").rglob("*.py"):
+                if "tools" in path.relative_to(ROOT / "src/engineering_assistant").parts:
+                    continue
                 files["engineering_assistant/" + path.relative_to(ROOT / "src/engineering_assistant").as_posix()] = path.read_bytes()
-            for directory in ("catalog", "skills", "packs", "schemas", "evals", "config"):
+            for directory in ("catalog", "skills", "packs", "schemas", "config"):
                 for path in (ROOT / directory).rglob("*"):
                     if path.is_file() and not any(part.startswith(".") for part in path.relative_to(ROOT).parts):
                         files["engineering_assistant/_assets/" + path.relative_to(ROOT).as_posix()] = path.read_bytes()
@@ -143,7 +155,7 @@ class ReleaseAssetTests(unittest.TestCase):
         write(self.wheel.parent / "wheel-verification.json", {"schema_version": "1", "status": "passed",
             "python_version": PYTHON_VERSION, "canonical_version": version,
             "wheel_filename": self.wheel.name, "wheel_digest": sha(self.wheel.read_bytes()), "wheel_version": metadata_version,
-            "checks": {name: "passed" for name in ("help", "doctor", "source_validation", "eval")},
+            "checks": {name: "passed" for name in ("help", "doctor", "source_validation", "runtime_protocol")},
             "source_commit": SOURCE_COMMIT, "ci_identity": CI_IDENTITY})
 
     def assemble(self, *, output=None, artifacts=None, wheel=None, agents=AGENTS, targets=TARGETS):
@@ -164,7 +176,7 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertEqual("ci_artifacts_unattested", index["assurance"])
         self.assertEqual("not_satisfied", index["support_qualification"]["status"])
         self.assertIn("windows11_native_host", index["support_qualification"]["missing"])
-        self.assertEqual(12, len(index["packages"]))
+        self.assertEqual(9, len(index["packages"]))
         self.assertEqual(self.wheel.read_bytes(), (output / index["setup"]["path"]).read_bytes())
         self.assertEqual(sha(self.wheel.read_bytes()), index["setup"]["sha256"])
         verification = index["setup"]["verification"]
@@ -172,7 +184,7 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertEqual("passed", verification["status"])
         self.assertEqual((self.wheel.parent / "wheel-verification.json").read_bytes(), (output / verification["path"]).read_bytes())
         self.assertEqual(index, json.loads((output / "release-index.json").read_text()))
-        self.assertEqual(24, self.verify.call_count)
+        self.assertEqual(18, self.verify.call_count)
         for entry in index["packages"]:
             archive_path = output / entry["archive"]["path"]
             self.assertEqual(sha(archive_path.read_bytes()), entry["archive"]["sha256"])
@@ -195,7 +207,7 @@ class ReleaseAssetTests(unittest.TestCase):
             if os.name != "nt":
                 self.assertTrue((package_tree / executable).stat().st_mode & 0o100)
 
-    def test_codex_three_target_release_does_not_require_linux_or_other_agents(self):
+    def test_codex_two_target_release_does_not_require_linux_or_other_agents(self):
         for target in INTERNAL_TARGETS:
             self.mutate(target, "runtime-qualification.json", lambda report: report.update(
                 results=[item for item in report["results"] if item["agent"] == "codex"]))
@@ -209,7 +221,7 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertEqual("2", index["schema_version"])
         self.assertEqual(["codex"], index["agents"])
         self.assertEqual(list(INTERNAL_TARGETS), index["targets"])
-        self.assertEqual(3, len(index["packages"]))
+        self.assertEqual(2, len(index["packages"]))
         self.assertEqual(SOURCE_COMMIT, index["source_commit"])
         self.assertEqual(CI_IDENTITY, index["ci_identity"])
         self.assertEqual("internal/codex/" + VERSION, index["release_tag"])
@@ -256,9 +268,9 @@ class ReleaseAssetTests(unittest.TestCase):
         return artifacts
 
     def test_local_validation_assembles_without_a_ci_run_but_keeps_host_acceptance_pending(self):
-        from engineering_assistant.artifact_io import ArtifactIO
-        from engineering_assistant.internal_promotion import _verify_candidate
-        from engineering_assistant.release_assets import validate_acceptance
+        from engineering_assistant.runtime.artifact_io import ArtifactIO
+        from engineering_assistant.tools.internal_promotion import _verify_candidate
+        from engineering_assistant.tools.release_assets import validate_acceptance
         artifacts = self.local_inputs()
         output = self.root / "local-candidate"
         index = assemble_release(artifacts, self.wheel, output, agents=("codex",), targets=INTERNAL_TARGETS,
@@ -292,7 +304,7 @@ class ReleaseAssetTests(unittest.TestCase):
             self.assertFalse((self.root / "candidate").exists())
 
     def test_validation_origin_requires_one_explicit_unattested_source(self):
-        from engineering_assistant.release_assets import release_provenance
+        from engineering_assistant.tools.release_assets import release_provenance
         for change in ({"validation_id": "123"}, {"repository": "other/repo"},
                        {"assurance": "verified"}, {"kind": "github"}):
             with self.assertRaises(ValidationFailure):
@@ -307,7 +319,7 @@ class ReleaseAssetTests(unittest.TestCase):
             self.assemble(artifacts={target: artifacts[target] for target in targets}, agents=("codex",), targets=targets)
 
     def test_formal_four_part_wheel_version_is_verified_without_a_prerelease(self):
-        from engineering_assistant.release_assets import _wheel_version
+        from engineering_assistant.tools.release_assets import _wheel_version
         self.make_wheel(version="1.0.0.1", metadata_version="1.0.0.1")
         self.assertEqual("1.0.0.1", _wheel_version(self.wheel.read_bytes(), "1.0.0.1"))
 
@@ -440,10 +452,10 @@ class ReleaseAssetTests(unittest.TestCase):
             self.assertFalse((self.root / "candidate").exists())
 
     def test_metadata_only_wheel_and_missing_installation_modules_or_resources_are_rejected(self):
-        from engineering_assistant.release_assets import _wheel_version
+        from engineering_assistant.tools.release_assets import _wheel_version
         variants = [{"include_payload": False}] + [{"omit": {name}} for name in (
-            "engineering_assistant/setup_cli.py", "engineering_assistant/installation.py",
-            "engineering_assistant/artifact_io.py", "engineering_assistant/adapters/codex.py",
+            "engineering_assistant/installer/setup_cli.py", "engineering_assistant/installer/installation.py",
+            "engineering_assistant/runtime/artifact_io.py", "engineering_assistant/platforms/adapters/codex.py",
             "engineering_assistant/_assets/config/runtime.json", "engineering_assistant/_assets/schemas/route-intent.schema.json")]
         for kwargs in variants:
             with self.subTest(kwargs=kwargs):
@@ -452,7 +464,7 @@ class ReleaseAssetTests(unittest.TestCase):
                     _wheel_version(self.wheel.read_bytes(), VERSION)
 
     def test_wheel_record_must_cover_all_members_with_valid_hashes_and_sizes(self):
-        from engineering_assistant.release_assets import _wheel_version
+        from engineering_assistant.tools.release_assets import _wheel_version
         def missing(rows):
             rows.pop(0)
         def duplicate(rows):
@@ -470,7 +482,7 @@ class ReleaseAssetTests(unittest.TestCase):
                     _wheel_version(self.wheel.read_bytes(), VERSION)
 
     def test_wheel_record_file_is_required(self):
-        from engineering_assistant.release_assets import _wheel_version
+        from engineering_assistant.tools.release_assets import _wheel_version
         self.make_wheel(omit={"engineering_assistant_kernel-2.3.0rc1.dist-info/RECORD"})
         with self.assertRaisesRegex(ValidationFailure, "RECORD"):
             _wheel_version(self.wheel.read_bytes(), VERSION)

@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.windows_process import run_bounded_windows  # noqa: E402
+from engineering_assistant.platforms.windows_process import run_bounded_windows  # noqa: E402
 
 
 @unittest.skipUnless(sys.platform == "win32", "native Windows Job Object integration")

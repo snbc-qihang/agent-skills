@@ -10,9 +10,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import artifact_fs
-from engineering_assistant.feedback import FeedbackStore
-from engineering_assistant.usage_observation import UsageObservationStore
+from engineering_assistant.runtime.artifact_io import artifact_fs
+from engineering_assistant.runtime.feedback import FeedbackStore
+from engineering_assistant.runtime.usage_observation import UsageObservationStore
 
 
 class _NoDirectoryFdOS:
@@ -46,8 +46,8 @@ class ArtifactCallerTests(unittest.TestCase):
             try:
                 store.artifacts.write_bytes_exclusive(b"{}", "efficiency-candidates", "bad.json")
                 store.artifacts.write_bytes_exclusive(b"{}", "events", "bad.json")
-                with patch("engineering_assistant.feedback.os", _NoDirectoryFdOS()), patch(
-                    "engineering_assistant.feedback.artifact_fs", artifact_fs, create=True
+                with patch("engineering_assistant.runtime.feedback.os", _NoDirectoryFdOS()), patch(
+                    "engineering_assistant.runtime.feedback.artifact_fs", artifact_fs, create=True
                 ):
                     self.assertEqual([None], list(store.iter_efficiency_candidates()))
                     self.assertEqual([None], list(store.iter_feedback_events()))
@@ -62,8 +62,8 @@ class ArtifactCallerTests(unittest.TestCase):
                     b"{}", "session-" + "0" * 16, "turn-" + "0" * 16 + ".json"
                 )
                 os.utime(path, (1, 1))
-                with patch("engineering_assistant.usage_observation.os", _NoDirectoryFdOS()), patch(
-                    "engineering_assistant.usage_observation.artifact_fs", artifact_fs, create=True
+                with patch("engineering_assistant.runtime.usage_observation.os", _NoDirectoryFdOS()), patch(
+                    "engineering_assistant.runtime.usage_observation.artifact_fs", artifact_fs, create=True
                 ):
                     self.assertEqual(1, store.prune_stale(now=200_000))
                 self.assertFalse(path.exists())

@@ -18,27 +18,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.compiler import build_package, verify_package
-from engineering_assistant.installation import (
+from engineering_assistant.tools.compiler import build_package, verify_package
+from engineering_assistant.installer.installation import (
     PYTHON_VERSION, _check_python_base, _package_lock, _protocol_run, doctor, host_target, prepare_runtime,
 )
-from engineering_assistant.validation import ValidationFailure
-from engineering_assistant.windows_process import run_bounded_windows
+from engineering_assistant.runtime.validation import ValidationFailure
+from engineering_assistant.platforms.windows_process import run_bounded_windows
 
 
-def qualify(base: Path, agents=("codex",)) -> dict:
-    from engineering_assistant.release_assets import release_scope
+def qualify(base: Path, agents=("codex",), *, packages=None) -> dict:
+    from engineering_assistant.tools.release_assets import release_scope
     target = host_target()
     if target == "unsupported":
         raise RuntimeError("this host is outside the supported native targets")
     agents, _ = release_scope(agents, (target,))
-    packages, data = base / "packages", base / "Runtime 数据"
-    packages.mkdir()
+    package_directory, data = base / "packages", base / "Runtime 数据"
+    package_directory.mkdir()
     results = []
     for agent in agents:
-        package = packages / agent
-        build_package(ROOT, agent, package, target=target)
+        package = package_directory / agent
+        if packages is None:
+            build_package(ROOT, agent, package, target=target)
+        else:
+            package = Path(packages[agent]).absolute()
         manifest = verify_package(package)
+        if manifest.get("platform") != agent or manifest.get("target") != target:
+            raise ValidationFailure("prebuilt package differs from the selected native agent/target")
         prepared = prepare_runtime(package, data_home=data, publish_default=False)
         result = doctor(agent, package=package, data_home=data)
         if (result.get("runtime_ready") is not True or result.get("provider_ready") is not True

@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.artifact_io import ArtifactIO
-from engineering_assistant.installation import PYTHON_VERSION, _protocol_run, _uv
+from engineering_assistant.runtime.artifact_io import ArtifactIO
+from engineering_assistant.installer.installation import PYTHON_VERSION, _protocol_run, _uv
 
 
 def _output_directory(output: Path) -> ArtifactIO:
@@ -98,14 +98,25 @@ def _verify_wheel(wheel: Path) -> dict:
                                   cwd=root, environment=environment, expected_exit_code=2)
         if json.loads(diagnosed).get("status") != "unsupported":
             raise ValueError("wheel doctor did not report unsupported without mutation")
-        _protocol_run([str(python), "-I", "-m", "engineering_assistant.cli", "validate", "--require-sources"],
-                      cwd=root, environment=environment)
-        _protocol_run([str(python), "-I", "-m", "engineering_assistant.cli", "eval"],
-                      cwd=root, environment=environment)
+        _protocol_run([str(python), "-I", "-c",
+            "from engineering_assistant.runtime.catalog import load_catalog; load_catalog(require_sources=True)"],
+            cwd=root, environment=environment)
+        probe = """import importlib.util
+from engineering_assistant.runtime.mcp_server import RuntimeTools
+assert importlib.util.find_spec('engineering_assistant.tools') is None
+tools = RuntimeTools()
+base = dict(task_kind='review', requested_outcome='wheel contract', scope=['fixture'],
+            risk_signals=['security'], requested_external_actions=[], confirmed_actions=[],
+            confidence=.99, evidence=['explicit user instruction'])
+for readonly, expected in ((True, 'proceed'), (False, 'confirm')):
+    result = tools.call('engineering_assistant_route', {'intent': dict(base, read_only=readonly)})
+    assert result['decision']['decision'] == expected, result
+"""
+        _protocol_run([str(python), "-I", "-c", probe], cwd=root, environment=environment)
     report = {"schema_version": "1", "status": "passed", "python_version": PYTHON_VERSION,
               "canonical_version": canonical, "wheel_filename": wheel.name,
               "wheel_digest": "sha256:" + hashlib.sha256(payload).hexdigest(), "wheel_version": metadata["Version"],
-              "checks": {"help": "passed", "doctor": "passed", "source_validation": "passed", "eval": "passed"}}
+              "checks": {"help": "passed", "doctor": "passed", "source_validation": "passed", "runtime_protocol": "passed"}}
     return report
 
 

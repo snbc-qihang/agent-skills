@@ -17,12 +17,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.compiler import build_package, verify_package  # noqa: E402
-import engineering_assistant.compiler as compiler_module  # noqa: E402
-from engineering_assistant.artifact_io import ArtifactIO, artifact_fs  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.version import platform_version  # noqa: E402
+from engineering_assistant.tools.compiler import build_package, verify_package  # noqa: E402
+import engineering_assistant.tools.compiler as compiler_module  # noqa: E402
+from engineering_assistant.runtime.artifact_io import ArtifactIO, artifact_fs  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.runtime.version import platform_version  # noqa: E402
 
 
 def reseal_package_fixture(package: Path) -> dict:
@@ -39,7 +39,7 @@ def reseal_package_fixture(package: Path) -> dict:
 
 def native_v1_fixture(package: Path, *, cachebuster: str | None = None) -> dict:
     """Full native 2.0/v1 contract with a real host binary, never qualification."""
-    from engineering_assistant.installation import environment_key
+    from engineering_assistant.installer.installation import environment_key
     build_package(ROOT, "codex", package, codex_cachebuster=cachebuster)
     path = package / "package-manifest.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -58,7 +58,7 @@ def native_v1_fixture(package: Path, *, cachebuster: str | None = None) -> dict:
 
 class CompilerAdapterTests(unittest.TestCase):
     def test_native_v1_package_keeps_strict_verification_but_is_not_preparable_as_v2(self):
-        from engineering_assistant.installation import _package_lock
+        from engineering_assistant.installer.installation import _package_lock
         package = self.root / "legacy-native-v1"
         expected = native_v1_fixture(package)
         self.assertEqual("2.0", expected["build_format_version"])
@@ -142,7 +142,7 @@ class CompilerAdapterTests(unittest.TestCase):
         lock["schema_version"] = "1"
         (core / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
         data = self.root / "launcher-unit-data"
-        from engineering_assistant.installation import _normalize_new_windows_environment, _storage
+        from engineering_assistant.installer.installation import _normalize_new_windows_environment, _storage
         storage = _storage(data)
         try:
             environment = data / "environments/launcher-unit-python"
@@ -170,7 +170,7 @@ class CompilerAdapterTests(unittest.TestCase):
         repository.mkdir()
 
         with mock.patch(
-            "engineering_assistant.compiler.load_catalog",
+            "engineering_assistant.tools.compiler.load_catalog",
             return_value=object(),
         ), self.assertRaisesRegex(ValidationFailure, "outside"):
             build_package(repository, "codex", self.root, replace=True)
@@ -372,7 +372,7 @@ class CompilerAdapterTests(unittest.TestCase):
             )
             command = groups[0]["hooks"][0]["command"]
             self.assertEqual('"${PLUGIN_ROOT}/engineering-assistant/bin/ea" hook', command)
-            from engineering_assistant.adapters.codex import windows_hook_command
+            from engineering_assistant.platforms.adapters.codex import windows_hook_command
             self.assertEqual(windows_hook_command(), groups[0]["hooks"][0]["commandWindows"])
         for event_name in ("UserPromptSubmit", "Stop"):
             self.assertNotIn("matcher", hooks["hooks"][event_name][0])
@@ -391,7 +391,7 @@ class CompilerAdapterTests(unittest.TestCase):
         hook_source = (codex / "hooks/feedback_capture.py").read_text(encoding="utf-8")
         self.assertLess(
             hook_source.index("read_gate_input"),
-            hook_source.index("engineering_assistant.feedback"),
+            hook_source.index("engineering_assistant.runtime.feedback"),
         )
 
         hook_project = self.root / "codex-hook-project"
@@ -706,11 +706,11 @@ class CompilerAdapterTests(unittest.TestCase):
         hook = codex / "hooks/feedback_capture.py"
         gate = (
             codex
-            / "engineering-assistant/runtime/engineering_assistant/hook_gate.py"
+            / "engineering-assistant/runtime/engineering_assistant/runtime/hook_gate.py"
         )
         feedback = (
             codex
-            / "engineering-assistant/runtime/engineering_assistant/feedback.py"
+            / "engineering-assistant/runtime/engineering_assistant/runtime/feedback.py"
         )
         payload = {
             "session_id": "fail-open-session",
@@ -921,7 +921,7 @@ class CompilerAdapterTests(unittest.TestCase):
         build_package(ROOT, "hermes", hermes)
         feedback = (
             hermes
-            / "engineering-assistant/runtime/engineering_assistant/feedback.py"
+            / "engineering-assistant/runtime/engineering_assistant/runtime/feedback.py"
         )
         feedback.write_text("raise RuntimeError('broken hook runtime')\n", encoding="utf-8")
         script = """
@@ -986,29 +986,23 @@ print(json.dumps({'tools': len(context.tools), 'hooks': context.hooks, 'skills':
             self.assertTrue((output / relative).is_file())
             self.assertIn(relative, build_manifest["payload_files"])
 
-    def test_compiled_runtime_validates_and_runs_real_evals(self) -> None:
+    def test_compiled_runtime_routes_and_serves_mcp_without_author_tools(self) -> None:
         output = self.root / "runtime-smoke"
         build_package(ROOT, "codex", output)
         launcher, native_environment = self.native_runtime_fixture(output)
-        validate = subprocess.run(
-            [str(launcher), "validate", "--require-sources"],
-            text=True,
-            capture_output=True,
-            check=False,
-            env=native_environment,
-        )
-        self.assertEqual(0, validate.returncode, validate.stdout + validate.stderr)
-        evaluate = subprocess.run(
-            [str(launcher), "eval"],
-            text=True,
-            capture_output=True,
-            check=False,
-            env=native_environment,
-        )
-        self.assertEqual(0, evaluate.returncode, evaluate.stdout + evaluate.stderr)
-        report = json.loads(evaluate.stdout)
-        self.assertFalse(report["simulation"])
-        self.assertGreaterEqual(report["routing"]["case_count"], 100)
+        runtime = output / "engineering-assistant"
+        self.assertFalse((runtime / "evals").exists())
+        self.assertFalse((runtime / "runtime/engineering_assistant/tools").exists())
+        self.assertFalse((runtime / "runtime/engineering_assistant/installer").exists())
+        intent = dict(task_kind="review", requested_outcome="只读评审", scope=["fixture"],
+                      risk_signals=["security"], requested_external_actions=[], confirmed_actions=[],
+                      confidence=.99, evidence=["明确只读"], read_only=True)
+        for read_only, decision in ((True, "proceed"), (False, "confirm")):
+            routed = subprocess.run([str(launcher), "route", "--intent", "-"],
+                input=json.dumps({**intent, "read_only": read_only}), text=True,
+                capture_output=True, check=False, env=native_environment)
+            self.assertEqual(0, routed.returncode, routed.stdout + routed.stderr)
+            self.assertEqual(decision, json.loads(routed.stdout)["decision"]["decision"])
 
         messages = "\n".join(
             json.dumps(message)

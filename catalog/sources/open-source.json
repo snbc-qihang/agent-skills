@@ -27,7 +27,7 @@
       "decision": "fuse",
       "rationale": "作为公开 Skill 结构、渐进加载和官方校验基线；只融合规范与 Apache-2.0 示例模式，不复制 source-available 文档能力。",
       "evidence_paths": ["README.md", "spec/agent-skills-spec.md", "template/SKILL.md", "skills/skill-creator/SKILL.md"],
-      "target_refs": ["skills", "src/engineering_assistant/official_validation.py"],
+      "target_refs": ["skills", "src/engineering_assistant/tools/official_validation.py"],
       "provider_id": null
     },
     {
@@ -69,7 +69,7 @@
       "decision": "fuse",
       "rationale": "融合产品研发全周期、代码简化、性能测量、质量评审与可观测性检查原则，并由本仓库 Runtime 证据合同约束。",
       "evidence_paths": ["skills/code-simplification/SKILL.md", "skills/performance-optimization/SKILL.md", "skills/code-review-and-quality/SKILL.md", "references/definition-of-done.md"],
-      "target_refs": ["skills/codebase-design", "skills/code-review", "packs/quality-evidence.md", "src/engineering_assistant/governance.py"],
+      "target_refs": ["skills/codebase-design", "skills/code-review", "packs/quality-evidence.md", "src/engineering_assistant/runtime/governance.py"],
       "provider_id": null
     },
     {
@@ -108,7 +108,7 @@
       "decision": "external_provider",
       "rationale": "保留大规模 UI/UX 检索数据和搜索脚本为固定摘要的可选外部 Provider；输出仅是不可信建议，失败时回退原生能力。",
       "evidence_paths": ["LICENSE", "src/ui-ux-pro-max/scripts/search.py", "src/ui-ux-pro-max/templates/base/skill-content.md"],
-      "target_refs": ["catalog/providers/core.json", "src/engineering_assistant/provider_runtime.py"],
+      "target_refs": ["catalog/providers/core.json", "src/engineering_assistant/runtime/provider_runtime.py"],
       "provider_id": "ui-ux-pro-max"
     },
     {

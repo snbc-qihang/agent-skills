@@ -14,9 +14,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import installation as inst
-from engineering_assistant.artifact_io import ArtifactIO
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.installer import installation as inst
+from engineering_assistant.runtime.artifact_io import ArtifactIO
+from engineering_assistant.runtime.validation import ValidationFailure
 
 
 class PythonArtifactLockTests(unittest.TestCase):

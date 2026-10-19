@@ -22,13 +22,13 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant import provider_sandbox_windows as windows  # noqa: E402
-from engineering_assistant.artifact_io import ArtifactIO  # noqa: E402
-from engineering_assistant.catalog import load_catalog  # noqa: E402
-from engineering_assistant.installation import (  # noqa: E402
+from engineering_assistant.platforms import provider_sandbox_windows as windows
+from engineering_assistant.runtime.artifact_io import ArtifactIO  # noqa: E402
+from engineering_assistant.runtime.catalog import load_catalog  # noqa: E402
+from engineering_assistant.installer.installation import (  # noqa: E402
     MAX_CONTROL_BYTES, _check_python_base, python_download_metadata, runtime_lock,
 )
-from engineering_assistant.windows_process import run_bounded_windows  # noqa: E402
+from engineering_assistant.platforms.windows_process import run_bounded_windows  # noqa: E402
 
 
 CRT_MODULES = tuple("api-ms-win-crt-" + name + "-l1-1-0.dll" for name in (

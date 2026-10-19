@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.validation import ValidationFailure
+from engineering_assistant.runtime.validation import ValidationFailure
 
 spec = importlib.util.spec_from_file_location("verify_setup_wheel", ROOT / "scripts/verify_setup_wheel.py")
 verification = importlib.util.module_from_spec(spec)
@@ -129,7 +129,7 @@ class SetupWheelTests(unittest.TestCase):
                                       "wheel_filename", "wheel_digest", "wheel_version", "checks"})
         self.assertEqual(report["wheel_digest"], "sha256:" + hashlib.sha256(self.wheel.read_bytes()).hexdigest())
         self.assertEqual(report["checks"], {"help": "passed", "doctor": "passed",
-                                           "source_validation": "passed", "eval": "passed"})
+                                           "source_validation": "passed", "runtime_protocol": "passed"})
         commands = [call.args[0] for call in self.protocol.call_args_list]
         self.assertEqual(len(commands), 8)
         self.assertEqual(self.protocol.call_args_list[5].kwargs["expected_exit_code"], 2)

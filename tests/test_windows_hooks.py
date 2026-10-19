@@ -23,9 +23,9 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.adapters.codex import CodexAdapter
-from engineering_assistant.catalog import load_catalog
-from engineering_assistant.native_launcher import build_launcher, host_target
+from engineering_assistant.platforms.adapters.codex import CodexAdapter
+from engineering_assistant.runtime.catalog import load_catalog
+from engineering_assistant.platforms.native_launcher import build_launcher, host_target
 
 
 def manifest_command(root: Path) -> str:
@@ -61,7 +61,7 @@ class WindowsHookManifestTests(unittest.TestCase):
     def test_new_fixture_directory_keeps_inherited_private_acl(self) -> None:
         filesystem = SimpleNamespace(open=Mock(return_value=7), O_DIRECTORY=0x4000,
             set_private_owner=Mock(), assert_private_directory=Mock(), fchmod=Mock(), close=Mock())
-        with patch("engineering_assistant.artifact_io.artifact_fs", filesystem), patch.object(os, "close"):
+        with patch("engineering_assistant.runtime.artifact_io.artifact_fs", filesystem), patch.object(os, "close"):
             WindowsHookExecutionTests.private(Path("private runtime"), directory=True)
         filesystem.set_private_owner.assert_called_once_with(7)
         filesystem.fchmod.assert_not_called()
@@ -91,7 +91,7 @@ class WindowsHookExecutionTests(unittest.TestCase):
         cls.binary = build_launcher(ROOT, host_target())
         cls.runtime_fixture = tempfile.TemporaryDirectory(prefix="ea hook interpreter ")
         cls.addClassCleanup(cls.runtime_fixture.cleanup)
-        from engineering_assistant.installation import _storage
+        from engineering_assistant.installer.installation import _storage
         storage = _storage(Path(cls.runtime_fixture.name) / "private Runtime")
         try:
             cls.environment = storage.ensure_directory("中文 Python environment")
@@ -106,7 +106,7 @@ class WindowsHookExecutionTests(unittest.TestCase):
 
     @staticmethod
     def private(path: Path, *, directory: bool, executable: bool = False) -> None:
-        from engineering_assistant.artifact_io import artifact_fs
+        from engineering_assistant.runtime.artifact_io import artifact_fs
 
         descriptor = artifact_fs.open(str(path), os.O_RDONLY | (artifact_fs.O_DIRECTORY if directory else 0))
         try:
@@ -145,7 +145,7 @@ class WindowsHookExecutionTests(unittest.TestCase):
                 "canonical_version": load_catalog(ROOT).version, "environment_key": key}
         (runtime / "runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
         binding = self.data / "bindings/codex" / (key + ".json")
-        from engineering_assistant.installation import _storage
+        from engineering_assistant.installer.installation import _storage
         storage = _storage(self.data)
         try:
             storage.create_immutable_json({"schema_version": "1", "agent": "codex", "target": "windows-x64",
@@ -235,7 +235,7 @@ class WindowsHookExecutionTests(unittest.TestCase):
                 self.assertEqual("needs_preparation", json.loads(result.stderr)["status"])
 
     def test_bridge_timeout_terminates_runtime_descendants(self) -> None:
-        from engineering_assistant.windows_process import run_bounded_windows
+        from engineering_assistant.platforms.windows_process import run_bounded_windows
 
         sentinel = self.base / "子进程 survived"
         child_code = "import pathlib,sys,time; time.sleep(60); pathlib.Path(sys.argv[1]).write_text('survived')"

@@ -12,9 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.mcp_server import RuntimeTools  # noqa: E402
-from engineering_assistant.state_store import StateStore  # noqa: E402
-from engineering_assistant.validation import ValidationFailure  # noqa: E402
+from engineering_assistant.runtime.mcp_server import RuntimeTools  # noqa: E402
+from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
+from engineering_assistant.runtime.validation import ValidationFailure  # noqa: E402
 
 
 def intent(task_kind: str, *, actions: list[str] | None = None) -> dict:

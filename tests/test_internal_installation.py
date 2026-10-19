@@ -21,8 +21,8 @@ CLEAN_LEGACY = {"legacy_installation_detected": False, "legacy_check_complete": 
 
 class InternalEntryTests(unittest.TestCase):
     def test_codex_install_without_source_uses_the_internal_distribution(self):
-        from engineering_assistant.setup_cli import main
-        with mock.patch("engineering_assistant.setup_cli.install_internal_codex", create=True,
+        from engineering_assistant.installer.setup_cli import main
+        with mock.patch("engineering_assistant.installer.setup_cli.install_internal_codex", create=True,
                         return_value={"status": "ready", "ready": True}) as install, \
                 redirect_stdout(io.StringIO()) as output:
             code = main(["install", "--agent", "codex", "--json"])
@@ -31,10 +31,10 @@ class InternalEntryTests(unittest.TestCase):
         self.assertEqual("ready", json.loads(output.getvalue())["status"])
 
     def test_default_output_explains_pending_hook_trust_in_chinese(self):
-        from engineering_assistant.setup_cli import main
+        from engineering_assistant.installer.setup_cli import main
         result = {"status": "needs_trust", "ready": False, "runtime_ready": True}
-        with mock.patch("engineering_assistant.setup_cli.doctor", return_value=result), \
-                mock.patch("engineering_assistant.setup_cli.inspect_legacy_codex", return_value=CLEAN_LEGACY), \
+        with mock.patch("engineering_assistant.installer.setup_cli.doctor", return_value=result), \
+                mock.patch("engineering_assistant.installer.setup_cli.inspect_legacy_codex", return_value=CLEAN_LEGACY), \
                 redirect_stdout(io.StringIO()) as output:
             code = main(["doctor", "--agent", "codex"])
         self.assertEqual(2, code)
@@ -42,12 +42,12 @@ class InternalEntryTests(unittest.TestCase):
         self.assertNotIn('"status"', output.getvalue())
 
     def test_doctor_without_control_cli_reports_preparation_without_writes(self):
-        from engineering_assistant.setup_cli import main
+        from engineering_assistant.installer.setup_cli import main
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             data = root / "not-created"
-            with mock.patch("engineering_assistant.installation.host_target", return_value="macos-arm64"), \
-                    mock.patch("engineering_assistant.codex_control._candidates", return_value=[]), \
+            with mock.patch("engineering_assistant.installer.installation.host_target", return_value="macos-arm64"), \
+                    mock.patch("engineering_assistant.platforms.codex_control._candidates", return_value=[]), \
                     mock.patch.dict("os.environ", {"CODEX_CLI": ""}), redirect_stdout(io.StringIO()) as output:
                 code = main(["doctor", "--agent", "codex", "--agent-home", str(root),
                              "--data-home", str(data), "--json"])
@@ -62,7 +62,7 @@ class ManagedInstallationTests(unittest.TestCase):
     """Real artifact transactions with a controlled native CLI boundary."""
 
     def setUp(self):
-        from engineering_assistant import internal_installation as managed
+        from engineering_assistant.installer import internal_installation as managed
         self.managed = managed
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -97,8 +97,8 @@ class ManagedInstallationTests(unittest.TestCase):
         return json.loads((Path(path) / "test-package.json").read_text())
 
     def release(self, version):
-        from engineering_assistant.artifact_io import ArtifactIO
-        from engineering_assistant.internal_distribution import _tree_digest
+        from engineering_assistant.runtime.artifact_io import ArtifactIO
+        from engineering_assistant.installer.internal_distribution import _tree_digest
         source = self.root / version
         package = source / "plugins/engineering-assistant"
         package.mkdir(parents=True)

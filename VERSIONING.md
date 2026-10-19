@@ -36,7 +36,7 @@ SemVer 的构建元数据不参与优先级比较。安装器依据 canonical ve
 ## 交付资格
 
 - 预发布版本可以通过本机发布脚本进行验证；正式编号允许执行无副作用预演，但当前本机策略禁止实际发布正式版。
-- 正式内部交付只通过受控 `internal/codex/<版本>` 路径，必须通过完整仓库门禁及 macOS arm64/x64、真实 Windows 11 x64 的 App、CLI、Provider 验收，并在入口启用前验证实际私有 HTTPS 固定命令。
+- 正式内部交付只通过受控 `internal/codex/<版本>` 路径，必须通过完整仓库门禁及 macOS arm64、真实 Windows 11 x64 的 App、CLI、Provider 验收，并在入口启用前验证实际公开仓库 HTTPS 固定命令。
 - 内部交付资格不等于产品稳定版或收益资格。公开稳定版和产品稳定版晋级仍须全部仓库门禁、真实产品 Canary 及人工审查，不接受 simulation 替代。
 - 版本变更必须同步更新 catalog、公开 skills、profile、本机发布策略和相关测试。
 - 不通过递增版本号解决缓存问题；Codex 本机更新使用 cachebuster。
