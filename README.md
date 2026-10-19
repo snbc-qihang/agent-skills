@@ -7,7 +7,7 @@
 - Mac Intel 不在支持范围。Hermes、Claude Code、Linux 共享源码保留回归。
 - 开发者：`sunliming625@gmail.com`。
 
-**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.2/README.md)，其中提供固定候选的一条安装命令。候选供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广；下面普通用户命令是正式推广后的教程。
+**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.3/README.md)，其中提供固定候选的一条安装命令。候选供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广；下面普通用户命令是正式推广后的教程。
 
 ## 普通用户：安装与更新
 

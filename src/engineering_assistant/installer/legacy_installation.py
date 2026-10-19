@@ -267,6 +267,17 @@ def inspect_legacy_codex(home: Path | str, data: Path | str) -> dict:
         scope.append({"kind": "runtime_data", "path": str(root)})
         bindings = [root / "bindings/codex.json", *children(root / "bindings/codex")]
         for path in bindings:
+            if path.name == ".artifact.lock" and safe(path):
+                try:
+                    storage = ArtifactIO(path.parent, ".")
+                    try:
+                        # Windows byte-range locking initializes one zero digit.
+                        if storage.read_bytes_limited(1, path.name) in (b"", b"0"):
+                            continue
+                    finally:
+                        storage.close()
+                except (OSError, ValidationFailure):
+                    problem("invalid_metadata", path, "无法核对内部锁文件")
             if path.suffix != ".json":
                 problem("binding_metadata", path, "绑定目录含未知项；需人工核对")
                 continue
