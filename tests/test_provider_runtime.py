@@ -68,6 +68,28 @@ class ProviderRuntimeTests(unittest.TestCase):
             density=8,
         )
 
+    def test_provider_uses_the_host_temporary_directory_and_cleans_its_snapshot(self) -> None:
+        temporary_parent = Path(self.temporary.name) / "临时工作 目录"
+        temporary_parent.mkdir()
+        snapshots = []
+
+        def execute(_provider, _invocation, bundle, work, _denied):
+            snapshots.append(bundle.parent)
+            self.assertEqual(temporary_parent.resolve(), bundle.parent.parent.resolve())
+            self.assertEqual(bundle.parent, work.parent)
+            self.assertEqual(b"name,value\nminimal,1\n", (bundle / "data/styles.csv").read_bytes())
+            if os.name != "nt":
+                self.assertEqual(0o700, bundle.parent.stat().st_mode & 0o777)
+            return "## Design System: temporary snapshot"
+
+        with patch("engineering_assistant.runtime.provider_runtime.tempfile.tempdir", str(temporary_parent)), patch.object(
+            self.executor, "_run_ui_ux_pro_max", side_effect=execute,
+        ):
+            result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("completed", result.status, result.warning)
+        self.assertEqual(1, len(snapshots))
+        self.assertFalse(snapshots[0].exists())
+
     def test_pinned_bundle_executes_without_shell_network_env_or_persist(self) -> None:
         real_popen = subprocess.Popen
         calls = []
@@ -392,7 +414,7 @@ class ProviderRuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(sys.platform == "darwin", "Darwin sandbox contract")
     def test_production_sandbox_denies_shared_temp_and_child_processes(self) -> None:
-        with tempfile.NamedTemporaryFile(dir="/private/tmp", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
             secret = Path(handle.name)
             handle.write(b"PRIVATE-TMP-SECRET")
         self.addCleanup(secret.unlink, missing_ok=True)

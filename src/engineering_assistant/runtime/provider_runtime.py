@@ -72,10 +72,7 @@ class ProviderExecutor:
         try:
             bundle = self._bundle_root(Path(provider_root))
             self._validate_layout(bundle)
-            temporary_parent = "/private/tmp" if platform.system() == "Darwin" else None
-            with tempfile.TemporaryDirectory(
-                prefix="ea-provider-", dir=temporary_parent
-            ) as temporary:
+            with tempfile.TemporaryDirectory(prefix="ea-provider-") as temporary:
                 sandbox_root = Path(temporary)
                 snapshot = sandbox_root / "bundle"
                 work = sandbox_root / "work"
