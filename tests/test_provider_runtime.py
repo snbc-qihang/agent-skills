@@ -71,18 +71,24 @@ class ProviderRuntimeTests(unittest.TestCase):
     def test_provider_uses_the_host_temporary_directory_and_cleans_its_snapshot(self) -> None:
         temporary_parent = Path(self.temporary.name) / "临时工作 目录"
         temporary_parent.mkdir()
+        configured_parent = temporary_parent
+        if os.name != "nt":
+            configured_parent = Path(self.temporary.name) / "系统临时路径别名"
+            configured_parent.symlink_to(temporary_parent, target_is_directory=True)
         snapshots = []
 
         def execute(_provider, _invocation, bundle, work, _denied):
             snapshots.append(bundle.parent)
             self.assertEqual(temporary_parent.resolve(), bundle.parent.parent.resolve())
+            self.assertEqual(bundle.resolve(), bundle)
+            self.assertEqual(work.resolve(), work)
             self.assertEqual(bundle.parent, work.parent)
             self.assertEqual(b"name,value\nminimal,1\n", (bundle / "data/styles.csv").read_bytes())
             if os.name != "nt":
                 self.assertEqual(0o700, bundle.parent.stat().st_mode & 0o777)
             return "## Design System: temporary snapshot"
 
-        with patch("engineering_assistant.runtime.provider_runtime.tempfile.tempdir", str(temporary_parent)), patch.object(
+        with patch("engineering_assistant.runtime.provider_runtime.tempfile.tempdir", str(configured_parent)), patch.object(
             self.executor, "_run_ui_ux_pro_max", side_effect=execute,
         ):
             result = self.executor.invoke(self.invocation(), provider_root=self.bundle)

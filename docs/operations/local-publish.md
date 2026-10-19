@@ -2,7 +2,7 @@
 
 ## Mac 候选验收
 
-另一台 macOS 14+ Apple Silicon 机器通过 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.1/README.md) 的固定命令安装 `1.0.0.1`。预先准备已登录的 Codex、Git 和 uv；无需维护者机器上的压缩包、路径或作者编译工具。
+另一台 macOS 14+ Apple Silicon 机器通过 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.2/README.md) 的固定命令安装 `1.0.0.1`。预先准备已登录的 Codex、Git 和 uv；无需维护者机器上的压缩包、路径或作者编译工具。
 
 候选使用独立的 `engineering-assistant-candidate` 市场和不可变 `candidate/codex/` tag，命令绑定真实源码 commit；安装器仍核对原生 Git 来源、包摘要、固定 Python 和完整 Provider 隔离。生成树只进入仓库外目录和候选 tag。候选教程同时给出检查、修复、卸载与真实 App、CLI、Hook、持久化恢复的结果回传要求。发现历史安装时，按检查给出的确切来源人工处理；不清理历史目录或共享缓存。
 

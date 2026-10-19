@@ -73,7 +73,7 @@ class ProviderExecutor:
             bundle = self._bundle_root(Path(provider_root))
             self._validate_layout(bundle)
             with tempfile.TemporaryDirectory(prefix="ea-provider-") as temporary:
-                sandbox_root = Path(temporary)
+                sandbox_root = Path(temporary).resolve()
                 snapshot = sandbox_root / "bundle"
                 work = sandbox_root / "work"
                 snapshot.mkdir()
