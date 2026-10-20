@@ -173,7 +173,8 @@ class PythonArtifactLockTests(unittest.TestCase):
     def test_same_version_wrong_build_or_unbound_base_is_rejected(self):
         lock = self.lock()
         with tempfile.TemporaryDirectory() as temporary:
-            data = Path(temporary).resolve()
+            data = Path(temporary).resolve() / "data"
+            inst._storage(data).close()
             artifact = lock["python_artifact"]
             base = data / "python" / lock["python_artifact_digest"] / artifact["key"].replace("-darwin-", "-macos-")
             base.mkdir(parents=True)
