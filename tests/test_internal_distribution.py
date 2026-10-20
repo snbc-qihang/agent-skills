@@ -357,6 +357,36 @@ class InternalDistributionTests(unittest.TestCase):
         actual = subprocess.check_output(["git", "show", "HEAD:line-endings.txt"], cwd=repository)
         self.assertEqual(payload, actual)
 
+    def test_git_fetch_preserves_release_bytes_despite_user_autocrlf(self):
+        config = self.root / "global.gitconfig"
+        config.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
+        with mock.patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1",
+        }):
+            repository = self.git_release()
+            result = self.acquire(self.root / "data", repository)
+        original = self.release / "marketplaces/codex/macos-arm64/plugins/engineering-assistant"
+        name = "engineering-assistant/runtime-requirements.txt"
+        self.assertEqual(
+            (original / name).read_bytes(),
+            (result["source"] / "plugins/engineering-assistant" / name).read_bytes(),
+        )
+
+    def test_git_fetch_ignores_user_text_attributes(self):
+        repository = self.git_release()
+        attributes = self.root / "global.attributes"
+        attributes.write_text("* text eol=crlf\n", encoding="utf-8")
+        config = self.root / "global.gitconfig"
+        config.write_text(
+            "[core]\n\tattributesFile = " + json.dumps(attributes.as_posix()) + "\n",
+            encoding="utf-8",
+        )
+        with mock.patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1",
+        }):
+            result = self.acquire(self.root / "data", repository)
+        self.assertTrue(result["source"].is_dir())
+
     def test_concurrent_fetch_publishes_one_complete_tree(self):
         from engineering_assistant.installer.installation import _read_control
         repository = self.git_release()

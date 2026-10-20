@@ -137,7 +137,10 @@ def _fetch_ref(repository_url: str, tag: str, staging: Path, storage: ArtifactIO
                        "GIT_NAMESPACE", "GIT_SHALLOW_FILE", "GIT_REPLACE_REF_BASE"}
         and not key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))}
     environment.update(GIT_TERMINAL_PROMPT="0", GIT_CONFIG_COUNT="0", GIT_NO_REPLACE_OBJECTS="1")
-    prefix = [git, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=" + os.devnull, "-c", "init.templateDir="]
+    # git archive applies working-tree conversions; user settings must not
+    # rewrite the bytes bound by the immutable release's digests.
+    prefix = [git, "-c", "core.autocrlf=false", "-c", "core.attributesFile=" + os.devnull,
+              "-c", "core.fsmonitor=false", "-c", "core.hooksPath=" + os.devnull, "-c", "init.templateDir="]
     storage.ensure_directory("git")
     cwd = staging / "git"
     try:
