@@ -1,5 +1,13 @@
 # 安装与本机发布
 
+## Mac 候选验收
+
+另一台 macOS 14+ Apple Silicon 机器通过 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.3/README.md) 的固定命令安装 `1.0.0.1`。预先准备已登录的 Codex、Git 和 uv；无需维护者机器上的压缩包、路径或作者编译工具。
+
+候选使用独立的 `engineering-assistant-candidate` 市场和不可变 `candidate/codex/` tag，命令绑定真实源码 commit；安装器仍核对原生 Git 来源、包摘要、固定 Python 和完整 Provider 隔离。生成树只进入仓库外目录和候选 tag。候选教程同时给出检查、修复、卸载与真实 App、CLI、Hook、持久化恢复的结果回传要求。发现历史安装时，按检查给出的确切来源人工处理；不清理历史目录或共享缓存。
+
+候选分发只提供可执行的验收入口，不写入已通过的人工作业记录，不创建 Release，不推进 `internal/installer`。Windows 11 和两目标完整真实验收、BUILD 更新及正式推广门禁继续保留。正式内部安装命令见下一节，目前尚未推广。
+
 ## 用户安装目标
 
 首轮内部交付安装完整的 11 个 skills、Runtime MCP、Hook 和 Provider 隔离能力，面向 macOS 14+ arm64、Windows 11 x64 上的 Codex App 与原生 CLI。用户预先安装 Codex（App 或原生 CLI）、`uv` 和 Git，在选用的 Codex 宿主完成登录。仓库采用 MIT 许可证并公开，下载不需要 GitHub 登录、token 或私有仓库授权。`uv` 的首轮验证基线为 0.11.7，须能在安装器启动前自动获取 Python 3.13.13；Runtime 准备函数的最低版本不能代替这项入口验证。无需 Node、手动 Python 环境、作者源 checkout、Rust 编译器或日常激活命令。
@@ -82,7 +90,7 @@ Provider 隔离资格使用受控诊断 bundle，不表示可选的 UI/UX Pro Ma
 
 ## Runtime 准备与恢复
 
-每个包包含 `runtime-lock.json`、单目标 `runtime-python-downloads.json`、哈希依赖锁和目标原生 `ea`/`ea.exe`。`config/runtime-python-downloads.json` 是四目标分布的作者源，固定 uv 0.11.7 元数据中的 CPython `3.13.13`、PBS `20260414`、官方归档 URL 与 SHA-256。准备使用包内元数据和构建日期，忽略继承的 uv 选择配置；由 uv 下载、解包并校验归档，不要求用户更换全局 uv 版本。
+每个包包含 `runtime-lock.json`、单目标 `runtime-python-downloads.json`、哈希依赖锁和目标原生 `ea`/`ea.exe`。`config/runtime-python-downloads.json` 是共享目标分布的作者源，固定 uv 0.11.7 元数据中的 CPython `3.13.13`、PBS `20260414`、官方归档 URL 与 SHA-256。准备使用包内元数据和构建日期，忽略继承的 uv 选择配置；由 uv 下载、解包并校验归档，不要求用户更换全局 uv 版本。
 
 launcher 读取按 Agent/版本持久化的 v2 绑定，使用绝对的固定解释器路径并校验分布身份；Runtime 启动和 `doctor` 还核对实际 `sys.base_prefix`、`BUILD` 与不可变安装记录。Python 基底按分布身份隔离，环境键包含该身份，更新不会重新标记旧基底的构建号。Runtime 启动不依赖 GUI/终端 PATH 中的 Python 或 uv，Codex Windows Hook 的系统 PowerShell 先决条件见上文。Hermes 宿主只加载标准库，通过有界 RPC 启动同一个 Runtime。
 
@@ -121,7 +129,7 @@ uvx --python 3.13.13 --from <setup-wheel> ea-setup update --agent hermes --packa
 
 候选可以使用 CI 或维护者本地两目标验证输入组装，生成物保存在仓库外；本地命令与工具准备见 [维护者候选准备](#无付费-ci-的候选准备)。本地验证只接受干净的已提交源码，批次文件同时绑定源码 commit 与随机 `validation_id`，两目标共用同一文件。组装拒绝不同源码、不同批次、混用 CI 字段和缺失必需检查；本地 index 标为 `local_artifacts_unattested`，既有 CI index 标为 `ci_artifacts_unattested`。两者均不提供外部验签，也不要求购买托管 CI。
 
-正式编号也仅生成候选，index 固定标记资格尚未满足；CI 临时 artifact 不是长期安装地址。维护者须在 macOS 两个架构与真实 Windows 11 上，对同一候选完成已认证 App、原生 CLI 会话与 Provider 隔离验收，覆盖首次安装、更新、重复执行、失败补偿、重开会话后的 skill/MCP/受信任 Hook。验收 JSON 及证据在仓库外保存，并绑定源码 commit、候选 index 与包摘要；具体字段由 `release_assets.validate_acceptance` 校验。
+正式编号也仅生成候选，index 固定标记资格尚未满足；CI 临时 artifact 不是长期安装地址。维护者须在 macOS arm64 与真实 Windows 11 上，对同一候选完成已认证 App、原生 CLI 会话与 Provider 隔离验收，覆盖首次安装、更新、重复执行、失败补偿、重开会话后的 skill/MCP/受信任 Hook。验收 JSON 及证据在仓库外保存，并绑定源码 commit、候选 index 与包摘要；具体字段由 `release_assets.validate_acceptance` 校验。
 
 每个目标的 App 与 CLI 验收记录都必须覆盖以下场景；缺项、失败或只有 `doctor` 结果均不能推广：
 
@@ -191,7 +199,11 @@ macOS Terminal 为本次验证设置工具链和仓库外输出目录：
 ```bash
 export RUSTUP_TOOLCHAIN=1.90.0
 export ENGINEERING_ASSISTANT_REQUIRE_PROVIDER_SANDBOX=1
-EA_CHECK_DIR="$(mktemp -d /private/tmp/ea-validation.XXXXXX)"
+EA_CHECK_ROOT="$HOME/Library/Caches/engineering-assistant/validation"
+mkdir -p "$EA_CHECK_ROOT"
+EA_CHECK_DIR="$(mktemp -d "$EA_CHECK_ROOT/run.XXXXXX")"
+mkdir "$EA_CHECK_DIR/work"
+export TMPDIR="$EA_CHECK_DIR/work"
 ```
 
 Windows PowerShell 使用对应设置；后面的验证命令两端相同：

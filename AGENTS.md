@@ -23,6 +23,7 @@
 - 仓库只保留当前架构和当前运维文档，不新增迁移矩阵、升级记录、实施过程、审批历史或发布执行历史。
 - 首轮内部发行只包含 Codex 的 macOS 14+ arm64 与 Windows 11 x64，App 与原生 CLI 使用同一完整功能及安全合同。Hermes、Claude Code 和 Linux 共享源码保留回归，不扩大首轮发行矩阵。
 - 内部安装器从 `internal/installer` 或同版本不可变 `internal/installer/<版本>` 源码 tag 核对真实 Git 来源，选择同版本不可变 `internal/codex/<版本>` 发行；生成发行树只进入仓库外临时目录和专用发行 tag，不进入 `main`、`teamwork` 或作者 checkout。
+- 真实验收前可按用户明确授权创建独立、不可覆盖的 `candidate/codex/` Git marketplace tag，复用显式 `ea-setup --source` 入口并绑定源码与包摘要。候选必须明确标记真实宿主验收待完成，不生成已通过的人工记录，不创建 Release 或推进正式入口；技术验证不能代替两目标真实验收。
 - 正式内部交付仅以完整仓库门禁及两目标真实 App、CLI、Provider 验收取得资格，不宣称产品收益 Canary 完成；公开稳定版和产品稳定版晋级继续遵守真实产品 Canary 门槛。
 - 历史 2.x 安装和备份由用户自行卸载与清理；安装器只读检查并提供确切位置和人工步骤，不自动接管或删除。共享 Python、其他插件、作者源码和目标项目运行证据不在清理范围内。
 

@@ -93,6 +93,56 @@ class LegacyInspectionTests(unittest.TestCase):
         self.assertTrue(result["legacy_check_complete"])
         self.assertNotIn(str(shared), json.dumps(result))
 
+    def test_runtime_created_binding_lock_is_not_an_unknown_installation(self):
+        storage = legacy.runtime._storage(self.data)
+        try:
+            legacy.runtime._publish_versioned_binding(storage, {
+                "agent": "codex", "canonical_version": "1.0.0.1", "environment_key": "current",
+            })
+        finally:
+            storage.close()
+        lock = self.data / "bindings/codex/.artifact.lock"
+        self.assertTrue(lock.is_file())
+        before = {p.relative_to(self.data): p.read_bytes() for p in self.data.rglob("*") if p.is_file()}
+        result = self.inspect()
+        self.assertFalse(result["legacy_installation_detected"])
+        self.assertTrue(result["legacy_check_complete"], result["legacy_unknown"])
+        self.assertEqual(before, {p.relative_to(self.data): p.read_bytes() for p in self.data.rglob("*") if p.is_file()})
+
+    def test_binding_lock_with_content_directory_or_symlink_remains_unknown(self):
+        lock = self.data / "bindings/codex/.artifact.lock"
+        lock.parent.mkdir(parents=True)
+        secret = self.root / "private-fixture"
+        secret.write_text("must not be read")
+        for kind in ("content", "single_byte", "directory", "symlink"):
+            with self.subTest(kind=kind):
+                if kind == "content":
+                    lock.write_text("unexpected lock content")
+                elif kind == "single_byte":
+                    lock.write_bytes(b"x")
+                elif kind == "directory":
+                    lock.mkdir()
+                else:
+                    lock.symlink_to(secret)
+                result = self.inspect()
+                self.assertFalse(result["legacy_check_complete"])
+                self.assertNotIn("must not be read", json.dumps(result))
+                self.assertEqual("must not be read", secret.read_text())
+                if kind == "directory":
+                    lock.rmdir()
+                else:
+                    lock.unlink()
+
+    def test_windows_byte_range_binding_lock_is_recognized_without_writes(self):
+        lock = self.data / "bindings/codex/.artifact.lock"
+        lock.parent.mkdir(parents=True)
+        with lock.open("wb") as stream:
+            legacy.ArtifactIO._prepare_windows_lock(stream.fileno())
+        self.assertEqual(b"0", lock.read_bytes())
+        result = self.inspect()
+        self.assertTrue(result["legacy_check_complete"], result["legacy_unknown"])
+        self.assertEqual(b"0", lock.read_bytes())
+
     def test_missing_cli_still_reports_disk_findings_and_incomplete_check(self):
         backup = self.package(self.home.parent / "plugins/.engineering-assistant.backup-old")
         self.query.side_effect = ValidationFailure("sensitive native failure fixture")
