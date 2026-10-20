@@ -73,8 +73,8 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import shutil
           import subprocess
-          import sys
           from pathlib import Path
           key = "cpython-3.13.13-windows-x86_64-none"
           metadata = Path("config/runtime-python-downloads.json").resolve()
@@ -82,18 +82,22 @@ jobs:
           root = Path(os.environ["EA_CI_ROOT"]).parent / "windows-python"
           downloads = root / "base"
           virtual = root / "developer-env"
+          uv = str(Path(shutil.which("uv")).resolve())
           environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("UV_")}
           environment.update(UV_PYTHON_INSTALL_DIR=str(downloads), UV_PYTHON_DOWNLOADS_JSON_URL=str(metadata),
               UV_PYTHON_CPYTHON_BUILD=entry["build"], UV_CACHE_DIR=os.environ["UV_CACHE_DIR"],
               UV_PYTHON_INSTALL_BIN="0", UV_PYTHON_INSTALL_REGISTRY="0", UV_PYTHON_NO_REGISTRY="1")
-          subprocess.run([sys.executable, "-m", "uv", "--no-config", "python", "install", key],
+          subprocess.run([uv, "--no-config", "python", "install", key],
                          env=environment, check=True, timeout=180)
           base = downloads / key
           assert (base / "BUILD").read_text(encoding="utf-8").strip() == entry["build"]
           assert (base / "python.exe").is_file()
-          subprocess.run([sys.executable, "-m", "uv", "--no-config", "venv", "--no-project", "--managed-python",
-                          "--no-python-downloads", "--python", key, str(virtual)],
+          subprocess.run([uv, "--no-config", "venv", "--no-project",
+                          "--no-python-downloads", "--python", str(base / "python.exe"), str(virtual)],
                          env=environment, check=True, timeout=60)
+          observed = subprocess.check_output([str(virtual / "Scripts/python.exe"), "-I", "-c",
+              "import json,sys;print(json.dumps(sys.base_prefix))"], env=environment, timeout=10)
+          assert Path(json.loads(observed)).resolve() == base.resolve(), "CI must use the fixed consumer Python"
           with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as stream:
               stream.write(str(virtual / "Scripts") + "\n")
           PY
