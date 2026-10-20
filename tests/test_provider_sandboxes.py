@@ -89,6 +89,70 @@ class WindowsPrivatePythonTests(unittest.TestCase):
                      patch.object(Path, "write_bytes", corrupt), self.assertRaises(OSError):
                     windows._private_runtime(root / "private")
 
+    @unittest.skipUnless(sys.platform == "win32", "native Winsock startup diagnosis, not qualification")
+    def test_windows_network_startup_versions_diagnostic(self):
+        from engineering_assistant.platforms.windows_process import run_bounded_windows
+        # This fixed FFI copy exists only in the diagnostic. Production's
+        # images, token, ACLs and network qualification stay unchanged.
+        records = {**windows._LPAC_PYTHON_IMAGES, "DLLs/_ctypes.pyd": (
+            "ec62f338fdd774cfd53ef977ccb9e68b5fb464189493cb70a345bbd27595838c", 119320,
+            "e51b1a2b11ad0a2f824f1c5621aad3b9946f97f03beced35b2c89d0b53d74c4d")}
+        environment = {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}}
+        observations = []
+        extended = "\\\\?\\"
+        for version in (0x0101, 0x0202):
+            for confined in (False, True):
+                with self.subTest(version=version, confined=confined), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve()
+                    bundle, work = root / "bundle", root / "work"
+                    bundle.mkdir()
+                    work.mkdir()
+                    api = windows._Api()
+                    api.acl(root, api.owner_sid(), None, False)
+                    source = f'''import os
+cwd=os.getcwd()
+os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd)
+for name in ('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'):
+    os.environ[name]=os.getcwd()
+import ctypes,json
+library=ctypes.WinDLL('ws2_32.dll',winmode=0x800)
+library.WSAStartup.argtypes=[ctypes.c_uint16,ctypes.c_void_p]
+library.WSAStartup.restype=ctypes.c_int
+library.WSACleanup.argtypes=[]
+library.WSACleanup.restype=ctypes.c_int
+buffer=(ctypes.c_uint64*64)()
+error=library.WSAStartup({version},ctypes.byref(buffer))
+result={{'version':{version},'startup_error':error,'socket_import':False}}
+if error==0:
+    try:
+        import socket
+        result['socket_import']=True
+    except ImportError:
+        pass
+    finally:
+        result['cleanup_error']=library.WSACleanup()
+print(json.dumps(result))
+'''
+                    command = [sys.executable, "-X", "utf8", "-I", "-B", "-S", "-c", source]
+                    with patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                        if confined:
+                            code, output, error = windows.run(command, bundle, work, environment, 10, 4096)
+                        else:
+                            executable = windows._private_runtime(root / "runtime")
+                            code, output = run_bounded_windows([str(executable), *command[1:]], cwd=work,
+                                environment=environment, timeout_seconds=10, output_limit_bytes=4096)
+                            error = b""
+                    self.assertEqual(0, code, error)
+                    result = json.loads(output.splitlines()[-1])
+                    self.assertEqual(version, result["version"])
+                    if not confined:
+                        self.assertEqual(0, result["startup_error"], result)
+                        self.assertIs(result["socket_import"], True, result)
+                    observations.append({"confined": confined, **result})
+        print(json.dumps({"winsock_startup_diagnostic": observations, "qualified": False}))
+        from engineering_assistant.runtime.sandbox_probe import qualify
+        print(json.dumps({"actual_provider_probe": qualify(ROOT), "diagnostic_only": True}))
+
     @unittest.skipUnless(sys.platform == "win32", "native fixed Windows stdlib imports")
     def test_windows_private_worker_loads_socket_extensions_without_widening_capabilities(self):
         environment = {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}}
@@ -101,6 +165,14 @@ class WindowsPrivatePythonTests(unittest.TestCase):
                 work.mkdir()
                 api = windows._Api()
                 api.acl(root, api.owner_sid(), None, False)
+                # Match ProviderExecutor's trusted bootstrap after Windows
+                # redirects these options to the sealed AppContainer profile.
+                extended = "\\\\?\\"
+                source = ("import os;cwd=os.getcwd();"
+                          f"os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd);"
+                          "work=os.getcwd();"
+                          "[os.environ.__setitem__(name,work) for name in "
+                          "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR')];" + source)
                 with patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
                     return windows.run([sys.executable, "-X", "utf8", "-I", "-B", "-S", "-c", source],
                                        bundle, work, environment, 10, 4096)
