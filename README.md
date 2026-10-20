@@ -7,14 +7,14 @@
 - Mac Intel 不在支持范围。Hermes、Claude Code、Linux 共享源码保留回归。
 - 开发者：`sunliming625@gmail.com`。
 
-**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261020.1/README.md)。本候选包含共享核心目录改造，供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广。
+**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261020.2/README.md)。本候选包含共享核心目录改造，供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广。
 
 ## Mac 候选：一条命令安装
 
 在另一台 macOS 14+ Apple Silicon Mac 准备并登录 Codex，确保终端已有 Git 和 uv，然后执行：
 
 ```bash
-uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@e769d7df86886532a0f62418af66cbd035ef4395" ea-setup install --agent codex --source "snbc-qihang/agent-skills@candidate/codex/1.0.0.1/macos-arm64/20261020.1" --marketplace engineering-assistant-candidate
+uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@e769d7df86886532a0f62418af66cbd035ef4395" ea-setup install --agent codex --source "snbc-qihang/agent-skills@candidate/codex/1.0.0.1/macos-arm64/20261020.2" --marketplace engineering-assistant-candidate
 ```
 
 无需取得维护者本机文件或安装 Python、Node、Rust。安装后在 Codex 审查并信任 Hook，再重开会话；等待信任时退出码可能为 2，不代表安装失败。检查、修复、卸载和结果回传要求见上述候选教程。下节命令是正式推广后的入口，目前尚不可用。

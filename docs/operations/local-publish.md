@@ -2,7 +2,7 @@
 
 ## Mac 候选验收
 
-另一台 macOS 14+ Apple Silicon 机器通过 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261020.1/README.md) 的固定命令安装 `1.0.0.1` 共享核心候选。预先准备已登录的 Codex、Git 和 uv；无需维护者机器上的压缩包、路径或作者编译工具。[README](../../README.md#mac-候选一条命令安装) 同时提供可直接复制的安装命令。
+另一台 macOS 14+ Apple Silicon 机器通过 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261020.2/README.md) 的固定命令安装 `1.0.0.1` 共享核心候选。预先准备已登录的 Codex、Git 和 uv；无需维护者机器上的压缩包、路径或作者编译工具。[README](../../README.md#mac-候选一条命令安装) 同时提供可直接复制的安装命令。
 
 候选使用独立的 `engineering-assistant-candidate` 市场和不可变 `candidate/codex/` tag，命令绑定真实源码 commit；安装器仍核对原生 Git 来源、包摘要、固定 Python 和完整 Provider 隔离。生成树只进入仓库外目录和候选 tag。候选教程同时给出检查、修复、卸载与真实 App、CLI、Hook、持久化恢复的结果回传要求。发现历史安装时，按检查给出的确切来源人工处理；不清理历史目录或共享缓存。
 
@@ -111,7 +111,7 @@ Provider 隔离资格使用受控诊断 bundle，不表示可选的 UI/UX Pro Ma
 
 原生市场管理的缓存可保留原发行包的运输副本，安装器不手写或裁剪宿主缓存；共享目录是日常执行和读取核心资料的位置。也不会把全局 `~/.agents/skills` 当成完整插件通用入口而重复注册相同 skill。各工具的 MCP、Hook、命名空间、启用和信任合同分别保留。依据 [Codex skills](https://developers.openai.com/codex/skills/)、[Claude Code skills](https://code.claude.com/docs/en/skills) 和 [Cursor plugins](https://cursor.com/docs/plugins) 的原生发现方式接入，目录相同不等于宿主配置协议相同。
 
-**本改造已进入 `20261020.1` Mac 候选，正式安装入口仍未启用。** 候选只包含 Codex 的 macOS arm64 包，不可通过修改命令中的 `--agent` 安装 `claude-code`/`cursor`。只有取得对应宿主、目标的已构建发行后，才可用高级 `ea-setup install --agent <宿主> --source <已核验的对应发行来源>`；Codex 默认正式入口的来源、验收与推广合同保持原样。共享目录变更不要求迁走已有 2.x 插件或删除旧 Runtime。
+**本改造已进入 `20261020.2` Mac 候选，正式安装入口仍未启用。** 候选只包含 Codex 的 macOS arm64 包，不可通过修改命令中的 `--agent` 安装 `claude-code`/`cursor`。只有取得对应宿主、目标的已构建发行后，才可用高级 `ea-setup install --agent <宿主> --source <已核验的对应发行来源>`；Codex 默认正式入口的来源、验收与推广合同保持原样。共享目录变更不要求迁走已有 2.x 插件或删除旧 Runtime。
 
 Cursor 使用官方支持的本地插件导入，安装器只管理自己的入口及所有权记录，不改写 `~/.cursor/mcp.json` 或 `hooks.json`。安装后必须重开 Cursor 或运行 `Developer: Reload Window`，在 Customize 核对 skills、MCP 和 Hook。团队/企业管理员可能禁止本地导入，同名市场插件也可能优先于本地副本；安装器不绕过这些规则。故目录及协议通过后仍报告 `requires_native_activation`，不以 `--hooks-trusted` 伪造宿主已加载。详见 [Cursor 本地插件加载限制](https://cursor.com/docs/plugins#test-plugins-locally)。
 
