@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import sysconfig
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -275,9 +276,69 @@ def _sxs_private_runtime(destination: Path, original) -> Path:
     return executable
 
 
-def _python_sxs_control(original, api, owner, environment) -> dict:
+def _manifest_resource(path: Path, name: int) -> bytes:
+    """Read only the fixed embedded manifest; never load executable code."""
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    for symbol, result, arguments in (
+        ("LoadLibraryExW", ctypes.c_void_p, (ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_uint32)),
+        ("FindResourceW", ctypes.c_void_p, (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)),
+        ("LoadResource", ctypes.c_void_p, (ctypes.c_void_p, ctypes.c_void_p)),
+        ("SizeofResource", ctypes.c_uint32, (ctypes.c_void_p, ctypes.c_void_p)),
+        ("LockResource", ctypes.c_void_p, (ctypes.c_void_p,)),
+        ("FreeLibrary", ctypes.c_int, (ctypes.c_void_p,)),
+    ):
+        function = getattr(api, symbol)
+        function.restype, function.argtypes = result, arguments
+    module = api.LoadLibraryExW(str(path), None, 0x2 | 0x20)  # DATAFILE | IMAGE_RESOURCE
+    if not module:
+        raise ValueError("private Python resource mapping failed")
+    try:
+        resource = api.FindResourceW(module, name, 24)  # RT_MANIFEST, not RT_VERSION (16)
+        size = api.SizeofResource(module, resource) if resource else 0
+        loaded = api.LoadResource(module, resource) if 64 <= size <= 8192 else None
+        address = api.LockResource(loaded) if loaded else None
+        if not address:
+            raise ValueError("private Python manifest resource unavailable")
+        return ctypes.string_at(address, size)
+    finally:
+        api.FreeLibrary(module)
+
+
+def _without_common_controls(data: bytes, manifest: bytes) -> bytes:
+    if not 64 <= len(manifest) <= 8192 or len(data) > 32 * 1024 * 1024 or data.count(manifest) != 1 or b"<!" in manifest:
+        raise ValueError("invalid private Python manifest control")
+    try:
+        root = ET.fromstring(manifest.rstrip(b"\0"))
+    except ET.ParseError:
+        raise ValueError("invalid private Python manifest control") from None
+    namespace = "{urn:schemas-microsoft-com:asm.v1}"
+    identities = root.findall(namespace + "dependency/" + namespace + "dependentAssembly/" + namespace + "assemblyIdentity")
+    expected = dict(type="win32", name="Microsoft.Windows.Common-Controls", version="6.0.0.0",
+                    processorArchitecture="*", publicKeyToken="6595b64144ccf1df", language="*")
+    matches = list(re.finditer(rb"<dependency>.*?</dependency>", manifest, re.DOTALL))
+    if root.tag != namespace + "assembly" or len(identities) != 1 or identities[0].attrib != expected or len(matches) != 1:
+        raise ValueError("unexpected private Python manifest dependency")
+    match = matches[0]
+    offset = data.index(manifest) + match.start()
+    return data[:offset] + b" " * len(match.group()) + data[offset + len(match.group()):]
+
+
+def _common_controls_private_runtime(destination: Path, original) -> Path:
+    executable = original(destination)
+    if executable != destination / "python.exe" or windows._reparse(destination) or windows._reparse(executable):
+        raise ValueError("invalid private Python control directory")
+    for name, resource in (("python.exe", 1), ("python313.dll", 2)):
+        image = destination / name
+        data = _without_common_controls(_read_file(image, 32 * 1024 * 1024), _manifest_resource(image, resource))
+        image.write_bytes(data)
+        if _read_file(image, 32 * 1024 * 1024) != data:
+            raise ValueError("private Python control changed")
+    return executable
+
+
+def _python_sxs_control(original, api, owner, environment, *, remove_common_controls=False) -> dict:
     observation = {"diagnostic_only": True, "qualified": False, "capability_count": 0,
-                   "manifest_lookup": "disabled_private_python_images"}
+                   "manifest_lookup": "private_common_controls_removed" if remove_common_controls else "disabled_private_python_images"}
     try:
         with tempfile.TemporaryDirectory(prefix="ea-native-sxs-control-") as temporary:
             base = Path(temporary).resolve()
@@ -285,7 +346,8 @@ def _python_sxs_control(original, api, owner, environment) -> dict:
             bundle, work = base / "bundle", base / "work"
             bundle.mkdir()
             work.mkdir()
-            with patch.object(windows, "_private_runtime", lambda path: _sxs_private_runtime(path, original)):
+            copier = _common_controls_private_runtime if remove_common_controls else _sxs_private_runtime
+            with patch.object(windows, "_private_runtime", lambda path: copier(path, original)):
                 code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
                     environment, 10, 4096, diagnostics=observation)
             observation.update(exit_code=f"0x{code & 0xFFFFFFFF:08X}",
@@ -611,7 +673,8 @@ def diagnose() -> dict:
             return replace_runtime(destination, image, original)
         environment = {name: value for name, value in os.environ.items()
                        if name.upper() in {"SYSTEMROOT", "WINDIR"}}
-        for name, detached in (("baseline", None), ("strict_lpac", False), ("detached_console", True)):
+        for name, detached in (("baseline", None), ("strict_lpac", False), ("detached_console", True),
+                               ("private_common_controls", True)):
             observation = {}
             report[name] = observation
             case_started = time.monotonic()
@@ -631,7 +694,8 @@ def diagnose() -> dict:
                             cwd=work, environment=private_environment, timeout_seconds=10, output_limit_bytes=4096)
                         observation.update(_observe(code, output))
                     else:
-                        with patch.object(windows, "_private_runtime", private_runtime):
+                        copier = (lambda path: replace_runtime(path, image, lambda target: _common_controls_private_runtime(target, original))) if name == "private_common_controls" else private_runtime
+                        with patch.object(windows, "_private_runtime", copier):
                             code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
                                 environment, 10, 4096, diagnostics=observation, _console_diagnostic=detached)
                         observation.update(_observe(code, output, stderr))
@@ -641,6 +705,7 @@ def diagnose() -> dict:
         if _registry_read_control_ready(report):
             report["detached_registry_read"] = _registry_read_control(image, original, api, owner, environment)
             report["python_startup_private_sxs"] = _python_sxs_control(original, api, owner, environment)
+            report["python_startup_private_common_controls"] = _python_sxs_control(original, api, owner, environment, remove_common_controls=True)
         if _python_startup_control_ready(report):
             report["python_startup_registry_read"] = _python_startup_control(original, api, owner, environment)
         else:

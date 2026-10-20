@@ -350,10 +350,10 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                      patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth, \
                      patch.object(probe, "_python_sxs_control", return_value={"diagnostic_only": True, "qualified": False}) as sxs:
                     result = probe.diagnose()
-                self.assertEqual([False, True], calls)
+                self.assertEqual([False, True, True], calls)
                 self.assertIs(result["qualified"], False)
                 self.assertEqual(int(eligible), fourth.call_count)
-                self.assertEqual(int(eligible), sxs.call_count)
+                self.assertEqual(2 * int(eligible), sxs.call_count)
                 if eligible:
                     self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
                     self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
@@ -853,6 +853,20 @@ class WindowsSxsCopyControlTests(unittest.TestCase):
         self.assertEqual(before[:222], after[:222])
         self.assertEqual(before[224:], after[224:])
         self.assertEqual(after, probe._without_sxs_manifest_lookup(after))
+
+    def test_common_controls_control_preserves_all_other_image_bytes(self):
+        dependency = (b'<dependency>\n<dependentAssembly>\n<assemblyIdentity type="win32" '
+                      b'name="Microsoft.Windows.Common-Controls" version="6.0.0.0" '
+                      b'processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*" />'
+                      b'\n</dependentAssembly>\n</dependency>')
+        manifest = b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1">' + dependency + b'</assembly>'
+        before = self.dll() + b'untouched-prefix' + manifest + b'untouched-suffix'
+        after = probe._without_common_controls(before, manifest)
+        self.assertEqual(before.replace(dependency, b' ' * len(dependency)), after)
+        for invalid in (self.dll(), before + manifest,
+                        before.replace(b'Microsoft.Windows.Common-Controls', b'Unapproved.Windows.Dependency')):
+            with self.subTest(size=len(invalid)), self.assertRaises(ValueError):
+                probe._without_common_controls(invalid, manifest)
 
     def test_sxs_copy_control_rejects_other_images_and_truncated_headers(self):
         invalid = [b"", self.dll()[:240], b"NO" + self.dll()[2:]]
