@@ -45,7 +45,8 @@ class PythonArtifactLockTests(unittest.TestCase):
     def test_creation_ignores_ambient_selection_and_keeps_old_base_untouched(self):
         lock = self.lock()
         with tempfile.TemporaryDirectory() as temporary:
-            data = Path(temporary).resolve()
+            data = Path(temporary).resolve() / "data"
+            inst._storage(data).close()
             old = data / "python/old-build"
             old.mkdir(parents=True)
             marker = old / "keep.txt"
@@ -96,7 +97,8 @@ class PythonArtifactLockTests(unittest.TestCase):
     def test_venv_failure_leaves_a_verified_base_reusable_without_another_download(self):
         lock = self.lock()
         with tempfile.TemporaryDirectory() as temporary:
-            data = Path(temporary).resolve()
+            data = Path(temporary).resolve() / "data"
+            inst._storage(data).close()
             base = data / "python" / lock["python_artifact_digest"] / lock["python_artifact"]["key"].replace("-darwin-", "-macos-")
             calls = []
             def failed_venv(argv, **kwargs):
@@ -129,7 +131,8 @@ class PythonArtifactLockTests(unittest.TestCase):
     def test_interruption_before_receipt_never_publishes_an_unbound_base(self):
         lock = self.lock()
         with tempfile.TemporaryDirectory() as temporary:
-            data = Path(temporary).resolve()
+            data = Path(temporary).resolve() / "data"
+            inst._storage(data).close()
             downloaded = []
             def install(argv, **kwargs):
                 if "install" in argv:
