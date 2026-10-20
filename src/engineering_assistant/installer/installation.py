@@ -70,6 +70,7 @@ def agent_home(agent: str, explicit: Path | str | None = None,
         "codex": ("CODEX_HOME", ".codex"),
         "hermes": ("HERMES_HOME", ".hermes"),
         "claude-code": ("CLAUDE_CONFIG_DIR", ".claude"),
+        "cursor": ("", ".cursor"),
     }[agent]
     configured = (config or {}).get("agent_homes", {}).get(agent)
     return Path(explicit or env.get(variable) or configured or Path.home() / fallback).expanduser().absolute()
@@ -282,8 +283,14 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
     if lock["canonical_version"] != manifest["canonical_version"] or lock["agent"] != manifest["platform"]:
         raise ValidationFailure("Runtime contract is not bound to its package")
     data = globals()["data_home"](data_home)
-    storage = _storage(data)
     uv = _uv(uv_executable)
+    storage = _storage(data)
+    from .shared_core import prepare_core
+    try:
+        shared_core = prepare_core(package, storage, repair=repair)
+    except BaseException:
+        storage.close()
+        raise
     key = lock["environment_key"]
     environment = data / "environments" / key
     base = data / "python" / lock["python_artifact_digest"] / lock["python_artifact"]["key"].replace("-darwin-", "-macos-")
@@ -297,7 +304,7 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                 try:
                     _verify_interpreter(environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"), lock,
                                         expected_base=base)
-                    _protocol_checks(package, python=environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
+                    _protocol_checks(package, python=environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python"), data=data)
                 except (OSError, ValueError, ValidationFailure):
                     rebuild = True
             if rebuild:
@@ -313,7 +320,7 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                         staged_io.create_immutable_json(environment_record, "runtime-environment.json")
                     finally:
                         staged_io.close()
-                    checks = _protocol_checks(package, python=staging / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
+                    checks = _protocol_checks(package, python=staging / ("Scripts/python.exe" if os.name == "nt" else "bin/python"), data=data)
                     if not checks["provider"].get("qualified"):
                         raise ValidationFailure("Provider sandbox qualification failed: " + str(checks["provider"].get("reason")))
                     with storage.open_directory("staging") as source, storage.open_directory("environments") as destination:
@@ -343,7 +350,7 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
                         raise ValidationFailure("existing Runtime environment differs from its version contract")
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             _verify_interpreter(python, lock, expected_base=base)
-            checks = _protocol_checks(package, python=python)
+            checks = _protocol_checks(package, python=python, data=data)
             if not checks["provider"].get("qualified"):
                 raise ValidationFailure("Provider sandbox qualification failed: " + str(checks["provider"].get("reason")))
             binding = {"schema_version": "2", "agent": lock["agent"], "target": target,
@@ -358,7 +365,7 @@ def prepare_runtime(package: Path | str, *, data_home: Path | str | None = None,
             if publish_default:
                 _publish_default_binding(data, binding)
             _replace_binding(storage, binding, lock["agent"])
-        return {"status": "prepared", "binding": binding, "package": str(package)}
+        return {"status": "prepared", "binding": binding, "package": str(package), "shared_core": str(shared_core)}
     finally:
         storage.close()
 
@@ -509,6 +516,11 @@ def _verify_marketplace_source(agent: str, home: Path, marketplace: str, source:
 
 
 def _installed_identity(agent: str, home: Path, marketplace: str | None = None) -> dict | None:
+    if agent == "cursor":
+        if marketplace not in {None, "local"}:
+            raise ValidationFailure("Cursor 使用原生 local 插件入口，不使用 Codex marketplace")
+        from .cursor_installation import cursor_selection
+        return cursor_selection(home)
     if marketplace is not None:
         _component(marketplace, "marketplace")
     arguments = ["plugins", "list", "--user", "--json"] if agent == "hermes" else ["plugin", "list", "--json"]
@@ -559,7 +571,7 @@ def _verified_package(package: Path, agent: str, version: str | None = None) -> 
             from ..runtime.version import platform_version
             actual = platform_version(manifest["canonical_version"], supports_four_part=False)
         else:
-            directory = ".codex-plugin" if agent == "codex" else ".claude-plugin"
+            directory = {"codex": ".codex-plugin", "claude-code": ".claude-plugin", "cursor": ".cursor-plugin"}[agent]
             actual = _read_control(package / directory / "plugin.json").get("version")
         if actual != version:
             raise ValidationFailure("native installed version differs from the verified package version")
@@ -625,16 +637,22 @@ def _protocol_run(command: list[str], *, cwd: Path, input_data: bytes = b"",
     return output
 
 
-def _windows_hook_probe(package: Path, cwd: Path, input_data: bytes, environment: Mapping[str, str]) -> str:
+def _windows_hook_probe(package: Path, cwd: Path, input_data: bytes, environment: Mapping[str, str], *, agent: str = "codex") -> str:
     hooks = _read_control(package / "hooks/hooks.json").get("hooks")
     if not isinstance(hooks, dict):
         raise ValidationFailure("Windows Hook manifest has no executable contract")
     commands = set()
+    if agent not in {"codex", "cursor"}:
+        raise ValidationFailure("unsupported Windows Hook bridge agent")
+    cursor = agent == "cursor"
     try:
         for groups in hooks.values():
             for group in groups:
-                for hook in group["hooks"]:
-                    commands.add(hook["commandWindows"])
+                if cursor:
+                    commands.add(group["command"])
+                else:
+                    for hook in group["hooks"]:
+                        commands.add(hook["commandWindows"])
         if len(commands) != 1:
             raise ValueError
         command = commands.pop()
@@ -649,8 +667,8 @@ def _windows_hook_probe(package: Path, cwd: Path, input_data: bytes, environment
     if executable is None or not executable.is_absolute() or executable.is_symlink() or not executable.is_file():
         raise ValidationFailure("Windows PowerShell prerequisite is unavailable for the actual Hook bridge")
     response = _protocol_run([str(executable), *command.split(" ")[1:]], cwd=cwd, input_data=input_data,
-                             environment={**environment, "PLUGIN_ROOT": str(package.resolve())}, timeout=15)
-    if json.loads(response) != {}:
+                             environment={**environment, "CURSOR_PLUGIN_ROOT" if cursor else "PLUGIN_ROOT": str(package.resolve())}, timeout=15)
+    if json.loads(response) != ({"permission": "allow"} if cursor else {}):
         raise ValidationFailure("Windows Hook bridge did not return the nonblocking protocol")
     return "passed"
 
@@ -687,15 +705,19 @@ def _protocol_checks(package: Path, *, python: Path | None = None,
         invoked = next((x for x in responses if x.get("id") == 3), {})
         if "error" in invoked or invoked.get("result", {}).get("isError", True):
             raise ValidationFailure("MCP tools/call did not execute the Runtime route")
-        hook = _protocol_run([*command, "hook"], input_data=json.dumps({"cwd": temporary, "hook_event_name": "Stop"}).encode(),
+        cursor = _package_lock(package)["agent"] == "cursor"
+        hook_payload = {"cwd": temporary, "hook_event_name": "beforeMCPExecution", "conversation_id": "installation",
+                        "generation_id": "probe", "workspace_roots": [temporary], "mcp_server_name": "engineering-assistant",
+                        "tool_name": "engineering_assistant_route", "tool_input": "{}"} if cursor else {"cwd": temporary, "hook_event_name": "Stop"}
+        hook = _protocol_run([*command, "cursor-hook" if cursor else "hook"], input_data=json.dumps(hook_payload).encode(),
                              cwd=Path(temporary), environment=environment, timeout=15)
-        if json.loads(hook) != {}:
+        if json.loads(hook) != ({"permission": "allow"} if cursor else {}):
             raise ValidationFailure("Hook did not return the nonblocking protocol")
         windows_hook = "not_applicable"
-        if os.name == "nt" and _package_lock(package)["agent"] == "codex":
+        if os.name == "nt" and _package_lock(package)["agent"] in {"codex", "cursor"}:
             windows_hook = "requires_prepared_binding" if python else _windows_hook_probe(package, Path(temporary),
-                json.dumps({"cwd": temporary, "hook_event_name": "Stop", "prompt": "中文安装验证"}, ensure_ascii=False).encode("utf-8"),
-                environment)
+                json.dumps(hook_payload if cursor else {"cwd": temporary, "hook_event_name": "Stop", "prompt": "中文安装验证"}, ensure_ascii=False).encode("utf-8"),
+                environment, agent="cursor" if cursor else "codex")
         try:
             sandbox = json.loads(_protocol_run([*command, "sandbox-probe"], cwd=Path(temporary), environment=environment, timeout=60))
             if not isinstance(sandbox, dict) or type(sandbox.get("qualified")) is not bool:
@@ -733,6 +755,8 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
         return {"status": "unsupported", "ready": False, "reason": "package target differs from host"}
     try:
         lock = _package_lock(package)
+        from ..runtime.shared_core import resolve_core
+        shared_core = resolve_core(package / "engineering-assistant", data)
         binding = _read_control(data / "bindings" / agent / (lock["environment_key"] + ".json"))
         if (any(binding.get(name) != lock[name] for name in ("schema_version", "agent", "target", "environment_key", "python_artifact_digest"))
             or binding.get("python_build") != lock["python_artifact"]["build"]):
@@ -752,6 +776,8 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
         status, reason = ("ready", None) if provider_ready else ("partial", checks["provider"].get("reason"))
     trust = "not_applicable" if agent == "hermes" else "user_confirmed" if hooks_trusted else "requires_native_host_review"
     activation = "enabled" if native_activation_verified or selected and selected["enabled"] else "disabled" if selected else "not_verified"
+    if agent == "cursor" and not native_activation_verified:
+        activation = "not_verified"
     if qualified and activation != "enabled":
         status, reason = "needs_preparation", "requires_native_activation"
     elif qualified and agent != "hermes" and not hooks_trusted:
@@ -760,6 +786,7 @@ def doctor(agent: str, *, package: Path | str | None = None, home: Path | str | 
             "provider_ready": provider_ready,
             "agent": agent, "target": actual, "version": manifest["canonical_version"],
             "package": str(package), "checks": checks,
+            "data_home": str(data), "shared_core": str(shared_core),
             "hook_trust": trust, "native_activation": activation,
             "python_build": lock["python_artifact"]["build"], "python_artifact_digest": lock["python_artifact_digest"],
             "native_marketplace_session": "not_executed", "reason": reason}
@@ -867,6 +894,10 @@ def update_plugin(agent: str, home: Path | str | None = None, marketplace: str |
                   *, package: Path | str | None = None, data_home: Path | str | None = None,
                   uv_executable: Path | str | None = None, hooks_trusted: bool = False) -> dict:
     root = agent_home(agent, home)
+    if agent == "cursor":
+        from .cursor_installation import install_cursor
+        return install_cursor(source=None, home=root, data=data_home, uv=uv_executable,
+                              hooks_trusted=hooks_trusted, update=True, package=package)
     if agent == "hermes" and package is None:
         raise ValidationFailure("Hermes update requires an explicit controlled --package candidate")
     selected = _installed_identity(agent, root, marketplace)
@@ -900,6 +931,9 @@ def install_plugin(agent: str, source: str, *, home: Path | str | None = None,
                    marketplace: str | None = None, data_home: Path | str | None = None,
                    uv_executable: Path | str | None = None, hooks_trusted: bool = False) -> dict:
     root = agent_home(agent, home)
+    if agent == "cursor":
+        from .cursor_installation import install_cursor
+        return install_cursor(source=source, home=root, data=data_home, uv=uv_executable, hooks_trusted=hooks_trusted)
     local = Path(source).expanduser()
     if local.exists():
         local = local.resolve()
@@ -952,6 +986,9 @@ def install_plugin(agent: str, source: str, *, home: Path | str | None = None,
 
 def uninstall(agent: str, home: Path | str | None = None, marketplace: str | None = None) -> dict:
     root = agent_home(agent, home)
+    if agent == "cursor":
+        from .cursor_installation import uninstall_cursor
+        return uninstall_cursor(root)
     selected = _installed_identity(agent, root, marketplace)
     if selected is None:
         raise ValidationFailure("native plugin is not installed")

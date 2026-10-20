@@ -11,7 +11,7 @@ from ...runtime.catalog import Catalog
 from ...runtime.version import platform_version
 
 
-def windows_hook_command() -> str:
+def windows_hook_command(*, root_variable: str = "PLUGIN_ROOT", mode: str = "hook") -> str:
     """Keep plugin paths and protocol bytes out of the outer Shell parser.
 
     Codex supplies PLUGIN_ROOT in the child environment. The encoded constant
@@ -45,6 +45,9 @@ try {
 }
 finally { $process.Dispose() }
 """
+    if root_variable not in {"PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT"} or mode not in {"hook", "cursor-hook"}:
+        raise ValueError("unsupported native Hook bridge")
+    script = script.replace("$env:PLUGIN_ROOT", "$env:" + root_variable).replace("$start.Arguments = 'hook'", "$start.Arguments = '" + mode + "'")
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
     return "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand " + encoded
 

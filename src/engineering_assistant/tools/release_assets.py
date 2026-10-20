@@ -18,13 +18,17 @@ from typing import Mapping
 from ..runtime.artifact_io import ArtifactIO, artifact_fs
 from .compiler import verify_package
 from ..runtime.catalog import DEFAULT_REPOSITORY_ROOT
-from ..installer.installation import AGENTS, PYTHON_VERSION, TARGETS, _package_lock
+from ..installer.installation import PYTHON_VERSION, TARGETS, _package_lock
 from ..runtime.validation import ValidationFailure
 from ..runtime.version import CanonicalVersion, platform_version
 
 from ..installer.release_contract import (
     _wheel_record, _safe_root, INTERNAL_AGENTS, INTERNAL_TARGETS, INTERNAL_REPOSITORY, MAX_CONTROL_BYTES, MAX_FILE_BYTES, MAX_TREE_BYTES, MAX_TREE_ENTRIES, REQUIRED_PROVIDER_CHECKS, _digest, _tree_digest, _file_hashes, _record, release_provenance, index_provenance, _matches_provenance, _portable_member, _required_wheel_files, _wheel_version, _wheel_verification, _marketplace, validate_acceptance_summary
 )
+
+# A build adapter is not automatically a release-qualified host. Retain the
+# existing advanced matrix; first internal delivery remains INTERNAL_AGENTS.
+RELEASE_AGENTS = ("codex", "hermes", "claude-code")
 
 _PROVIDER_TESTS = frozenset(
     "test_provider_runtime.ProviderRuntimeTests." + name for name in (
@@ -91,7 +95,7 @@ def release_scope(agents, targets) -> tuple[tuple[str, ...], tuple[str, ...]]:
                 or len(set(values)) != len(values)):
             raise ValidationFailure("发行 " + label + " 集合为空、重复或包含未知值")
         return tuple(values)
-    return selected(agents, AGENTS, "Agent"), selected(targets, TARGETS, "目标")
+    return selected(agents, RELEASE_AGENTS, "Agent"), selected(targets, TARGETS, "目标")
 
 
 def _validate_records(storage: ArtifactIO, target: str, agents: tuple[str, ...],

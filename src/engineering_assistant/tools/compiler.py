@@ -9,7 +9,7 @@ import re
 import secrets
 from pathlib import Path
 
-from ..platforms.adapters import ClaudeCodeAdapter, CodexAdapter, HermesAdapter
+from ..platforms.adapters import ClaudeCodeAdapter, CodexAdapter, CursorAdapter, HermesAdapter
 from ..runtime.artifact_io import ArtifactIO
 from ..runtime.catalog import load_catalog
 from ..runtime.validation import ValidationFailure
@@ -18,6 +18,7 @@ from ..runtime.validation import ValidationFailure
 ADAPTERS = {
     "claude-code": ClaudeCodeAdapter,
     "codex": CodexAdapter,
+    "cursor": CursorAdapter,
     "hermes": HermesAdapter,
 }
 
@@ -226,6 +227,10 @@ def _compile_package(
 
     adapter = ADAPTERS[platform](cachebuster=codex_cachebuster, target=target) if platform == "codex" else ADAPTERS[platform](target=target)
     adapter.write_platform_files(output, catalog)
+    from ..runtime.shared_core import make_core_descriptor
+    transport_files = output_io.sha256_file_digests(max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES)
+    (runtime_root / "runtime-core.json").write_text(
+        json.dumps(make_core_descriptor(transport_files, catalog.version, target), sort_keys=True) + "\n", encoding="utf-8")
     payload_files = output_io.sha256_file_digests(
         max_file_bytes=MAX_BUILD_PAYLOAD_FILE_BYTES,
     )

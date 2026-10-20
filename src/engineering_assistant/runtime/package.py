@@ -48,6 +48,10 @@ def verify_package(package_root: Path | str) -> dict:
     ).hexdigest()
     if f"sha256:{digest}" != manifest.get("payload_digest"):
         raise ValidationFailure("package payload digest differs from its build manifest")
+    from .shared_core import make_core_descriptor, read_core_descriptor
+    descriptor = read_core_descriptor(package_root / "engineering-assistant") if manifest.get("build_format_version") == "2.0" else None
+    if descriptor is not None and descriptor != make_core_descriptor(actual, manifest["canonical_version"], manifest["target"]):
+        raise ValidationFailure("shared core contract differs from the distribution payload")
     if manifest.get("build_format_version") == "2.0":
         from .environment import (
             AGENTS,
@@ -167,6 +171,7 @@ def _validate_build_manifest(manifest: object, package_root: Path) -> None:
             "hooks/feedback_capture.py",
         ),
         "hermes": ("plugin.yaml", "__init__.py"),
+        "cursor": (".cursor-plugin/plugin.json", "mcp.json", "hooks/hooks.json"),
         "claude-code": (
             ".claude-plugin/plugin.json",
             ".mcp.json",

@@ -41,7 +41,7 @@ def _execute(args, home: Path, data: Path | str | None, uv: Path | str | None) -
         return {"status": "unsupported", "ready": False, "target": args.target}
     if args.agent == "codex" and host_target() == "unsupported":
         return {"status": "unsupported", "ready": False, "target": "unsupported"}
-    if args.agent == "codex":
+    if args.agent in {"codex", "cursor"}:
         paths = (home, resolve_data_home(data))
         unknown = [{"kind": "unsafe_path", "path": str(path),
                     "reason": "路径不可读或含符号链接/reparse point；尚未调用原生宿主"}
@@ -50,7 +50,7 @@ def _execute(args, home: Path, data: Path | str | None, uv: Path | str | None) -
             return legacy_blocker({"legacy_installation_detected": False, "legacy_check_complete": False,
                 "legacy_scope": [{"kind": "installation_path", "path": str(path)} for path in paths],
                 "legacy_confirmed": [], "legacy_unknown": unknown,
-                "legacy_manual_steps": [{"action": "manual_review", "instruction": "请核对选定 CODEX_HOME 和数据目录的真实路径；安装器不会跟随链接或自动清理"}]})
+                "legacy_manual_steps": [{"action": "manual_review", "instruction": "请核对所选宿主与数据目录的真实路径；安装器不会跟随链接或自动清理"}]})
     with native_control(data, allow_download=args.command in {"install", "update", "repair"}):
         if args.command == "doctor":
             inspection = inspect_legacy_codex(home, resolve_data_home(data)) if args.agent == "codex" else {}
@@ -96,6 +96,9 @@ def _execute(args, home: Path, data: Path | str | None, uv: Path | str | None) -
                                           hooks_trusted=args.hooks_trusted)
             if result is not None:
                 return result
+        if args.agent == "cursor" and args.command == "repair" and args.package is None:
+            from .cursor_installation import repair_cursor
+            return repair_cursor(home, data=data, uv=uv, hooks_trusted=args.hooks_trusted)
         package = args.package or find_package(args.agent, home, args.marketplace)
         if package is None:
             return {"status": "needs_preparation", "ready": False, "reason": "请先安装工程助手插件。"}
@@ -111,7 +114,7 @@ def _show_result(result: dict, as_json: bool) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
     messages = {
-        "ready": "工程助手已就绪。", "needs_trust": "插件与 Runtime 已准备好；请在 Codex 中审查并信任 Hook，然后重开会话。",
+        "ready": "工程助手已就绪。", "needs_trust": "插件与 Runtime 已准备好；请在所选宿主中审查并信任 Hook，然后重开会话。",
         "needs_update": "已安装旧版，请执行 update。", "needs_preparation": "插件尚未准备好，请执行 install 或 repair。",
         "unsupported": "当前系统或目标不在支持范围内。", "uninstalled": "插件已卸载；已保留 Runtime，供仍在运行的会话使用。",
         "partial": "完整功能资格尚未通过，插件未就绪。", "failed": "操作未完成。",
@@ -120,10 +123,16 @@ def _show_result(result: dict, as_json: bool) -> None:
     if result.get("status") == "partial" and result.get("runtime_ready") is True:
         message = "Runtime 与 MCP 可运行；Provider 隔离检查未通过，完整功能资格尚未通过。"
     elif result.get("reason") == "requires_native_activation":
-        message = "插件与 Runtime 已准备好；请在 Codex 中启用插件，然后重开会话。"
+        message = "插件与 Runtime 已准备好；请在所选宿主中核对并启用插件，然后重开会话。"
     print(message)
     if result.get("version"):
         print("版本：" + result["version"])
+    if result.get("shared_core"):
+        print("共享核心：" + result["shared_core"])
+    if result.get("package"):
+        print("宿主入口：" + result["package"])
+    for instruction in result.get("next_steps", []):
+        print("操作：" + instruction)
     if result.get("reason") and result["status"] not in {"ready", "needs_trust"}:
         print("原因：" + str(result["reason"]))
     if result.get("legacy_installation_detected") or result.get("legacy_check_complete") is False:
@@ -136,7 +145,7 @@ def _show_result(result: dict, as_json: bool) -> None:
             if item.get("command"):
                 print("命令：" + " ".join(item["command"]))
     if result.get("restart_required") and result["status"] == "ready":
-        print("请重开 Codex 会话以加载本版插件。")
+        print("请重开所选宿主的会话以加载本版插件。")
 
 
 def main(argv=None) -> int:

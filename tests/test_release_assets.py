@@ -17,8 +17,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engineering_assistant.installer.installation import AGENTS, PYTHON_VERSION, TARGETS, python_download_metadata, runtime_lock
-from engineering_assistant.tools.release_assets import REQUIRED_PROVIDER_CHECKS, assemble_release, required_native_tests
+from engineering_assistant.installer.installation import PYTHON_VERSION, TARGETS, python_download_metadata, runtime_lock
+from engineering_assistant.tools.release_assets import RELEASE_AGENTS as AGENTS, REQUIRED_PROVIDER_CHECKS, assemble_release, required_native_tests
 from engineering_assistant.runtime.validation import ValidationFailure
 
 VERSION = "2.3.0.0-rc.1"
@@ -50,6 +50,11 @@ def fake_verify(package):
 
 
 class ReleaseAssetTests(unittest.TestCase):
+    def test_new_build_adapter_does_not_implicitly_expand_release_scope(self):
+        from engineering_assistant.tools.release_assets import release_scope
+        with self.assertRaises(ValidationFailure):
+            release_scope(("cursor",), INTERNAL_TARGETS)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name).resolve()

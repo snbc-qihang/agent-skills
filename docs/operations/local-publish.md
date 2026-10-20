@@ -90,6 +90,37 @@ Provider 隔离资格使用受控诊断 bundle，不表示可选的 UI/UX Pro Ma
 
 ## Runtime 准备与恢复
 
+### 共享核心与原生入口
+
+核心位置遵循操作系统标准，不使用 `~/.codex` 作为产品数据根：
+
+| 内容 | macOS | Windows |
+| --- | --- | --- |
+| 共享数据根 | `~/Library/Application Support/engineering-assistant/` | `%LOCALAPPDATA%\engineering-assistant\` |
+| 核心内容 | 根下 `cores/<摘要>/` | 根下 `cores\<摘要>\` |
+| Python 与依赖 | 根下 `python/`、`environments/` | 根下 `python\`、`environments\` |
+| 宿主版本绑定 | 根下 `bindings/<agent>/` | 根下 `bindings\<agent>\` |
+
+同一源码、版本及目标下，Codex、Claude Code、Cursor 和 Hermes 的公共核心按内容摘要复用；宿主发现元数据留在入口。启动时校验完整核心，再从核心执行 Runtime、读取 catalog/skills/packs/schemas。用户不需要手工复制技能或配置全局环境变量。正常安装结果显示核心与入口两个路径，JSON 诊断增加 `data_home`、`shared_core`；`package` 继续表示原生入口，不改动已有字段语义。
+
+| 宿主 | 原生入口 | 当前范围 |
+| --- | --- | --- |
+| Codex | 选定 `CODEX_HOME` 下的原生 marketplace/cache | 首轮两目标；真实验收及正式推广仍待完成 |
+| Claude Code | 选定 `CLAUDE_CONFIG_DIR` 下的原生插件与缓存 | 源码回归与显式 `--source` 入口；不复用 Codex 发行包 |
+| Cursor | `~/.cursor/plugins/local/engineering-assistant/`，可用 `--agent-home` 选择本地根 | 新增原生本地插件适配，尚无已验收发行或真实宿主支持承诺 |
+
+原生市场管理的缓存可保留原发行包的运输副本，安装器不手写或裁剪宿主缓存；共享目录是日常执行和读取核心资料的位置。也不会把全局 `~/.agents/skills` 当成完整插件通用入口而重复注册相同 skill。各工具的 MCP、Hook、命名空间、启用和信任合同分别保留。依据 [Codex skills](https://developers.openai.com/codex/skills/)、[Claude Code skills](https://code.claude.com/docs/en/skills) 和 [Cursor plugins](https://cursor.com/docs/plugins) 的原生发现方式接入，目录相同不等于宿主配置协议相同。
+
+**本改造尚未进入 GitHub `.3` 候选或正式安装入口。** 不可通过把 `.3` 命令中的 `--agent` 改为 `claude-code`/`cursor` 安装对应插件。只有取得对应宿主、目标的已构建发行后，才可用高级 `ea-setup install --agent <宿主> --source <已核验的对应发行来源>`；Codex 默认正式入口的来源、验收与推广合同保持原样。共享目录变更不要求迁走已有 2.x 插件或删除旧 Runtime。
+
+Cursor 使用官方支持的本地插件导入，安装器只管理自己的入口及所有权记录，不改写 `~/.cursor/mcp.json` 或 `hooks.json`。安装后必须重开 Cursor 或运行 `Developer: Reload Window`，在 Customize 核对 skills、MCP 和 Hook。团队/企业管理员可能禁止本地导入，同名市场插件也可能优先于本地副本；安装器不绕过这些规则。故目录及协议通过后仍报告 `requires_native_activation`，不以 `--hooks-trusted` 伪造宿主已加载。详见 [Cursor 本地插件加载限制](https://cursor.com/docs/plugins#test-plugins-locally)。
+
+Cursor Hook 单独适配 `beforeSubmitPrompt`、`beforeMCPExecution`、`afterMCPExecution`、`postToolUseFailure` 与 `stop`，不读 transcript 或用户邮箱，不自动续跑。按 [Cursor Hook 响应协议](https://cursor.com/docs/hooks)，观察器异常使用宿主默认允许的失败退出，不返回会阻断权限事件的无效 JSON。MCP 专用事件不保证提供原生 `tool_use_id`，缺少时仅采集有效反馈，不生成伪造的调用计数；完整事件覆盖仍需真实 Cursor 验收，不能用模型声明替代。
+
+更新按各入口自己的不可变核心摘要选择内容，不能把某个宿主的更新传播为其他宿主强制升级。卸载保留共享核心、Python、其他宿主和项目证据。新包的核心缺失或摘要错误时拒绝启动，执行 `repair` 才会保留旧内容并重新准备；不会静默改用另一核心或原生运输副本。旧包没有 `runtime-core.json` 时继续遵守原启动合同。
+
+### 固定解释器与恢复
+
 每个包包含 `runtime-lock.json`、单目标 `runtime-python-downloads.json`、哈希依赖锁和目标原生 `ea`/`ea.exe`。`config/runtime-python-downloads.json` 是共享目标分布的作者源，固定 uv 0.11.7 元数据中的 CPython `3.13.13`、PBS `20260414`、官方归档 URL 与 SHA-256。准备使用包内元数据和构建日期，忽略继承的 uv 选择配置；由 uv 下载、解包并校验归档，不要求用户更换全局 uv 版本。
 
 launcher 读取按 Agent/版本持久化的 v2 绑定，使用绝对的固定解释器路径并校验分布身份；Runtime 启动和 `doctor` 还核对实际 `sys.base_prefix`、`BUILD` 与不可变安装记录。Python 基底按分布身份隔离，环境键包含该身份，更新不会重新标记旧基底的构建号。Runtime 启动不依赖 GUI/终端 PATH 中的 Python 或 uv，Codex Windows Hook 的系统 PowerShell 先决条件见上文。Hermes 宿主只加载标准库，通过有界 RPC 启动同一个 Runtime。

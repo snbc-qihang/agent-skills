@@ -39,6 +39,24 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 修复、卸载、首次工具准备和旧版清理见[安装与本机发布](docs/operations/local-publish.md)。发现历史 2.x 安装时，安装器提供确切位置和人工步骤；不自动接管或删除。共享 Python、其他插件、作者源码和项目运行证据不在清理范围。
 
+## 安装位置与多工具接入
+
+核心使用操作系统的标准用户数据目录，独立于 Codex、Claude Code、Cursor：
+
+| 系统 | 共享数据根目录 |
+| --- | --- |
+| macOS | `~/Library/Application Support/engineering-assistant/` |
+| Windows | `%LOCALAPPDATA%\engineering-assistant\` |
+| Linux（源码回归） | `${XDG_DATA_HOME:-~/.local/share}/engineering-assistant/` |
+
+`cores/<摘要>/` 保存不可变的 Runtime、skills、packs、catalog 和 schemas；同一核心由多个宿主复用。`python/`、`environments/` 保存固定解释器及依赖，`bindings/<agent>/` 保存各宿主的版本绑定。安装器输出“共享核心”和“宿主入口”两个位置，`doctor --json` 提供 `data_home`、`shared_core` 与 `package`。
+
+宿主继续管理自己的插件入口：Codex 使用原生 marketplace/cache，Claude Code 使用原生 plugin，Cursor 使用 `~/.cursor/plugins/local/engineering-assistant/`。原生缓存可保留发行包副本；日常 Runtime 从校验过的共享核心加载。卸载一个入口保留共享核心及其他宿主。项目运行证据仍位于目标项目 `.run-artifacts/engineering-assistant/`。
+
+各工具没有统一的插件配置文件，不能只指定一个文件夹就保证全部自动加载。安装器通过 `--agent codex`、`--agent claude-code` 或 `--agent cursor` 选择宿主 adapter，保留原生发现、启用和信任流程，不改写其他插件的配置。详见[共享核心与原生入口](docs/operations/local-publish.md#共享核心与原生入口)。
+
+**共享核心改造尚未发布。** 上面的 GitHub `.3` 候选保留原有布局，不包含本次改造。Cursor 当前为源码和本地资格验证入口，尚无已验收的 GitHub 发行命令；新增 adapter 不扩大首轮 Codex 两目标的发行矩阵。
+
 ## 使用方式
 
 安装后直接描述任务，无需日常手动管理 `ea` 状态机：

@@ -627,7 +627,7 @@ class FeedbackCollector:
         platform: str,
         mode: str = "candidates",
     ) -> CaptureResult:
-        if platform not in {"claude-code", "codex"}:
+        if platform not in {"claude-code", "codex", "cursor"}:
             raise ValidationFailure(f"unsupported lifecycle platform {platform!r}")
         self._validate_mode(mode)
         if mode == "disabled":
@@ -1471,7 +1471,7 @@ def run_lifecycle_hook(
 ) -> int:
     response: dict = {}
     try:
-        if platform not in {"claude-code", "codex"}:
+        if platform not in {"claude-code", "codex", "cursor"}:
             raise ValidationFailure(f"unsupported lifecycle platform {platform!r}")
         raw = input_stream.read(MAX_HOOK_INPUT_BYTES + 1)
         if len(raw.encode("utf-8")) > MAX_HOOK_INPUT_BYTES:
