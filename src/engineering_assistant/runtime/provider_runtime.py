@@ -503,6 +503,8 @@ class ProviderExecutor:
         observed_integrity: str | None = None,
     ) -> ProviderResult:
         fallback_id = provider.fallback_provider_id or "native-engineering"
+        if len(warning) > 1000:
+            warning = warning[:250] + "\n...\n" + warning[-745:]
         result = ProviderResult(
             invocation_id=invocation.invocation_id,
             invocation_digest=self.invocation_digest(invocation),
@@ -522,7 +524,7 @@ class ProviderExecutor:
             observed_source_integrity=observed_integrity,
             observed_at=datetime.now(timezone.utc).isoformat(),
             next_action="execute_native_provider",
-            warning=warning[:1000],
+            warning=warning,
             fallback_provider_id=fallback_id,
         )
         validate_instance(result.to_dict(), self.output_schema, "provider-result")

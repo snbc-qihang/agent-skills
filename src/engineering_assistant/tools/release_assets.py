@@ -36,7 +36,7 @@ _PROVIDER_TESTS = frozenset(
         "test_production_sandbox_denies_network_processes_exec_and_outside_writes",
         "test_production_sandbox_enforces_timeout_and_output_limit",
     )
-)
+) | {"test_sandbox_probe.SandboxProbeTests.test_real_sandbox_qualification_requires_every_execution_boundary"}
 _WINDOWS_TESTS = frozenset(
     "test_windows_artifact_fs.WindowsArtifactIntegrationTests." + name for name in (
         "test_concurrent_immutable_and_cas_have_exactly_one_winner",

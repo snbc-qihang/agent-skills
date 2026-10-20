@@ -68,6 +68,15 @@ class ProviderRuntimeTests(unittest.TestCase):
             density=8,
         )
 
+    def test_bounded_fallback_keeps_failure_category_and_final_exception(self) -> None:
+        warning = "provider exited with status 1: " + "traceback frame\n" * 200 + "ImportError: fixed native extension failed"
+        provider = self.catalog.providers["ui-ux-pro-max"]
+        result = self.executor._fallback(self.invocation(), provider, warning)
+        self.assertEqual("fallback", result.status)
+        self.assertLessEqual(len(result.warning), 1000)
+        self.assertTrue(result.warning.startswith("provider exited with status 1:"))
+        self.assertTrue(result.warning.endswith("ImportError: fixed native extension failed"))
+
     def test_provider_uses_the_host_temporary_directory_and_cleans_its_snapshot(self) -> None:
         temporary_parent = Path(self.temporary.name) / "临时工作 目录"
         temporary_parent.mkdir()
