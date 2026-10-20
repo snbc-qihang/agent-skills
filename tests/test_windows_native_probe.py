@@ -864,20 +864,26 @@ class WindowsSxsCopyControlTests(unittest.TestCase):
             with self.subTest(size=len(data)), self.assertRaises(ValueError):
                 probe._without_sxs_manifest_lookup(data)
 
-    def test_sxs_control_changes_only_the_private_dll_copy(self):
+    def test_sxs_control_changes_only_the_private_python_images(self):
         import shutil
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             source = root / "installed"
             source.mkdir()
-            (source / "python.exe").write_bytes(b"unchanged executable")
+            executable = bytearray(self.dll())
+            struct.pack_into("<H", executable, 150, 0x22)
+            executable = bytes(executable)
+            (source / "python.exe").write_bytes(executable)
             (source / "python313.dll").write_bytes(self.dll())
+            (source / "unrelated.dll").write_bytes(b"unchanged dependency")
             target = root / "private"
             original = lambda destination: (shutil.copytree(source, destination), destination / "python.exe")[1]
             self.assertEqual(target / "python.exe", probe._sxs_private_runtime(target, original))
             self.assertEqual(self.dll(), (source / "python313.dll").read_bytes())
-            self.assertEqual(b"unchanged executable", (target / "python.exe").read_bytes())
+            self.assertEqual(executable, (source / "python.exe").read_bytes())
+            self.assertEqual(probe._without_sxs_manifest_lookup(executable, dll=False), (target / "python.exe").read_bytes())
             self.assertEqual(probe._without_sxs_manifest_lookup(self.dll()), (target / "python313.dll").read_bytes())
+            self.assertEqual(b"unchanged dependency", (target / "unrelated.dll").read_bytes())
 
 
 if __name__ == "__main__":

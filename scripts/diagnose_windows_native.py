@@ -236,14 +236,14 @@ def replace_runtime(destination: Path, image: bytes, original) -> Path:
     return executable
 
 
-def _without_sxs_manifest_lookup(data: bytes) -> bytes:
-    """Fixed x64 DLL control: change only the documented SxS lookup bit.
+def _without_sxs_manifest_lookup(data: bytes, *, dll: bool = True) -> bytes:
+    """Fixed x64 image control: change only the documented SxS lookup bit.
 
     /ALLOWISOLATION:NO controls assembly manifests, not AppContainer isolation:
     https://learn.microsoft.com/cpp/build/reference/allowisolation
     This diagnostic never changes the installed interpreter or token policy.
     """
-    error = ValueError("invalid private CPython DLL control")
+    error = ValueError("invalid private CPython image control")
     if not 64 <= len(data) <= 32 * 1024 * 1024 or data[:2] != b"MZ":
         raise error
     pe = struct.unpack_from("<I", data, 60)[0]
@@ -252,7 +252,7 @@ def _without_sxs_manifest_lookup(data: bytes) -> bytes:
     machine = struct.unpack_from("<H", data, pe + 4)[0]
     size, flags = struct.unpack_from("<HH", data, pe + 20)
     optional = pe + 24
-    if (machine != 0x8664 or size != 240 or flags & 0x2002 != 0x2002
+    if (machine != 0x8664 or size != 240 or flags & 0x2002 != (0x2002 if dll else 0x2)
             or optional + size > len(data) or struct.unpack_from("<H", data, optional)[0] != 0x20B):
         raise error
     result = bytearray(data)
@@ -266,17 +266,18 @@ def _sxs_private_runtime(destination: Path, original) -> Path:
     executable = original(destination)
     if executable != destination / "python.exe" or windows._reparse(destination) or windows._reparse(executable):
         raise ValueError("invalid private CPython control directory")
-    core = destination / "python313.dll"
-    data = _without_sxs_manifest_lookup(_read_file(core, 32 * 1024 * 1024))
-    core.write_bytes(data)
-    if _read_file(core, 32 * 1024 * 1024) != data:
-        raise ValueError("private CPython control changed")
+    for name, dll in (("python.exe", False), ("python313.dll", True)):
+        image = destination / name
+        data = _without_sxs_manifest_lookup(_read_file(image, 32 * 1024 * 1024), dll=dll)
+        image.write_bytes(data)
+        if _read_file(image, 32 * 1024 * 1024) != data:
+            raise ValueError("private CPython control changed")
     return executable
 
 
 def _python_sxs_control(original, api, owner, environment) -> dict:
     observation = {"diagnostic_only": True, "qualified": False, "capability_count": 0,
-                   "manifest_lookup": "disabled_private_dll_copy"}
+                   "manifest_lookup": "disabled_private_python_images"}
     try:
         with tempfile.TemporaryDirectory(prefix="ea-native-sxs-control-") as temporary:
             base = Path(temporary).resolve()
