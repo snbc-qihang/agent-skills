@@ -350,10 +350,10 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                      patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth, \
                      patch.object(probe, "_python_sxs_control", return_value={"diagnostic_only": True, "qualified": False}) as sxs:
                     result = probe.diagnose()
-                self.assertEqual([False, True, True], calls)
+                self.assertEqual([False, True, True, True], calls)
                 self.assertIs(result["qualified"], False)
                 self.assertEqual(int(eligible), fourth.call_count)
-                self.assertEqual(2 * int(eligible), sxs.call_count)
+                self.assertEqual(3 * int(eligible), sxs.call_count)
                 if eligible:
                     self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
                     self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
@@ -867,6 +867,19 @@ class WindowsSxsCopyControlTests(unittest.TestCase):
                         before.replace(b'Microsoft.Windows.Common-Controls', b'Unapproved.Windows.Dependency')):
             with self.subTest(size=len(invalid)), self.assertRaises(ValueError):
                 probe._without_common_controls(invalid, manifest)
+
+    def test_manifest_type_control_requires_exact_image_and_preserves_every_other_byte(self):
+        data = self.dll()
+        offset = 300
+        data = data[:offset] + struct.pack('<I', 24) + data[offset + 4:]
+        expected = data[:offset] + struct.pack('<I', 65535) + data[offset + 4:]
+        record = (hashlib.sha256(data).hexdigest(), offset, hashlib.sha256(expected).hexdigest())
+        with patch.object(probe, 'MANIFEST_FREE_IMAGES', {'python313.dll': record}):
+            self.assertEqual(expected, probe._without_embedded_manifest(data, 'python313.dll'))
+            for name, invalid in (('python.exe', data), ('python313.dll', data[:-1]),
+                                  ('python313.dll', data[:-1] + b'X')):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    probe._without_embedded_manifest(invalid, name)
 
     def test_sxs_copy_control_rejects_other_images_and_truncated_headers(self):
         invalid = [b"", self.dll()[:240], b"NO" + self.dll()[2:]]

@@ -45,6 +45,12 @@ IMPORTS = {"GetStdHandle", "WriteFile", "LoadLibraryExW", "GetLastError", "FreeL
            "MapViewOfFile", "UnmapViewOfFile", "CreateActCtxW", "ReleaseActCtx"}
 SOURCE_SHA256 = "5e0e6c2826c2a8917b9939241e8f708df99ebd8af4751c5df9495f4ebeb2cd9f"
 MAX_IMAGE = 1_048_576
+MANIFEST_FREE_IMAGES = {
+    "python.exe": ("1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039", 10280,
+                   "7c9b1e6b2c57695476d7ed73938766eb4b64872ddd498e2f857291cfb870caac"),
+    "python313.dll": ("68dc4b6989e4a5954417157f5d714d2a1d21b1da855549e98ef1c2ab43468b62", 6098968,
+                      "5d5218b5ec9f47af179f152b1fb53e372da293a01bffbc41fe8803e9eda50067"),
+}
 
 
 class ProbeFailure(ValueError):
@@ -276,7 +282,7 @@ def _sxs_private_runtime(destination: Path, original) -> Path:
     return executable
 
 
-def _manifest_resource(path: Path, name: int) -> bytes:
+def _manifest_resource(path: Path, name: int, *, allow_missing=False) -> bytes | None:
     """Read only the fixed embedded manifest; never load executable code."""
     api = ctypes.WinDLL("kernel32", use_last_error=True)
     for symbol, result, arguments in (
@@ -293,7 +299,10 @@ def _manifest_resource(path: Path, name: int) -> bytes:
     if not module:
         raise ValueError("private Python resource mapping failed")
     try:
+        ctypes.set_last_error(0)
         resource = api.FindResourceW(module, name, 24)  # RT_MANIFEST, not RT_VERSION (16)
+        if not resource and allow_missing and ctypes.get_last_error() == 1813:
+            return None  # Observed ERROR_RESOURCE_TYPE_NOT_FOUND only.
         size = api.SizeofResource(module, resource) if resource else 0
         loaded = api.LoadResource(module, resource) if 64 <= size <= 8192 else None
         address = api.LockResource(loaded) if loaded else None
@@ -336,9 +345,41 @@ def _common_controls_private_runtime(destination: Path, original) -> Path:
     return executable
 
 
-def _python_sxs_control(original, api, owner, environment, *, remove_common_controls=False) -> dict:
+def _without_embedded_manifest(data: bytes, name: str) -> bytes:
+    record = MANIFEST_FREE_IMAGES.get(name)
+    if record is None or hashlib.sha256(data).hexdigest() != record[0]:
+        raise ValueError("manifest type control requires the exact fixed PBS image")
+    _before, offset, after = record
+    if offset + 4 > len(data) or struct.unpack_from("<I", data, offset)[0] != 24:
+        raise ValueError("manifest type control has an invalid fixed resource entry")
+    result = data[:offset] + struct.pack("<I", 65535) + data[offset + 4:]
+    if hashlib.sha256(result).hexdigest() != after:
+        raise ValueError("manifest type control result mismatch")
+    return result
+
+
+def _manifest_free_private_runtime(destination: Path, original) -> Path:
+    executable = original(destination)
+    if executable != destination / "python.exe" or windows._reparse(destination) or windows._reparse(executable):
+        raise ValueError("invalid private Python control directory")
+    images = {name: _without_embedded_manifest(_read_file(destination / name, 32 * 1024 * 1024), name)
+              for name in MANIFEST_FREE_IMAGES}
+    for name, data in images.items():
+        image = destination / name
+        image.write_bytes(data)
+        if _read_file(image, 32 * 1024 * 1024) != data:
+            raise ValueError("manifest type control changed")
+        resource = 1 if name == "python.exe" else 2
+        if _manifest_resource(image, resource, allow_missing=True) is not None:
+            raise ValueError("manifest type control remains visible")
+    return executable
+
+
+def _python_sxs_control(original, api, owner, environment, *, remove_common_controls=False, hide_manifest=False) -> dict:
     observation = {"diagnostic_only": True, "qualified": False, "capability_count": 0,
                    "manifest_lookup": "private_common_controls_removed" if remove_common_controls else "disabled_private_python_images"}
+    if hide_manifest:
+        observation["manifest_lookup"] = "fixed_private_manifest_type_hidden"
     try:
         with tempfile.TemporaryDirectory(prefix="ea-native-sxs-control-") as temporary:
             base = Path(temporary).resolve()
@@ -346,13 +387,23 @@ def _python_sxs_control(original, api, owner, environment, *, remove_common_cont
             bundle, work = base / "bundle", base / "work"
             bundle.mkdir()
             work.mkdir()
-            copier = _common_controls_private_runtime if remove_common_controls else _sxs_private_runtime
+            copier = _manifest_free_private_runtime if hide_manifest else _common_controls_private_runtime if remove_common_controls else _sxs_private_runtime
             with patch.object(windows, "_private_runtime", lambda path: copier(path, original)):
                 code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
                     environment, 10, 4096, diagnostics=observation)
             observation.update(exit_code=f"0x{code & 0xFFFFFFFF:08X}",
                 marker=code == 0 and not stderr and output in (b"EA_LPAC_STARTUP_OK\n", b"EA_LPAC_STARTUP_OK\r\n"),
-                stderr_present=bool(stderr))
+                stdout_marker=b"EA_LPAC_STARTUP_OK" in output,
+                stdout_bytes=len(output), stderr_present=bool(stderr), stderr_bytes=len(stderr),
+                stderr_flags=[label for label, text in (
+                    ("python_path_configuration", b"Python path configuration:"),
+                    ("python_fatal_error", b"Fatal Python error:"),
+                    ("permission_error", b"PermissionError:"),
+                    ("missing_independent_libraries", b"Could not find platform independent libraries"),
+                    ("missing_dependent_libraries", b"Could not find platform dependent libraries"),
+                ) if text in stderr])
+            if hide_manifest:
+                observation["manifest_resource_absence_verified"] = True
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         observation["error"] = _error_record(exc)
     return observation
@@ -674,7 +725,7 @@ def diagnose() -> dict:
         environment = {name: value for name, value in os.environ.items()
                        if name.upper() in {"SYSTEMROOT", "WINDIR"}}
         for name, detached in (("baseline", None), ("strict_lpac", False), ("detached_console", True),
-                               ("private_common_controls", True)):
+                               ("private_common_controls", True), ("private_no_manifest", True)):
             observation = {}
             report[name] = observation
             case_started = time.monotonic()
@@ -694,11 +745,15 @@ def diagnose() -> dict:
                             cwd=work, environment=private_environment, timeout_seconds=10, output_limit_bytes=4096)
                         observation.update(_observe(code, output))
                     else:
-                        copier = (lambda path: replace_runtime(path, image, lambda target: _common_controls_private_runtime(target, original))) if name == "private_common_controls" else private_runtime
+                        transform = {"private_common_controls": _common_controls_private_runtime,
+                                     "private_no_manifest": _manifest_free_private_runtime}.get(name)
+                        copier = (lambda path: replace_runtime(path, image, lambda target: transform(target, original))) if transform else private_runtime
                         with patch.object(windows, "_private_runtime", copier):
                             code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
                                 environment, 10, 4096, diagnostics=observation, _console_diagnostic=detached)
                         observation.update(_observe(code, output, stderr))
+                        if name == "private_no_manifest":
+                            observation["manifest_resource_absence_verified"] = True
             except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 observation["error"] = _error_record(exc, "execution")
             observation["total_seconds"] = round(time.monotonic() - case_started, 3)
@@ -706,6 +761,7 @@ def diagnose() -> dict:
             report["detached_registry_read"] = _registry_read_control(image, original, api, owner, environment)
             report["python_startup_private_sxs"] = _python_sxs_control(original, api, owner, environment)
             report["python_startup_private_common_controls"] = _python_sxs_control(original, api, owner, environment, remove_common_controls=True)
+            report["python_startup_private_no_manifest"] = _python_sxs_control(original, api, owner, environment, hide_manifest=True)
         if _python_startup_control_ready(report):
             report["python_startup_registry_read"] = _python_startup_control(original, api, owner, environment)
         else:
