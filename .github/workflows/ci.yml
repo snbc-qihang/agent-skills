@@ -218,6 +218,29 @@ jobs:
           print(json.dumps(attempt), flush=True)
           raise SystemExit(code)
           PYTHON
+      - name: Windows 安装与 Provider 边界定位
+        if: matrix.target == 'windows-x64'
+        run: |
+          python - <<'PY'
+          import sys
+          import unittest
+          sys.path.insert(0, "tests")
+          names = [
+              "test_codex_control.CodexControlTests.test_replaced_parent_is_rejected_and_replacement_is_preserved",
+              "test_internal_distribution.InternalDistributionTests.test_concurrent_fetch_publishes_one_complete_tree",
+              "test_internal_distribution.InternalDistributionTests.test_failed_final_verification_cleans_only_its_staging",
+              "test_internal_distribution.InternalDistributionTests.test_git_fetch_ignores_inherited_repository_and_object_routing",
+              "test_internal_distribution.InternalDistributionTests.test_git_transport_rejects_replaced_working_directory_before_next_command",
+              "test_internal_distribution.InternalDistributionTests.test_real_git_fetch_is_cached_offline_and_cache_is_reverified",
+              "test_internal_distribution.InternalDistributionTests.test_replaced_final_staging_is_not_deleted_by_failure_cleanup",
+              "test_internal_promotion.ReleaseBoundaryTests.test_git_environment_cannot_rewrite_fixed_https_origin",
+              "test_legacy_installation.LegacyInspectionTests.test_missing_cli_still_reports_disk_findings_and_incomplete_check",
+              "test_provider_runtime.ProviderRuntimeTests.test_windows_lpac_reads_and_writes_deep_unicode_paths",
+              "test_provider_sandboxes.WindowsPrivatePythonTests.test_windows_private_worker_retains_token_restrictions",
+          ]
+          result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromNames(names))
+          raise SystemExit(0 if result.wasSuccessful() else 1)
+          PY
       - name: 全量回归与不可跳过的原生安全验证
         run: |
           python - <<'PY'
@@ -248,7 +271,7 @@ jobs:
           loader = unittest.TestLoader()
           suite = loader.discover("tests")
           discovered = set(test_ids(suite))
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          result = unittest.TextTestRunner(verbosity=2, failfast=True).run(suite)
           require_native_test_results(result, required, discovered)
           report = {
               "target": os.environ["EA_CI_TARGET"], "test_count": result.testsRun,
