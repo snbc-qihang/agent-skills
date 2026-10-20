@@ -145,8 +145,13 @@ class ProviderExecutor:
             # CreateProcessW may redirect AppContainer directory options into
             # its profile. Restore only the private cwd after LPAC/Job setup
             # and before loading any Provider code; the profile stays closed.
+            extended = "\\\\?\\"
+            if os.name == "nt" and not str(script).startswith(extended):
+                script = Path(extended + str(script))
             bootstrap += (
                 "import os;"
+                "cwd=os.getcwd();"
+                f"os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd) if os.name=='nt' else None;"
                 "os.environ.update(dict.fromkeys("
                 "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'),os.getcwd()));"
             )
