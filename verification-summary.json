@@ -1,0 +1,38 @@
+{
+  "schema_version": "1",
+  "assurance": "local_unattested",
+  "source_commit": "e769d7df86886532a0f62418af66cbd035ef4395",
+  "tests": {
+    "run": 854,
+    "passed": 828,
+    "skipped_for_other_platforms": 26,
+    "failed": 0
+  },
+  "checks": {
+    "source-validation": "passed",
+    "eval": "passed",
+    "package-codex": "passed",
+    "package-hermes": "passed",
+    "package-claude-code": "passed",
+    "package-cursor": "passed",
+    "shared-core-identity": "passed",
+    "official-validation": "passed",
+    "native-runtime": "passed",
+    "native-registration": "passed",
+    "wheel-verification": "passed",
+    "publish-dry-run": "passed"
+  },
+  "candidate_official_validation": "passed",
+  "shared_core_digest": "sha256:b28f303504f1b51c5e8b178147e269027aebe00980c9ae3cb3ff7865bcf3412d",
+  "native_macos_runtime": {
+    "mcp": "passed",
+    "hook_protocol": "passed",
+    "persistent_run": "passed",
+    "cross_process_recovery": "passed",
+    "provider_isolation": "passed"
+  },
+  "authenticated_app_cli_acceptance": "pending",
+  "windows11_acceptance": "pending",
+  "formal_release_eligible": false,
+  "product_canary": "not_verified"
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["invocation_id", "invocation_digest", "requested_provider_id", "provider_id", "capability_id", "status", "output", "trust_level", "source_revision", "expected_source_integrity", "observed_source_integrity", "observed_at", "next_action", "warning", "fallback_provider_id"],
+  "properties": {
+    "invocation_id": {"type": "string", "minLength": 1},
+    "invocation_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "requested_provider_id": {"type": "string", "minLength": 1},
+    "provider_id": {"type": "string", "minLength": 1},
+    "capability_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["completed", "fallback", "in_progress"]},
+    "output": {"type": "string", "maxLength": 131072},
+    "trust_level": {"const": "untrusted_advisory"},
+    "source_revision": {"type": ["string", "null"]},
+    "expected_source_integrity": {"type": ["string", "null"]},
+    "observed_source_integrity": {"type": ["string", "null"]},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "next_action": {"enum": ["review_advisory", "execute_native_provider", "retry"]},
+    "warning": {"type": ["string", "null"]},
+    "fallback_provider_id": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["invocation_id", "run_id", "capability_id", "query", "operation", "project_name", "domain", "stack", "variance", "motion", "density"],
+  "properties": {
+    "invocation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "capability_id": {"enum": ["frontend-design", "product-prototype-review"]},
+    "query": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "operation": {"enum": ["design_system", "search"]},
+    "project_name": {"type": ["string", "null"], "maxLength": 200},
+    "domain": {"type": ["string", "null"], "enum": [null, "style", "prompt", "color", "chart", "landing", "product", "ux", "typography", "google-fonts", "gsap"]},
+    "stack": {"type": ["string", "null"], "maxLength": 64},
+    "variance": {"type": ["integer", "null"], "minimum": 1, "maximum": 10},
+    "motion": {"type": ["integer", "null"], "minimum": 1, "maximum": 10},
+    "density": {"type": ["integer", "null"], "minimum": 1, "maximum": 10}
+  },
+  "additionalProperties": false
+}

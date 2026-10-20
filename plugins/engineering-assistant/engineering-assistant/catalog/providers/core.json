@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0.1",
+  "providers": [
+    {
+      "id": "native-engineering",
+      "version": "1.0.0.1",
+      "mode": "native",
+      "capability_ids": [
+        "route-engineering", "research", "decision-interview", "domain-modeling",
+        "repo-context", "wayfinder", "prototype", "codebase-design", "tdd",
+        "diagnosing-bugs", "code-review", "shape-contract", "architecture-design",
+        "implementation-contract", "design-review", "work-slicing", "implementation",
+        "quality-evidence", "frontend-design", "frontend-implementation",
+        "product-prototype-review", "database-design", "redis-design", "mq-design",
+        "release-readiness", "release-verification", "release-retrospective",
+        "feedback-ingest", "knowledge-mining", "skill-evolution", "skill-quality"
+      ],
+      "input_schema_ref": "schemas/run-state.schema.json",
+      "output_schema_ref": "schemas/step-result.schema.json",
+      "risk_class": "workspace_write",
+      "network_policy": "deny",
+      "timeout_seconds": 300,
+      "evidence_contract": ["source", "test", "review"],
+      "failure_action": "block",
+      "fallback_provider_id": null,
+      "source": null,
+      "priority": 0
+    },
+    {
+      "id": "ui-ux-pro-max",
+      "version": "1.0.0.1",
+      "mode": "external_cli",
+      "capability_ids": ["frontend-design", "product-prototype-review"],
+      "input_schema_ref": "schemas/provider-invocation.schema.json",
+      "output_schema_ref": "schemas/provider-result.schema.json",
+      "risk_class": "read_only",
+      "network_policy": "deny",
+      "timeout_seconds": 30,
+      "evidence_contract": ["source", "review"],
+      "failure_action": "fallback",
+      "fallback_provider_id": "native-engineering",
+      "source": {
+        "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git",
+        "revision": "3da52ff1cab1be91848072ec1be5f493d730fd5f",
+        "integrity": "sha256:c03a2109fdd9c0b37d92c707c81fbf8dbb41f92e4d157cd03b27bc13d864d2c5",
+        "license": "MIT"
+      },
+      "priority": 100
+    }
+  ]
+}

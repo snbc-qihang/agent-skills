@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0.1",
+  "flows": [
+    {
+      "id": "shape",
+      "version": "1.0.0.1",
+      "entry_conditions": ["请求结果尚未达到决策完备状态"],
+      "nodes": [
+        {"id": "discover-facts", "capability": "repo-context", "depends_on": [], "when": "仓库事实可能回答待解决问题", "completion_criteria": ["可调查事实均已记录并附有证据"], "policy_refs": ["evidence-quality"]},
+        {"id": "domain-model", "capability": "domain-modeling", "depends_on": ["discover-facts"], "when": "术语、上下文、业务规则、所有权、不变量或生命周期歧义会改变范围、验收或风险", "completion_criteria": ["相关术语在限界上下文内闭合，跨上下文差异已显式记录", "影响需求契约的规则、所有权、不变量和生命周期已经场景验证；待决产品选择已传递给后续决策访谈"], "policy_refs": ["evidence-quality", "document-governance", "scope-control"]},
+        {"id": "resolve-decisions", "capability": "decision-interview", "depends_on": ["domain-model"], "when": "仍有重大产品或设计决策", "completion_criteria": ["每项重大决策已有答案或保持阻断"], "policy_refs": ["risk-approval"]},
+        {"id": "shape-contract", "capability": "shape-contract", "depends_on": ["resolve-decisions"], "when": "always", "completion_criteria": ["目标、范围、非目标、验收、依赖和风险均已决策完备"], "policy_refs": ["scope-control", "document-governance"]}
+      ],
+      "terminal_conditions": ["需求塑形契约完整且不存在阻断决策"],
+      "policy_refs": ["safety-core", "evidence-quality", "scope-control"]
+    },
+    {
+      "id": "design",
+      "version": "1.0.0.1",
+      "entry_conditions": ["已有需求塑形契约，或任务本身是有明确边界的设计请求"],
+      "nodes": [
+        {"id": "repo-context", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["模块、接口、数据、依赖和影响范围均有证据"], "policy_refs": ["evidence-quality", "scope-control"]},
+        {"id": "prototype", "capability": "prototype", "depends_on": ["repo-context"], "when": "使用具体原型回答界面或逻辑问题的成本更低", "completion_criteria": ["原型已回答既定问题并明确后续处理方式"], "policy_refs": ["frontend-product", "scope-control"]},
+        {"id": "domain-model", "capability": "domain-modeling", "depends_on": ["prototype"], "when": "架构边界依赖领域语义、上下文关系、聚合、一致性、生命周期或领域事件", "completion_criteria": ["战略和战术模型由当前业务场景及仓库证据支持", "聚合、不变量、生命周期和跨上下文协作边界已闭合；不能闭合的产品选择保持等待或阻断"], "policy_refs": ["evidence-quality", "document-governance", "scope-control"]},
+        {"id": "architecture", "capability": "architecture-design", "depends_on": ["domain-model"], "when": "always", "completion_criteria": ["边界、流程、失败模式和风险均已明确"], "policy_refs": ["team-standards", "scope-control"]},
+        {"id": "implementation-contract", "capability": "implementation-contract", "depends_on": ["architecture"], "when": "预期进入实现阶段", "completion_criteria": ["接口、状态、行为、测试、任务和回滚均已决策完备"], "policy_refs": ["evidence-quality", "document-governance"]},
+        {"id": "design-review", "capability": "design-review", "depends_on": ["implementation-contract"], "when": "设计准备进入实现", "completion_criteria": ["阻断问题已关闭或被明确否决"], "policy_refs": ["risk-approval", "team-standards"]}
+      ],
+      "terminal_conditions": ["设计门禁允许进入实现，或已记录阻断决定"],
+      "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance"]
+    },
+    {
+      "id": "implement",
+      "version": "1.0.0.1",
+      "entry_conditions": ["已有批准设计，或存在边界明确的实现任务"],
+      "nodes": [
+        {"id": "select-slice", "capability": "work-slicing", "depends_on": [], "when": "always", "completion_criteria": ["已明确有边界的切片、允许修改的文件及适用验证方法；说明是否采用 TDD 和依据"], "policy_refs": ["scope-control"]},
+        {"id": "red-green", "capability": "tdd", "depends_on": ["select-slice"], "when": "本切片已选择 TDD，或用户／适用项目规范明确要求 TDD", "completion_criteria": ["同一行为同时具备红灯和绿灯证据"], "policy_refs": ["evidence-quality", "team-standards"]},
+        {"id": "implementation", "capability": "implementation", "depends_on": ["select-slice"], "when": "always", "completion_criteria": ["实现保持在批准范围内并能够映射到验收标准"], "policy_refs": ["scope-control", "risk-approval"]},
+        {"id": "quality", "capability": "quality-evidence", "depends_on": ["red-green", "implementation"], "when": "always", "completion_criteria": ["所有必需质量命令都有实际观察结果"], "policy_refs": ["evidence-quality"]},
+        {"id": "review", "capability": "code-review", "depends_on": ["quality"], "when": "always", "completion_criteria": ["规范轴和需求轴均不存在未解决阻断项"], "policy_refs": ["team-standards", "risk-approval"]}
+      ],
+      "terminal_conditions": ["所选切片的验收和质量证据均已通过"],
+      "policy_refs": ["safety-core", "scope-control", "evidence-quality", "risk-approval"]
+    },
+    {
+      "id": "review",
+      "version": "1.0.0.1",
+      "entry_conditions": ["存在固定的设计或代码比较点"],
+      "nodes": [
+        {"id": "fixed-point", "capability": "repo-context", "depends_on": [], "when": "always", "completion_criteria": ["评审范围和固定比较点没有歧义"], "policy_refs": ["evidence-quality"]},
+        {"id": "review", "capability": "code-review", "depends_on": ["fixed-point"], "when": "存在代码 diff", "completion_criteria": ["规范问题和需求问题彼此独立且都有证据"], "policy_refs": ["team-standards"]},
+        {"id": "design-review", "capability": "design-review", "depends_on": ["fixed-point"], "when": "评审对象是设计产物", "completion_criteria": ["已评审设计边界、风险和验收标准"], "policy_refs": ["team-standards", "risk-approval"]},
+        {"id": "gate", "capability": "quality-evidence", "depends_on": ["review", "design-review"], "when": "适用评审节点已经完成", "completion_criteria": ["门禁决定已反映所有 blocker 和 major 问题"], "policy_refs": ["evidence-quality", "risk-approval"]}
+      ],
+      "terminal_conditions": ["已生成附有证据的门禁决定"],
+      "policy_refs": ["safety-core", "evidence-quality", "team-standards"]
+    },
+    {
+      "id": "release",
+      "version": "1.0.0.1",
+      "entry_conditions": ["已有实现和评审证据", "明确的发布范围已获批准"],
+      "nodes": [
+        {"id": "readiness", "capability": "release-readiness", "depends_on": [], "when": "always", "completion_criteria": ["范围、风险、窗口、负责人、回滚和审批均已完备"], "policy_refs": ["release-safety"], "evidence_kinds": ["source", "review", "ci"], "evidence_scope_tags": ["flow:release"]},
+        {"id": "verification", "capability": "release-verification", "depends_on": ["readiness"], "when": "发布动作已获得单独执行审批", "completion_criteria": ["生产或灰度证据支持所声明状态"], "policy_refs": ["release-safety", "evidence-quality"], "evidence_kinds": ["ci", "external_state"], "evidence_scope_tags": ["flow:release"]},
+        {"id": "retrospective", "capability": "release-retrospective", "depends_on": ["verification"], "when": "发布或回滚已经完成", "completion_criteria": ["问题、原因和后续候选事项都有负责人"], "policy_refs": ["feedback-evolution", "document-governance"], "evidence_kinds": ["source", "review"], "evidence_scope_tags": ["flow:release"]}
+      ],
+      "terminal_conditions": ["已记录发布证据或阻断决定"],
+      "policy_refs": ["safety-core", "release-safety", "risk-approval"]
+    },
+    {
+      "id": "domain-design",
+      "version": "1.0.0.1",
+      "entry_conditions": ["请求需要跨限界上下文的完整领域驱动设计，且正式产物归属目标项目"],
+      "nodes": [
+        {"id": "resolve-design-sources", "capability": "domain-design-source", "depends_on": [], "when": "always", "completion_criteria": ["DesignSourceRegistry 已冻结需求、源码、现有设计、接口、数据和部署证据的引用与未知项"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "discover-domain-facts", "capability": "repo-context", "depends_on": ["resolve-design-sources"], "when": "always", "completion_criteria": ["参与者、业务价值、成功、失败、非法场景、验收和术语冲突均可追溯；场景或能力旅程不被机械等同于单次请求或 API"], "policy_refs": ["domain-design-governance", "evidence-quality", "scope-control"]},
+        {"id": "strategic-design", "capability": "domain-modeling", "depends_on": ["discover-domain-facts"], "when": "always", "completion_criteria": ["领域愿景、核心/支撑/通用子域、所有者、变化压力、投入或 make/buy 倾向和边界理由已由业务场景支撑；子域按价值与内聚划分而非技术拓扑"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "resolve-domain-decisions", "capability": "decision-interview", "depends_on": ["strategic-design"], "when": "存在会改变边界、权属或验收的重大决策", "completion_criteria": ["重大业务与架构决策已有答案，不能回答的决策保持阻断或等待"], "policy_refs": ["domain-design-governance", "risk-approval"]},
+        {"id": "context-topology", "capability": "context-topology", "depends_on": ["resolve-domain-decisions"], "when": "always", "completion_criteria": ["领域、子域、限界上下文和部署单元的映射、数据权属、上下游关系、翻译与兼容责任已记录；映射是待验证假设，非一对一映射已说明原因"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "boundary-validation", "capability": "boundary-validation", "depends_on": ["context-topology"], "when": "always", "completion_criteria": ["模型语境、业务目标、规则权属、变化驱动、稳定复用、质量属性、数据权属和翻译责任已验证；边界通过内聚、奥卡姆、最小惊讶和清晰职责检查"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "context-slicing", "capability": "context-slicing", "depends_on": ["boundary-validation"], "when": "always", "completion_criteria": ["每个限界上下文已切分业务目标、归属场景、非归属概念、证据与待决项；不存在未归属的范围内场景"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "tactical-modeling", "capability": "domain-modeling", "depends_on": ["context-slicing"], "when": "always", "completion_criteria": ["每个上下文以场景为依据定义必要的命令、生命周期、不变量、聚合和事件，或明确记录战术模型不适用及理由"], "policy_refs": ["domain-design-governance", "evidence-quality", "document-governance"]},
+        {"id": "capability-detailed-design", "capability": "capability-detailed-design", "depends_on": ["tactical-modeling"], "when": "always", "completion_criteria": ["每个业务能力或旅程已归属一个限界上下文，并定义命令、查询、权限、失败处理、外部契约与可追溯的详细设计；不要求场景、API 或实现方法一一对应"], "policy_refs": ["domain-design-governance", "scope-control", "document-governance"]},
+        {"id": "integration-consistency", "capability": "domain-integration", "depends_on": ["capability-detailed-design"], "when": "存在跨限界上下文或外部模型边界", "completion_criteria": ["跨上下文仅以发布语言、稳定标识或集成事件协作；业务意图、权限、错误语义、兼容责任与数据权属已定义；一致性、幂等、重试、补偿和人工处置已按实际需要记录"], "policy_refs": ["domain-design-governance", "evidence-quality", "scope-control"]},
+        {"id": "design-conformance-review", "capability": "code-review", "depends_on": ["integration-consistency"], "when": "always", "completion_criteria": ["能力详细设计可回指上下文模型与系统 HLD，且没有未决 blocker"], "policy_refs": ["domain-design-governance", "team-standards", "risk-approval"]},
+        {"id": "baseline-approval", "capability": "domain-baseline-approval", "depends_on": ["design-conformance-review"], "when": "always", "completion_criteria": ["业务负责人和架构负责人已对正式基线作出独立、范围受限的批准"], "policy_refs": ["domain-design-governance", "document-governance", "risk-approval"]}
+      ],
+      "terminal_conditions": ["正式产物保持 reviewing，或在双审批后成为批准基线"],
+      "policy_refs": ["safety-core", "domain-design-governance", "evidence-quality", "scope-control", "document-governance", "risk-approval"]
+    },
+    {
+      "id": "evolve",
+      "version": "1.0.0.1",
+      "entry_conditions": ["存在关于 skill、flow、policy 或工具的有证据反馈"],
+      "nodes": [
+        {"id": "ingest", "capability": "feedback-ingest", "depends_on": [], "when": "always", "completion_criteria": ["反馈具备来源、症状、范围和复发数据"], "policy_refs": ["feedback-evolution"]},
+        {"id": "knowledge", "capability": "knowledge-mining", "depends_on": ["ingest"], "when": "反馈包含可复用工程知识", "completion_criteria": ["候选知识已与任务专用噪声分离"], "policy_refs": ["evidence-quality"]},
+        {"id": "candidate", "capability": "skill-evolution", "depends_on": ["ingest", "knowledge"], "when": "有充分理由改变行为", "completion_criteria": ["变更方案包含回归案例和受影响来源"], "policy_refs": ["feedback-evolution"]},
+        {"id": "quality", "capability": "skill-quality", "depends_on": ["candidate"], "when": "存在候选变更", "completion_criteria": ["可预测性、相关性、重复、上下文和安全检查均已通过"], "policy_refs": ["feedback-evolution", "team-standards"]}
+      ],
+      "terminal_conditions": ["候选变更已拒绝，或正在等待明确人工审批"],
+      "policy_refs": ["safety-core", "feedback-evolution", "evidence-quality"]
+    }
+  ]
+}

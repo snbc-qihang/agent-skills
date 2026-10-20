@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/policy-spec.schema.json",
+  "type": "object",
+  "required": ["id", "version", "policy_class", "immutable", "applies_when", "rules", "required_evidence", "on_violation"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+    "policy_class": {"enum": ["safety", "risk", "evidence", "document", "team", "capability"]},
+    "immutable": {"type": "boolean"},
+    "applies_when": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "condition", "effect", "severity"],
+        "properties": {
+          "id": {"type": "string"},
+          "condition": {"type": "string"},
+          "effect": {"type": "string"},
+          "severity": {"enum": ["info", "minor", "major", "blocker"]}
+        },
+        "additionalProperties": false
+      }
+    },
+    "required_evidence": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "on_violation": {"enum": ["ask", "confirm", "block", "fail"]}
+  },
+  "additionalProperties": false
+}

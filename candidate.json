@@ -1,0 +1,21 @@
+{
+  "schema_version": "1",
+  "kind": "codex_installation_candidate",
+  "canonical_version": "1.0.0.1",
+  "target": "macos-arm64",
+  "source_commit": "e769d7df86886532a0f62418af66cbd035ef4395",
+  "tag": "candidate/codex/1.0.0.1/macos-arm64/20261020.1",
+  "marketplace": "engineering-assistant-candidate",
+  "package_payload_digest": "sha256:fbaed3c1f02c2a96fab0554bbafc266db830dad8658065dc537b578036de1a90",
+  "package_manifest_sha256": "sha256:cc71a426d2be937c98f950fd75f059066c8979fdea12c2d62afaf43e2a37614d",
+  "native_plugin_version": "1.0.0+codex.candidate-20261020-1",
+  "shared_core_digest": "sha256:b28f303504f1b51c5e8b178147e269027aebe00980c9ae3cb3ff7865bcf3412d",
+  "qualification": "maintainer_native_runtime_only",
+  "authenticated_app_cli_acceptance": "pending",
+  "windows11_acceptance": "pending",
+  "formal_release_eligible": false,
+  "product_canary": "not_verified",
+  "technical_verification": {
+    "verification-summary.json": "sha256:f3d50d9a6ca7116cec7409aefbebe605eeeb5d9cf354d48bd2c2691a55699772"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "engineering-assistant-candidate",
+  "interface": {
+    "displayName": "工程助手 Mac 候选验收"
+  },
+  "plugins": [
+    {
+      "name": "engineering-assistant",
+      "source": {
+        "source": "local",
+        "path": "./plugins/engineering-assistant"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
