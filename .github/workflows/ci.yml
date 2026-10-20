@@ -252,7 +252,9 @@ jobs:
           # together and preserving every test in the complete suite.
           native_modules = {name.partition(".")[0] for name in required}
           suite = unittest.TestSuite(sorted(tests, key=lambda test: test.id().partition(".")[0] not in native_modules))
-          result = unittest.TextTestRunner(verbosity=2, failfast=True).run(suite)
+          # Collect all failures even when qualification is blocked. Passing
+          # still requires the whole suite and every required native result.
+          result = unittest.TextTestRunner(verbosity=2, failfast=False).run(suite)
           require_native_test_results(result, required, discovered)
           report = {
               "target": os.environ["EA_CI_TARGET"], "test_count": result.testsRun,

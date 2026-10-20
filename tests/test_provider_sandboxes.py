@@ -123,6 +123,19 @@ library.WSACleanup.restype=ctypes.c_int
 buffer=(ctypes.c_uint64*64)()
 error=library.WSAStartup({version},ctypes.byref(buffer))
 result={{'version':{version},'startup_error':error,'socket_import':False}}
+registry=ctypes.WinDLL('advapi32.dll',winmode=0x800)
+registry.RegOpenKeyExW.argtypes=[ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_uint32,ctypes.c_uint32,ctypes.POINTER(ctypes.c_void_p)]
+registry.RegOpenKeyExW.restype=ctypes.c_int
+registry.RegCloseKey.argtypes=[ctypes.c_void_p]
+registry.RegCloseKey.restype=ctypes.c_int
+result['catalog_open_errors']={{}}
+for leaf in ('','Protocol_Catalog9','NameSpace_Catalog5'):
+    handle=ctypes.c_void_p()
+    key=r'SYSTEM\\CurrentControlSet\\Services\\WinSock2\\Parameters'+('\\\\'+leaf if leaf else '')
+    status=registry.RegOpenKeyExW(ctypes.c_void_p(-2147483646),key,0,0x20019,ctypes.byref(handle))
+    result['catalog_open_errors'][leaf or 'Parameters']=status
+    if status==0:
+        assert registry.RegCloseKey(handle)==0
 if error==0:
     try:
         import socket
@@ -148,6 +161,8 @@ print(json.dumps(result))
                     if not confined:
                         self.assertEqual(0, result["startup_error"], result)
                         self.assertIs(result["socket_import"], True, result)
+                        self.assertEqual({"Parameters": 0, "Protocol_Catalog9": 0, "NameSpace_Catalog5": 0},
+                                         result["catalog_open_errors"])
                     observations.append({"confined": confined, **result})
         print(json.dumps({"winsock_startup_diagnostic": observations, "qualified": False}))
         from engineering_assistant.runtime.sandbox_probe import qualify
