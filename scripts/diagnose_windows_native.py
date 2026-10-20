@@ -236,6 +236,65 @@ def replace_runtime(destination: Path, image: bytes, original) -> Path:
     return executable
 
 
+def _without_sxs_manifest_lookup(data: bytes) -> bytes:
+    """Fixed x64 DLL control: change only the documented SxS lookup bit.
+
+    /ALLOWISOLATION:NO controls assembly manifests, not AppContainer isolation:
+    https://learn.microsoft.com/cpp/build/reference/allowisolation
+    This diagnostic never changes the installed interpreter or token policy.
+    """
+    error = ValueError("invalid private CPython DLL control")
+    if not 64 <= len(data) <= 32 * 1024 * 1024 or data[:2] != b"MZ":
+        raise error
+    pe = struct.unpack_from("<I", data, 60)[0]
+    if not 64 <= pe <= 65536 or pe + 24 > len(data) or data[pe:pe + 4] != b"PE\0\0":
+        raise error
+    machine = struct.unpack_from("<H", data, pe + 4)[0]
+    size, flags = struct.unpack_from("<HH", data, pe + 20)
+    optional = pe + 24
+    if (machine != 0x8664 or size != 240 or flags & 0x2002 != 0x2002
+            or optional + size > len(data) or struct.unpack_from("<H", data, optional)[0] != 0x20B):
+        raise error
+    result = bytearray(data)
+    location = optional + 70
+    characteristics = struct.unpack_from("<H", data, location)[0]
+    struct.pack_into("<H", result, location, characteristics | 0x200)
+    return bytes(result)
+
+
+def _sxs_private_runtime(destination: Path, original) -> Path:
+    executable = original(destination)
+    if executable != destination / "python.exe" or windows._reparse(destination) or windows._reparse(executable):
+        raise ValueError("invalid private CPython control directory")
+    core = destination / "python313.dll"
+    data = _without_sxs_manifest_lookup(_read_file(core, 32 * 1024 * 1024))
+    core.write_bytes(data)
+    if _read_file(core, 32 * 1024 * 1024) != data:
+        raise ValueError("private CPython control changed")
+    return executable
+
+
+def _python_sxs_control(original, api, owner, environment) -> dict:
+    observation = {"diagnostic_only": True, "qualified": False, "capability_count": 0,
+                   "manifest_lookup": "disabled_private_dll_copy"}
+    try:
+        with tempfile.TemporaryDirectory(prefix="ea-native-sxs-control-") as temporary:
+            base = Path(temporary).resolve()
+            api.acl(base, owner, None, False)
+            bundle, work = base / "bundle", base / "work"
+            bundle.mkdir()
+            work.mkdir()
+            with patch.object(windows, "_private_runtime", lambda path: _sxs_private_runtime(path, original)):
+                code, output, stderr = windows._run_lpac(list(windows._STARTUP_COMMAND), bundle, work,
+                    environment, 10, 4096, diagnostics=observation)
+            observation.update(exit_code=f"0x{code & 0xFFFFFFFF:08X}",
+                marker=code == 0 and not stderr and output in (b"EA_LPAC_STARTUP_OK\n", b"EA_LPAC_STARTUP_OK\r\n"),
+                stderr_present=bool(stderr))
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        observation["error"] = _error_record(exc)
+    return observation
+
+
 def build_probe(destination: Path) -> bytes:
     try:
         source = _read_file(ROOT / "tests/fixtures/windows_startup_probe.rs", 16384)
@@ -580,6 +639,7 @@ def diagnose() -> dict:
             observation["total_seconds"] = round(time.monotonic() - case_started, 3)
         if _registry_read_control_ready(report):
             report["detached_registry_read"] = _registry_read_control(image, original, api, owner, environment)
+            report["python_startup_private_sxs"] = _python_sxs_control(original, api, owner, environment)
         if _python_startup_control_ready(report):
             report["python_startup_registry_read"] = _python_startup_control(original, api, owner, environment)
         else:

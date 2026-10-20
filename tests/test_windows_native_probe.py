@@ -347,11 +347,13 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                      patch.object(probe.sys, "version_info", (3, 13, 13)), \
                      patch.object(probe, "build_probe", return_value=self.image()), \
                      patch.object(probe, "run_bounded_windows", return_value=(0, self.output())), \
-                     patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth:
+                     patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth, \
+                     patch.object(probe, "_python_sxs_control", return_value={"diagnostic_only": True, "qualified": False}) as sxs:
                     result = probe.diagnose()
                 self.assertEqual([False, True], calls)
                 self.assertIs(result["qualified"], False)
                 self.assertEqual(int(eligible), fourth.call_count)
+                self.assertEqual(int(eligible), sxs.call_count)
                 if eligible:
                     self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
                     self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
@@ -829,6 +831,53 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         self.assertLess(positions[-1], source.index('private_load(handle, b"python313.dll"'))
         self.assertEqual(probe.SOURCE_SHA256, hashlib.sha256(
             (ROOT / "tests/fixtures/windows_startup_probe.rs").read_bytes()).hexdigest())
+
+
+class WindowsSxsCopyControlTests(unittest.TestCase):
+    @staticmethod
+    def dll():
+        data = bytearray(1024)
+        data[:2] = b"MZ"
+        struct.pack_into("<I", data, 60, 128)
+        data[128:132] = b"PE\0\0"
+        struct.pack_into("<HH", data, 132, 0x8664, 1)
+        struct.pack_into("<HH", data, 148, 240, 0x2002)
+        struct.pack_into("<H", data, 152, 0x20B)
+        struct.pack_into("<H", data, 222, 0x4160)
+        return bytes(data)
+
+    def test_sxs_copy_control_changes_only_the_manifest_lookup_bit(self):
+        before = self.dll()
+        after = probe._without_sxs_manifest_lookup(before)
+        self.assertEqual(0x4360, struct.unpack_from("<H", after, 222)[0])
+        self.assertEqual(before[:222], after[:222])
+        self.assertEqual(before[224:], after[224:])
+        self.assertEqual(after, probe._without_sxs_manifest_lookup(after))
+
+    def test_sxs_copy_control_rejects_other_images_and_truncated_headers(self):
+        invalid = [b"", self.dll()[:240], b"NO" + self.dll()[2:]]
+        for offset, value in ((60, 0xFFFFFF00), (132, 0x14C), (148, 224), (150, 2), (152, 0x10B)):
+            data = bytearray(self.dll())
+            struct.pack_into("<I" if offset == 60 else "<H", data, offset, value)
+            invalid.append(bytes(data))
+        for data in invalid:
+            with self.subTest(size=len(data)), self.assertRaises(ValueError):
+                probe._without_sxs_manifest_lookup(data)
+
+    def test_sxs_control_changes_only_the_private_dll_copy(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            source = root / "installed"
+            source.mkdir()
+            (source / "python.exe").write_bytes(b"unchanged executable")
+            (source / "python313.dll").write_bytes(self.dll())
+            target = root / "private"
+            original = lambda destination: (shutil.copytree(source, destination), destination / "python.exe")[1]
+            self.assertEqual(target / "python.exe", probe._sxs_private_runtime(target, original))
+            self.assertEqual(self.dll(), (source / "python313.dll").read_bytes())
+            self.assertEqual(b"unchanged executable", (target / "python.exe").read_bytes())
+            self.assertEqual(probe._without_sxs_manifest_lookup(self.dll()), (target / "python313.dll").read_bytes())
 
 
 if __name__ == "__main__":
