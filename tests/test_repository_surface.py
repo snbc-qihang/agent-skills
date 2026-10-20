@@ -110,22 +110,27 @@ class RepositorySurfaceTests(unittest.TestCase):
         entry = json.loads((ROOT / "config/runtime-python-downloads.json").read_text())[key]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            base = root / "consumer-python" / key
+            ci_root = root / "windows-x64"
+            ci_root.mkdir()
+            base = root / "windows-python/base" / key
             base.mkdir(parents=True)
             (base / "BUILD").write_text(entry["build"])
             (base / "python.exe").write_bytes(b"fixture; never executed")
             command_file = root / "github-path"
-            with mock.patch.dict(os.environ, {"EA_CI_ROOT": str(root), "GITHUB_PATH": str(command_file),
+            with mock.patch.dict(os.environ, {"EA_CI_ROOT": str(ci_root), "GITHUB_PATH": str(command_file),
                     "UV_CACHE_DIR": str(root / "cache"), "UV_INDEX_URL": "untrusted-fixture"}, clear=True), \
                  mock.patch("subprocess.run") as run:
                 exec(compile(textwrap.dedent(step.group(1)), "<CI consumer Python>", "exec"), {})
-            command = run.call_args.args[0]
+            command = run.call_args_list[0].args[0]
             self.assertEqual([sys.executable, "-m", "uv", "--no-config", "python", "install", key], command)
-            environment = run.call_args.kwargs["env"]
+            environment = run.call_args_list[0].kwargs["env"]
             self.assertNotIn("UV_INDEX_URL", environment)
             self.assertEqual(entry["build"], environment["UV_PYTHON_CPYTHON_BUILD"])
             self.assertEqual("0", environment["UV_PYTHON_INSTALL_REGISTRY"])
-            self.assertEqual([str(base), str(base / "Scripts")], command_file.read_text().splitlines())
+            virtual = root / "windows-python/developer-env"
+            self.assertEqual([str(virtual / "Scripts")], command_file.read_text().splitlines())
+            self.assertEqual([sys.executable, "-m", "uv", "--no-config", "venv", "--no-project", "--managed-python",
+                              "--no-python-downloads", "--python", key, str(virtual)], run.call_args_list[1].args[0])
 
     def test_ci_native_gate_rejects_skips_missing_tests_and_failures(self) -> None:
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

@@ -79,18 +79,23 @@ jobs:
           key = "cpython-3.13.13-windows-x86_64-none"
           metadata = Path("config/runtime-python-downloads.json").resolve()
           entry = json.loads(metadata.read_text(encoding="utf-8"))[key]
-          root = Path(os.environ["EA_CI_ROOT"]) / "consumer-python"
+          root = Path(os.environ["EA_CI_ROOT"]).parent / "windows-python"
+          downloads = root / "base"
+          virtual = root / "developer-env"
           environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("UV_")}
-          environment.update(UV_PYTHON_INSTALL_DIR=str(root), UV_PYTHON_DOWNLOADS_JSON_URL=str(metadata),
+          environment.update(UV_PYTHON_INSTALL_DIR=str(downloads), UV_PYTHON_DOWNLOADS_JSON_URL=str(metadata),
               UV_PYTHON_CPYTHON_BUILD=entry["build"], UV_CACHE_DIR=os.environ["UV_CACHE_DIR"],
               UV_PYTHON_INSTALL_BIN="0", UV_PYTHON_INSTALL_REGISTRY="0", UV_PYTHON_NO_REGISTRY="1")
           subprocess.run([sys.executable, "-m", "uv", "--no-config", "python", "install", key],
                          env=environment, check=True, timeout=180)
-          base = root / key
+          base = downloads / key
           assert (base / "BUILD").read_text(encoding="utf-8").strip() == entry["build"]
           assert (base / "python.exe").is_file()
+          subprocess.run([sys.executable, "-m", "uv", "--no-config", "venv", "--no-project", "--managed-python",
+                          "--no-python-downloads", "--python", key, str(virtual)],
+                         env=environment, check=True, timeout=60)
           with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as stream:
-              stream.write(str(base) + "\n" + str(base / "Scripts") + "\n")
+              stream.write(str(virtual / "Scripts") + "\n")
           PY
       - name: 确认原生宿主
         run: |
