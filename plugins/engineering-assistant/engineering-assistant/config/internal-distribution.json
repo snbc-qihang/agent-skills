@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "repository_url": "https://github.com/snbc-qihang/agent-skills.git",
+  "installer_ref": "internal/installer",
+  "installer_tag_prefix": "internal/installer/",
+  "release_tag_prefix": "internal/codex/",
+  "marketplace": "engineering-assistant",
+  "agents": ["codex"],
+  "targets": ["macos-arm64", "windows-x64"]
+}

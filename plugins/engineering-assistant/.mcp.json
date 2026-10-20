@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "engineering-assistant": {
+      "command": "./engineering-assistant/bin/ea",
+      "args": [
+        "mcp-serve"
+      ],
+      "cwd": "."
+    }
+  }
+}

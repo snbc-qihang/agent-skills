@@ -1,0 +1,4 @@
+interface:
+  display_name: "代码评审"
+  short_description: "按明确范围、证据和完成条件执行“代码评审”工作流。"
+  default_prompt: "使用 $engineering-assistant:code-review 基于证据完成这项工程任务。"

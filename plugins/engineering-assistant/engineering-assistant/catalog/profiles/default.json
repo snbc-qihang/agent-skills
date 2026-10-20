@@ -1,0 +1,23 @@
+{
+  "id": "default",
+  "version": "1.0.0.1",
+  "policy_refs": ["safety-core", "risk-approval", "evidence-quality", "document-governance", "scope-control", "team-standards"],
+  "store": {
+    "run_root": ".run-artifacts/engineering-assistant",
+    "formal_document_roots": ["docs/architecture", "docs/design", "docs/decisions", "docs/release"]
+  },
+  "investigation_policy": {
+    "default_mode": "suggest_then_run",
+    "auto_readonly": {
+      "enabled": false,
+      "authorization_id": "default-no-auto-authorization",
+      "allowed_source_scope": [],
+      "max_cost": "low"
+    }
+  },
+  "evidence_policy": {
+    "max_age_seconds": 3600,
+    "max_future_skew_seconds": 300
+  },
+  "adapter_preferences": ["codex", "hermes", "claude-code"]
+}

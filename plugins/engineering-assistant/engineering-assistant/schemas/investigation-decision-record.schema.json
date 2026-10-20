@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["record_id", "run_id", "investigation_id", "run_revision", "decision", "selected_mode", "allowed_source_scope", "max_cost", "actor_ref", "reason", "recorded_at", "source"],
+  "properties": {
+    "record_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "investigation_id": {"type": "string", "minLength": 1},
+    "run_revision": {"type": "integer", "minimum": 0},
+    "decision": {"enum": ["approve", "decline"]},
+    "selected_mode": {"enum": ["suggest_then_run", "guided", "disabled"]},
+    "allowed_source_scope": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "max_cost": {"enum": ["low", "medium", "high"]},
+    "actor_ref": {"type": "string", "minLength": 1},
+    "reason": {"type": "string", "minLength": 1},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "source": {"enum": ["user_confirmation", "conversation"]}
+  },
+  "additionalProperties": false
+}

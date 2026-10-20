@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-skills.local/schemas/capability-provider-spec.schema.json",
+  "type": "object",
+  "required": [
+    "id", "version", "mode", "capability_ids", "input_schema_ref",
+    "output_schema_ref", "risk_class", "network_policy", "timeout_seconds",
+    "evidence_contract", "failure_action", "fallback_provider_id", "source", "priority"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+    "mode": {"enum": ["native", "external_cli", "mcp"]},
+    "capability_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "input_schema_ref": {"type": "string", "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$"},
+    "output_schema_ref": {"type": "string", "pattern": "^schemas/[a-z0-9-]+\\.schema\\.json$"},
+    "risk_class": {"enum": ["read_only", "workspace_write", "external_write", "production"]},
+    "network_policy": {"enum": ["deny", "allow_readonly", "allow_write"]},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+    "evidence_contract": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "failure_action": {"enum": ["block", "fallback", "continue_with_warning"]},
+    "fallback_provider_id": {"type": ["string", "null"]},
+    "source": {
+      "type": ["object", "null"],
+      "properties": {
+        "url": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "integrity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "license": {"type": "string", "minLength": 1}
+      },
+      "required": ["url", "revision", "integrity", "license"],
+      "additionalProperties": false
+    },
+    "priority": {"type": "integer", "minimum": 0, "maximum": 1000}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"enum": ["external_cli", "mcp"]}}, "required": ["mode"]},
+      "then": {"properties": {"source": {"type": "object"}}}
+    },
+    {
+      "if": {"properties": {"failure_action": {"const": "fallback"}}, "required": ["failure_action"]},
+      "then": {"properties": {"fallback_provider_id": {"type": "string", "minLength": 1}}}
+    }
+  ],
+  "additionalProperties": false
+}

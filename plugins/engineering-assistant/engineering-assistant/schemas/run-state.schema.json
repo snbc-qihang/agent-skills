@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "run_id", "task_id", "profile_id", "flow_id", "status", "current_node", "completed_nodes", "skipped_nodes", "context_refs", "evidence_refs", "open_questions", "required_approvals", "transition_history", "next_actions", "revision"],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "run_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "profile_id": {"type": "string", "minLength": 1},
+    "flow_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["initialized", "running", "waiting_for_input", "waiting_for_approval", "blocked", "cancelled", "completed"]},
+    "current_node": {"type": ["string", "null"]},
+    "completed_nodes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "skipped_nodes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "context_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "open_questions": {"type": "array", "items": {"type": "string"}},
+    "required_approvals": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "transition_history": {"type": "array", "items": {"type": "object"}},
+    "next_actions": {"type": "array", "items": {"type": "string"}},
+    "revision": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}
