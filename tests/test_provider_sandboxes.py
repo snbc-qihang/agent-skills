@@ -30,11 +30,13 @@ class WindowsPrivatePythonTests(unittest.TestCase):
             data = bytearray(b"unchanged image bytes" * 32)
             struct.pack_into("<I", data, offset, 24)
             original = bytes(data)
-            struct.pack_into("<I", data, offset, 65535)
+            if name != "python.exe":
+                struct.pack_into("<I", data, offset, 65535)
             derived = bytes(data)
             (source / name).write_bytes(original)
             images[name] = original, derived
-            records[name] = hashlib.sha256(original).hexdigest(), offset, hashlib.sha256(derived).hexdigest()
+            records[name] = (hashlib.sha256(original).hexdigest(),
+                             None if name == "python.exe" else offset, hashlib.sha256(derived).hexdigest())
         (source / "Lib").mkdir()
         (source / "Lib/os.py").write_bytes(b"unchanged standard library")
         return source, images, records
@@ -101,12 +103,13 @@ class WindowsPrivatePythonTests(unittest.TestCase):
         self.assertIs(access["ui_access"], False)
         self.assertIs(access["virtualization_enabled"], False)
         self.assertEqual(0, access["capability_count"])
-        # Never print trusted-startup text or host paths. These finite labels
-        # distinguish residual Python/CRT diagnostics without storing content.
-        words = ("warning", "runtimewarning", "registry", "path", "encoding", "codec", "console",
-                 "handle", "ignored", "permission", "access", "denied", "utf", "thread", "locale")
+        # CPython can report that the executable's final location is unavailable.
+        # Accept only this exact fixed-startup message, never arbitrary stderr.
+        if error:
+            expected = ("Failed to find real location of " + str(root / "runtime/python.exe")).encode("utf-8")
+            self.assertEqual(expected, error.rstrip(b"\r\n"))
         print(json.dumps({"fixed_worker_stderr_bytes": len(error),
-                          "fixed_worker_stderr_tags": [word for word in words if word.encode() in error.lower()]}))
+                          "fixed_worker_stderr_class": "executable_location_unavailable" if error else "none"}))
 
 
 class ProviderSandboxContractTests(unittest.TestCase):

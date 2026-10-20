@@ -44,6 +44,7 @@ _WINDOWS_TESTS = frozenset(
         "test_created_file_and_chmod_preserve_private_owner_dacl",
         "test_parent_rename_keeps_reads_and_writes_on_opened_identity",
         "test_directory_fd_copy_hash_rename_and_delete_contract",
+        "test_readonly_file_deletion_preserves_an_external_hardlink",
         "test_junction_is_rejected_without_reading_or_writing_its_target",
         "test_private_directory_validation_accepts_path_and_retained_handle",
         "test_private_directory_validation_rejects_broad_and_null_dacls",

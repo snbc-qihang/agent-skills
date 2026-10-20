@@ -37,14 +37,15 @@ LPWSTR = ctypes.c_wchar_p
 SIZE_T = ctypes.c_size_t
 
 # CLI-only private workers use the exact PBS 3.13.13 / 20260414 build pinned
-# by runtime-python-downloads.json. Its embedded activation contexts cannot
-# load in zero-capability LPAC. Hide only the final RT_MANIFEST type (24),
+# by runtime-python-downloads.json. The core DLL's activation context cannot
+# load in zero-capability LPAC. Hide only its final RT_MANIFEST type (24),
 # keeping resource ordering, version resources and every PE security bit.
+# The executable stays byte-identical, including its longPathAware manifest.
 # These unsigned input images and exact derived images are independently
 # bound; this is not a general PE editor or an installed-Python modification.
 _LPAC_PYTHON_IMAGES = {
-    "python.exe": ("1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039", 10280,
-                   "7c9b1e6b2c57695476d7ed73938766eb4b64872ddd498e2f857291cfb870caac"),
+    "python.exe": ("1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039", None,
+                   "1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039"),
     "python313.dll": ("68dc4b6989e4a5954417157f5d714d2a1d21b1da855549e98ef1c2ab43468b62", 6098968,
                       "5d5218b5ec9f47af179f152b1fb53e372da293a01bffbc41fe8803e9eda50067"),
 }
@@ -327,11 +328,13 @@ def _prepare_private_python(destination: Path) -> None:
             raise OSError("Windows private Python image is not a bounded regular file")
         with path.open("rb") as stream:
             data = stream.read(8 * 1024 * 1024 + 1)
-        if hashlib.sha256(data).hexdigest() != before or offset + 4 > len(data):
+        if hashlib.sha256(data).hexdigest() != before:
             raise OSError("Windows LPAC requires the exact fixed Python build; repair the Runtime")
-        if struct.unpack_from("<I", data, offset)[0] != 24:
-            raise OSError("Windows private Python manifest entry is invalid")
-        derived = data[:offset] + struct.pack("<I", 65535) + data[offset + 4:]
+        derived = data
+        if offset is not None:
+            if offset + 4 > len(data) or struct.unpack_from("<I", data, offset)[0] != 24:
+                raise OSError("Windows private Python manifest entry is invalid")
+            derived = data[:offset] + struct.pack("<I", 65535) + data[offset + 4:]
         if hashlib.sha256(derived).hexdigest() != after:
             raise OSError("Windows private Python derivation does not match")
         images[path] = derived, after

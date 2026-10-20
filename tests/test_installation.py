@@ -195,6 +195,36 @@ class InstallationTests(unittest.TestCase):
             with self.assertRaises(ValidationFailure):
                 _protocol_run([sys.executable, "-c", "print('{}')"], cwd=cwd, expected_exit_code=2)
 
+    def test_windows_protocol_resolves_tools_before_the_absolute_process_boundary(self):
+        from types import SimpleNamespace
+        from engineering_assistant.installer import installation as inst
+        from engineering_assistant.platforms import windows_process
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            selected, current = root / "selected tools", root / "untrusted cwd"
+            selected.mkdir()
+            current.mkdir()
+            tool = selected / "git.exe"
+            tool.write_bytes(b"inert selected tool; never executed")
+            (current / "git.exe").write_bytes(b"inert impostor; never executed")
+            environment = {"PATH": str(selected), "PATHEXT": ".CMD"}
+            previous = Path.cwd()
+            try:
+                os.chdir(current)
+                with mock.patch.object(inst, "os", SimpleNamespace(name="nt", pathsep=os.pathsep)), \
+                        mock.patch.object(windows_process, "run_bounded_windows", return_value=(0, b"version")) as process:
+                    self.assertEqual(b"version", inst._protocol_run(["git", "--version"], cwd=ROOT, environment=environment))
+                    self.assertEqual([str(tool), "--version"], process.call_args.args[0])
+                    self.assertEqual(environment, process.call_args.kwargs["environment"])
+                    tool.unlink()
+                    process.reset_mock()
+                    for name in ("git", "./git.exe", "../git.exe", r"sub\git.exe", "C:git.exe"):
+                        with self.subTest(name=name), self.assertRaises(inst.ValidationFailure):
+                            inst._protocol_run([name, "--version"], cwd=ROOT, environment=environment)
+                    process.assert_not_called()
+            finally:
+                os.chdir(previous)
+
     def test_failed_final_repair_check_restores_the_original_environment(self):
         from engineering_assistant.installer.installation import prepare_runtime, runtime_lock, python_download_metadata
         from engineering_assistant.runtime.validation import ValidationFailure

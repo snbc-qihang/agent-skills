@@ -598,6 +598,19 @@ def _protocol_run(command: list[str], *, cwd: Path, input_data: bytes = b"",
         raise ValidationFailure("protocol input exceeds its bounded limit")
     if os.name == "nt":
         from ..platforms.windows_process import run_bounded_windows
+        if command and not Path(command[0]).is_absolute():
+            name = command[0]
+            if any(character in name for character in "/\\:"):
+                raise ValidationFailure("protocol executable must be absolute or a bare native tool name")
+            # Resolve native tools only in explicit absolute PATH entries.
+            # Windows which() can prepend cwd and reads ambient PATHEXT.
+            names = (name,) if Path(name).suffix else (name + ".exe", name + ".com")
+            executable = next((path.resolve() for directory in environment.get("PATH", "").split(os.pathsep)
+                               if directory and Path(directory).is_absolute()
+                               for filename in names if (path := Path(directory) / filename).is_file()), None)
+            if executable is None:
+                raise ValidationFailure("protocol executable was not found in the selected PATH")
+            command = [str(executable), *command[1:]]
         code, output = run_bounded_windows(command, cwd=cwd, environment=environment,
             timeout_seconds=timeout, output_limit_bytes=limit, input_data=input_data)
     else:
