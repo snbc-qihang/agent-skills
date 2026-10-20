@@ -280,16 +280,30 @@ class CodexControlTests(unittest.TestCase):
         replacement = self.data / "tools/codex/0.159.2"
         marker = replacement / "unrelated-marker"
         def replace_parent(executable, home, target):
+            if os.name == "nt":
+                with self.assertRaises(PermissionError) as denied:
+                    replacement.rename(replacement.with_name("original-version"))
+                self.assertEqual(5, denied.exception.winerror)
+                return
             replacement.rename(replacement.with_name("original-version"))
             replacement.mkdir()
             marker.write_text("preserve", encoding="utf-8")
         with self.preparation(payload) as patched:
             patched["_probe_cli"].side_effect = replace_parent
-            with self.assertRaises(ValidationFailure):
-                control.resolve_codex_control(self.data, self.home)
-            self.assertEqual(1, patched["_probe_cli"].call_count)
-        self.assertEqual("preserve", marker.read_text(encoding="utf-8"))
-        self.assertFalse((replacement / "macos-arm64").exists())
+            if os.name == "nt":
+                executable = control.resolve_codex_control(self.data, self.home)
+                self.assertTrue(executable.is_file())
+                self.assertEqual(2, patched["_probe_cli"].call_count)
+            else:
+                with self.assertRaises(ValidationFailure):
+                    control.resolve_codex_control(self.data, self.home)
+                self.assertEqual(1, patched["_probe_cli"].call_count)
+        if os.name == "nt":
+            self.assertFalse(replacement.with_name("original-version").exists())
+            self.assertFalse(marker.exists())
+        else:
+            self.assertEqual("preserve", marker.read_text(encoding="utf-8"))
+            self.assertFalse((replacement / "macos-arm64").exists())
 
     def test_file_and_total_decompressed_limits_reject_before_native_probe(self):
         payload = self.archive()

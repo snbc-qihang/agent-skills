@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 import socket
 import ssl
+import subprocess
 import sys
 import tempfile
 import time
@@ -483,6 +484,36 @@ class OfficialValidationTests(unittest.TestCase):
                     repository_root=Path(temporary),
                     environment={},
                 )
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX process-group cleanup")
+    def test_macos_zombie_group_permission_error_reaps_then_checks_descendants(self):
+        from types import SimpleNamespace
+        from engineering_assistant.platforms.process import _terminate
+        child = SimpleNamespace(pid=123, poll=mock.Mock(return_value=0))
+        with mock.patch("engineering_assistant.platforms.process.os.killpg", side_effect=[PermissionError(), ProcessLookupError()]) as kill:
+            _terminate(child)
+        self.assertEqual(2, kill.call_count)
+        child.poll.assert_called_once()
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX process-group cleanup")
+    def test_live_child_permission_error_is_not_treated_as_successful_cleanup(self):
+        from types import SimpleNamespace
+        from engineering_assistant.platforms.process import _terminate
+        child = SimpleNamespace(pid=123, poll=mock.Mock(return_value=None),
+            wait=mock.Mock(side_effect=subprocess.TimeoutExpired("fixture", 0.1)))
+        with mock.patch("engineering_assistant.platforms.process.os.killpg", side_effect=PermissionError()):
+            with self.assertRaises(PermissionError):
+                _terminate(child)
+        self.assertFalse(getattr(child, "_engineering_assistant_group_terminated", False))
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX process-group cleanup")
+    def test_exiting_child_permission_race_waits_briefly_before_group_recheck(self):
+        from types import SimpleNamespace
+        from engineering_assistant.platforms.process import _terminate
+        child = SimpleNamespace(pid=123, poll=mock.Mock(return_value=None), wait=mock.Mock(return_value=0))
+        with mock.patch("engineering_assistant.platforms.process.os.killpg", side_effect=[PermissionError(), ProcessLookupError()]):
+            _terminate(child)
+        child.wait.assert_called_once_with(timeout=0.1)
 
     def test_caller_home_and_cache_swap_cannot_replace_execution_snapshot(self) -> None:
         from engineering_assistant.tools.official_validation import OFFICIAL_VALIDATORS

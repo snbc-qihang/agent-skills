@@ -183,6 +183,28 @@ class InstallationTests(unittest.TestCase):
             with self.assertRaises((ValidationFailure, subprocess.TimeoutExpired)):
                 _protocol_run([sys.executable, "-c", "import time;time.sleep(5)"], cwd=cwd, timeout=1)
 
+    @unittest.skipIf(os.name == "nt", "POSIX process-group cleanup")
+    def test_protocol_output_limit_survives_zombie_group_permission_race(self):
+        from engineering_assistant.installer.installation import _protocol_run
+        from engineering_assistant.runtime.validation import ValidationFailure
+        signal_group = os.killpg
+        calls = 0
+
+        def zombie_then_absent(pid, signal):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PermissionError("Darwin zombie process group")
+            return signal_group(pid, signal)
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "engineering_assistant.installer.installation.os.killpg", side_effect=zombie_then_absent,
+        ):
+            with self.assertRaisesRegex(ValidationFailure, "bounded.*limit"):
+                _protocol_run([sys.executable, "-c", "import sys;sys.stdout.write('x'*1048577)"],
+                              cwd=Path(temporary))
+        self.assertEqual(2, calls)
+
     def test_protocol_requires_the_expected_cli_exit_code(self):
         from engineering_assistant.installer.installation import _protocol_run
         from engineering_assistant.runtime.validation import ValidationFailure
@@ -194,6 +216,36 @@ class InstallationTests(unittest.TestCase):
             self.assertEqual({}, json.loads(_protocol_run(command, cwd=cwd, expected_exit_code=2)))
             with self.assertRaises(ValidationFailure):
                 _protocol_run([sys.executable, "-c", "print('{}')"], cwd=cwd, expected_exit_code=2)
+
+    def test_windows_protocol_resolves_tools_before_the_absolute_process_boundary(self):
+        from types import SimpleNamespace
+        from engineering_assistant.installer import installation as inst
+        from engineering_assistant.platforms import windows_process
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            selected, current = root / "selected tools", root / "untrusted cwd"
+            selected.mkdir()
+            current.mkdir()
+            tool = selected / "git.exe"
+            tool.write_bytes(b"inert selected tool; never executed")
+            (current / "git.exe").write_bytes(b"inert impostor; never executed")
+            environment = {"PATH": str(selected), "PATHEXT": ".CMD"}
+            previous = Path.cwd()
+            try:
+                os.chdir(current)
+                with mock.patch.object(inst, "os", SimpleNamespace(name="nt", pathsep=os.pathsep)), \
+                        mock.patch.object(windows_process, "run_bounded_windows", return_value=(0, b"version")) as process:
+                    self.assertEqual(b"version", inst._protocol_run(["git", "--version"], cwd=ROOT, environment=environment))
+                    self.assertEqual([str(tool), "--version"], process.call_args.args[0])
+                    self.assertEqual(environment, process.call_args.kwargs["environment"])
+                    tool.unlink()
+                    process.reset_mock()
+                    for name in ("git", "./git.exe", "../git.exe", r"sub\git.exe", "C:git.exe"):
+                        with self.subTest(name=name), self.assertRaises(inst.ValidationFailure):
+                            inst._protocol_run([name, "--version"], cwd=ROOT, environment=environment)
+                    process.assert_not_called()
+            finally:
+                os.chdir(previous)
 
     def test_failed_final_repair_check_restores_the_original_environment(self):
         from engineering_assistant.installer.installation import prepare_runtime, runtime_lock, python_download_metadata

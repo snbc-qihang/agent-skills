@@ -7,7 +7,17 @@
 - Mac Intel 不在支持范围。Hermes、Claude Code、Linux 共享源码保留回归。
 - 开发者：`sunliming625@gmail.com`。
 
-**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261019.3/README.md)，其中提供固定候选的一条安装命令。候选供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广；下面普通用户命令是正式推广后的教程。
+**正式安装入口尚未发布。** Mac Apple Silicon 的验收人员使用独立的 [GitHub 候选安装教程](https://github.com/snbc-qihang/agent-skills/blob/candidate/codex/1.0.0.1/macos-arm64/20261020.2/README.md)。本候选包含共享核心目录改造，供真实验收，不表示两目标已通过。正式 tag、Release 与移动安装入口仍须在两个目标真实验收完成后推广。
+
+## Mac 候选：一条命令安装
+
+在另一台 macOS 14+ Apple Silicon Mac 准备并登录 Codex，确保终端已有 Git 和 uv，然后执行：
+
+```bash
+uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qihang/agent-skills.git@e769d7df86886532a0f62418af66cbd035ef4395" ea-setup install --agent codex --source "snbc-qihang/agent-skills@candidate/codex/1.0.0.1/macos-arm64/20261020.2" --marketplace engineering-assistant-candidate
+```
+
+无需取得维护者本机文件或安装 Python、Node、Rust。安装后在 Codex 审查并信任 Hook，再重开会话；等待信任时退出码可能为 2，不代表安装失败。检查、修复、卸载和结果回传要求见上述候选教程。下节命令是正式推广后的入口，目前尚不可用。
 
 ## 普通用户：安装与更新
 
@@ -38,6 +48,24 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 ```
 
 修复、卸载、首次工具准备和旧版清理见[安装与本机发布](docs/operations/local-publish.md)。发现历史 2.x 安装时，安装器提供确切位置和人工步骤；不自动接管或删除。共享 Python、其他插件、作者源码和项目运行证据不在清理范围。
+
+## 安装位置与多工具接入
+
+核心使用操作系统的标准用户数据目录，独立于 Codex、Claude Code、Cursor：
+
+| 系统 | 共享数据根目录 |
+| --- | --- |
+| macOS | `~/Library/Application Support/engineering-assistant/` |
+| Windows | `%LOCALAPPDATA%\engineering-assistant\` |
+| Linux（源码回归） | `${XDG_DATA_HOME:-~/.local/share}/engineering-assistant/` |
+
+`cores/<摘要>/` 保存不可变的 Runtime、skills、packs、catalog 和 schemas；同一核心由多个宿主复用。`python/`、`environments/` 保存固定解释器及依赖，`bindings/<agent>/` 保存各宿主的版本绑定。安装器输出“共享核心”和“宿主入口”两个位置，`doctor --json` 提供 `data_home`、`shared_core` 与 `package`。
+
+宿主继续管理自己的插件入口：Codex 使用原生 marketplace/cache，Claude Code 使用原生 plugin，Cursor 使用 `~/.cursor/plugins/local/engineering-assistant/`。原生缓存可保留发行包副本；日常 Runtime 从校验过的共享核心加载。卸载一个入口保留共享核心及其他宿主。项目运行证据仍位于目标项目 `.run-artifacts/engineering-assistant/`。
+
+各工具没有统一的插件配置文件，不能只指定一个文件夹就保证全部自动加载。安装器通过 `--agent codex`、`--agent claude-code` 或 `--agent cursor` 选择宿主 adapter，保留原生发现、启用和信任流程，不改写其他插件的配置。详见[共享核心与原生入口](docs/operations/local-publish.md#共享核心与原生入口)。
+
+**共享核心改造已进入上述 Mac 候选，真实宿主验收尚未完成。** 正式安装入口仍未启用。Cursor 当前为源码和本地资格验证入口，尚无已验收的 GitHub 发行命令；新增 adapter 不扩大首轮 Codex 两目标的发行矩阵。
 
 ## 使用方式
 

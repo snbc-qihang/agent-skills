@@ -572,7 +572,10 @@ class WindowsFilesystem:
         try:
             # Windows 11/NTFS supports immediate name removal while cooperating
             # readers retain handles. Do not weaken to path-based DeleteFile.
-            flags = _DWORD(0x1 | 0x2)  # DELETE | POSIX_SEMANTICS
+            # Git pack/object files can have READONLY set. Ignore that attribute
+            # for this retained DELETE handle without changing any link's ACL
+            # or attributes; external hardlinks retain their read-only state.
+            flags = _DWORD(0x1 | 0x2 | 0x10)  # DELETE | POSIX_SEMANTICS | IGNORE_READONLY_ATTRIBUTE
             self._set_information(descriptor, flags, 64)
         finally:
             os.close(descriptor)

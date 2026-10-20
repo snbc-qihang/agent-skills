@@ -8,6 +8,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from engineering_assistant.runtime.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs  # noqa: E402
+from engineering_assistant.runtime import artifact_io  # noqa: E402
 from engineering_assistant.runtime.feedback import FeedbackStore  # noqa: E402
 from engineering_assistant.runtime.model import FeedbackCapture  # noqa: E402
 from engineering_assistant.runtime.state_store import StateStore  # noqa: E402
@@ -44,6 +46,61 @@ class ArtifactIOTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValidationFailure, "lock is busy"):
                 artifacts.create_immutable_json({"value": 1}, "run", "locked.json")
+
+    def test_windows_lock_initializes_only_after_acquiring_and_releases_on_failure(self) -> None:
+        for timeout in (None, 0.01):
+            for initialization_fails in (False, True):
+                with self.subTest(timeout=timeout, initialization_fails=initialization_fails):
+                    artifacts = ArtifactIO(
+                        self.project,
+                        f"lock-{timeout}-{initialization_fails}",
+                        lock_timeout_seconds=timeout,
+                    )
+                    directory_fd = artifacts._ensure_directory_fd(artifacts.artifact_root)
+                    modes = []
+                    backend = SimpleNamespace(LK_LOCK=1, LK_NBLCK=2, LK_UNLCK=3)
+                    original_write = artifact_io.os.write
+
+                    def locking(descriptor, mode, count):
+                        self.assertEqual(1, count)
+                        self.assertEqual(0, artifact_io.os.lseek(descriptor, 0, os.SEEK_CUR))
+                        modes.append(mode)
+
+                    def write(descriptor, data):
+                        self.assertEqual(
+                            [backend.LK_LOCK if timeout is None else backend.LK_NBLCK],
+                            modes,
+                            "a competing writer can lock byte zero before initialization",
+                        )
+                        if initialization_fails:
+                            raise PermissionError("initialization failed")
+                        return original_write(descriptor, data)
+
+                    backend.locking = locking
+                    try:
+                        with (
+                            patch.object(artifact_io, "fcntl", None),
+                            patch.object(artifact_io, "msvcrt", backend),
+                            patch.object(artifact_io.os, "write", side_effect=write),
+                        ):
+                            if initialization_fails:
+                                with self.assertRaisesRegex(PermissionError, "initialization failed"):
+                                    with artifacts._lock_fd(directory_fd):
+                                        self.fail("failed initialization must not enter the protected body")
+                            else:
+                                with artifacts._lock_fd(directory_fd):
+                                    self.assertEqual(1, len(modes))
+                        self.assertEqual(
+                            [backend.LK_LOCK if timeout is None else backend.LK_NBLCK, backend.LK_UNLCK],
+                            modes,
+                        )
+                        self.assertEqual(
+                            b"" if initialization_fails else b"0",
+                            (artifacts.artifact_root / ".artifact.lock").read_bytes(),
+                        )
+                    finally:
+                        artifact_io.os.close(directory_fd)
+                        artifacts.close()
 
     def test_limited_json_read_returns_payload_and_exact_raw_bytes(self) -> None:
         artifacts = ArtifactIO(self.project, ".run-artifacts/engineering-assistant")

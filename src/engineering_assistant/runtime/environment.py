@@ -11,7 +11,7 @@ from pathlib import Path
 from .artifact_io import ArtifactIO, artifact_fs
 from .validation import ValidationFailure
 
-AGENTS = ("codex", "hermes", "claude-code")
+AGENTS = ("codex", "hermes", "claude-code", "cursor")
 
 
 TARGETS = ("macos-arm64", "linux-x64", "windows-x64")

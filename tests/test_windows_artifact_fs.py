@@ -595,6 +595,24 @@ class WindowsArtifactIntegrationTests(unittest.TestCase):
         finally:
             child.close()
 
+    def test_readonly_file_deletion_preserves_an_external_hardlink(self) -> None:
+        self.artifacts.write_bytes_exclusive(b"read-only object", "readonly")
+        path = self.artifacts.path("readonly")
+        alias = self.root / "outside-hardlink"
+        os.link(path, alias)
+        path.chmod(0o400)
+        try:
+            with alias.open("rb") as stream:
+                self.assertTrue(os.fstat(stream.fileno()).st_file_attributes & 1)
+            self.artifacts.delete_regular_file("readonly")
+            self.assertFalse(path.exists())
+            with alias.open("rb") as stream:
+                self.assertEqual(b"read-only object", stream.read())
+                self.assertTrue(os.fstat(stream.fileno()).st_file_attributes & 1)
+        finally:
+            alias.chmod(0o600)
+            alias.unlink()
+
     def test_junction_is_rejected_without_reading_or_writing_its_target(self) -> None:
         import subprocess
 

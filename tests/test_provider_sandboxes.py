@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
+import os
+import struct
 import sys
 import tempfile
 import unittest
@@ -16,6 +19,225 @@ sys.path.insert(0, str(ROOT / "src"))
 from engineering_assistant.platforms import provider_sandbox_linux as linux
 from engineering_assistant.platforms import provider_sandbox_macos as macos
 from engineering_assistant.platforms import provider_sandbox_windows as windows
+
+
+class WindowsPrivatePythonTests(unittest.TestCase):
+    def fixture(self, root):
+        source = root / "source"
+        source.mkdir()
+        images, records = {}, {}
+        for name, offset in (("python.exe", 96), ("python313.dll", 128),
+                             ("DLLs/_socket.pyd", 160), ("DLLs/select.pyd", 192)):
+            data = bytearray(b"unchanged image bytes" * 32)
+            struct.pack_into("<I", data, offset, 24)
+            original = bytes(data)
+            if name != "python.exe":
+                struct.pack_into("<I", data, offset, 65535)
+            derived = bytes(data)
+            (source / name).parent.mkdir(exist_ok=True)
+            (source / name).write_bytes(original)
+            images[name] = original, derived
+            records[name] = (hashlib.sha256(original).hexdigest(),
+                             None if name == "python.exe" else offset, hashlib.sha256(derived).hexdigest())
+        (source / "Lib").mkdir()
+        (source / "Lib/os.py").write_bytes(b"unchanged standard library")
+        return source, images, records
+
+    def test_fixed_private_worker_changes_only_known_manifest_type_and_never_shared_python(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, images, records = self.fixture(root)
+            with patch.object(windows.sys, "base_prefix", str(source)), \
+                 patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                executable = windows._private_runtime(root / "private")
+            self.assertEqual(root / "private/python.exe", executable)
+            for name, (original, derived) in images.items():
+                self.assertEqual(original, (source / name).read_bytes())
+                self.assertEqual(derived, (root / "private" / name).read_bytes())
+            self.assertEqual(b"unchanged standard library", (root / "private/Lib/os.py").read_bytes())
+
+    def test_unknown_changed_and_truncated_runtime_never_returns_an_executable(self):
+        for name in ("python.exe", "python313.dll", "DLLs/_socket.pyd", "DLLs/select.pyd"):
+            for mode in ("unknown", "changed", "truncated", "missing"):
+                with self.subTest(name=name, mode=mode), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    source, images, records = self.fixture(root)
+                    image = source / name
+                    if mode == "missing":
+                        image.unlink()
+                    else:
+                        original = images[name][0]
+                        image.write_bytes(original + b"certificate" if mode == "unknown" else
+                                          original[:-1] + b"X" if mode == "changed" else original[:-1])
+                    with patch.object(windows.sys, "base_prefix", str(source)), \
+                         patch.object(windows, "_LPAC_PYTHON_IMAGES", records), self.assertRaises(OSError):
+                        windows._private_runtime(root / "private")
+                    # Even corruption of the last input must precede every write.
+                    if name == "DLLs/select.pyd":
+                        self.assertEqual(images["python313.dll"][0], (root / "private/python313.dll").read_bytes())
+
+    def test_derived_image_is_read_back_before_worker_can_be_returned(self):
+        for name in ("python.exe", "python313.dll", "DLLs/_socket.pyd", "DLLs/select.pyd"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source, _images, records = self.fixture(root)
+                write = Path.write_bytes
+                def corrupt(path, data):
+                    return write(path, data[:-1] if path == root / "private" / name else data)
+                with patch.object(windows.sys, "base_prefix", str(source)), \
+                     patch.object(windows, "_LPAC_PYTHON_IMAGES", records), \
+                     patch.object(Path, "write_bytes", corrupt), self.assertRaises(OSError):
+                    windows._private_runtime(root / "private")
+
+    @unittest.skipUnless(sys.platform == "win32", "native Winsock startup diagnosis, not qualification")
+    def test_windows_network_startup_versions_diagnostic(self):
+        from engineering_assistant.platforms.windows_process import run_bounded_windows
+        # This fixed FFI copy exists only in the diagnostic. Production's
+        # images, token, ACLs and network qualification stay unchanged.
+        records = {**windows._LPAC_PYTHON_IMAGES, "DLLs/_ctypes.pyd": (
+            "ec62f338fdd774cfd53ef977ccb9e68b5fb464189493cb70a345bbd27595838c", 119320,
+            "e51b1a2b11ad0a2f824f1c5621aad3b9946f97f03beced35b2c89d0b53d74c4d")}
+        environment = {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}}
+        observations = []
+        extended = "\\\\?\\"
+        for version in (0x0101, 0x0202):
+            for confined in (False, True):
+                with self.subTest(version=version, confined=confined), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve()
+                    bundle, work = root / "bundle", root / "work"
+                    bundle.mkdir()
+                    work.mkdir()
+                    api = windows._Api()
+                    api.acl(root, api.owner_sid(), None, False)
+                    source = f'''import os
+cwd=os.getcwd()
+os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd)
+for name in ('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'):
+    os.environ[name]=os.getcwd()
+import ctypes,json
+library=ctypes.WinDLL('ws2_32.dll',winmode=0x800)
+library.WSAStartup.argtypes=[ctypes.c_uint16,ctypes.c_void_p]
+library.WSAStartup.restype=ctypes.c_int
+library.WSACleanup.argtypes=[]
+library.WSACleanup.restype=ctypes.c_int
+buffer=(ctypes.c_uint64*64)()
+error=library.WSAStartup({version},ctypes.byref(buffer))
+result={{'version':{version},'startup_error':error,'socket_import':False}}
+registry=ctypes.WinDLL('advapi32.dll',winmode=0x800)
+registry.RegOpenKeyExW.argtypes=[ctypes.c_void_p,ctypes.c_wchar_p,ctypes.c_uint32,ctypes.c_uint32,ctypes.POINTER(ctypes.c_void_p)]
+registry.RegOpenKeyExW.restype=ctypes.c_int
+registry.RegCloseKey.argtypes=[ctypes.c_void_p]
+registry.RegCloseKey.restype=ctypes.c_int
+result['catalog_open_errors']={{}}
+for leaf in ('','Protocol_Catalog9','NameSpace_Catalog5'):
+    handle=ctypes.c_void_p()
+    key=r'SYSTEM\\CurrentControlSet\\Services\\WinSock2\\Parameters'+('\\\\'+leaf if leaf else '')
+    status=registry.RegOpenKeyExW(ctypes.c_void_p(-2147483646),key,0,0x20019,ctypes.byref(handle))
+    result['catalog_open_errors'][leaf or 'Parameters']=status
+    if status==0:
+        assert registry.RegCloseKey(handle)==0
+if error==0:
+    try:
+        import socket
+        result['socket_import']=True
+    except ImportError:
+        pass
+    finally:
+        result['cleanup_error']=library.WSACleanup()
+print(json.dumps(result))
+'''
+                    command = [sys.executable, "-X", "utf8", "-I", "-B", "-S", "-c", source]
+                    with patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                        if confined:
+                            code, output, error = windows.run(command, bundle, work, environment, 10, 4096)
+                        else:
+                            executable = windows._private_runtime(root / "runtime")
+                            code, output = run_bounded_windows([str(executable), *command[1:]], cwd=work,
+                                environment=environment, timeout_seconds=10, output_limit_bytes=4096)
+                            error = b""
+                    self.assertEqual(0, code, error)
+                    result = json.loads(output.splitlines()[-1])
+                    self.assertEqual(version, result["version"])
+                    if not confined:
+                        self.assertEqual(0, result["startup_error"], result)
+                        self.assertIs(result["socket_import"], True, result)
+                        self.assertEqual({"Parameters": 0, "Protocol_Catalog9": 0, "NameSpace_Catalog5": 0},
+                                         result["catalog_open_errors"])
+                    observations.append({"confined": confined, **result})
+        print(json.dumps({"winsock_startup_diagnostic": observations, "qualified": False}))
+        from engineering_assistant.runtime.sandbox_probe import qualify
+        print(json.dumps({"actual_provider_probe": qualify(ROOT), "diagnostic_only": True}))
+
+    @unittest.skipUnless(sys.platform == "win32", "native fixed Windows stdlib imports")
+    def test_windows_private_worker_loads_socket_extensions_without_widening_capabilities(self):
+        environment = {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}}
+
+        def execute(source, records):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                bundle, work = root / "bundle", root / "work"
+                bundle.mkdir()
+                work.mkdir()
+                api = windows._Api()
+                api.acl(root, api.owner_sid(), None, False)
+                # Match ProviderExecutor's trusted bootstrap after Windows
+                # redirects these options to the sealed AppContainer profile.
+                extended = "\\\\?\\"
+                source = ("import os;cwd=os.getcwd();"
+                          f"os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd);"
+                          "work=os.getcwd();"
+                          "[os.environ.__setitem__(name,work) for name in "
+                          "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR')];" + source)
+                with patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                    return windows.run([sys.executable, "-X", "utf8", "-I", "-B", "-S", "-c", source],
+                                       bundle, work, environment, 10, 4096)
+
+        records = windows._LPAC_PYTHON_IMAGES
+        for name, module in (("DLLs/_socket.pyd", "_socket"), ("DLLs/select.pyd", "select")):
+            with self.subTest(original=module):
+                before, _offset, _after = records[name]
+                original = {**records, name: (before, None, before)}
+                code, output, error = execute(f"import {module};print('IMPORTED')", original)
+                self.assertEqual(1, code, error)
+                self.assertNotIn(b"IMPORTED", output)
+                self.assertIn(b"ImportError: DLL load failed while importing " + module.encode(), error)
+        code, output, error = execute(
+            "import json,os,socket,subprocess,sys,select;"
+            "assert socket.inet_aton('127.0.0.1')==b'\\x7f\\x00\\x00\\x01';"
+            "assert callable(select.select);"
+            "assert not socket.selectors.SelectSelector().get_map();"
+            "print('EA_LPAC_STDLIB_OK')", records)
+        self.assertEqual(0, code, error)
+        self.assertEqual(b"EA_LPAC_STDLIB_OK", output.strip())
+
+    @unittest.skipUnless(sys.platform == "win32", "native fixed Windows worker token")
+    def test_windows_private_worker_retains_token_restrictions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            bundle, work = root / "bundle", root / "work"
+            bundle.mkdir()
+            work.mkdir()
+            api = windows._Api()
+            api.acl(root, api.owner_sid(), None, False)
+            diagnostics = {}
+            code, output, error = windows.run(list(windows._STARTUP_COMMAND), bundle, work,
+                {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}},
+                10, 4096, diagnostics=diagnostics)
+        self.assertEqual(0, code)
+        self.assertIn(b"EA_LPAC_STARTUP_OK", output)
+        access = diagnostics["access"]
+        self.assertIs(access["appcontainer"], True)
+        self.assertEqual("low", access["child_integrity"]["level"])
+        self.assertIs(access["ui_access"], False)
+        self.assertIs(access["virtualization_enabled"], False)
+        self.assertEqual(0, access["capability_count"])
+        # CPython can report that the executable's final location is unavailable.
+        # Accept only this exact fixed-startup message, never arbitrary stderr.
+        if error:
+            expected = ("Failed to find real location of " + str(root / "runtime/python.exe")).encode("utf-8")
+            self.assertEqual(expected, error.rstrip(b"\r\n"))
+        print(json.dumps({"fixed_worker_stderr_bytes": len(error),
+                          "fixed_worker_stderr_class": "executable_location_unavailable" if error else "none"}))
 
 
 class ProviderSandboxContractTests(unittest.TestCase):
@@ -151,6 +373,11 @@ class ProviderSandboxContractTests(unittest.TestCase):
         def token_information(token, kind, value, size, length):
             if kind == 46:
                 return 0
+            if kind == 30:
+                length._obj.value = 8
+                if value is not None:
+                    struct.pack_into("<I", value, 0, 0)
+                return int(value is not None)
             if value is None:
                 length._obj.value = 4
                 return 0

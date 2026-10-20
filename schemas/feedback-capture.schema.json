@@ -12,7 +12,7 @@
     "session_ref": {"type": "string", "pattern": "^session-[a-f0-9]{16}$"},
     "turn_ref": {"type": "string", "pattern": "^turn-[a-f0-9]{16}$"},
     "event_name": {"enum": ["PostToolUse", "Stop", "UserPromptSubmit"]},
-    "platform": {"enum": ["claude-code", "codex", "hermes"]},
+    "platform": {"enum": ["claude-code", "codex", "cursor", "hermes"]},
     "model": {"type": "string", "minLength": 1},
     "permission_mode": {"type": "string", "minLength": 1},
     "status": {"enum": ["candidate_created", "no_signal", "metadata_only", "skipped_continuation"]},

@@ -56,8 +56,20 @@ def _terminate(process: subprocess.Popen) -> None:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    finally:
-        setattr(process, "_engineering_assistant_group_terminated", True)
+    except PermissionError as error:
+        # Darwin can return EPERM for a group containing only the unreaped
+        # zombie leader. Reap that child, then still kill/check the group so
+        # surviving descendants cannot be mistaken for successful cleanup.
+        if process.poll() is None:
+            try:
+                process.wait(timeout=0.1)
+            except subprocess.TimeoutExpired:
+                raise error
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    setattr(process, "_engineering_assistant_group_terminated", True)
 
 
 def run_streaming(

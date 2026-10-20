@@ -145,8 +145,13 @@ class ProviderExecutor:
             # CreateProcessW may redirect AppContainer directory options into
             # its profile. Restore only the private cwd after LPAC/Job setup
             # and before loading any Provider code; the profile stays closed.
+            extended = "\\\\?\\"
+            if os.name == "nt" and not str(script).startswith(extended):
+                script = Path(extended + str(script))
             bootstrap += (
                 "import os;"
+                "cwd=os.getcwd();"
+                f"os.chdir(cwd if cwd.startswith({extended!r}) else {extended!r}+cwd) if os.name=='nt' else None;"
                 "os.environ.update(dict.fromkeys("
                 "('LOCALAPPDATA','APPDATA','USERPROFILE','TEMP','TMP','TMPDIR'),os.getcwd()));"
             )
@@ -159,6 +164,7 @@ class ProviderExecutor:
         runtime_executable = self._runtime_executable()
         command = [
             str(runtime_executable),
+            *(["-X", "utf8"] if platform.system() == "Windows" else []),
             "-I",
             "-B",
             "-S",
@@ -497,6 +503,8 @@ class ProviderExecutor:
         observed_integrity: str | None = None,
     ) -> ProviderResult:
         fallback_id = provider.fallback_provider_id or "native-engineering"
+        if len(warning) > 1000:
+            warning = warning[:250] + "\n...\n" + warning[-745:]
         result = ProviderResult(
             invocation_id=invocation.invocation_id,
             invocation_digest=self.invocation_digest(invocation),
@@ -516,7 +524,7 @@ class ProviderExecutor:
             observed_source_integrity=observed_integrity,
             observed_at=datetime.now(timezone.utc).isoformat(),
             next_action="execute_native_provider",
-            warning=warning[:1000],
+            warning=warning,
             fallback_provider_id=fallback_id,
         )
         validate_instance(result.to_dict(), self.output_schema, "provider-result")
