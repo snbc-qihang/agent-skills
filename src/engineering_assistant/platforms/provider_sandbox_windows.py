@@ -13,6 +13,7 @@ and learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-setinformationjobob
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import ntpath
 import os
@@ -20,6 +21,7 @@ import platform
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -33,6 +35,19 @@ BOOL = ctypes.c_int32
 HANDLE = ctypes.c_void_p
 LPWSTR = ctypes.c_wchar_p
 SIZE_T = ctypes.c_size_t
+
+# CLI-only private workers use the exact PBS 3.13.13 / 20260414 build pinned
+# by runtime-python-downloads.json. Its embedded activation contexts cannot
+# load in zero-capability LPAC. Hide only the final RT_MANIFEST type (24),
+# keeping resource ordering, version resources and every PE security bit.
+# These unsigned input images and exact derived images are independently
+# bound; this is not a general PE editor or an installed-Python modification.
+_LPAC_PYTHON_IMAGES = {
+    "python.exe": ("1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039", 10280,
+                   "7c9b1e6b2c57695476d7ed73938766eb4b64872ddd498e2f857291cfb870caac"),
+    "python313.dll": ("68dc4b6989e4a5954417157f5d714d2a1d21b1da855549e98ef1c2ab43468b62", 6098968,
+                      "5d5218b5ec9f47af179f152b1fb53e372da293a01bffbc41fe8803e9eda50067"),
+}
 
 
 class _SecurityAttributes(ctypes.Structure):
@@ -303,6 +318,33 @@ def _reparse(path: Path) -> bool:
     return path.is_symlink() or bool(getattr(metadata, "st_file_attributes", 0) & 0x400)
 
 
+def _prepare_private_python(destination: Path) -> None:
+    images = {}
+    for name, (before, offset, after) in _LPAC_PYTHON_IMAGES.items():
+        path = destination / name
+        metadata = path.lstat()
+        if _reparse(path) or not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 8 * 1024 * 1024:
+            raise OSError("Windows private Python image is not a bounded regular file")
+        with path.open("rb") as stream:
+            data = stream.read(8 * 1024 * 1024 + 1)
+        if hashlib.sha256(data).hexdigest() != before or offset + 4 > len(data):
+            raise OSError("Windows LPAC requires the exact fixed Python build; repair the Runtime")
+        if struct.unpack_from("<I", data, offset)[0] != 24:
+            raise OSError("Windows private Python manifest entry is invalid")
+        derived = data[:offset] + struct.pack("<I", 65535) + data[offset + 4:]
+        if hashlib.sha256(derived).hexdigest() != after:
+            raise OSError("Windows private Python derivation does not match")
+        images[path] = derived, after
+    # Neither image may be used until both source identities and both writes
+    # have passed. Unknown builds and host policy failures remain fail-closed.
+    for path, (data, expected) in images.items():
+        path.write_bytes(data)
+        with path.open("rb") as stream:
+            observed = stream.read(8 * 1024 * 1024 + 1)
+        if hashlib.sha256(observed).hexdigest() != expected:
+            raise OSError("Windows private Python changed after derivation")
+
+
 def _private_runtime(destination: Path) -> Path:
     """Copy runtime leaves only, excluding third-party packages and user code."""
     source = Path(sys.base_prefix).resolve()
@@ -342,6 +384,7 @@ def _private_runtime(destination: Path) -> Path:
 
     for candidate in candidates:
         copy(candidate)
+    _prepare_private_python(destination)
     return destination / "python.exe"
 
 
@@ -1025,7 +1068,8 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
             observations["child_integrity"] = _token_integrity(api, token)
         except OSError as exc:
             observations["child_integrity"] = {"unavailable": True, "error": exc.errno}
-        for name, information_class in (("appcontainer", 29), ("lpac", 46)):
+        for name, information_class in (("appcontainer", 29), ("lpac", 46),
+                                        ("ui_access", 26), ("virtualization_enabled", 24)):
             value, length = DWORD(), DWORD()
             try:
                 api.check(api.advapi.GetTokenInformation(token, information_class, ctypes.byref(value),
@@ -1036,6 +1080,17 @@ def _startup_access(api: _Api, process, runtime: Path, bundle: Path, work: Path)
                 # that observation as unavailable and still inspect objects;
                 # absence of a query result cannot assert LPAC false or true.
                 observations[name] = {"error": exc.errno}
+        try:
+            size = DWORD()
+            api.advapi.GetTokenInformation(token, 30, None, 0, ctypes.byref(size))
+            if not 4 <= size.value <= 65536:
+                raise OSError("diagnostic token capability size is invalid")
+            capabilities = ctypes.create_string_buffer(size.value)
+            api.check(api.advapi.GetTokenInformation(token, 30, capabilities, len(capabilities), ctypes.byref(size)),
+                      "diagnostic token capabilities")
+            observations["capability_count"] = DWORD.from_buffer_copy(capabilities).value
+        except OSError as exc:
+            observations["capability_count"] = {"error": exc.errno}
         try:
             observations["traverse_privilege"] = _traverse_privilege(api, token)
         except OSError as exc:

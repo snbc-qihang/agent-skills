@@ -83,7 +83,9 @@ def required_native_tests(target: str) -> frozenset[str]:
     if target == "windows-x64":
         required |= _WINDOWS_TESTS | {
             "test_provider_runtime.ProviderRuntimeTests."
-            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work"
+            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work",
+            "test_provider_runtime.ProviderRuntimeTests.test_windows_lpac_reads_and_writes_deep_unicode_paths",
+            "test_provider_sandboxes.WindowsPrivatePythonTests.test_windows_private_worker_retains_token_restrictions",
         }
     return frozenset(required)
 

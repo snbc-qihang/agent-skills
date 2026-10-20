@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
+import os
+import struct
 import sys
 import tempfile
 import unittest
@@ -16,6 +19,94 @@ sys.path.insert(0, str(ROOT / "src"))
 from engineering_assistant.platforms import provider_sandbox_linux as linux
 from engineering_assistant.platforms import provider_sandbox_macos as macos
 from engineering_assistant.platforms import provider_sandbox_windows as windows
+
+
+class WindowsPrivatePythonTests(unittest.TestCase):
+    def fixture(self, root):
+        source = root / "source"
+        source.mkdir()
+        images, records = {}, {}
+        for name, offset in (("python.exe", 96), ("python313.dll", 128)):
+            data = bytearray(b"unchanged image bytes" * 32)
+            struct.pack_into("<I", data, offset, 24)
+            original = bytes(data)
+            struct.pack_into("<I", data, offset, 65535)
+            derived = bytes(data)
+            (source / name).write_bytes(original)
+            images[name] = original, derived
+            records[name] = hashlib.sha256(original).hexdigest(), offset, hashlib.sha256(derived).hexdigest()
+        (source / "Lib").mkdir()
+        (source / "Lib/os.py").write_bytes(b"unchanged standard library")
+        return source, images, records
+
+    def test_fixed_private_worker_changes_only_known_manifest_type_and_never_shared_python(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, images, records = self.fixture(root)
+            with patch.object(windows.sys, "base_prefix", str(source)), \
+                 patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                executable = windows._private_runtime(root / "private")
+            self.assertEqual(root / "private/python.exe", executable)
+            for name, (original, derived) in images.items():
+                self.assertEqual(original, (source / name).read_bytes())
+                self.assertEqual(derived, (root / "private" / name).read_bytes())
+            self.assertEqual(b"unchanged standard library", (root / "private/Lib/os.py").read_bytes())
+
+    def test_unknown_changed_and_truncated_runtime_never_returns_an_executable(self):
+        for mode in ("unknown", "changed", "truncated", "missing"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source, images, records = self.fixture(root)
+                image = source / "python313.dll"
+                if mode == "missing":
+                    image.unlink()
+                else:
+                    original = images[image.name][0]
+                    image.write_bytes(original + b"certificate" if mode == "unknown" else
+                                      original[:-1] + b"X" if mode == "changed" else original[:-1])
+                with patch.object(windows.sys, "base_prefix", str(source)), \
+                     patch.object(windows, "_LPAC_PYTHON_IMAGES", records), self.assertRaises(OSError):
+                    windows._private_runtime(root / "private")
+
+    def test_derived_image_is_read_back_before_worker_can_be_returned(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, _images, records = self.fixture(root)
+            write = Path.write_bytes
+            def corrupt(path, data):
+                return write(path, data[:-1])
+            with patch.object(windows.sys, "base_prefix", str(source)), \
+                 patch.object(windows, "_LPAC_PYTHON_IMAGES", records), \
+                 patch.object(Path, "write_bytes", corrupt), self.assertRaises(OSError):
+                windows._private_runtime(root / "private")
+
+    @unittest.skipUnless(sys.platform == "win32", "native fixed Windows worker token")
+    def test_windows_private_worker_retains_token_restrictions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            bundle, work = root / "bundle", root / "work"
+            bundle.mkdir()
+            work.mkdir()
+            api = windows._Api()
+            api.acl(root, api.owner_sid(), None, False)
+            diagnostics = {}
+            code, output, error = windows.run(list(windows._STARTUP_COMMAND), bundle, work,
+                {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}},
+                10, 4096, diagnostics=diagnostics)
+        self.assertEqual(0, code)
+        self.assertIn(b"EA_LPAC_STARTUP_OK", output)
+        access = diagnostics["access"]
+        self.assertIs(access["appcontainer"], True)
+        self.assertEqual("low", access["child_integrity"]["level"])
+        self.assertIs(access["ui_access"], False)
+        self.assertIs(access["virtualization_enabled"], False)
+        self.assertEqual(0, access["capability_count"])
+        # Never print trusted-startup text or host paths. These finite labels
+        # distinguish residual Python/CRT diagnostics without storing content.
+        words = ("warning", "runtimewarning", "registry", "path", "encoding", "codec", "console",
+                 "handle", "ignored", "permission", "access", "denied", "utf", "thread", "locale")
+        print(json.dumps({"fixed_worker_stderr_bytes": len(error),
+                          "fixed_worker_stderr_tags": [word for word in words if word.encode() in error.lower()]}))
 
 
 class ProviderSandboxContractTests(unittest.TestCase):
@@ -151,6 +242,11 @@ class ProviderSandboxContractTests(unittest.TestCase):
         def token_information(token, kind, value, size, length):
             if kind == 46:
                 return 0
+            if kind == 30:
+                length._obj.value = 8
+                if value is not None:
+                    struct.pack_into("<I", value, 0, 0)
+                return int(value is not None)
             if value is None:
                 length._obj.value = 4
                 return 0

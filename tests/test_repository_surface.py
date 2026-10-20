@@ -100,6 +100,33 @@ class RepositorySurfaceTests(unittest.TestCase):
             self.assertIn(contract, workflow)
         self.assertNotIn("continue-on-error", workflow)
 
+    def test_windows_ci_uses_the_consumer_download_contract_before_developer_install(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        step = re.search(r"      - name: 使用消费者相同的固定 Windows Python\n.*?python - <<'PY'\n(.*?)\n          PY",
+                         workflow, flags=re.DOTALL)
+        self.assertIsNotNone(step)
+        self.assertLess(step.start(), workflow.index("      - name: 安装开发包"))
+        key = "cpython-3.13.13-windows-x86_64-none"
+        entry = json.loads((ROOT / "config/runtime-python-downloads.json").read_text())[key]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            base = root / "consumer-python" / key
+            base.mkdir(parents=True)
+            (base / "BUILD").write_text(entry["build"])
+            (base / "python.exe").write_bytes(b"fixture; never executed")
+            command_file = root / "github-path"
+            with mock.patch.dict(os.environ, {"EA_CI_ROOT": str(root), "GITHUB_PATH": str(command_file),
+                    "UV_CACHE_DIR": str(root / "cache"), "UV_INDEX_URL": "untrusted-fixture"}, clear=True), \
+                 mock.patch("subprocess.run") as run:
+                exec(compile(textwrap.dedent(step.group(1)), "<CI consumer Python>", "exec"), {})
+            command = run.call_args.args[0]
+            self.assertEqual([sys.executable, "-m", "uv", "--no-config", "python", "install", key], command)
+            environment = run.call_args.kwargs["env"]
+            self.assertNotIn("UV_INDEX_URL", environment)
+            self.assertEqual(entry["build"], environment["UV_PYTHON_CPYTHON_BUILD"])
+            self.assertEqual("0", environment["UV_PYTHON_INSTALL_REGISTRY"])
+            self.assertEqual([str(base), str(base / "Scripts")], command_file.read_text().splitlines())
+
     def test_ci_native_gate_rejects_skips_missing_tests_and_failures(self) -> None:
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         functions = []

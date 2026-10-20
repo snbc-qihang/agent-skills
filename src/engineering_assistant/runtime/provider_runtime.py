@@ -159,6 +159,7 @@ class ProviderExecutor:
         runtime_executable = self._runtime_executable()
         command = [
             str(runtime_executable),
+            *(["-X", "utf8"] if platform.system() == "Windows" else []),
             "-I",
             "-B",
             "-S",

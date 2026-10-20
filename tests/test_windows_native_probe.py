@@ -347,13 +347,11 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
                      patch.object(probe.sys, "version_info", (3, 13, 13)), \
                      patch.object(probe, "build_probe", return_value=self.image()), \
                      patch.object(probe, "run_bounded_windows", return_value=(0, self.output())), \
-                     patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth, \
-                     patch.object(probe, "_python_sxs_control", return_value={"diagnostic_only": True, "qualified": False}) as sxs:
+                     patch.object(probe, "_registry_read_control", return_value={"qualified": False, "complete": True}) as fourth:
                     result = probe.diagnose()
-                self.assertEqual([False, True, True, True], calls)
+                self.assertEqual([False, True], calls)
                 self.assertIs(result["qualified"], False)
                 self.assertEqual(int(eligible), fourth.call_count)
-                self.assertEqual(3 * int(eligible), sxs.call_count)
                 if eligible:
                     self.assertEqual(expected["detached_console"]["checks"], result["detached_console"]["checks"])
                     self.assertEqual(expected["detached_console"]["loads"], result["detached_console"]["loads"])
@@ -831,86 +829,6 @@ class WindowsNativeProbeContractTests(unittest.TestCase):
         self.assertLess(positions[-1], source.index('private_load(handle, b"python313.dll"'))
         self.assertEqual(probe.SOURCE_SHA256, hashlib.sha256(
             (ROOT / "tests/fixtures/windows_startup_probe.rs").read_bytes()).hexdigest())
-
-
-class WindowsSxsCopyControlTests(unittest.TestCase):
-    @staticmethod
-    def dll():
-        data = bytearray(1024)
-        data[:2] = b"MZ"
-        struct.pack_into("<I", data, 60, 128)
-        data[128:132] = b"PE\0\0"
-        struct.pack_into("<HH", data, 132, 0x8664, 1)
-        struct.pack_into("<HH", data, 148, 240, 0x2002)
-        struct.pack_into("<H", data, 152, 0x20B)
-        struct.pack_into("<H", data, 222, 0x4160)
-        return bytes(data)
-
-    def test_sxs_copy_control_changes_only_the_manifest_lookup_bit(self):
-        before = self.dll()
-        after = probe._without_sxs_manifest_lookup(before)
-        self.assertEqual(0x4360, struct.unpack_from("<H", after, 222)[0])
-        self.assertEqual(before[:222], after[:222])
-        self.assertEqual(before[224:], after[224:])
-        self.assertEqual(after, probe._without_sxs_manifest_lookup(after))
-
-    def test_common_controls_control_preserves_all_other_image_bytes(self):
-        dependency = (b'<dependency>\n<dependentAssembly>\n<assemblyIdentity type="win32" '
-                      b'name="Microsoft.Windows.Common-Controls" version="6.0.0.0" '
-                      b'processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*" />'
-                      b'\n</dependentAssembly>\n</dependency>')
-        manifest = b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1">' + dependency + b'</assembly>'
-        before = self.dll() + b'untouched-prefix' + manifest + b'untouched-suffix'
-        after = probe._without_common_controls(before, manifest)
-        self.assertEqual(before.replace(dependency, b' ' * len(dependency)), after)
-        for invalid in (self.dll(), before + manifest,
-                        before.replace(b'Microsoft.Windows.Common-Controls', b'Unapproved.Windows.Dependency')):
-            with self.subTest(size=len(invalid)), self.assertRaises(ValueError):
-                probe._without_common_controls(invalid, manifest)
-
-    def test_manifest_type_control_requires_exact_image_and_preserves_every_other_byte(self):
-        data = self.dll()
-        offset = 300
-        data = data[:offset] + struct.pack('<I', 24) + data[offset + 4:]
-        expected = data[:offset] + struct.pack('<I', 65535) + data[offset + 4:]
-        record = (hashlib.sha256(data).hexdigest(), offset, hashlib.sha256(expected).hexdigest())
-        with patch.object(probe, 'MANIFEST_FREE_IMAGES', {'python313.dll': record}):
-            self.assertEqual(expected, probe._without_embedded_manifest(data, 'python313.dll'))
-            for name, invalid in (('python.exe', data), ('python313.dll', data[:-1]),
-                                  ('python313.dll', data[:-1] + b'X')):
-                with self.subTest(name=name), self.assertRaises(ValueError):
-                    probe._without_embedded_manifest(invalid, name)
-
-    def test_sxs_copy_control_rejects_other_images_and_truncated_headers(self):
-        invalid = [b"", self.dll()[:240], b"NO" + self.dll()[2:]]
-        for offset, value in ((60, 0xFFFFFF00), (132, 0x14C), (148, 224), (150, 2), (152, 0x10B)):
-            data = bytearray(self.dll())
-            struct.pack_into("<I" if offset == 60 else "<H", data, offset, value)
-            invalid.append(bytes(data))
-        for data in invalid:
-            with self.subTest(size=len(data)), self.assertRaises(ValueError):
-                probe._without_sxs_manifest_lookup(data)
-
-    def test_sxs_control_changes_only_the_private_python_images(self):
-        import shutil
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            source = root / "installed"
-            source.mkdir()
-            executable = bytearray(self.dll())
-            struct.pack_into("<H", executable, 150, 0x22)
-            executable = bytes(executable)
-            (source / "python.exe").write_bytes(executable)
-            (source / "python313.dll").write_bytes(self.dll())
-            (source / "unrelated.dll").write_bytes(b"unchanged dependency")
-            target = root / "private"
-            original = lambda destination: (shutil.copytree(source, destination), destination / "python.exe")[1]
-            self.assertEqual(target / "python.exe", probe._sxs_private_runtime(target, original))
-            self.assertEqual(self.dll(), (source / "python313.dll").read_bytes())
-            self.assertEqual(executable, (source / "python.exe").read_bytes())
-            self.assertEqual(probe._without_sxs_manifest_lookup(executable, dll=False), (target / "python.exe").read_bytes())
-            self.assertEqual(probe._without_sxs_manifest_lookup(self.dll()), (target / "python313.dll").read_bytes())
-            self.assertEqual(b"unchanged dependency", (target / "unrelated.dll").read_bytes())
 
 
 if __name__ == "__main__":

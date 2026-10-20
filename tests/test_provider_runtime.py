@@ -134,6 +134,9 @@ class ProviderRuntimeTests(unittest.TestCase):
         self.assertNotIn("--persist", command)
         self.assertNotIn("HOME", calls[0][1]["env"])
         self.assertNotIn("HTTP_PROXY", calls[0][1]["env"])
+        if sys.platform == "win32":
+            utf8 = command.index("-X")
+            self.assertEqual("utf8", command[utf8 + 1])
         self.assertEqual(calls[0][1]["cwd"], Path(calls[0][1]["env"]["TMP"]))
         self.assertNotIn("preexec_fn", calls[0][1])
         self.assertEqual(subprocess.DEVNULL, calls[0][1]["stdin"])
@@ -184,6 +187,34 @@ class ProviderRuntimeTests(unittest.TestCase):
         self.refresh_integrity()
         result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
         self.assertEqual("completed", result.status, result.warning)
+
+    @unittest.skipUnless(sys.platform == "win32", "native Windows LPAC long Unicode paths")
+    def test_windows_lpac_reads_and_writes_deep_unicode_paths(self) -> None:
+        self._require_production_sandbox()
+        relative = Path(*(["中文 带空格目录" + "层" * 24] * 8))
+        data = self.bundle / "data" / relative / "资料.txt"
+        self.assertGreater(len(str(data)), 300)
+        data.parent.mkdir(parents=True)
+        data.write_text("中文资料", encoding="utf-8")
+        (self.bundle / "scripts/search.py").write_text(
+            "from pathlib import Path\n"
+            f"relative = Path({str(relative)!r})\n"
+            "data = Path(__file__).parent.parent / 'data' / relative / '资料.txt'\n"
+            "assert data.read_text(encoding='utf-8') == '中文资料'\n"
+            "assert data in list(data.parent.iterdir())\n"
+            "output = Path.cwd() / relative / '结果.txt'\n"
+            "output.parent.mkdir(parents=True)\n"
+            "output.write_text('中文结果', encoding='utf-8')\n"
+            "assert output.read_text(encoding='utf-8') == '中文结果'\n"
+            "print('## Design System: 中文路径与结果')\n", encoding="utf-8",
+        )
+        self.refresh_integrity()
+        parent = Path(self.temporary.name) / "中文 临时目录"
+        parent.mkdir()
+        with patch("engineering_assistant.runtime.provider_runtime.tempfile.tempdir", str(parent)):
+            result = self.executor.invoke(self.invocation(), provider_root=self.bundle)
+        self.assertEqual("completed", result.status, result.warning)
+        self.assertEqual("## Design System: 中文路径与结果", result.output)
 
     def test_darwin_venv_uses_the_base_framework_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
