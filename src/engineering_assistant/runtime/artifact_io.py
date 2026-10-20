@@ -1366,6 +1366,8 @@ class ArtifactIO:
         try:
             self._acquire_lock(descriptor)
             acquired = True
+            if fcntl is None and msvcrt is not None:  # pragma: no cover - Windows only
+                self._prepare_windows_lock(descriptor)
             yield
         finally:
             if acquired and fcntl is not None:
@@ -1380,7 +1382,8 @@ class ArtifactIO:
             if fcntl is not None:
                 fcntl.flock(descriptor, fcntl.LOCK_EX)
             elif msvcrt is not None:  # pragma: no cover - Windows only
-                self._prepare_windows_lock(descriptor)
+                # Windows can lock beyond EOF; initialize only while holding the lock.
+                os.lseek(descriptor, 0, os.SEEK_SET)
                 msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
             return
 
@@ -1390,7 +1393,7 @@ class ArtifactIO:
                 if fcntl is not None:
                     fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 elif msvcrt is not None:  # pragma: no cover - Windows only
-                    self._prepare_windows_lock(descriptor)
+                    os.lseek(descriptor, 0, os.SEEK_SET)
                     msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
                 return
             except (BlockingIOError, OSError) as exc:
