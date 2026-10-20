@@ -37,8 +37,8 @@ LPWSTR = ctypes.c_wchar_p
 SIZE_T = ctypes.c_size_t
 
 # CLI-only private workers use the exact PBS 3.13.13 / 20260414 build pinned
-# by runtime-python-downloads.json. The core DLL's activation context cannot
-# load in zero-capability LPAC. Hide only its final RT_MANIFEST type (24),
+# by runtime-python-downloads.json. The core and socket/select activation
+# contexts cannot load in zero-capability LPAC. Hide their final RT_MANIFEST type (24),
 # keeping resource ordering, version resources and every PE security bit.
 # The executable stays byte-identical, including its longPathAware manifest.
 # These unsigned input images and exact derived images are independently
@@ -48,6 +48,10 @@ _LPAC_PYTHON_IMAGES = {
                    "1cef81e2d42a8548becdfb134fd82746e0305a317f4337c95dc868551ed6d039"),
     "python313.dll": ("68dc4b6989e4a5954417157f5d714d2a1d21b1da855549e98ef1c2ab43468b62", 6098968,
                       "5d5218b5ec9f47af179f152b1fb53e372da293a01bffbc41fe8803e9eda50067"),
+    "DLLs/_socket.pyd": ("c223f3fcb30d6938a3f8645db5f6bf5d83b5b2c389307b184bfb298f7123fe17", 69656,
+                         "6c432fd1aa244e4d7d23dcf7748d45dedf183a8c515dc72c709e6f2a52ac669a"),
+    "DLLs/select.pyd": ("dfc46e5ee61d3e70833a56868af3c9eca3e32df1264d9ceea83634ea3f58a28a", 15896,
+                        "2f875843fdba4e2b9d733c61221c3889aba1da7ac26e46f962dd86214cba4e08"),
 }
 
 
@@ -338,8 +342,8 @@ def _prepare_private_python(destination: Path) -> None:
         if hashlib.sha256(derived).hexdigest() != after:
             raise OSError("Windows private Python derivation does not match")
         images[path] = derived, after
-    # Neither image may be used until both source identities and both writes
-    # have passed. Unknown builds and host policy failures remain fail-closed.
+    # No image may be used until all source identities and writes have passed.
+    # Unknown builds and host policy failures remain fail-closed.
     for path, (data, expected) in images.items():
         path.write_bytes(data)
         with path.open("rb") as stream:

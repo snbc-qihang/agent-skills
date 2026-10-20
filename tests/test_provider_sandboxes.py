@@ -26,13 +26,15 @@ class WindowsPrivatePythonTests(unittest.TestCase):
         source = root / "source"
         source.mkdir()
         images, records = {}, {}
-        for name, offset in (("python.exe", 96), ("python313.dll", 128)):
+        for name, offset in (("python.exe", 96), ("python313.dll", 128),
+                             ("DLLs/_socket.pyd", 160), ("DLLs/select.pyd", 192)):
             data = bytearray(b"unchanged image bytes" * 32)
             struct.pack_into("<I", data, offset, 24)
             original = bytes(data)
             if name != "python.exe":
                 struct.pack_into("<I", data, offset, 65535)
             derived = bytes(data)
+            (source / name).parent.mkdir(exist_ok=True)
             (source / name).write_bytes(original)
             images[name] = original, derived
             records[name] = (hashlib.sha256(original).hexdigest(),
@@ -55,32 +57,71 @@ class WindowsPrivatePythonTests(unittest.TestCase):
             self.assertEqual(b"unchanged standard library", (root / "private/Lib/os.py").read_bytes())
 
     def test_unknown_changed_and_truncated_runtime_never_returns_an_executable(self):
-        for mode in ("unknown", "changed", "truncated", "missing"):
-            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                source, images, records = self.fixture(root)
-                image = source / "python313.dll"
-                if mode == "missing":
-                    image.unlink()
-                else:
-                    original = images[image.name][0]
-                    image.write_bytes(original + b"certificate" if mode == "unknown" else
-                                      original[:-1] + b"X" if mode == "changed" else original[:-1])
-                with patch.object(windows.sys, "base_prefix", str(source)), \
-                     patch.object(windows, "_LPAC_PYTHON_IMAGES", records), self.assertRaises(OSError):
-                    windows._private_runtime(root / "private")
+        for name in ("python.exe", "python313.dll", "DLLs/_socket.pyd", "DLLs/select.pyd"):
+            for mode in ("unknown", "changed", "truncated", "missing"):
+                with self.subTest(name=name, mode=mode), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    source, images, records = self.fixture(root)
+                    image = source / name
+                    if mode == "missing":
+                        image.unlink()
+                    else:
+                        original = images[name][0]
+                        image.write_bytes(original + b"certificate" if mode == "unknown" else
+                                          original[:-1] + b"X" if mode == "changed" else original[:-1])
+                    with patch.object(windows.sys, "base_prefix", str(source)), \
+                         patch.object(windows, "_LPAC_PYTHON_IMAGES", records), self.assertRaises(OSError):
+                        windows._private_runtime(root / "private")
+                    # Even corruption of the last input must precede every write.
+                    if name == "DLLs/select.pyd":
+                        self.assertEqual(images["python313.dll"][0], (root / "private/python313.dll").read_bytes())
 
     def test_derived_image_is_read_back_before_worker_can_be_returned(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source, _images, records = self.fixture(root)
-            write = Path.write_bytes
-            def corrupt(path, data):
-                return write(path, data[:-1])
-            with patch.object(windows.sys, "base_prefix", str(source)), \
-                 patch.object(windows, "_LPAC_PYTHON_IMAGES", records), \
-                 patch.object(Path, "write_bytes", corrupt), self.assertRaises(OSError):
-                windows._private_runtime(root / "private")
+        for name in ("python.exe", "python313.dll", "DLLs/_socket.pyd", "DLLs/select.pyd"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source, _images, records = self.fixture(root)
+                write = Path.write_bytes
+                def corrupt(path, data):
+                    return write(path, data[:-1] if path == root / "private" / name else data)
+                with patch.object(windows.sys, "base_prefix", str(source)), \
+                     patch.object(windows, "_LPAC_PYTHON_IMAGES", records), \
+                     patch.object(Path, "write_bytes", corrupt), self.assertRaises(OSError):
+                    windows._private_runtime(root / "private")
+
+    @unittest.skipUnless(sys.platform == "win32", "native fixed Windows stdlib imports")
+    def test_windows_private_worker_loads_socket_extensions_without_widening_capabilities(self):
+        environment = {key: value for key, value in os.environ.items() if key.upper() in {"SYSTEMROOT", "WINDIR"}}
+
+        def execute(source, records):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                bundle, work = root / "bundle", root / "work"
+                bundle.mkdir()
+                work.mkdir()
+                api = windows._Api()
+                api.acl(root, api.owner_sid(), None, False)
+                with patch.object(windows, "_LPAC_PYTHON_IMAGES", records):
+                    return windows.run([sys.executable, "-X", "utf8", "-I", "-B", "-S", "-c", source],
+                                       bundle, work, environment, 10, 4096)
+
+        records = windows._LPAC_PYTHON_IMAGES
+        for name, module in (("DLLs/_socket.pyd", "_socket"), ("DLLs/select.pyd", "select")):
+            with self.subTest(original=module):
+                before, _offset, _after = records[name]
+                original = {**records, name: (before, None, before)}
+                code, output, error = execute(f"import {module};print('IMPORTED')", original)
+                self.assertEqual(1, code, error)
+                self.assertNotIn(b"IMPORTED", output)
+                self.assertIn(b"ImportError: DLL load failed while importing " + module.encode(), error)
+        code, output, error = execute(
+            "import json,os,socket,subprocess,sys,select;"
+            "assert socket.inet_aton('127.0.0.1')==b'\\x7f\\x00\\x00\\x01';"
+            "assert callable(select.select);"
+            "assert not socket.selectors.SelectSelector().get_map();"
+            "print('EA_LPAC_STDLIB_OK')", records)
+        self.assertEqual(0, code, error)
+        self.assertEqual(b"EA_LPAC_STDLIB_OK", output.strip())
 
     @unittest.skipUnless(sys.platform == "win32", "native fixed Windows worker token")
     def test_windows_private_worker_retains_token_restrictions(self):

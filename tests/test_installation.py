@@ -183,6 +183,28 @@ class InstallationTests(unittest.TestCase):
             with self.assertRaises((ValidationFailure, subprocess.TimeoutExpired)):
                 _protocol_run([sys.executable, "-c", "import time;time.sleep(5)"], cwd=cwd, timeout=1)
 
+    @unittest.skipIf(os.name == "nt", "POSIX process-group cleanup")
+    def test_protocol_output_limit_survives_zombie_group_permission_race(self):
+        from engineering_assistant.installer.installation import _protocol_run
+        from engineering_assistant.runtime.validation import ValidationFailure
+        signal_group = os.killpg
+        calls = 0
+
+        def zombie_then_absent(pid, signal):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PermissionError("Darwin zombie process group")
+            return signal_group(pid, signal)
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "engineering_assistant.installer.installation.os.killpg", side_effect=zombie_then_absent,
+        ):
+            with self.assertRaisesRegex(ValidationFailure, "bounded.*limit"):
+                _protocol_run([sys.executable, "-c", "import sys;sys.stdout.write('x'*1048577)"],
+                              cwd=Path(temporary))
+        self.assertEqual(2, calls)
+
     def test_protocol_requires_the_expected_cli_exit_code(self):
         from engineering_assistant.installer.installation import _protocol_run
         from engineering_assistant.runtime.validation import ValidationFailure

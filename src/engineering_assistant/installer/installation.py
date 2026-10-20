@@ -14,7 +14,6 @@ import re
 import secrets
 import selectors
 import shutil
-import signal
 import stat
 import subprocess
 import sys
@@ -30,6 +29,7 @@ from ..runtime.artifact_io import ArtifactConflict, ArtifactIO, artifact_fs
 from ..runtime.catalog import DEFAULT_REPOSITORY_ROOT
 from ..runtime.package import verify_package
 from ..runtime.validation import ValidationFailure
+from ..platforms.process import _terminate
 
 from ..runtime.environment import (
     AGENTS, TARGETS, PYTHON_PLATFORMS, PYTHON_VERSION, MAX_CONTROL_BYTES, environment_key, python_download_metadata, runtime_lock, _read_control, _validate_runtime_lock, _package_lock, _python_receipt, _check_python_base, _record_python_artifact, _verify_python_facts, verify_running_python
@@ -638,10 +638,7 @@ def _protocol_run(command: list[str], *, cwd: Path, input_data: bytes = b"",
                 code = process.wait(timeout=max(deadline - time.monotonic(), 0.001))
             finally:
                 selector.close()
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                _terminate(process)
                 process.wait()
                 process.stdout.close()
             output = bytes(output)
