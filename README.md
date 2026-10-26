@@ -63,7 +63,11 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 宿主继续管理自己的插件入口：Codex 使用原生 marketplace/cache，Claude Code 使用原生 plugin，Cursor 使用 `~/.cursor/plugins/local/engineering-assistant/`。原生缓存可保留发行包副本；日常 Runtime 从校验过的共享核心加载。卸载一个入口保留共享核心及其他宿主。项目运行证据仍位于目标项目 `.run-artifacts/engineering-assistant/`。
 
-各工具没有统一的插件配置文件，不能只指定一个文件夹就保证全部自动加载。安装器通过 `--agent codex`、`--agent claude-code` 或 `--agent cursor` 选择宿主 adapter，保留原生发现、启用和信任流程，不改写其他插件的配置。详见[共享核心与原生入口](docs/operations/local-publish.md#共享核心与原生入口)。
+统一入口是 `ea-setup`，通过 `--agent codex` 或 `--agent claude-cowork` 选择宿主，共用上述默认目录。命令自动准备固定依赖和对应原生入口；用户随后在 Agent 内发现、审查并启用。Claude Code 与 Cursor 的高级入口继续保留。
+
+Codex 使用原生 marketplace 登记。Claude **桌面端 Cowork** 使用账号插件入口：命令将已校验的 Claude 原生包复制到 `entries/claude-cowork/<摘要>/package/`，准备共享 Runtime，并生成同级 `engineering-assistant.plugin`。随后在 Claude 的 **Customize → Plugins → Add → Upload plugin** 选择输出路径并启用。个人账号尚无已确认的通用命令行登记接口；Claude Code 的 CLI 安装不会登记 Cowork 账号。[Claude 原生插件机制](https://claude.com/docs/plugins/overview)
+
+Cowork 本机准备完成返回 `needs_activation`、`ready=false`，退出码为 0；这表示导入材料已准备，不表示账号已发现、已启用或真实验收通过。`doctor` 不通过 `--hooks-trusted` 或其他声明推断 Cowork 账号状态。**Cowork 的 GitHub 固定候选来源和正式入口尚未发布**；本轮提供安装器能力与开发者验证入口，不把示意 tag 作为可用安装命令。详见[统一命令与 Cowork 原生发现](docs/operations/local-publish.md#统一命令与-cowork-原生发现)。
 
 **共享核心改造已进入上述 Mac 候选，真实宿主验收尚未完成。** 正式安装入口仍未启用。Cursor 当前为源码和本地资格验证入口，尚无已验收的 GitHub 发行命令；新增 adapter 不扩大首轮 Codex 两目标的发行矩阵。
 

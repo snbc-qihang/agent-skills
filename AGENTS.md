@@ -22,6 +22,7 @@
 - 构建产物只能写到仓库外临时目录。
 - 仓库只保留当前架构和当前运维文档，不新增迁移矩阵、升级记录、实施过程、审批历史或发布执行历史。
 - 首轮内部发行只包含 Codex 的 macOS 14+ arm64 与 Windows 11 x64，App 与原生 CLI 使用同一完整功能及安全合同。Hermes、Claude Code 和 Linux 共享源码保留回归，不扩大首轮发行矩阵。
+- `ea-setup --agent claude-cowork` 仅准备共享 Runtime 与原生账号导入包，复用 Claude 原生格式；不得通过 Claude Code CLI、私有缓存或用户声明冒充 Cowork 账号登记与启用。个人账号最后一步使用原生界面，真实 Cowork 验收前不宣称完整支持，不扩大正式发行合同。
 - 内部安装器从 `internal/installer` 或同版本不可变 `internal/installer/<版本>` 源码 tag 核对真实 Git 来源，选择同版本不可变 `internal/codex/<版本>` 发行；生成发行树只进入仓库外临时目录和专用发行 tag，不进入 `main`、`teamwork` 或作者 checkout。
 - 真实验收前可按用户明确授权创建独立、不可覆盖的 `candidate/codex/` Git marketplace tag，复用显式 `ea-setup --source` 入口并绑定源码与包摘要。候选必须明确标记真实宿主验收待完成，不生成已通过的人工记录，不创建 Release 或推进正式入口；技术验证不能代替两目标真实验收。
 - 正式内部交付仅以完整仓库门禁及两目标真实 App、CLI、Provider 验收取得资格，不宣称产品收益 Canary 完成；公开稳定版和产品稳定版晋级继续遵守真实产品 Canary 门槛。
