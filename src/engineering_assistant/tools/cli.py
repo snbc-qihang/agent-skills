@@ -192,7 +192,7 @@ def _add_author_commands(subparsers):
     build = subparsers.add_parser("build")
     build.add_argument(
         "--platform",
-        choices=sorted(("claude-code", "codex", "hermes")),
+        choices=sorted(("claude-code", "codex", "cursor", "hermes")),
         required=True,
     )
     build.add_argument("--output", required=True)

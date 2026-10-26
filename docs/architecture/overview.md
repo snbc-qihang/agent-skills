@@ -39,7 +39,7 @@ flowchart LR
 - `runtime/feedback.py` 提供跨平台的脱敏、信号分类、精确去重和反馈持久化。
 - `runtime/governance.py` 提供证据绑定的六维质量门禁和带人工选择审计的调研队列。
 - `runtime/provider_runtime.py` 把固定第三方 bundle 复制为拒绝 pyc、symlink 和特殊文件的私有快照，对快照验摘要后在最小权限沙箱执行 UI/UX 建议；输出只作为不可信建议，任何失败都返回明确的原生 Provider 执行指令。
-- `tools/compiler.py` 从同一作者源构建 Codex/Hermes/Claude Code 包。
+- `tools/compiler.py` 从同一作者源构建 Codex/Hermes/Claude Code 包及待宿主验收的 Cursor 包。
 - `tools/local_publish.py` 负责本机预发布、回滚和平台注册。
 - `installer/installation.py` 和 `ea-setup` 按作者源的目标分布元数据固定 CPython 版本、PBS 构建与归档摘要，准备哈希依赖和不可变版本绑定，消费已验证预构建插件，不要求终端用户执行作者源门禁。诊断分别报告 Runtime/MCP 与 Provider 就绪状态，完整功能仍要求全部通过。
 - `scripts/validate_local.py` 在干净的固定源码上生成同一批次的本地原生验证输入。`tools/release_assets.py` 接受互斥的 CI 身份或 `local_unattested` 本地来源，核对源码、批次与包摘要；两者都不能代替真实 App/CLI/Provider 人工验收。
@@ -82,6 +82,10 @@ flowchart LR
 Codex 包包含 `.codex-plugin/plugin.json`、`.mcp.json`、`hooks/hooks.json`、skills 和 `engineering-assistant/` 运行目录，`.mcp.json` 启动包内 `ea mcp-serve`；Hook manifest 注册 `UserPromptSubmit`、本插件 MCP 的 `PreToolUse`/`PostToolUse` 和 `Stop`。轻量 gate 仅在明确插件请求或活动 run 时加载 Runtime，失败始终 fail-open。Hermes 包通过 `post_llm_call` 和插件工具包装复用同一反馈采集语义，并明确平台覆盖差异。
 
 各平台包的核心文件来自同一构建，差异只能存在于 adapter 生成的平台注册文件。
+
+构建将公共 Runtime、skills/references、packs、catalog、schemas、配置与许可证绑定为 `runtime-core.json`；宿主 manifest、Hook 命令、启动锁及 Codex 的 `agents/openai.yaml` 等发现元数据留在原生入口。安装器把相同内容原子保存到系统标准数据根的 `cores/<sha256>/`，按摘要复用，不建立可被更新覆盖的全局 current-core 指针。启动器仍按宿主和版本选择固定 Python；bootstrap 先核对共享核心的逐文件摘要，再从该核心加载应用模块和资料。原生市场可保留发行运输副本，实际 Runtime 不从该副本执行。旧包没有共享清单时继续遵守原有启动合同；新包缺少或篡改核心时明确要求修复，不回退到运输副本。
+
+`installer/shared_core.py` 只负责核心的准备、复用及显式修复。修复保留被替换的内容，其他宿主、旧环境与活动版本不被清理。`installer/cursor_installation.py` 管理官方支持的本地插件入口及其独立所有权记录，不修改用户全局 MCP/Hook 配置，也不把目录存在当作 Cursor 已启用。`platforms/cursor_hook.py` 将 Cursor 的事件、项目根和响应合同适配到既有非阻断反馈；没有原生工具调用 ID 时只保留有效反馈信号，不伪造并发调用计数。真实宿主加载与覆盖范围仍需单独验收。
 
 首轮内部交付仅包含 Codex 的 macOS 14+ arm64 与 Windows 11 x64，App 与原生 CLI 维持同一完整功能和安全合同。Hermes、Claude Code、Linux 的共享源码与高级工具保留回归，不作为首轮发行前置矩阵。当前 `1.0.0.1` 的正式内部交付资格限定于仓库门禁和完整安装运行验收，不代表产品稳定版或收益资格。候选组装不表示发行可用：Windows Server Runner 不能替代 Windows 11，Runtime 资格、`doctor` 与用户信任声明不能替代真实已认证 App/CLI 会话。固定源码 tag 与发行 tag 绑定同一版本和源码提交；移动入口只在两目标真实固定命令验收后启用。
 

@@ -152,7 +152,7 @@ class InternalDistributionTests(unittest.TestCase):
         repo = self.root / "repository"
         shutil.copytree(self.release, repo)
         for arguments in (("init",), ("add", "."), ("-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "synthetic"), ("tag", TAG)):
-            subprocess.run(["git", *arguments], cwd=repo, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "core.autocrlf=false", *arguments], cwd=repo, check=True, capture_output=True)
         return repo
 
     def acquire(self, data, repository):
@@ -348,6 +348,45 @@ class InternalDistributionTests(unittest.TestCase):
         with mock.patch.object(distribution, "_fetch_ref", side_effect=AssertionError("offline")), self.assertRaises(ValidationFailure):
             self.acquire(data, repository)
 
+    def test_git_release_fixture_preserves_crlf_bytes_despite_user_conversion(self):
+        payload = b"fixture line one\r\nfixture line two\r\n"
+        (self.release / "line-endings.txt").write_bytes(payload)
+        with mock.patch.dict(os.environ, {"GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true"}):
+            repository = self.git_release()
+        actual = subprocess.check_output(["git", "show", "HEAD:line-endings.txt"], cwd=repository)
+        self.assertEqual(payload, actual)
+
+    def test_git_fetch_preserves_release_bytes_despite_user_autocrlf(self):
+        config = self.root / "global.gitconfig"
+        config.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
+        with mock.patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1",
+        }):
+            repository = self.git_release()
+            result = self.acquire(self.root / "data", repository)
+        original = self.release / "marketplaces/codex/macos-arm64/plugins/engineering-assistant"
+        name = "engineering-assistant/runtime-requirements.txt"
+        self.assertEqual(
+            (original / name).read_bytes(),
+            (result["source"] / "plugins/engineering-assistant" / name).read_bytes(),
+        )
+
+    def test_git_fetch_ignores_user_text_attributes(self):
+        repository = self.git_release()
+        attributes = self.root / "global.attributes"
+        attributes.write_text("* text eol=crlf\n", encoding="utf-8")
+        config = self.root / "global.gitconfig"
+        config.write_text(
+            "[core]\n\tattributesFile = " + json.dumps(attributes.as_posix()) + "\n",
+            encoding="utf-8",
+        )
+        with mock.patch.dict(os.environ, {
+            "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1",
+        }):
+            result = self.acquire(self.root / "data", repository)
+        self.assertTrue(result["source"].is_dir())
+
     def test_concurrent_fetch_publishes_one_complete_tree(self):
         from engineering_assistant.installer.installation import _read_control
         repository = self.git_release()
@@ -403,6 +442,11 @@ class InternalDistributionTests(unittest.TestCase):
         calls = []
         def replace(command, **kwargs):
             calls.append(command)
+            if os.name == "nt":
+                with self.assertRaises(PermissionError) as denied:
+                    storage_root.rename(self.root / "detached-transport")
+                self.assertEqual(5, denied.exception.winerror)
+                raise ValidationFailure("Windows denied replacement of an ancestor with an open child")
             storage_root.rename(self.root / "detached-transport")
             storage_root.mkdir()
             (storage_root / "foreign-marker").write_bytes(b"must survive")
@@ -411,7 +455,12 @@ class InternalDistributionTests(unittest.TestCase):
             "engineering_assistant.installer.installation._command", side_effect=replace), self.assertRaises(ValidationFailure):
             distribution._fetch_ref(URL, TAG, storage_root, storage)
         self.assertEqual(1, len(calls))
-        self.assertEqual(b"must survive", (storage_root / "foreign-marker").read_bytes())
+        if os.name == "nt":
+            self.assertTrue((storage_root / "git").is_dir())
+            self.assertFalse((self.root / "detached-transport").exists())
+            self.assertFalse((storage_root / "foreign-marker").exists())
+        else:
+            self.assertEqual(b"must survive", (storage_root / "foreign-marker").read_bytes())
 
     def test_git_fetch_ignores_inherited_repository_and_object_routing(self):
         repository = self.git_release()

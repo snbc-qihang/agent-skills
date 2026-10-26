@@ -51,6 +51,7 @@ def native_v1_fixture(package: Path, *, cachebuster: str | None = None) -> dict:
             "environment_key": environment_key(manifest["canonical_version"], "3.13.13", digest, manifest["target"])}
     (package / "engineering-assistant/runtime-lock.json").write_text(json.dumps(lock), encoding="utf-8")
     (package / "engineering-assistant/runtime-python-downloads.json").unlink()
+    (package / "engineering-assistant/runtime-core.json").unlink()
     manifest["runtime_environment_key"] = lock["environment_key"]
     path.write_text(json.dumps(manifest), encoding="utf-8")
     return reseal_package_fixture(package)
@@ -145,6 +146,8 @@ class CompilerAdapterTests(unittest.TestCase):
         from engineering_assistant.installer.installation import _normalize_new_windows_environment, _storage
         storage = _storage(data)
         try:
+            from engineering_assistant.installer.shared_core import prepare_core
+            prepare_core(package, storage)
             environment = data / "environments/launcher-unit-python"
             if not environment.exists():
                 storage.ensure_directory("environments", "launcher-unit-python")

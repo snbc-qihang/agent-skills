@@ -67,6 +67,40 @@ jobs:
           rustup toolchain install 1.90.0 --profile minimal
           cargo --version
           uv --version
+      - name: 使用消费者相同的固定 Windows Python
+        if: matrix.target == 'windows-x64'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import shutil
+          import subprocess
+          from pathlib import Path
+          key = "cpython-3.13.13-windows-x86_64-none"
+          metadata = Path("config/runtime-python-downloads.json").resolve()
+          entry = json.loads(metadata.read_text(encoding="utf-8"))[key]
+          root = Path(os.environ["EA_CI_ROOT"]).parent / "windows-python"
+          downloads = root / "base"
+          virtual = root / "developer-env"
+          uv = str(Path(shutil.which("uv")).resolve())
+          environment = {key: value for key, value in os.environ.items() if not key.upper().startswith("UV_")}
+          environment.update(UV_PYTHON_INSTALL_DIR=str(downloads), UV_PYTHON_DOWNLOADS_JSON_URL=str(metadata),
+              UV_PYTHON_CPYTHON_BUILD=entry["build"], UV_CACHE_DIR=os.environ["UV_CACHE_DIR"],
+              UV_PYTHON_INSTALL_BIN="0", UV_PYTHON_INSTALL_REGISTRY="0", UV_PYTHON_NO_REGISTRY="1")
+          subprocess.run([uv, "--no-config", "python", "install", key],
+                         env=environment, check=True, timeout=180)
+          base = downloads / key
+          assert (base / "BUILD").read_text(encoding="utf-8").strip() == entry["build"]
+          assert (base / "python.exe").is_file()
+          subprocess.run([uv, "--no-config", "venv", "--no-project",
+                          "--no-python-downloads", "--python", str(base / "python.exe"), str(virtual)],
+                         env=environment, check=True, timeout=60)
+          observed = subprocess.check_output([str(virtual / "Scripts/python.exe"), "-I", "-c",
+              "import json,sys;print(json.dumps(sys.base_prefix))"], env=environment, timeout=10)
+          assert Path(json.loads(observed)).resolve() == base.resolve(), "CI must use the fixed consumer Python"
+          with Path(os.environ["GITHUB_PATH"]).open("a", encoding="utf-8") as stream:
+              stream.write(str(virtual / "Scripts") + "\n")
+          PY
       - name: 确认原生宿主
         run: |
           python - <<'PY'
@@ -89,7 +123,15 @@ jobs:
           (root / "host.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
           PY
       - name: 安装开发包
-        run: python -m pip install --disable-pip-version-check -e .
+        run: |
+          python - <<'PY'
+          import subprocess
+          import sys
+          command = (["uv", "--no-config", "pip", "install", "--python", sys.executable, "-e", "."]
+                     if sys.platform == "win32" else
+                     [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-e", "."])
+          subprocess.run(command, check=True)
+          PY
       - name: Windows Provider 启动检查
         id: windows_provider_startup
         if: matrix.target == 'windows-x64'
@@ -195,18 +237,24 @@ jobs:
               if not required or missing or skipped or not result.wasSuccessful():
                   raise SystemExit(f"native qualification failed: missing={sorted(missing)}, skipped={sorted(skipped)}, suite_passed={result.wasSuccessful()}")
 
-          def test_ids(suite):
+          def test_cases(suite):
               for item in suite:
                   if isinstance(item, unittest.TestSuite):
-                      yield from test_ids(item)
+                      yield from test_cases(item)
                   else:
-                      yield item.id()
+                      yield item
 
           required = set(required_native_tests(os.environ["EA_CI_TARGET"]))
           loader = unittest.TestLoader()
-          suite = loader.discover("tests")
-          discovered = set(test_ids(suite))
-          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          tests = list(test_cases(loader.discover("tests")))
+          discovered = {test.id() for test in tests}
+          # Prioritize required native modules, keeping class/module fixtures
+          # together and preserving every test in the complete suite.
+          native_modules = {name.partition(".")[0] for name in required}
+          suite = unittest.TestSuite(sorted(tests, key=lambda test: test.id().partition(".")[0] not in native_modules))
+          # Collect all failures even when qualification is blocked. Passing
+          # still requires the whole suite and every required native result.
+          result = unittest.TextTestRunner(verbosity=2, failfast=False).run(suite)
           require_native_test_results(result, required, discovered)
           report = {
               "target": os.environ["EA_CI_TARGET"], "test_count": result.testsRun,

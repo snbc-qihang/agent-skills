@@ -149,7 +149,7 @@ class LegacyInspectionTests(unittest.TestCase):
         result = self.inspect()
         self.assertTrue(result["legacy_installation_detected"])
         self.assertFalse(result["legacy_check_complete"])
-        self.assertIn(str(backup), json.dumps(result))
+        self.assertIn(str(backup), {item["path"] for item in result["legacy_confirmed"]})
         self.assertNotIn("sensitive", json.dumps(result))
 
     def test_unknown_or_symlinked_owned_entry_is_reported_without_following_it(self):

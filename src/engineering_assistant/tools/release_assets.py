@@ -18,7 +18,7 @@ from typing import Mapping
 from ..runtime.artifact_io import ArtifactIO, artifact_fs
 from .compiler import verify_package
 from ..runtime.catalog import DEFAULT_REPOSITORY_ROOT
-from ..installer.installation import AGENTS, PYTHON_VERSION, TARGETS, _package_lock
+from ..installer.installation import PYTHON_VERSION, TARGETS, _package_lock
 from ..runtime.validation import ValidationFailure
 from ..runtime.version import CanonicalVersion, platform_version
 
@@ -26,13 +26,17 @@ from ..installer.release_contract import (
     _wheel_record, _safe_root, INTERNAL_AGENTS, INTERNAL_TARGETS, INTERNAL_REPOSITORY, MAX_CONTROL_BYTES, MAX_FILE_BYTES, MAX_TREE_BYTES, MAX_TREE_ENTRIES, REQUIRED_PROVIDER_CHECKS, _digest, _tree_digest, _file_hashes, _record, release_provenance, index_provenance, _matches_provenance, _portable_member, _required_wheel_files, _wheel_version, _wheel_verification, _marketplace, validate_acceptance_summary
 )
 
+# A build adapter is not automatically a release-qualified host. Retain the
+# existing advanced matrix; first internal delivery remains INTERNAL_AGENTS.
+RELEASE_AGENTS = ("codex", "hermes", "claude-code")
+
 _PROVIDER_TESTS = frozenset(
     "test_provider_runtime.ProviderRuntimeTests." + name for name in (
         "test_production_sandbox_runs_provider_and_allows_only_private_work_writes",
         "test_production_sandbox_denies_network_processes_exec_and_outside_writes",
         "test_production_sandbox_enforces_timeout_and_output_limit",
     )
-)
+) | {"test_sandbox_probe.SandboxProbeTests.test_real_sandbox_qualification_requires_every_execution_boundary"}
 _WINDOWS_TESTS = frozenset(
     "test_windows_artifact_fs.WindowsArtifactIntegrationTests." + name for name in (
         "test_concurrent_immutable_and_cas_have_exactly_one_winner",
@@ -40,6 +44,7 @@ _WINDOWS_TESTS = frozenset(
         "test_created_file_and_chmod_preserve_private_owner_dacl",
         "test_parent_rename_keeps_reads_and_writes_on_opened_identity",
         "test_directory_fd_copy_hash_rename_and_delete_contract",
+        "test_readonly_file_deletion_preserves_an_external_hardlink",
         "test_junction_is_rejected_without_reading_or_writing_its_target",
         "test_private_directory_validation_accepts_path_and_retained_handle",
         "test_private_directory_validation_rejects_broad_and_null_dacls",
@@ -79,7 +84,11 @@ def required_native_tests(target: str) -> frozenset[str]:
     if target == "windows-x64":
         required |= _WINDOWS_TESTS | {
             "test_provider_runtime.ProviderRuntimeTests."
-            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work"
+            "test_windows_lpac_keeps_temporary_and_profile_options_in_private_work",
+            "test_provider_runtime.ProviderRuntimeTests.test_windows_lpac_reads_and_writes_deep_unicode_paths",
+            "test_provider_sandboxes.WindowsPrivatePythonTests.test_windows_private_worker_retains_token_restrictions",
+            "test_provider_sandboxes.WindowsPrivatePythonTests."
+            "test_windows_private_worker_loads_socket_extensions_without_widening_capabilities",
         }
     return frozenset(required)
 
@@ -91,7 +100,7 @@ def release_scope(agents, targets) -> tuple[tuple[str, ...], tuple[str, ...]]:
                 or len(set(values)) != len(values)):
             raise ValidationFailure("发行 " + label + " 集合为空、重复或包含未知值")
         return tuple(values)
-    return selected(agents, AGENTS, "Agent"), selected(targets, TARGETS, "目标")
+    return selected(agents, RELEASE_AGENTS, "Agent"), selected(targets, TARGETS, "目标")
 
 
 def _validate_records(storage: ArtifactIO, target: str, agents: tuple[str, ...],

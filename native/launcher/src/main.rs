@@ -167,7 +167,7 @@ fn runtime_command(arguments: &[OsString]) -> Result<Command> {
         return Err("plugin target does not match the native launcher");
     }
     let agent = field(&lock, "agent")?;
-    if !["codex", "hermes", "claude-code"].contains(&agent) {
+    if !["codex", "hermes", "claude-code", "cursor"].contains(&agent) {
         return Err("plugin agent is unsupported");
     }
     field(&lock, "canonical_version")?;
@@ -386,6 +386,10 @@ fn main() {
             );
             if hook {
                 println!("{{}}");
+            } else if arguments.first().is_some_and(|argument| argument == "cursor-hook") {
+                // Cursor's permission hooks block invalid JSON and exit 2.
+                // Exit 1 is its documented non-blocking failure path.
+                process::exit(1);
             } else {
                 process::exit(2);
             }
