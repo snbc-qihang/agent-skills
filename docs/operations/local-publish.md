@@ -38,6 +38,41 @@ uvx --isolated --refresh --python 3.13.13 --from "git+https://github.com/snbc-qi
 
 安装结果为 `needs_trust` 时，在 Codex App 或 CLI 中审查并信任当前 Hook 定义，关闭旧会话并打开新会话，再运行 `doctor` 和真实 skill/MCP/Hook 操作。`--hooks-trusted` 仅记录用户声明，不能授予宿主信任或代替真实执行证据。重新打开 App 后仍须能执行 MCP 和恢复持久化任务，才算完成验收。
 
+## 统一命令与 Cowork 原生发现
+
+Codex 与 Claude 桌面端 Cowork 共用 `ea-setup` 及操作系统标准用户数据目录。这里的 Cowork 不是 `claude-code` 命令行安装目标：前者在 Claude 账号中添加插件，后者只在本机登记 Claude Code。首轮 Codex 正式内部发行及两目标真实验收门禁不因新增准备入口而改变。
+
+原生机制已核对：Codex 支持命令行添加本地/Git marketplace；Claude 个人账号从 Customize → Plugins 添加 Git marketplace 或上传原生插件，Code CLI 的安装不反向同步到账号。Claude Plugins API 仅面向 Enterprise 管理员，不作为 Pro/Max 用户的安装前提。依据：[Codex marketplace](https://developers.openai.com/plugins/build/plugins)、[Claude 插件入口](https://claude.com/docs/plugins/overview)、[Claude Plugins API 适用范围](https://platform.claude.com/docs/en/manage-claude/plugins-api)。
+
+### Cowork 一次本机准备与原生启用
+
+安装器接受 `install --agent claude-cowork`，支持 `--source` 指定该仓库的固定 Git tag 或已构建目录，也支持 `--package` 指定现有 Claude 原生包。Git 来源只接受 `snbc-qihang/agent-skills@tag`，实际获取 `refs/tags/`；来源快照、包和导入归档均验证摘要。未发布的默认来源明确返回 `needs_preparation`，不下载作者源码后在消费者机器上编译。
+
+**当前尚无已发布的 Cowork 固定 GitHub 候选，因此这里不提供不可执行的新人安装命令。** 维护者先在原生目标上构建 Claude 包，再从源码 checkout 用同一个安装入口验证。以下为维护者命令；`EA_COWORK_PACKAGE` 必须指向仓库外已构建的包，`EA_INSTALL_DATA` 必须是仓库外本轮独立数据根：
+
+```bash
+python3 -m engineering_assistant.installer.setup_cli install --agent claude-cowork --package "$EA_COWORK_PACKAGE" --data-home "$EA_INSTALL_DATA" --json
+python3 -m engineering_assistant.installer.setup_cli doctor --agent claude-cowork --data-home "$EA_INSTALL_DATA" --json
+```
+
+正式用户省略 `--data-home`，默认位置与 Codex 相同：Mac 为 `~/Library/Application Support/engineering-assistant/`，Windows 为 `%LOCALAPPDATA%\engineering-assistant\`。固定 GitHub 来源发布并验证后，完整 `uvx` 命令只负责取得安装器和执行同一操作，不要求用户取得维护者机器上的实验包。
+
+准备完成后，命令输出安装目录、共享核心及 `import_package`：
+
+1. 在 Claude 桌面端进入 Customize → Plugins → Add → Upload plugin，选择 `engineering-assistant.plugin`。
+2. 审查并启用插件及所需连接器，启动新的 Cowork 任务。
+3. 实际执行 Skill、MCP、Hook、项目状态持久化与重开恢复；核对本地/云端会话的真实执行链路。
+
+这一步是 Claude 原生账号操作，不通过写入私有缓存或调用 Code CLI 代替。包存在只证明可以交接给原生入口，不证明 Claude 已接收或启用。`needs_activation` + `installation_prepared=true` 表示本机准备成功，退出码为 0，`ready` 仍为 false；`native_activation=not_verified`、`host_acceptance=not_executed` 持续保留，不能用于推广资格。
+
+### 重复准备、更新、修复与移除
+
+同内容重复执行复用受控入口。不同内容需要显式 `update`；固定候选更新时显式提供新的 `--source` 或 `--package`，然后在 Claude 原生界面导入并核对新版本。准备失败时保留之前的导入包和选择记录。入口或归档损坏时 `repair` 从记录来源或显式候选重建，并保留被替换内容。各版本的共享核心和固定 Python 不自动清理，其他 Agent 入口保留。
+
+`doctor --agent claude-cowork` 只检查受控本机材料与 Runtime，不读取或声明 Claude 账号启用状态。`uninstall --agent claude-cowork` 返回 `needs_native_action` 和确切原生步骤：在 Customize → Plugins 中移除本插件；命令不谎报账号已卸载，也不删除可能仍被使用的 Runtime 或导入材料。
+
+真实 Cowork 验收必须覆盖首次命令准备、原生导入与启用、实际工具调用、真实 Hook、重开恢复、更新和修复。官方 manifest 校验、安装器单元测试和 Runtime 直连检查仅是技术证据。Windows 11 Provider 的既有阻断和 Codex 两目标真实验收继续保留；未通过前不生成正式支持、Release 或 installer alias。
+
 ## 历史 2.x 卸载与清理
 
 首次安装前运行固定版本的 `doctor --json`。检查输出包含 `legacy_installation_detected`、检查范围、已确认项、未知项和人工步骤。只检查选定 `CODEX_HOME`、已知 Runtime 数据目录、明确旧来源、该插件缓存及发布备份；不扫描全盘。无法读取或归属的文件不能被当作已清理。发现明确历史安装或来源冲突时，新安装停止，不自动接管或删除。

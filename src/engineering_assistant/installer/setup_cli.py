@@ -19,16 +19,16 @@ from .internal_installation import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ea-setup", description="准备并验证原生市场中的工程助手插件。")
+    parser = argparse.ArgumentParser(prog="ea-setup", description="准备共享核心并接入对应 Agent 的原生插件入口。")
     parser.add_argument("command", choices=("prepare", "doctor", "repair", "install", "update", "uninstall"))
-    parser.add_argument("--agent", choices=AGENTS, required=True)
-    parser.add_argument("--package", type=Path, help="显式指定已安装的、由CI构建的插件目录。")
+    parser.add_argument("--agent", choices=(*AGENTS, "claude-cowork"), required=True)
+    parser.add_argument("--package", type=Path, help="显式指定已构建插件目录；Cowork 会准备原生导入包。")
     parser.add_argument("--agent-home", type=Path)
     parser.add_argument("--data-home", type=Path)
     parser.add_argument("--uv", type=Path)
     parser.add_argument("--config", type=Path, help="可选 JSON 配置；命令参数与 Agent 环境变量优先。")
     parser.add_argument("--marketplace", help="原生市场名称；存在多个来源时显式选择。")
-    parser.add_argument("--source", help="可选高级发行来源；Codex 默认使用团队已验收的内部发行。")
+    parser.add_argument("--source", help="固定发行来源或已构建目录；Codex 默认读取已验收发行，Cowork 候选使用仓库@tag。")
     parser.add_argument("--hooks-trusted", action="store_true", help="声明已由用户在原生宿主审查并信任本插件 Hook；仅记为 user_confirmed。")
     parser.add_argument("--target")
     parser.add_argument("--json", action="store_true")
@@ -118,6 +118,8 @@ def _show_result(result: dict, as_json: bool) -> None:
         "needs_update": "已安装旧版，请执行 update。", "needs_preparation": "插件尚未准备好，请执行 install 或 repair。",
         "unsupported": "当前系统或目标不在支持范围内。", "uninstalled": "插件已卸载；已保留 Runtime，供仍在运行的会话使用。",
         "partial": "完整功能资格尚未通过，插件未就绪。", "failed": "操作未完成。",
+        "needs_activation": "本机插件与 Runtime 已准备好；请在 Claude 中导入、审查并启用。",
+        "needs_native_action": "请在所选宿主的原生界面完成操作。",
     }
     message = messages.get(result.get("status"), "操作未完成。")
     if result.get("status") == "partial" and result.get("runtime_ready") is True:
@@ -127,10 +129,14 @@ def _show_result(result: dict, as_json: bool) -> None:
     print(message)
     if result.get("version"):
         print("版本：" + result["version"])
+    if result.get("data_home"):
+        print("安装目录：" + result["data_home"])
     if result.get("shared_core"):
         print("共享核心：" + result["shared_core"])
     if result.get("package"):
         print("宿主入口：" + result["package"])
+    if result.get("import_package"):
+        print("原生导入包：" + result["import_package"])
     for instruction in result.get("next_steps", []):
         print("操作：" + instruction)
     if result.get("reason") and result["status"] not in {"ready", "needs_trust"}:
@@ -157,16 +163,33 @@ def main(argv=None) -> int:
         config = _read_control(args.config) if args.config else {}
         if not set(config).issubset({"agent_homes", "data_home", "uv"}):
             raise ValueError("unsupported ea-setup configuration field")
-        home = agent_home(args.agent, args.agent_home, config=config)
         data = args.data_home or config.get("data_home")
         uv = args.uv or config.get("uv")
-        result = _execute(args, home, data, uv)
+        if args.agent == "claude-cowork":
+            from .cowork_installation import inspect_cowork, prepare_cowork, uninstall_cowork
+            from .installation import host_target
+            if host_target() not in {"macos-arm64", "windows-x64"} or args.target not in {None, host_target()}:
+                result = {"status": "unsupported", "ready": False, "target": args.target or host_target()}
+            elif args.agent_home or args.marketplace or args.hooks_trusted or (args.source and args.package):
+                raise ValueError("Cowork 使用原生账号入口；请指定 --source 或 --package，不使用 --agent-home、--marketplace 或 --hooks-trusted")
+            elif args.command in {"doctor", "uninstall"} and (args.source or args.package):
+                raise ValueError("Cowork doctor/uninstall 检查已准备入口，不接受 --source 或 --package")
+            elif args.command == "doctor":
+                result = inspect_cowork(data)
+            elif args.command == "uninstall":
+                result = uninstall_cowork()
+            else:
+                result = prepare_cowork(source=str(args.package) if args.package else args.source, data_home=data,
+                    uv_executable=uv, update=args.command == "update", repair=args.command == "repair")
+        else:
+            home = agent_home(args.agent, args.agent_home, config=config)
+            result = _execute(args, home, data, uv)
     except ControlNeedsPreparation as exc:
         result = {"status": "needs_preparation", "ready": False, "reason": str(exc)}
     except Exception as exc:
         result = {"status": "failed", "ready": False, "reason": str(exc)}
     _show_result(result, args.json)
-    return 0 if result["status"] in {"ready", "uninstalled"} else 2
+    return 0 if result["status"] in {"ready", "uninstalled", "needs_activation"} else 2
 
 
 if __name__ == "__main__":
